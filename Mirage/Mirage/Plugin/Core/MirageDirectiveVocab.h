@@ -76,4 +76,11 @@ NSArray<NSDictionary<NSString *, NSString *> *>
 /// booleans, bare flags) - passed to the code editor's `directiveKeywords`.
 NSSet<NSString *> *MirageDirectiveValueKeywords(void);
 
+/// The `// #motionblur <mode>` modes, with descriptions. A BARE word rather
+/// than a `key=value` pair, so the generic value-completion rule (which keys
+/// off a trailing `=`) never reaches it and it needs its own table. Also read
+/// by the AI authoring path, which learns the directive vocabulary from these
+/// tables rather than from the docs.
+NSArray<NSDictionary<NSString *, NSString *> *> *MirageMotionBlurModes(void);
+
 NS_ASSUME_NONNULL_END

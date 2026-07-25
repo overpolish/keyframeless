@@ -785,10 +785,22 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // entry point so its own syntax is still checked. `outPrependLines` maps a
   // reported error back to the active tab (an error inside Common surfaces on
   // the Common tab).
+  // The validator is handed only the ACTIVE section's code, but "is this
+  // shader multi-pass" is a question about the whole tab SET. The composer runs
+  // first (KKCodeEditorView -_runValidator) and does see every section, so it
+  // records what it saw for the validator to read.
+  __block BOOL sawBufferSection = NO;
+  __block BOOL activeIsImage = YES;
   shader.codeValidationComposer =
       ^NSString *(NSString *activeName, NSString *activeCode,
                   NSArray<NSDictionary<NSString *, NSString *> *> *sections,
                   NSInteger *outPrependLines) {
+        activeIsImage = ![activeName isEqualToString:@"Common"] &&
+                        ![activeName hasPrefix:@"Buffer"];
+        sawBufferSection = NO;
+        for (NSDictionary<NSString *, NSString *> *sec in sections)
+          if ([sec[@"name"] hasPrefix:@"Buffer"] && sec[@"code"].length)
+            sawBufferSection = YES;
         NSString *commonCode = nil;
         for (NSDictionary<NSString *, NSString *> *s in sections)
           if ([s[@"name"] isEqualToString:@"Common"]) {
@@ -878,6 +890,17 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                    @"Mirage point-OSC type error.");
       return [NSString stringWithFormat:fmt, badOSC];
     }
+    // Multi-pass + accumulate is a SILENT no-op: accumulate re-renders the
+    // shader at N sub-frame times, and a feedback buffer can't be re-simulated
+    // per sub-sample, so the plugin renders once and the user's Motion Blur
+    // slider does nothing at all. No error, no blur - just a dead control.
+    // Say so, and name the two declarations that resolve it.
+    if (activeIsImage && sawBufferSection &&
+        MirageMotionBlurModeForSource(code) == MirageMotionBlurModeAccumulate)
+      return RLoc(@"Multi-pass shaders can't use the default motion blur - add "
+                  @"`// #motionblur native` to blur it yourself, or `// "
+                  @"#motionblur off` to hide the control",
+                  @"Mirage multi-pass motion-blur validation error.");
     KKGLSLTranspileResult *r = KKTranspileGLSL(code);
     if (r.msl)
       return nil; // compiled clean

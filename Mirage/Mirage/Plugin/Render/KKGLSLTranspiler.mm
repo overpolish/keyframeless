@@ -80,19 +80,59 @@ static NSString *KKZeroInitLocals(NSString *msl) {
   return [out componentsJoinedByString:@"\n"];
 }
 
+// Blank out `//` and block comments, keeping the string the same length so any
+// caller that also cares about offsets stays aligned. Only for TEXT SCANS that
+// ask "does this shader really do X" - a mention in prose is not a use.
+static NSString *KKBlankComments(NSString *src) {
+  NSMutableString *out = [src mutableCopy];
+  NSUInteger n = out.length;
+  BOOL line = NO, block = NO;
+  for (NSUInteger i = 0; i < n; i++) {
+    unichar c = [out characterAtIndex:i];
+    unichar d = (i + 1 < n) ? [out characterAtIndex:i + 1] : 0;
+    if (line) {
+      if (c == '\n') { line = NO; continue; }
+    } else if (block) {
+      if (c == '*' && d == '/') {
+        [out replaceCharactersInRange:NSMakeRange(i, 2) withString:@"  "];
+        i++;
+        block = NO;
+        continue;
+      }
+    } else if (c == '/' && d == '/') {
+      line = YES;
+    } else if (c == '/' && d == '*') {
+      block = YES;
+    } else {
+      continue;
+    }
+    if (c != '\n')
+      [out replaceCharactersInRange:NSMakeRange(i, 1) withString:@" "];
+  }
+  return out;
+}
+
 // Which iChannels the USER's source references (before wrapping widens it).
+//
+// Comments are blanked first. A shader that only NAMES a channel in prose
+// ("never samples iChannel0") does not use it, and counting that as a use
+// turned off the alpha-composite path - the shader's own alpha was then
+// discarded by the opaque image convention and the whole frame rendered as its
+// flat colour. It also left the sampler declared but unreferenced, which the
+// compiler strips, which used to corrupt GPU memory at bind time.
 static NSUInteger KKChannelMask(NSString *src) {
+  NSString *code = KKBlankComments(src);
   NSUInteger mask = 0;
   for (NSUInteger ch = 0; ch < 4; ch++) {
     NSString *tok = [NSString stringWithFormat:@"iChannel%lu", (unsigned long)ch];
-    if ([src rangeOfString:tok].location != NSNotFound)
+    if ([code rangeOfString:tok].location != NSNotFound)
       mask |= (1u << ch);
   }
   return mask;
 }
 
 static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
-                                                  BOOL bufferMode);
+                                                  KKGLSLPassKind pass);
 
 // An editing session churns many one-off shader variants; past this many
 // distinct sources the least-recently-used transpile is dropped.
@@ -104,7 +144,7 @@ static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
 // itself (not its hash - lookups compare contents, so a collision can't
 // return another shader's MSL), bounded LRU.
 static KKGLSLTranspileResult *KKTranspileMemoized(NSString *userGLSL,
-                                                  BOOL bufferMode) {
+                                                  KKGLSLPassKind pass) {
   static NSMutableDictionary<NSString *, KKGLSLTranspileResult *> *cache;
   static NSMutableOrderedSet<NSString *> *recency;
   static NSLock *cacheLock;
@@ -114,8 +154,8 @@ static KKGLSLTranspileResult *KKTranspileMemoized(NSString *userGLSL,
     recency = [NSMutableOrderedSet orderedSet];
     cacheLock = [NSLock new];
   });
-  NSString *key =
-      [(bufferMode ? @"b|" : @"i|") stringByAppendingString:userGLSL];
+  NSString *key = [(pass == KKGLSLPassBuffer ? @"b|" : @"i|")
+      stringByAppendingString:userGLSL];
   [cacheLock lock];
   KKGLSLTranspileResult *hit = cache[key];
   if (hit) {
@@ -125,7 +165,7 @@ static KKGLSLTranspileResult *KKTranspileMemoized(NSString *userGLSL,
   [cacheLock unlock];
   if (hit)
     return hit;
-  KKGLSLTranspileResult *r = KKTranspileUncached(userGLSL, bufferMode);
+  KKGLSLTranspileResult *r = KKTranspileUncached(userGLSL, pass);
   [cacheLock lock];
   cache[key] = r;
   [recency removeObject:key];
@@ -139,16 +179,17 @@ static KKGLSLTranspileResult *KKTranspileMemoized(NSString *userGLSL,
 }
 
 KKGLSLTranspileResult *KKTranspileGLSL(NSString *userGLSL) {
-  return KKTranspileMemoized(userGLSL, NO);
+  return KKTranspileMemoized(userGLSL, KKGLSLPassImage);
 }
 
 KKGLSLTranspileResult *KKTranspileGLSLBuffer(NSString *userGLSL) {
-  return KKTranspileMemoized(userGLSL, YES);
+  return KKTranspileMemoized(userGLSL, KKGLSLPassBuffer);
 }
+
 
 // Run the dialect shims, then wrap. Fills in the result's shim/channel/line
 // metadata and returns the core-450 GLSL glslang parses.
-static NSString *KKPrepareGLSL(NSString *userGLSL, BOOL bufferMode,
+static NSString *KKPrepareGLSL(NSString *userGLSL, KKGLSLPassKind pass,
                                KKGLSLTranspileResult *result) {
   BOOL hadMainImage =
       [userGLSL rangeOfString:@"mainImage"].location != NSNotFound;
@@ -167,10 +208,10 @@ static NSString *KKPrepareGLSL(NSString *userGLSL, BOOL bufferMode,
   // Force the two it always samples.
   if (glTransition)
     channelMask |= 0x3u;
-  result.declaredChannelMask = KKDeclaredChannelMask(channelMask, bufferMode);
+  result.declaredChannelMask = KKDeclaredChannelMask(channelMask, pass);
 
   NSInteger lineOffset = 0;
-  NSString *glsl = KKWrapGLSL(shimmed, channelMask, &lineOffset, bufferMode);
+  NSString *glsl = KKWrapGLSL(shimmed, channelMask, &lineOffset, pass);
   result.userLineOffset = lineOffset;
   return glsl;
 }
@@ -199,7 +240,20 @@ static void KKReflectBindings(spvc_compiler compiler,
             spvc_compiler_msl_get_automatic_resource_binding(compiler, list[i].id);
         unsigned sm = spvc_compiler_msl_get_automatic_resource_binding_secondary(
             compiler, list[i].id);
-        [result setTexture:(NSInteger)t sampler:(NSInteger)sm forChannel:ch];
+        // SPIRV-Cross returns uint32_t(-1) when a resource got NO automatic
+        // binding - it was declared but never referenced, so the compiler
+        // dropped it. Recording that verbatim made it a real-looking index
+        // (4294967295) that passed every NSNotFound guard downstream and
+        // reached setFragmentTexture:atIndex:, which writes far outside the
+        // argument table and corrupts GPU memory. The fault then surfaces at
+        // some LATER, unrelated Metal call, which is what makes it so hard to
+        // place. A stripped channel is simply unused - record it as such.
+        static const unsigned kNoBinding = 0xFFFFFFFFu;
+        if (t == kNoBinding && sm == kNoBinding)
+          break;
+        [result setTexture:(t == kNoBinding ? NSNotFound : (NSInteger)t)
+                   sampler:(sm == kNoBinding ? NSNotFound : (NSInteger)sm)
+                forChannel:ch];
         break;
       }
     }
@@ -292,7 +346,7 @@ static void KKCompileToMSL(const std::vector<unsigned int> &spirv,
 }
 
 static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
-                                                  BOOL bufferMode) {
+                                                  KKGLSLPassKind pass) {
   static NSLock *lock;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -301,7 +355,7 @@ static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
   });
 
   KKGLSLTranspileResult *result = [KKGLSLTranspileResult new];
-  NSString *glsl = KKPrepareGLSL(userGLSL, bufferMode, result);
+  NSString *glsl = KKPrepareGLSL(userGLSL, pass, result);
   std::string glslStr = glsl.UTF8String;
 
   // glslang is process-global state, so the whole pipeline is serialised.

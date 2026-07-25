@@ -345,12 +345,10 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
     return NO;
   }
 
-  // A procedural shader owns every pixel and its own animation clock
-  // (iTime/iProgress), so motion blur is pure sample-accumulate: re-render the
-  // shader at N sub-frame times across the shutter and average (render loops
-  // states[0..n-1] through KKMotionBlur). There is no velocity buffer to
-  // reconstruct from, so the Fast technique can't apply here - force Accurate
-  // (which also derives mode = Always, blurring every animated frame).
+  // Technique is forced to Accurate for the WHEN-gating it derives (Always -
+  // blur every animated frame), which is what both engines want here: a
+  // procedural shader owns every pixel and its own animation clock, so there is
+  // no "value changing" signal to gate on.
   if (mbState.enabled)
     mbState.technique = KKMotionBlurTechniqueAccurate;
 

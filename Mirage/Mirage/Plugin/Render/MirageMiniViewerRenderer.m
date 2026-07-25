@@ -575,6 +575,14 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   KKGLSLUniforms base = MirageMakeUniforms(
       W, H, iTime, grain, grainSize, (float)self.playheadFraction,
       (float)encodeSRGB, (simd_float4){W, H, 1.0f, 0.0f});
+  // `// #motionblur native`: the shader does its own blur, so hand it the same
+  // shutter the viewer does or the preview shows a different image (a trail
+  // pinned to its floor decay). Gated on the mode exactly as the FCP render is,
+  // so accumulate / off / absent all keep iMotionBlur at 0 in both paths.
+  if (MirageMotionBlurModeForSource(image) == MirageMotionBlurModeNative) {
+    base.transition.y = self.motionBlurShutterFraction;
+    base.transition.z = (float)self.motionBlurSamples;
+  }
   // A shader's `// #color` properties -> the colour pool (bound after the fixed
   // uniforms, same as the FCP render).
   simd_float4 colorPool[KK_SHADER_COLOR_POOL];

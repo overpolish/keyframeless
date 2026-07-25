@@ -517,6 +517,17 @@ MirageDirectiveCompletions(NSString *text, NSUInteger caret,
   BOOL valuePos =
       inBlock ? (firstEq.location != NSNotFound) : [bwTrim hasSuffix:@"="];
 
+  // `#motionblur` takes a BARE mode word, not `key=value`, so the generic
+  // value rule below (which keys off a trailing `=`) never fires for it. Its
+  // modes would otherwise be undiscoverable in the editor entirely.
+  if (!inBlock && firstEq.location == NSNotFound &&
+      [bwTrim hasPrefix:@"#motionblur"]) {
+    NSArray *modes = FilterByPrefix(MirageMotionBlurModes(), word);
+    if (modes.count)
+      *outReplaceRange = NSMakeRange(wordStart, caret - wordStart);
+    return modes;
+  }
+
   if (valuePos) {
     // The key names what the value is for: the text before the field's `=` in a
     // block, else the token right before the trailing `=` on a `#kind` line.

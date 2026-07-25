@@ -54,6 +54,21 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// `audioTimelineTimeSec` above: the preview has to agree with the viewer.
 @property(nonatomic) double playheadFraction;
 
+/// The Motion Blur shutter as a 0..1 fraction of a frame (1.0 == 360deg), and
+/// the sample count, pushed by the inspector.
+///
+/// These reach the shader as `iMotionBlur` / `iMotionBlurSamples`, and ONLY for
+/// a `// #motionblur native` source - exactly as in the FCP render. A native
+/// shader treats the shutter as a LOOK control (a trail's decay), so without
+/// them the preview isn't merely unblurred, it shows a different image: the
+/// trail sits at its floor value however the slider is set. Every other mode
+/// leaves iMotionBlur at 0 in both paths, so they already agree.
+///
+/// This is NOT the mini rendering motion blur - it deliberately doesn't. It is
+/// handing the shader the same number the viewer hands it.
+@property(nonatomic) float motionBlurShutterFraction;
+@property(nonatomic) int motionBlurSamples;
+
 // clipDurationSeconds + clipTimelineStartSec are inherited from
 // KKMiniViewerRenderer (hoisted there so every plugin's mini gets
 // parameter-link feed-locking). The preview's `iTime` still reads

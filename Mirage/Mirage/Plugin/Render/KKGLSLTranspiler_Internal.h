@@ -52,7 +52,7 @@ NSString *KKRenameReservedIdentifiers(NSString *src);
 // footage (see `honorAlpha` in the wrapper). Binding follows the declaration,
 // so this is the set that matters; reporting the user's set instead left
 // channel 0 declared but its sampler never created, and the draw bound nil.
-NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, BOOL bufferMode);
+NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, KKGLSLPassKind pass);
 
 // Embed a (already shimmed) GLSL image-shader body in a full core-450 unit:
 // uniform block, `// #` directive members + defines, iChannel declarations, the
@@ -60,7 +60,8 @@ NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, BOOL bufferMode);
 // `outUserLineOffset` receives the number of lines prepended, so a glslang
 // error at wrapped line L maps back to the editor as L - offset.
 NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
-                     NSInteger *_Nullable outUserLineOffset, BOOL bufferMode);
+                     NSInteger *_Nullable outUserLineOffset,
+                     KKGLSLPassKind pass);
 
 #ifdef __cplusplus
 }

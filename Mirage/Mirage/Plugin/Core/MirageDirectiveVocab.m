@@ -98,13 +98,33 @@ MirageDirectiveAttributeKeys(void) {
             @"axis="),
         ],
         kKEY);
-    // A bare flag - coral (keyword value) so its popup swatch matches the code.
-    v = [v arrayByAddingObjectsFromArray:
-               Colored(@[ E(@"skipsnapping", @"skipsnapping",
-                            @"Opt a point/position handle out of the default "
-                            @"Cmd-held snap.",
-                            @"skipsnapping") ],
-                       kKW)];
+    // Bare flags / values - coral (keyword value) so the popup swatch matches
+    // the code. `#motionblur` takes its mode as a bare word too, so its three
+    // modes live here beside skipsnapping rather than needing a `key=` form.
+    v = [v
+        arrayByAddingObjectsFromArray:
+            Colored(
+                @[
+                  E(@"skipsnapping", @"skipsnapping",
+                    @"Opt a point/position handle out of the default "
+                    @"Cmd-held snap.",
+                    @"skipsnapping"),
+                  E(@"accumulate", @"accumulate",
+                    @"#motionblur: the default. The plugin re-renders your "
+                    @"shader across the shutter and averages it. Exact for any "
+                    @"motion, including rotation. Single-pass only.",
+                    @"accumulate"),
+                  E(@"native", @"native",
+                    @"#motionblur: your shader blurs itself - a feedback trail "
+                    @"or its own loop. Required for multi-pass. You get "
+                    @"iMotionBlur (0-1 shutter) + iMotionBlurSamples.",
+                    @"native"),
+                  E(@"off", @"off",
+                    @"#motionblur: no blur, and the Motion Blur control is "
+                    @"cleared.",
+                    @"off"),
+                ],
+                kKW)];
   });
   return v;
 }
@@ -138,8 +158,32 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"dot",          @"square",     @"hollow",   @"arc", // point styles
       @"skipsnapping", @"lockaspect", @"dropdown",         // bare flags
       @"percent",      @"int",        @"px", // #multi units/modifiers
-      @"accumulate",   @"native"             // #motionblur modes ("off" = none)
+      @"accumulate",   @"native",     @"off" // #motionblur modes
     ]];
+  });
+  return v;
+}
+
+NSArray<NSDictionary<NSString *, NSString *> *> *MirageMotionBlurModes(void) {
+  static NSArray *v;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    v = Colored(
+        @[
+          E(@"accumulate", @"accumulate",
+            @"The default. The plugin re-renders your shader across the "
+            @"shutter and averages it. Exact for any motion, including "
+            @"rotation. Single-pass shaders only.",
+            @"accumulate"),
+          E(@"native", @"native",
+            @"Your shader blurs itself - a feedback trail, or its own sampling "
+            @"loop. Required for multi-pass shaders. You get iMotionBlur "
+            @"(0-1 shutter) and iMotionBlurSamples.",
+            @"native"),
+          E(@"off", @"off", @"No motion blur, and the control is cleared.",
+            @"off"),
+        ],
+        kKW);
   });
   return v;
 }

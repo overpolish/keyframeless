@@ -28,6 +28,12 @@ NS_ASSUME_NONNULL_BEGIN
   // _playheadFraction (private to the kit) to feed-lock parameter-link timing;
   // both are set to the same value in the respective setPlayheadFraction:.
   double _playheadFraction;
+  // Motion-blur state mirrored for the preview (see
+  // -_pushMotionBlurToMiniViewer): the shutter only reaches a `native` shader,
+  // but the inspector is where the persisted values arrive.
+  BOOL _mbPreviewEnabled;
+  double _mbPreviewShutterAngle;
+  NSInteger _mbPreviewSamples;
   /// The effective shader source last seen by -applyTimeline:, so a timeline
   /// change that swaps the shader (incl. a guide seed dropping the code lane =>
   /// the baked default) re-wires the source-derived OSC set exactly once.

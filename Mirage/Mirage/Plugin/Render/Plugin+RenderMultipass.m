@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "Plugin+Render_Internal.h"
 #import "MirageCustomShader.h"
 #import "MirageFeedbackSet.h"
+#import "Plugin+Render_Internal.h"
 
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 
@@ -151,7 +151,7 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
     bufPS[k] = [self customPipelineForSource:bufferSources[k]
                                  pixelFormat:MTLPixelFormatRGBA16Float
                                   registryID:registryID
-                                  bufferMode:YES];
+                                        pass:KKGLSLPassBuffer];
     if (!bufPS[k]) {
       present[k] = NO;
       continue;

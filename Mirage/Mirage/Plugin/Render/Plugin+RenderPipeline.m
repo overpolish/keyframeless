@@ -19,15 +19,16 @@
                   pixelFormat:[KKMetalDeviceCache
                                   pixelFormatForImageTile:destinationImage]
                    registryID:destinationImage.deviceRegistryID
-                   bufferMode:NO];
+                         pass:KKGLSLPassImage];
 }
 
 - (id<MTLRenderPipelineState>)customPipelineForSource:(NSString *)userSource
                                           pixelFormat:(MTLPixelFormat)pf
                                            registryID:(uint64_t)registryID
-                                           bufferMode:(BOOL)bufferMode {
-  KKGLSLTranspileResult *tr = bufferMode ? KKTranspileGLSLBuffer(userSource)
-                                         : KKTranspileGLSL(userSource);
+                                                 pass:(KKGLSLPassKind)pass {
+  KKGLSLTranspileResult *tr = pass == KKGLSLPassBuffer
+                                  ? KKTranspileGLSLBuffer(userSource)
+                                  : KKTranspileGLSL(userSource);
   if (!tr.msl) {
     KKLogError(@"[Custom] GLSL transpile failed: %@", tr.errorLog);
     return nil;

@@ -82,11 +82,16 @@ static KKGLSLUniforms MirageBuildUniforms(const MiragePluginState *base,
 // source-dependent setup (pipeline, transpile, gamma-encoded source textures,
 // noise/samplers) is captured ONCE, so motion blur can reuse it across N
 // sub-frame samples, varying only the uniforms and pool per sample.
+// What varies per draw, grouped so the block signature stays readable.
+typedef struct MirageDrawArgs {
+  KKGLSLUniforms u;
+  const simd_float4 *pool;
+  int poolCount;
+} MirageDrawArgs;
+
 typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                      NSArray<id<MTLTexture>> *inputTextures,
-                                     KKGLSLUniforms u,
-                                     const simd_float4 *colorPool,
-                                     int poolCount);
+                                     MirageDrawArgs args);
 
 // Builds a MirageSinglePassDraw for `effectiveSource`. `linearDst` (float dest)
 // triggers the gamma-encode of the linear sources - done once here and shared
@@ -148,12 +153,13 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
   }
   id<MTLTexture> toTex = gammaTo;
   return ^(id<MTLRenderCommandEncoder> encoder,
-           NSArray<id<MTLTexture>> *inputTextures, KKGLSLUniforms u,
-           const simd_float4 *colorPool, int poolCount) {
+           NSArray<id<MTLTexture>> *inputTextures, MirageDrawArgs args) {
     [encoder setRenderPipelineState:customPS];
     id<MTLTexture> src =
         gammaSrc ?: (inputTextures.count ? inputTextures[0] : nil);
-    KKGLSLUniforms uu = u;
+    KKGLSLUniforms uu = args.u;
+    const simd_float4 *colorPool = args.pool;
+    int poolCount = args.poolCount;
     if (src)
       uu.chanRes[0] =
           (simd_float4){(float)src.width, (float)src.height, 1.0f, 0.0f};
@@ -196,9 +202,12 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                          id<MTLRenderCommandEncoder> encoder,
                                          NSArray<id<MTLTexture>>
                                              *inputTextures) {
-                                       draw(encoder, inputTextures, u,
-                                            baseCopy.colorPool,
-                                            baseCopy.colorPoolCount);
+                                       draw(encoder, inputTextures,
+                                            (MirageDrawArgs){
+                                                .u = u,
+                                                .pool = baseCopy.colorPool,
+                                                .poolCount =
+                                                    baseCopy.colorPoolCount});
                                      }];
 }
 
@@ -250,9 +259,13 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                                        encoder,
                                                    NSArray<id<MTLTexture>>
                                                        *inputs) {
-                                                 draw(encoder, inputs, su,
-                                                      s->colorPool,
-                                                      s->colorPoolCount);
+                                                 draw(
+                                                     encoder, inputs,
+                                                     (MirageDrawArgs){
+                                                         .u = su,
+                                                         .pool = s->colorPool,
+                                                         .poolCount =
+                                                             s->colorPoolCount});
                                                }];
                   }];
 }

@@ -12,8 +12,8 @@
 // and premultiply live in main() driven by kkExtra so they stay runtime
 // choices.
 
-NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, BOOL bufferMode) {
-  BOOL honorAlpha = !bufferMode && !(channelMask & 1u);
+NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, KKGLSLPassKind pass) {
+  BOOL honorAlpha = pass == KKGLSLPassImage && !(channelMask & 1u);
   return channelMask | (honorAlpha ? 1u : 0u);
 }
 
@@ -69,14 +69,16 @@ static int KKEmitColorProps(NSString *userSource, NSMutableString *body,
 // onto the shader vec via a swizzle (uRot.x = first-listed axis). A
 // single-axis rotate reduces to `radians(-uRot_kk.x)`.
 static void KKEmitRotateDefine(const MirageOSCBlock *blk, NSString *nm,
-                               NSMutableString *defines) {
-  [defines appendFormat:@"#define %@ (radians(-%@_kk.%@))\n", nm, nm,
+                               NSString *acc, NSMutableString *defines) {
+  [defines appendFormat:@"#define %@ (radians(-%@.%@))\n", nm, acc,
                         MirageOSCBlockRotateSwizzle(blk)];
 }
 
+// `nm` is the identifier the define creates and `acc` the block member it
+// unpacks.
 static void KKEmitScalarDefine(const MirageScalarProp *p,
                                const MirageOSCBlock *blk, NSString *nm,
-                               NSMutableString *defines) {
+                               NSString *acc, NSMutableString *defines) {
   // The rotate-OSC form is per-kind below (never for int/choice/bool, which
   // historically outrank it) rather than one early check, so the kind switch
   // stays exhaustive for -Wswitch.
@@ -86,25 +88,25 @@ static void KKEmitScalarDefine(const MirageScalarProp *p,
   case MirageScalarKindChoice:
     // Scalar int/choice only; a `#multi int` is still a vector (its
     // integer-ness is just field stepping) and lands in the Multi case.
-    [defines appendFormat:@"#define %@ (int(%@_kk.x))\n", nm, nm];
+    [defines appendFormat:@"#define %@ (int(%@.x))\n", nm, acc];
     break;
   case MirageScalarKindBool:
-    [defines appendFormat:@"#define %@ (%@_kk.x > 0.5)\n", nm, nm];
+    [defines appendFormat:@"#define %@ (%@.x > 0.5)\n", nm, acc];
     break;
   case MirageScalarKindAngle:
     if (rotate) {
-      KKEmitRotateDefine(blk, nm, defines);
+      KKEmitRotateDefine(blk, nm, acc, defines);
       break;
     }
     // Lane is degrees; the shader gets radians. Negated so a clockwise knob
     // turn reads as a clockwise on-screen rotation (the knob increases CW, but
     // a standard rotation matrix turns CCW for a positive angle in the
     // shader's y-up coordinate space).
-    [defines appendFormat:@"#define %@ (radians(-%@_kk.x))\n", nm, nm];
+    [defines appendFormat:@"#define %@ (radians(-%@.x))\n", nm, acc];
     break;
   case MirageScalarKindMulti: {
     if (rotate) {
-      KKEmitRotateDefine(blk, nm, defines);
+      KKEmitRotateDefine(blk, nm, acc, defines);
       break;
     }
     // An N-component numeric field, delivered RAW (the shader owns the units):
@@ -113,12 +115,12 @@ static void KKEmitScalarDefine(const MirageScalarProp *p,
     NSString *swizzle = (strcmp(uty, "vec3") == 0)   ? @"xyz"
                         : (strcmp(uty, "vec4") == 0) ? @"xyzw"
                                                      : @"xy";
-    [defines appendFormat:@"#define %@ (%@_kk.%@)\n", nm, nm, swizzle];
+    [defines appendFormat:@"#define %@ (%@.%@)\n", nm, acc, swizzle];
     break;
   }
   case MirageScalarKindPoint:
     if (rotate) {
-      KKEmitRotateDefine(blk, nm, defines);
+      KKEmitRotateDefine(blk, nm, acc, defines);
       break;
     }
     // Delivered in PIXELS (fragCoord space), not normalized: scale by
@@ -126,17 +128,17 @@ static void KKEmitScalarDefine(const MirageScalarProp *p,
     // (Shadertoy convention), the SAME origin as the object-space lane, so the
     // point lines up directly. Per-pass iResolution keeps it correct in
     // smaller buffer passes.
-    [defines appendFormat:@"#define %@ (%@_kk.xy * iResolution.xy)\n", nm, nm];
+    [defines appendFormat:@"#define %@ (%@.xy * iResolution.xy)\n", nm, acc];
     break;
   case MirageScalarKindFloat:
   case MirageScalarKindPercent:
   case MirageScalarKindProgress:
   case MirageScalarKindSeed:
     if (rotate) {
-      KKEmitRotateDefine(blk, nm, defines);
+      KKEmitRotateDefine(blk, nm, acc, defines);
       break;
     }
-    [defines appendFormat:@"#define %@ (%@_kk.x)\n", nm, nm];
+    [defines appendFormat:@"#define %@ (%@.x)\n", nm, acc];
     break;
   }
 }
@@ -154,7 +156,7 @@ static int KKEmitScalarProps(NSString *userSource, NSMutableString *body,
     NSString *nm = @(scalars[i].name);
     [members appendFormat:@"  vec4 %@_kk;\n", nm];
     KKEmitScalarDefine(&scalars[i], [model oscBlockForUniform:scalars[i].name],
-                       nm, defines);
+                       nm, [nm stringByAppendingString:@"_kk"], defines);
     // Strip the standalone declaration regardless of its declared GLSL type:
     // the
     // `#define` above owns the real access, so an `#int` fed a `uniform float`
@@ -300,8 +302,8 @@ static void KKAppendColorHelpers(NSMutableString *s) {
 // The three display branches differ only in how alpha is treated; see
 // KKWantsAlphaOutput for why `// #alpha` is a third mode rather than a default.
 static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
-                                 BOOL bufferMode, BOOL honorAlpha) {
-  if (bufferMode) {
+                                 KKGLSLPassKind pass, BOOL honorAlpha) {
+  if (pass == KKGLSLPassBuffer) {
     // A Buffer pass stores raw DATA a later pass samples (e.g. a distance /
     // position packed into RGBA). No grain, no sRGB, no clamp, no forced-opaque
     // - pass mainImage's output straight through.
@@ -343,7 +345,7 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
 }
 
 NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
-                     NSInteger *outUserLineOffset, BOOL bufferMode) {
+                     NSInteger *outUserLineOffset, KKGLSLPassKind pass) {
   NSMutableString *colorMembers = [NSMutableString string];
   NSMutableString *colorDefines = [NSMutableString string];
   NSMutableString *gradientFns = [NSMutableString string];
@@ -384,8 +386,8 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
   // 0 on. A shader that DOES sample iChannel0 manages the source itself (that
   // use wins), so it keeps the opaque image convention (a=1) - which also
   // protects golfed Shadertoy pastes that leave garbage in fragColor.a.
-  BOOL honorAlpha = !bufferMode && !(channelMask & 1u);
-  NSUInteger declMask = KKDeclaredChannelMask(channelMask, bufferMode);
+  BOOL honorAlpha = pass == KKGLSLPassImage && !(channelMask & 1u);
+  NSUInteger declMask = KKDeclaredChannelMask(channelMask, pass);
   for (NSUInteger ch = 0; ch < 4; ch++) {
     if (declMask & (1u << ch))
       [s appendFormat:@"layout(binding = %lu) uniform sampler2D iChannel%lu;\n",
@@ -425,6 +427,6 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                   @"fragCoord.y;\n"
                   @"  vec4 kkColor = vec4(0.0, 0.0, 0.0, 1.0);\n"
                   @"  mainImage(kkColor, fragCoord);\n"];
-  KKAppendOutputBranch(s, userSource, bufferMode, honorAlpha);
+  KKAppendOutputBranch(s, userSource, pass, honorAlpha);
   return s;
 }

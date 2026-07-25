@@ -551,6 +551,34 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   return _clipTimelineStartSec;
 }
 
+/// Motion-blur state reaching the preview. Only a `// #motionblur native`
+/// shader consumes it (the renderer gates on the mode), but the inspector
+/// pushes it unconditionally - the mode lives in the shader source, which
+/// changes under the editor, so deciding here would go stale.
+///
+/// Shutter is normalised the same way the FCP render normalises it: 360deg is
+/// one frame, so angle/360 == shutterSec/frameDur. Disabled zeroes it, matching
+/// a render with blur off.
+- (void)_pushMotionBlurToMiniViewer {
+  _miniViewerRenderer.motionBlurShutterFraction =
+      _mbPreviewEnabled ? (float)(_mbPreviewShutterAngle / 360.0) : 0.0f;
+  _miniViewerRenderer.motionBlurSamples = (int)_mbPreviewSamples;
+}
+
+- (void)setMotionBlurEnabled:(BOOL)enabled {
+  [super setMotionBlurEnabled:enabled];
+  _mbPreviewEnabled = enabled;
+  [self _pushMotionBlurToMiniViewer];
+}
+
+- (void)setMotionBlurShutterAngle:(double)shutterAngle
+                          samples:(NSInteger)samples {
+  [super setMotionBlurShutterAngle:shutterAngle samples:samples];
+  _mbPreviewShutterAngle = shutterAngle;
+  _mbPreviewSamples = samples;
+  [self _pushMotionBlurToMiniViewer];
+}
+
 /// The playhead moved: the mini viewer's `// #audio` preview follows it, so the
 /// bars show the same instant the viewer does.
 - (void)setPlayheadFraction:(double)frac {

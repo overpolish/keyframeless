@@ -379,6 +379,10 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
     __weak __typeof(self) weakSelf = self;
     __weak KKTimelineInspectorView *weakView = view;
     __weak KKMiniViewerRenderer *weakOscRenderer = oscRenderer;
+    // Whether the CURRENT shader says `off`. Tracked rather than read on
+    // demand: the source lives in the editor and changes under us.
+    __block BOOL mbOffDeclared =
+        MirageMotionBlurModeForSource(shaderSrc) == MirageMotionBlurModeOff;
     view.onCodeCommitted = ^(NSString *code) {
       __strong __typeof(weakSelf) strongSelf = weakSelf;
       KKTimelineInspectorView *v = weakView;
@@ -391,6 +395,35 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
                                     renderer:r
                                    compounds:freshCompounds
                                      paramID:kParamUIState];
+      // `// #motionblur off` means this shader will not blur, so the control
+      // must not keep claiming it is on. Clear the PERSISTED state, not just
+      // the checkbox: a user who enabled blur and then edited the shader to
+      // `off` would otherwise reopen to a ticked toggle that does nothing.
+      mbOffDeclared =
+          MirageMotionBlurModeForSource(code) == MirageMotionBlurModeOff;
+      if (mbOffDeclared) {
+        [v setMotionBlurEnabled:NO];
+        if (v.onMotionBlurChanged)
+          v.onMotionBlurChanged(NO, 180.0, [v motionBlurDefaultSamples],
+                                KKMotionBlurTechniqueAccurate);
+      }
+    };
+
+    // An `off` shader must REFUSE the toggle, not merely start unticked -
+    // otherwise the user ticks it straight back on and holds a control that
+    // does nothing. Decorate the shared handler the kit installed above rather
+    // than duplicating its blob write.
+    void (^hostMBChanged)(BOOL, double, NSInteger, KKMotionBlurTechnique) =
+        view.onMotionBlurChanged;
+    __weak KKTimelineInspectorView *weakMBView = view;
+    view.onMotionBlurChanged = ^(BOOL enabled, double shutterAngle,
+                                 NSInteger samples,
+                                 KKMotionBlurTechnique technique) {
+      BOOL allowed = enabled && !mbOffDeclared;
+      if (enabled && mbOffDeclared)
+        [weakMBView setMotionBlurEnabled:NO]; // bounce the tick straight back
+      if (hostMBChanged)
+        hostMBChanged(allowed, shutterAngle, samples, technique);
     };
     [view setOSCVisible:oscMasterVisible];
     [view setRenderMode:renderMode];

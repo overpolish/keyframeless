@@ -51,6 +51,13 @@ typedef enum MirageMotionBlurMode {
   MirageMotionBlurModeOff = 2,
 } MirageMotionBlurMode;
 
+/// Which variant of a source to transpile. The two differ only in what `main()`
+/// writes: display pixels, or raw buffer data a later pass samples.
+typedef enum KKGLSLPassKind {
+  KKGLSLPassImage = 0,
+  KKGLSLPassBuffer = 1,
+} KKGLSLPassKind;
+
 // Result of transpiling a GLSL image-shader body to a full MSL unit.
 @interface KKGLSLTranspileResult : NSObject
 // Complete MSL (the SPIRV-Cross fragment plus an appended full-screen vertex),
