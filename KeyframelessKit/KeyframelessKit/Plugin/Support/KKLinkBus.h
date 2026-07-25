@@ -314,6 +314,21 @@ NSArray<NSNumber *> *_Nullable KKLinkResolvedLaneValueWithOverride(
 FOUNDATION_EXPORT NSSet<NSString *> *
 KKLinkTimelineSourceNames(KKTimeline *timeline);
 
+/// The `${refs}` in `lane`'s expression that resolve to NOTHING, in source
+/// order. The resolver treats an unknown reference as 0 so a render can never
+/// fail on one - correct at render time, invisible to the author, which is
+/// exactly what happens when the control a reference names is deleted. This is
+/// how a UI asks the question the resolver deliberately doesn't raise.
+///
+/// Checks the same two places, in the same order, as resolution: the live
+/// override first (a same-clip lane mid-drag hasn't published yet and is NOT
+/// missing), then the bus. Empty when everything resolves, when the lane has no
+/// expression, or when the expression doesn't compile - a broken expression is
+/// the error bar's business, not this.
+FOUNDATION_EXPORT NSArray<NSString *> *
+KKLinkUnresolvedReferences(KKLane *_Nullable lane,
+                           KKLinkRefOverride _Nullable refOverride);
+
 /// Translate an expression's FRIENDLY refs (`${Clip.Param}`, as the picker
 /// shows them and as an AI would write them) to the STORED form
 /// (`${uuid.rawLabel}`) the model persists, using `manifests` (typically

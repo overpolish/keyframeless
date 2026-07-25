@@ -190,6 +190,39 @@ NSArray<NSNumber *> *KKTimelineLaneValueAtFraction(KKLane *lane, double frac) {
   return KKLaneRawValueAtFraction(lane, frac);
 }
 
+NSArray<NSNumber *> *KKLaneClampToComponentRange(KKLane *lane,
+                                                 NSArray<NSNumber *> *values) {
+  NSArray<NSNumber *> *cMin = lane.componentMin;
+  NSArray<NSNumber *> *cMax = lane.componentMax;
+  if (!lane || values.count == 0 || (cMin.count == 0 && cMax.count == 0))
+    return values;
+  NSMutableArray<NSNumber *> *out = nil;
+  for (NSUInteger i = 0; i < values.count; i++) {
+    double v = values[i].doubleValue;
+    BOOL hasLo = i < cMin.count, hasHi = i < cMax.count;
+    double lo = hasLo ? cMin[i].doubleValue : -INFINITY;
+    double hi = hasHi ? cMax[i].doubleValue : INFINITY;
+    double c;
+    if (isnan(v)) {
+      // NOT left to MAX/MIN: every comparison against NaN is false, so the
+      // pair happens to land on the MAXIMUM - a divide-by-zero would slam a
+      // control to full rather than fail quietly. Take the floor instead,
+      // which is off/none for the controls this can happen to.
+      if (!hasLo)
+        continue; // unbounded: nothing sensible to substitute, pass it through
+      c = lo;
+    } else {
+      c = v < lo ? lo : (v > hi ? hi : v); // +/-inf resolve to their bound
+    }
+    if (c == v)
+      continue; // in range - keep the original box, no allocation
+    if (!out)
+      out = [values mutableCopy];
+    out[i] = @(c);
+  }
+  return out ?: values;
+}
+
 double KKHermiteJoinBlend(double frac, double boundary, double window,
                           double (^sample)(double f)) {
   if (window <= 0.0)

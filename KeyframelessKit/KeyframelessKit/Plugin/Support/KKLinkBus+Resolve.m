@@ -12,10 +12,10 @@
 #import "KKLinkBus_Private.h"
 
 #import "KKLinkExpr.h"
+#import "KKTimeline.h"
 #import "KKTimingEvaluation.h"
 #import <KeyframelessKit/KKLog.h>
 #import <os/lock.h>
-#import "KKTimeline.h"
 
 static KKExprVal KKLinkExprValFromArray(NSArray<NSNumber *> *arr) {
   KKExprVal v = {{0, 0, 0, 0}, 1};
@@ -117,7 +117,11 @@ static KKExprVal KKLinkResolveSource(NSString *name, double T,
                  return KKLinkResolveSource(n, T, visiting, refOverride);
                }];
   [visiting removeObject:name];
-  return out;
+  // Same rule one level down: what a reference reports is the source lane's
+  // value, and that lane's own range binds it too. Only bites when the SOURCE
+  // itself carries an expression - its raw keyposes were clamped when authored.
+  return KKLinkExprValFromArray(
+      KKLaneClampToComponentRange(curve.lane, KKLinkArrayFromExprVal(out)));
 }
 
 NSArray<NSNumber *> *KKLinkResolvedLaneValue(KKLane *lane, double frac,
@@ -142,8 +146,7 @@ KKLinkResolvedLaneValueWithOverride(KKLane *lane, double frac,
     // No expression (or bare passthrough) -> the lane's own value.
     return KKLaneDisplayValueAtFraction(lane, frac);
   KKLinkExpr *expr = KKLinkCompile(exprStr);
-  NSArray<NSNumber *> *own =
-      KKLaneDisplayValueAtFraction(lane, frac);
+  NSArray<NSNumber *> *own = KKLaneDisplayValueAtFraction(lane, frac);
   if (!expr)
     return own;
   KKExprVal ownVal = KKLinkExprValFromArray(own);
@@ -158,7 +161,27 @@ KKLinkResolvedLaneValueWithOverride(KKLane *lane, double frac,
          resolveRef:^KKExprVal(NSString *n) {
            return KKLinkResolveSource(n, timelineSec, visiting, refOverride);
          }];
-  return KKLinkArrayFromExprVal(out);
+  // A lane's declared range binds however the value was arrived at. Typing and
+  // dragging already clamp, so without this an expression was the one way to
+  // push a lane past its own bounds - which reads as the control going strange
+  // (a 0..100 % radius driven from a 0..400 % size stops behaving at 100).
+  return KKLaneClampToComponentRange(lane, KKLinkArrayFromExprVal(out));
+}
+
+NSArray<NSString *> *KKLinkUnresolvedReferences(KKLane *lane,
+                                                KKLinkRefOverride refOverride) {
+  KKLinkExpr *expr = KKLinkCompile(lane.linkExpression);
+  if (!expr)
+    return @[];
+  NSMutableArray<NSString *> *missing = [NSMutableArray array];
+  for (NSString *name in expr.references) {
+    if (refOverride && refOverride(name).count > 0)
+      continue; // live same-clip value: published or not, it resolves
+    if ([KKLinkBus loadCurve:name])
+      continue;
+    [missing addObject:name];
+  }
+  return missing;
 }
 
 NSSet<NSString *> *KKLinkTimelineSourceNames(KKTimeline *timeline) {

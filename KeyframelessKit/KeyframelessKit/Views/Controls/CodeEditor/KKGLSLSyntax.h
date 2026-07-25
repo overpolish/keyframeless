@@ -26,7 +26,8 @@ NSColor *
 KKCodeDirective(void); // green (a `// #kind` / `// @osc` annotation - a
                        // flavour on top of the comment, NOT real code)
 NSColor *KKCodeCursor(void);
-NSColor *KKCodeError(void); // red (error bar / flagged line)
+NSColor *KKCodeError(void);   // red (error bar / flagged line)
+NSColor *KKCodeWarning(void); // amber (valid, but something needs attention)
 
 /// One regex matching comments, preprocessor directives, numbers and
 /// identifiers (capture groups 1..4 respectively).

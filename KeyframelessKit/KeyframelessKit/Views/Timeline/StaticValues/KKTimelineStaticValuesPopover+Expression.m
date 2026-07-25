@@ -31,6 +31,7 @@
 - (NSArray<NSDictionary<NSString *, NSString *> *> *)
     _linkCompletionItemsForPartial:(NSString *)partial;
 - (NSString *)_displayFromStored:(NSString *)stored;
+- (NSArray<NSString *> *)_displayNamesForRefs:(NSArray<NSString *> *)refs;
 - (NSString *)_storedFromDisplay:(NSString *)display;
 - (void)_insertReferenceMenu:(NSButton *)sender;
 - (NSAttributedString *)_exprCatalogTitleForEntry:
@@ -203,6 +204,29 @@
 // the cached manifests.
 - (NSString *)_displayFromStored:(NSString *)stored {
   return KKLinkDisplayExpressionFromStored(stored, _linkManifests);
+}
+
+// Stored ref names ("uuid.Radius", "uuid.layerID.Radius") as something worth
+// showing. The usual translation goes through the manifests, but the refs this
+// is called on are exactly the ones nothing publishes any more - so a deleted
+// source has no manifest entry to name it, and the uuid would leak into the
+// warning. Fall back to the trailing component, which is the parameter name the
+// author actually typed.
+- (NSArray<NSString *> *)_displayNamesForRefs:(NSArray<NSString *> *)refs {
+  NSMutableArray<NSString *> *out =
+      [NSMutableArray arrayWithCapacity:refs.count];
+  for (NSString *ref in refs) {
+    NSString *wrapped = [NSString stringWithFormat:@"${%@}", ref];
+    NSString *display = [self _displayFromStored:wrapped];
+    if (![display isEqualToString:wrapped] && display.length > 3) {
+      [out addObject:[display substringWithRange:NSMakeRange(2, display.length -
+                                                                    3)]];
+      continue;
+    }
+    NSArray<NSString *> *comps = [ref componentsSeparatedByString:@"."];
+    [out addObject:comps.lastObject.length ? comps.lastObject : ref];
+  }
+  return out;
 }
 
 - (NSString *)_storedFromDisplay:(NSString *)display {
@@ -515,6 +539,7 @@
     return;
   if (lane.linkExpression.length == 0) {
     ed.resultText = nil;
+    ed.resultWarningText = nil; // clearing the expression clears its warning
     return;
   }
   // Evaluate against the LIVE displayed value (seeded from the shown keypose,
@@ -601,6 +626,25 @@
              NSArray<NSNumber *> *res = KKLinkResolvedLaneValueWithOverride(
                  evalLane, evalFrac, evalTl, dur, refOverride);
              ed.resultText = [self _formatResultText:res forLane:evalLane];
+             // A reference that names nothing resolves to 0 and renders
+             // happily, so the readout looks fine while a term has quietly
+             // vanished - which is what deleting a referenced control does.
+             // Name the refs rather than just saying something is wrong: with
+             // several in one expression, which one died is the whole question.
+             NSArray<NSString *> *missing =
+                 KKLinkUnresolvedReferences(evalLane, refOverride);
+             ed.resultWarningText =
+                 missing.count
+                     ? [NSString
+                           stringWithFormat:
+                               KKLoc(@"Unknown reference: %@ (reads 0)",
+                                     @"Expression warning: the named ${refs} "
+                                     @"resolve to no published source, so they "
+                                     @"evaluate as zero. %@ is a "
+                                     @"comma-separated list of names."),
+                               [[self _displayNamesForRefs:missing]
+                                   componentsJoinedByString:@", "]]
+                     : nil;
 
              // Inline curve preview: sample the SAME expression across the
              // whole clip (fraction 0..1, t = clipStart + frac*dur), first

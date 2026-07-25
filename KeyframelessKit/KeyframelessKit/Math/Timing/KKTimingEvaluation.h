@@ -77,6 +77,26 @@ FOUNDATION_EXPORT
 NSArray<NSNumber *> *_Nullable KKLaneDisplayValueAtFraction(KKLane *lane,
                                                             double visualFrac);
 
+/// Clamp `values` component-wise to the lane's declared value range
+/// (`componentMin` / `componentMax`). A component with no declared bound - the
+/// arrays are empty, or shorter than the value - passes through untouched, so
+/// a deliberately unbounded lane (draw-on Offset, Rotation) is unaffected.
+///
+/// This is the VALUE clamp, not the slider clamp: `sliderMin`/`sliderMax` stop
+/// the widget short of the real range on purpose and must not narrow a value.
+/// It also does NOT consult `componentMaxByControllerValue` - that effective
+/// max depends on another lane's current value, which only the inspector has
+/// in hand, so a controller-driven max still bounds typing but not expressions.
+///
+/// Keypose edits are already clamped on the way in; this exists for the paths
+/// that compute a value rather than store one, which is link expressions.
+///
+/// Non-finite input: +/-infinity resolve to their bound, and NaN takes the
+/// floor (an expression that divided by zero should read as off, not as full).
+/// A component with no floor passes NaN through unchanged.
+FOUNDATION_EXPORT NSArray<NSNumber *> *_Nullable KKLaneClampToComponentRange(
+    KKLane *_Nullable lane, NSArray<NSNumber *> *_Nullable values);
+
 /// A Basic-mode lane's hold shape: which In/Out phases exist and which
 /// keypose indices bracket the Hold. THE one shape resolver - `lane.holdShape`
 /// (stamped by every Basic rebuild) is authoritative; the count/middle-time

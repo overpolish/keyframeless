@@ -54,7 +54,8 @@
   _KKSparklineView *_sparkline; // trailing curve preview in the result strip
   NSButton *_resultCopyButton;  // trailing copy button, shown only on error
   NSLayoutConstraint *_resultBarHeight;
-  NSString *_resultValueText; // host's "-> value" readout (shown when valid)
+  NSString *_resultValueText;   // host's "-> value" readout (shown when valid)
+  NSString *_resultWarningText; // amber note (valid, but worth flagging)
   NSString
       *_exprErrorText; // parser error (shown red in the strip when invalid)
   NSView *_saveBar;    // optional name + Save strip (height toggled 0/on)

@@ -82,6 +82,14 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 /// clarity. nil/empty hides the strip.
 @property(nonatomic, copy, nullable) NSString *resultText;
 
+/// Optional warning for the result strip. Unlike a parser error, the
+/// expression is VALID and does produce a value - something about it just needs
+/// saying (a `${ref}` that names nothing published, which silently reads 0).
+/// Amber, and it ranks between the red error and the dim value readout: the
+/// value is still what renders, so the sparkline stays visible beside it.
+/// nil = no warning.
+@property(nonatomic, copy, nullable) NSString *resultWarningText;
+
 /// Optional inline sparkline drawn at the trailing end of the result strip: the
 /// expression sampled across the whole clip (fraction 0->1), so it reads the
 /// same in constants and keypose modes regardless of the current playhead.

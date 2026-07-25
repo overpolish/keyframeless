@@ -131,23 +131,41 @@
   [self _refreshResultStrip];
 }
 
-// The strip shows the parser error (red, Error-Lens style: always visible, no
-// hover) when the expression is invalid, otherwise the host's "-> value"
-// readout (dim) with its sparkline. Error wins because an invalid expression
-// has no value.
+- (NSString *)resultWarningText {
+  return _resultWarningText;
+}
+
+- (void)setResultWarningText:(NSString *)resultWarningText {
+  _resultWarningText = [resultWarningText copy];
+  [self _refreshResultStrip];
+}
+
+// Three states, most severe first. A parser error (red, Error-Lens style:
+// always visible, no hover) wins because an invalid expression has no value at
+// all. A warning (amber) means the expression DOES evaluate but something in it
+// is not what the author meant - it replaces the readout text, because a number
+// with a silent hole in it is worse than no number, but keeps the sparkline
+// since that curve is genuinely what renders. Otherwise the plain dim readout.
 - (void)_refreshResultStrip {
   BOOL hasError = _exprErrorText.length > 0;
-  NSString *text = hasError ? _exprErrorText : (_resultValueText ?: @"");
+  BOOL hasWarning = !hasError && _resultWarningText.length > 0;
+  NSString *text = hasError     ? _exprErrorText
+                   : hasWarning ? _resultWarningText
+                                : (_resultValueText ?: @"");
   _resultLabel.stringValue = text;
-  _resultLabel.textColor =
-      hasError ? KKCodeError() : [KKCodeText() colorWithAlphaComponent:0.55];
-  // Match the GLSL error bar: red text on a dark-red strip when invalid, the
-  // neutral panel tint otherwise.
-  _resultBar.layer.backgroundColor =
-      (hasError ? KKHex(0x2d1214) : KKHex(0x161b22)).CGColor;
+  _resultLabel.textColor = hasError ? KKCodeError()
+                           : hasWarning
+                               ? KKCodeWarning()
+                               : [KKCodeText() colorWithAlphaComponent:0.55];
+  // Match the GLSL error bar: red text on a dark-red strip when invalid, a
+  // dark-amber one when flagged, the neutral panel tint otherwise.
+  _resultBar.layer.backgroundColor = (hasError     ? KKHex(0x2d1214)
+                                      : hasWarning ? KKHex(0x2b2413)
+                                                   : KKHex(0x161b22))
+                                         .CGColor;
   _resultBarHeight.constant = text.length ? 16.0 : 0.0;
-  // Error and value are mutually exclusive in the strip: error shows the copy
-  // button, a valid value shows the sparkline.
+  // The copy button is for a message the author may want to paste elsewhere;
+  // the sparkline is for a value that exists. A warning has both.
   _resultCopyButton.hidden = !hasError;
   _sparkline.hidden =
       hasError || text.length == 0 || _sparkline.samples.count < 2;

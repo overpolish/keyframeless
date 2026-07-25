@@ -27,3 +27,4 @@ NSColor *KKCodeString(void) { return KKHex(0xa5d6ff); }
 NSColor *KKCodeDirective(void) { return KKHex(0x7ee787); }
 NSColor *KKCodeCursor(void) { return KKHex(0x58a6ff); }
 NSColor *KKCodeError(void) { return KKHex(0xf85149); }
+NSColor *KKCodeWarning(void) { return KKHex(0xd29922); }
