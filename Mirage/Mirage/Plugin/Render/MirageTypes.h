@@ -17,11 +17,24 @@
 // (slider/field cap + swatch visibility in the catalog).
 #define KK_SHADER_MAX_COLORS 32
 
-// Total vec4 slots across ALL of a shader's `// #color` properties (each single
-// = 1 vec4; each array[N] = N + 1 meta vec4). This is the std140 tail appended
-// to the transpiled shader's uniform block. Shared by the render blob and the
-// bind path.
-#define KK_SHADER_COLOR_POOL 48
+// Total vec4 slots shared by EVERY directive-driven value: `// #color` (1 each,
+// or N+1 for an array), scalars (1 each), `#audio` (N band vec4s + flow) and
+// `#gradient` (stops + midpoints + count). The std140 tail appended to the
+// transpiled shader's uniform block.
+//
+// Self-imposed, not a hardware limit - a Metal constant buffer is 64KB and this
+// is 1.5KB. What it actually costs is `MiragePluginState`, which motion blur
+// allocates ONE OF PER SUB-FRAME SAMPLE, plus a stack copy in the mini viewer.
+// The state blob memcpys that struct, so this size is baked into its byte
+// layout - safe to change because the blob is FxPlug's per-render handoff
+// (produced in -pluginState:atTime:, consumed by the render on the same tick),
+// not project data. The persisted timeline is a separate parameter.
+//
+// Raised 48 -> 96 for headroom: audio and gradients are the greedy ones (two
+// `#audio` spectra at [16] would be 34 slots on their own), and Frame already
+// uses 26. Overflow is at least honest - the parsers stop and validation
+// reports it rather than dropping controls silently.
+#define KK_SHADER_COLOR_POOL 96
 
 // Shared params common to every Type, passed in their own fragment buffer
 // (MirageFragmentIndex_Common) so the per-Type uniform structs don't each

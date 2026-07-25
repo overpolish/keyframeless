@@ -14,6 +14,7 @@
 #import "KKMiniViewerView.h"
 #import "KKPaddedScrollView.h"
 #import "KKPaletteGenerator.h"
+#import "KKPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
@@ -844,6 +845,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // mini-viewer blink).
 - (void)_rebuildCategoryNavForLanes:(NSArray<KKLane *> *)lanes
                     initialCategory:(NSString *)requested {
+  [_categoryPillBar removeFromSuperview];
+  _categoryPillBar = nil;
   [_categoryPill removeFromSuperview];
   _categoryPill = nil;
   _stackTopConstraint.active = NO;
@@ -871,14 +874,32 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _categoryKeys = KKLaneCategoryKeys(lanes);
     _selectedCategory = KKResolveLaneCategory(lanes, requested);
     _categoryPill = pill;
-    [self addSubview:pill];
+    // Wrapped in the same edge-faded horizontal scroll the lane-filter
+    // checklist uses. Added bare, a long category run overflowed the popover
+    // and the tabs past the edge were simply unreachable - and a shader can
+    // name as many groups as it likes, so this isn't a rare case.
+    KKPillBar *bar = [[KKPillBar alloc] initWithPillRow:pill];
+    bar.translatesAutoresizingMaskIntoConstraints = NO;
+    // Hug the content while it fits, but near-zero compression resistance lets
+    // it shrink so the inner scroll takes over instead of clipping.
+    [bar setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                    forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [bar setContentCompressionResistancePriority:1
+                                  forOrientation:
+                                      NSLayoutConstraintOrientationHorizontal];
+    _categoryPillBar = bar;
+    [self addSubview:bar];
     [NSLayoutConstraint activateConstraints:@[
-      [pill.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-      [pill.topAnchor constraintEqualToAnchor:_categoryNavTopAnchor
-                                     constant:_categoryNavTopInset],
-      [pill.heightAnchor constraintEqualToConstant:kKKCategoryPillH],
+      [bar.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+      [bar.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor
+                                                     constant:KKPaddingMD],
+      [bar.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor
+                                                   constant:-KKPaddingMD],
+      [bar.topAnchor constraintEqualToAnchor:_categoryNavTopAnchor
+                                    constant:_categoryNavTopInset],
+      [bar.heightAnchor constraintEqualToConstant:kKKCategoryPillH],
     ]];
-    top = pill.bottomAnchor;
+    top = bar.bottomAnchor;
     inset = KKPaddingMD;
   } else {
     _categoryKeys = nil;

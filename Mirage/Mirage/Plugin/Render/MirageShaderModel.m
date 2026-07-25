@@ -151,8 +151,10 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
   _colorCount =
       MirageParseColorProps(source, _colors, KK_SHADER_MAX_COLOR_PROPS, &cUsed);
   _colorPoolUsed = cUsed;
+  int sTrunc = 0;
   _scalarCount = MirageParseScalarProps(
-      source, _scalars, KK_SHADER_MAX_SCALAR_PROPS, cUsed, &sUsed);
+      source, _scalars, KK_SHADER_MAX_SCALAR_PROPS, cUsed, &sUsed, &sTrunc);
+  _scalarTruncated = sTrunc != 0;
   _scalarPoolUsed = sUsed;
   _audioCount = MirageParseAudioProps(source, _audio, KK_SHADER_MAX_AUDIO_PROPS,
                                       cUsed + sUsed, &aUsed);

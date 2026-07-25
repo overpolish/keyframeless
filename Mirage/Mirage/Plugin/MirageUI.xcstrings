@@ -8065,6 +8065,48 @@
         }
       }
     },
+    "Too many controls: %d is the limit": {
+      "comment": "Mirage control-count validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu viele Steuerungen: %d ist das Maximum"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiados controles: el máximo es %d"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop de contrôles : %d au maximum"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロールが多すぎます。上限は %d です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤이 너무 많습니다. 최대 %d개입니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件过多：上限为 %d 个"
+          }
+        }
+      }
+    },
     "Transition": {
       "comment": "Mirage category: blends two clips.",
       "extractionState": "manual",
@@ -8817,6 +8859,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "`#%@` 无法设置分组：颜色、音频和渐变有各自的分组"
+          }
+        }
+      }
+    },
+    "`#multi` takes at most 4 fields - split it into two controls": {
+      "comment": "Mirage too-many-multi-fields validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#multi` erlaubt höchstens 4 Felder – teile es in zwei Steuerungen auf"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#multi` admite 4 campos como máximo: divídelo en dos controles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#multi` accepte 4 champs au maximum : divisez-le en deux contrôles"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#multi` のフィールドは最大 4 つです。2 つのコントロールに分けてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#multi`는 필드를 최대 4개까지 사용할 수 있습니다. 두 개의 컨트롤로 나누세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#multi` 最多支持 4 个字段，请拆分为两个控件"
           }
         }
       }

@@ -27,6 +27,8 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorTextH;
 FOUNDATION_EXPORT const CGFloat kKKExprEditorRowH;
 FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
 
+@class KKPillBar;
+
 @interface _KKStaticValuesPopoverView () {
 @package
   NSMutableDictionary<NSString *, _KKStaticValueRow *> *_rowsByLabel;
@@ -47,6 +49,7 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   // Category nav: an icon pill row under the mini-viewer that filters which
   // param rows show. nil/empty when <2 distinct lane categories (no pill).
   KKPillToggleRowView *_categoryPill;
+  KKPillBar *_categoryPillBar; // the pill's scrolling wrapper (see the rebuild)
   NSArray<NSString *> *_categoryKeys; // ordered, first-seen
   NSString *_selectedCategory;        // currently shown category key
   NSDictionary<NSString *, NSString *> *_rowCategoryByLabel;

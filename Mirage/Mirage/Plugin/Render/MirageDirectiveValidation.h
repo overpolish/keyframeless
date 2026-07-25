@@ -121,6 +121,50 @@ static inline NSString *MirageUnknownGroupSymbol(NSString *source) {
   return nil;
 }
 
+/// The first `#multi` declaring more than 4 fields, or nil. A vec4 is the
+/// widest uniform there is, so a 5th field has nowhere to live - and silently
+/// dropping it would leave the author wondering why their control is short.
+static inline NSString *MirageFirstOverlongMulti(NSString *source) {
+  if (!source.length)
+    return nil;
+  NSRegularExpression *re = [NSRegularExpression
+      regularExpressionWithPattern:
+          @"(?m)^[ \\t]*//[ "
+          @"\\t]*#multi\\b[^\\n]*?\\bfields\\s*=\\s*\\{([^}]*)\\}"
+                           options:0
+                             error:nil];
+  __block NSString *found = nil;
+  [re enumerateMatchesInString:source
+                       options:0
+                         range:NSMakeRange(0, source.length)
+                    usingBlock:^(NSTextCheckingResult *m, NSMatchingFlags f,
+                                 BOOL *stop) {
+                      NSString *list =
+                          [source substringWithRange:[m rangeAtIndex:1]];
+                      NSInteger n = 0;
+                      for (NSString *t in
+                           [list componentsSeparatedByString:@","])
+                        if ([t stringByTrimmingCharactersInSet:
+                                    NSCharacterSet.whitespaceCharacterSet]
+                                .length)
+                          n++;
+                      if (n > 4) {
+                        found = list;
+                        *stop = YES;
+                      }
+                    }];
+  return found;
+}
+
+/// YES when the shader declares more controls than there is room for. Silent
+/// truncation is the worst outcome here: the shader still compiles and renders,
+/// and the missing controls just never appear.
+static inline BOOL MirageHasTooManyControls(NSString *source) {
+  if (!source.length)
+    return NO;
+  return [MirageShaderModel modelForSource:source].scalarTruncated;
+}
+
 /// The `osc` kinds a directive can carry, for validation-error messaging.
 typedef enum MirageOSCErrorKind {
   MirageOSCErrorPoint = 0,  // osc=point on a non-vec2

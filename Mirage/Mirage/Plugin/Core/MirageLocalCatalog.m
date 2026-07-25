@@ -222,21 +222,28 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
   plasma.sections = @{@"Image" : MirageCustomDefaultShaderSource()};
   plasma.thumbnail = sBuiltinThumbnails[@"Plasma"];
 
-  // The former standalone Rounded plugin, now a shipped shader. Categorised
+  // The former standalone Rounded plugin, now a shipped shader (and rather
+  // more than rounding). Categorised
   // `layout` rather than `filter`: it does read the clip, but what it IS is the
   // `#alpha`-masked one-region-of-the-frame shader that category describes, and
   // stacking instances on Final Cut's lanes is the whole point of it.
-  MirageCatalogEntry *rounded = [MirageCatalogEntry new];
-  rounded.entryID = @"builtin.rounded";
-  rounded.name = @"Rounded";
-  rounded.author = @"";
-  rounded.category = kMirageCategoryLayout;
-  rounded.version = 1;
-  rounded.folderPath = @"";
-  rounded.builtin = YES;
-  rounded.sections = @{@"Image" : MirageRoundedShaderSource()};
-  rounded.thumbnail = sBuiltinThumbnails[@"Rounded"];
-  return @[ plasma, rounded ];
+  MirageCatalogEntry *frame = [MirageCatalogEntry new];
+  frame.entryID = @"builtin.frame";
+  frame.name = @"Frame";
+  frame.author = @"";
+  frame.category = kMirageCategoryLayout;
+  frame.version = 1;
+  frame.folderPath = @"";
+  frame.builtin = YES;
+  frame.sections = @{
+    @"Image" : MirageFrameShaderSource(),
+    @"Common" : MirageFrameCommonSource(),
+    @"Buffer B" : MirageFrameBufferBSource(),
+    @"Buffer C" : MirageFrameBufferCSource(),
+    @"Buffer D" : MirageFrameBufferDSource(),
+  };
+  frame.thumbnail = sBuiltinThumbnails[@"Frame"];
+  return @[ plasma, frame ];
 }
 
 - (void)deleteEntryID:(NSString *)entryID {

@@ -189,10 +189,20 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   id<MTLCommandQueue> ckptQueue = [cache commandQueueWithRegistryID:registryID
                                                         pixelFormat:pf];
   NSInteger F = frameIndex;
-  MirageSimRange sim = [self simRangeForSet:fb
-                                 frameIndex:F
-                                     device:device
-                                      queue:ckptQueue];
+  // Only a FEEDBACK chain can reuse a previous render's buffers: its state is a
+  // function of history, so once frame F is simulated it stays valid. A
+  // non-feedback chain is a pure function of the CURRENT uniforms, and the
+  // reuse path returns an empty range that skips the passes entirely - so any
+  // parameter change while parked on one frame left the buffers holding the
+  // last render's result. Crop the window, then raise the glow, and the glow
+  // was still built from the UNCROPPED silhouette (alpha 1 everywhere = a
+  // white wash), correcting itself only when a scrub changed the frame index.
+  MirageSimRange sim = needsFeedback
+                           ? [self simRangeForSet:fb
+                                       frameIndex:F
+                                           device:device
+                                            queue:ckptQueue]
+                           : (MirageSimRange){0, 0, NO}; // always recompute
 
   for (NSInteger f = sim.from; f <= sim.to; f++) {
     int prevI = fb->prevIdx, curI = 1 - prevI;

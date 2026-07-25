@@ -40,6 +40,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) int scalarCount;
 - (const MirageScalarProp *)scalarProps;
 @property(nonatomic, readonly) int scalarPoolUsed;
+/// YES when the source declared more controls than fit (the prop cap, or the
+/// shared vec4 pool). The extras were dropped; validation surfaces it.
+@property(nonatomic, readonly) BOOL scalarTruncated;
 
 @property(nonatomic, readonly) int audioCount;
 - (const MirageAudioProp *)audioProps;

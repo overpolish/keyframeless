@@ -192,7 +192,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   return self;
 }
 
-// Render each shipped built-in shader (Plasma, Rounded) to a thumbnail once per
+// Render each shipped built-in shader (Plasma, Frame) to a thumbnail once per
 // process, using a throwaway renderer whose timeline holds just that shader's
 // code. Directive lanes aren't seeded, so each one draws at its DECLARED
 // defaults - which is what makes a filter's thumbnail meaningful, since it
@@ -210,6 +210,17 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
                                    label:kMirageCodeLaneLabel];
       lane.valueType = KKLaneValueTypeCode;
       lane.codeString = e.sections[@"Image"];
+      // Carry the entry's OTHER sections too, exactly as _loadEntry does. An
+      // Image section is not necessarily self-contained: Frame keeps its shared
+      // helpers in Common and its glow blur in Buffer B/C/D, so baking Image
+      // alone failed to compile and the card rendered the red error shader.
+      NSMutableArray<NSDictionary<NSString *, NSString *> *> *tabs =
+          [NSMutableArray array];
+      for (NSString *name in
+           @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ])
+        if (e.sections[name].length)
+          [tabs addObject:@{@"name" : name, @"code" : e.sections[name]}];
+      lane.codeTabs = tabs.count ? tabs : nil;
       t.lanes = @[ lane ];
       r.timeline = t;
       NSData *jpeg = MirageRenderThumbnailJPEG(r, 320, 180);

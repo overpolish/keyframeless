@@ -5,6 +5,7 @@
 
 #import "MirageMiniViewerRenderer.h"
 #import "MirageMiniViewerRenderer_Internal.h"
+#import <KeyframelessKit/KKLog.h>
 
 #import "Constants.h"        // MirageCustomDefaultShaderSource
 #import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding

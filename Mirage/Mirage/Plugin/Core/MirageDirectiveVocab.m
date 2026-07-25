@@ -97,7 +97,9 @@ MirageDirectiveAttributeKeys(void) {
             @"osc="),
           E(@"fields", @"fields={}",
             @"Names for each number of a #multi control.", @"fields={"),
-          E(@"units", @"units={}", @"Per-field units for #multi: % or px.",
+          E(@"units", @"units={}",
+            @"How the value reads: % or px. One per field on a #multi, or "
+            @"units=\"px\" on a single control.",
             @"units={"),
           E(@"center", @"center=",
             @"Where a ring or box sits in the frame, 0 to 1.", @"center="),

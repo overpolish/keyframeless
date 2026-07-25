@@ -161,7 +161,13 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
         if ([fieldsStr characterAtIndex:i] == ',')
           cnt++;
     }
+    // Hard-capped at 4: every per-field array on the prop (mmin / mmax / mdef
+    // / fieldUnit) is [4] and the widest uniform is a vec4, so a longer
+    // `fields={}` would have the lane builder read past the end of all of
+    // them. Validation reports it; this keeps the parse in bounds either way.
     p->fieldCount = cnt > 0 ? cnt : (arity > 0 ? arity : 2);
+    if (p->fieldCount > 4)
+      p->fieldCount = 4;
     p->aspectLinked =
         ([[NSRegularExpression regularExpressionWithPattern:@"\\blockaspect\\b"
                                                     options:0
@@ -301,8 +307,11 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
 /// used (one per prop).
 static inline int MirageParseScalarProps(NSString *source,
                                          MirageScalarProp *props, int maxProps,
-                                         int startOffset, int *outUsed) {
+                                         int startOffset, int *outUsed,
+                                         int *outTruncated) {
   int n = 0, pool = startOffset;
+  if (outTruncated)
+    *outTruncated = 0;
   if (outUsed)
     *outUsed = 0;
   if (!source.length || maxProps <= 0)
@@ -322,9 +331,13 @@ static inline int MirageParseScalarProps(NSString *source,
       [dirRe matchesInString:source
                      options:0
                        range:NSMakeRange(0, source.length)];
-  for (int di = 0; di < (int)dirs.count && n < maxProps; di++) {
-    if (pool + 1 > KK_SHADER_COLOR_POOL)
+  for (int di = 0; di < (int)dirs.count; di++) {
+    // Out of room: say so rather than quietly returning a short control set.
+    if (n >= maxProps || pool + 1 > KK_SHADER_COLOR_POOL) {
+      if (outTruncated)
+        *outTruncated = 1;
       break;
+    }
     NSTextCheckingResult *dm = dirs[di];
     NSString *kind = [source substringWithRange:[dm rangeAtIndex:1]];
     NSString *attrs = [source substringWithRange:[dm rangeAtIndex:2]];
@@ -399,6 +412,29 @@ static inline int MirageParseScalarProps(NSString *source,
     strncpy(p.label, label.UTF8String ?: "", sizeof(p.label) - 1);
     MirageParseGroupAttr(attrs, p.group, sizeof(p.group), p.groupSymbol,
                          sizeof(p.groupSymbol));
+    if (!p.isMulti) {
+      // Single-value `units="px"` / `units={px}`. `#multi` parses its own
+      // per-field list further down; this is the one-component spelling.
+      NSString *u = MirageAttrString(attrs, @"units");
+      if (!u.length) {
+        NSTextCheckingResult *bm = [[NSRegularExpression
+            regularExpressionWithPattern:@"\\bunits\\s*=\\s*\\{([^}]*)\\}"
+                                 options:0
+                                   error:nil]
+            firstMatchInString:attrs
+                       options:0
+                         range:NSMakeRange(0, attrs.length)];
+        if (bm && [bm rangeAtIndex:1].location != NSNotFound)
+          u = [attrs substringWithRange:[bm rangeAtIndex:1]];
+      }
+      u = [[u
+          stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet]
+          lowercaseString];
+      if ([u isEqualToString:@"px"])
+        p.fieldUnit[0] = 'p';
+      else if ([u isEqualToString:@"%"] || [u isEqualToString:@"percent"])
+        p.fieldUnit[0] = '%';
+    }
     p.poolOffset = pool;
     MirageScalarParseOSC(attrs, &p);
     MirageScalarParseDefaults(attrs, &p);

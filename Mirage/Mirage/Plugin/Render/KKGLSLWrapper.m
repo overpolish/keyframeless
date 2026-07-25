@@ -262,12 +262,26 @@ static void KKEmitGradientProps(NSString *userSource, NSMutableString *body,
 // The sRGB decode + core film-grain overlay every display path calls. Grain is
 // ported verbatim from MirageCommon.h so Custom grain matches the built-in
 // Types; it is applied in gamma space before encoding.
+//
+// EDITING THIS FILE DURING DEVELOPMENT: restart FCP, don't just rebuild.
+// KKTranspileMemoized keys its cache on the USER SOURCE ALONE, and the pipeline
+// cache below it keys on the resulting MSL digest - so a wrapper change that
+// leaves the user source untouched returns the OLD MSL from the memo, produces
+// the same digest, and quietly reuses the OLD pipeline. The cache is a
+// process-wide static, so a fresh effect instance won't clear it either.
+// Shipped builds are unaffected (new process, cold cache); this only bites
+// while iterating.
 static void KKAppendColorHelpers(NSMutableString *s) {
   [s appendString:
           @"vec3 kkSrgbToLinear(vec3 c) {\n"
           @"  c = clamp(c, 0.0, 1.0);\n"
           @"  bvec3 lo = lessThanEqual(c, vec3(0.04045));\n"
           @"  return mix(pow((c + 0.055) / 1.055, vec3(2.4)), c / 12.92, "
+          @"vec3(lo));\n}\n"
+          @"vec3 kkLinearToSrgb(vec3 c) {\n"
+          @"  c = clamp(c, 0.0, 1.0);\n"
+          @"  bvec3 lo = lessThanEqual(c, vec3(0.0031308));\n"
+          @"  return mix(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, c * 12.92, "
           @"vec3(lo));\n}\n"];
   // A gradient stop's MIDPOINT: where the halfway colour of the segment BELOW
   // it lands. Two straight ramps meeting at (m, 0.5) - the same piecewise bias
@@ -318,10 +332,18 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
     // `// #alpha`: premultiplied passthrough of the shader's own alpha. No
     // composite over the source (the shader is masking that source), no forced
     // opaque.
+    // Premultiply in LINEAR on BOTH paths, then encode back for a gamma
+    // target. Multiplying colour by coverage is only meaningful in linear
+    // light, and doing it in gamma (as the 8-bit path used to) displays the
+    // faint end of a ramp 3-5x darker than the float path does - the same
+    // shader looked materially different in the mini viewer and the main
+    // viewer, which is a preview you can't trust for anything soft-edged.
     [s appendString:
-            @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) : disp;\n"
             @"  float kka = clamp(kkColor.a, 0.0, 1.0);\n"
-            @"  kk_outColor = vec4(rgb * kka, kka);\n}\n"];
+            @"  vec3 pm = kkSrgbToLinear(disp) * kka;\n"
+            @"  kk_outColor = (kkExtra.w == 0.0) ? vec4(pm, kka)\n"
+            @"                                  : vec4(kkLinearToSrgb(pm), "
+            @"kka);\n}\n"];
   } else if (honorAlpha) {
     // Composite the shader over the source using its own alpha, so transparent
     // areas show the footage (iChannel0) rather than black - the shader is a

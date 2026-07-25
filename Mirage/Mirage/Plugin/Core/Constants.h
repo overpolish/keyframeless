@@ -67,7 +67,13 @@ static const UInt32 kParamToImage = 204;
 /// catalog. Defined in Plugin+Render.
 extern NSString *MirageCustomDefaultShaderSource(void);
 
-/// The shipped Rounded filter (rounded corners + crop + slide, `#alpha`
-/// masked), offered as a built-in catalog entry beside the default plasma.
-/// Defined alongside it in MirageCustomShader.
-extern NSString *MirageRoundedShaderSource(void);
+/// The shipped Frame filter: crops the clip to a rounded window, then borders,
+/// shadows and (with an audio source) pulses it. Masks with `#alpha` so the
+/// corners are genuinely transparent.
+extern NSString *MirageFrameShaderSource(void);
+/// Frame's other sections: shared blur helper, then the two halves of the
+/// separable glow blur. Buffer A is skipped so ch0 keeps the source clip.
+extern NSString *MirageFrameCommonSource(void);
+extern NSString *MirageFrameBufferBSource(void);
+extern NSString *MirageFrameBufferCSource(void);
+extern NSString *MirageFrameBufferDSource(void);

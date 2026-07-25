@@ -11,6 +11,7 @@
 #import "MirageStateBlob.h"
 #import "Plugin+Render_Internal.h"
 
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>

@@ -419,6 +419,18 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
         lane.componentUnits = @[ @"%" ];
         lane.integerValued = YES;
       }
+      if (p->fieldUnit[0] == 'p') {
+        // Raw pixels: the "px" label WITHOUT componentsScaleWithMedia, so the
+        // stored value is the pixel count the shader uses directly. Media
+        // scaling would be wrong here anyway - it maps component 0 to media
+        // WIDTH, and a thickness like this is usually measured off height.
+        lane.componentUnits = @[ @"px" ];
+        lane.integerValued = YES;
+        lane.scrubStep = 1.0;
+      } else if (p->fieldUnit[0] == '%') {
+        lane.componentUnits = @[ @"%" ];
+        lane.integerValued = YES;
+      }
       if (p->isInt) {
         lane.integerValued = YES; // whole-number slider
         lane.scrubStep = 1.0;
@@ -938,6 +950,18 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                                 @"check the name in the SF Symbols app",
                                 @"Mirage unknown group-icon validation error."),
                            badSymbol];
+    // More controls than there's room for - they'd otherwise just not appear.
+    if (MirageHasTooManyControls(code))
+      return [NSString
+          stringWithFormat:RLoc(@"Too many controls: %d is the limit",
+                                @"Mirage control-count validation error."),
+                           KK_SHADER_MAX_SCALAR_PROPS];
+    // More than 4 `fields={}` on a #multi: a vec4 is as wide as a uniform
+    // gets, so the extras have nowhere to go.
+    if (MirageFirstOverlongMulti(code).length)
+      return RLoc(@"`#multi` takes at most 4 fields - split it into two "
+                  @"controls",
+                  @"Mirage too-many-multi-fields validation error.");
     // An OSC opt-in on an incompatible uniform: osc=point needs a vec2, a
     // radial OSC (osc=ring / osc=box) needs a float/int slider or a vec2
     // #multi, a rotate osc={..} needs one distinct x/y/z axis per value
