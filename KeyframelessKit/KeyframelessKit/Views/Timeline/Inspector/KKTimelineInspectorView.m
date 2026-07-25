@@ -5,6 +5,7 @@
 
 #import "KKTimelineInspectorView.h"
 #import "KKLocalized.h"
+#import "KKLog.h"
 #import "KKTimelineInspectorView_Private.h"
 
 #import "KKCheckboxView.h"
@@ -582,6 +583,39 @@ const CGFloat kMBCheckboxTrailing = 23.0;
         _availableLanes = [lanes copy];
         [_basicView updateAvailableLanes:lanes];
       }
+    }
+  }
+  // `label` is NOT serialized, so a timeline that has round-tripped through the
+  // blob comes back with label == key. For a plugin whose key IS its label
+  // (Speed, Grain) that is invisible; for a dynamic lane the key is a raw
+  // uniform name, so the row reads "uCenter" instead of "Center" and, having no
+  // template, loses `animatable` and drops out of Basic / Advanced entirely.
+  //
+  // Re-asserted on EVERY apply, not just when the code changed: the previous
+  // placement inside the re-derive guard meant any ordinary mutation - notably
+  // animating a property, which persists and reloads without touching the
+  // source - left every dynamic lane showing its uniform key.
+  if (_availableLanes.count && timeline.lanes.count) {
+    NSMutableDictionary<NSString *, NSString *> *labelByKey =
+        [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
+    for (KKLane *t in _availableLanes)
+      if (t.key.length && t.label.length)
+        labelByKey[t.key] = t.label;
+    NSMutableArray<KKLane *> *relabelled = nil;
+    for (NSUInteger i = 0; i < timeline.lanes.count; i++) {
+      KKLane *l = timeline.lanes[i];
+      NSString *want = labelByKey[KKPlainLaneLabel(l.key ?: @"")];
+      if (!want.length || [want isEqualToString:l.label])
+        continue;
+      if (!relabelled)
+        relabelled = [timeline.lanes mutableCopy];
+      KKLane *c = [l copy];
+      c.label = want;
+      relabelled[i] = c;
+    }
+    if (relabelled) {
+      timeline = [timeline copy];
+      timeline.lanes = relabelled;
     }
   }
   [_basicView applyTimeline:timeline];

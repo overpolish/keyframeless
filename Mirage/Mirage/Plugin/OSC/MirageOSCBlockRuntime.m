@@ -186,7 +186,12 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
     if (!bindsIsPoint)
       return nil;
   }
-  if (!isRotate && !isPosition) {
+  // A `position` normally has no forward (the control IS the lane), but an
+  // AUTHORED toPos/fromPos remaps it - the placement warp KKPositionOSC applies
+  // to every drawn point. Compile it only when one was written, so the
+  // `osc=position` sugar (which supplies none) still means identity placement
+  // rather than failing to compile an empty expression.
+  if (!isRotate && (!isPosition || strlen(blk->forward) > 0)) {
     r->_forward = [KKLinkExpr compile:@(blk->forward)
                           allowedVars:allowed
                                 error:&err];
@@ -214,6 +219,10 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
 
 - (BOOL)hasInverse {
   return _inverse != nil;
+}
+
+- (BOOL)hasForward {
+  return _forward != nil;
 }
 
 - (KKExprVal)boundValueFromLaneValues:(NSArray<NSNumber *> *)values {
@@ -307,13 +316,25 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
                             aspect:(double)aspect
                              mouse:(simd_float2)mouse
                          haveMouse:(BOOL)haveMouse {
+  return [self objectPointForBound:bound
+                            aspect:aspect
+                             mouse:mouse
+                         haveMouse:haveMouse
+                          fraction:-1.0];
+}
+
+- (simd_float2)objectPointForBound:(KKExprVal)bound
+                            aspect:(double)aspect
+                             mouse:(simd_float2)mouse
+                         haveMouse:(BOOL)haveMouse
+                          fraction:(double)fraction {
   KKExprVal p = [_forward evalWithValue:bound
                                    vars:[self _varsForBound:bound
                                                      aspect:aspect
                                                       mouse:mouse
                                                   haveMouse:haveMouse
                                                       extra:nil
-                                                       frac:-1.0]];
+                                                       frac:fraction]];
   return (simd_float2){(float)p.v[0], (float)p.v[1]};
 }
 
@@ -321,9 +342,18 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
                                 laneValues:(NSArray<NSNumber *> *)values
                                     aspect:(double)aspect {
   KKExprVal bound = [runtime boundValueFromLaneValues:values];
-  if ([runtime.primitive isEqualToString:@"position"])
+  if ([runtime.primitive isEqualToString:@"position"]) {
+    // A remapped position (authored toPos/fromPos) sits where its forward puts
+    // it, not at its raw value - otherwise an offset-valued lane would offer a
+    // snap target at the frame origin while its handle is drawn elsewhere.
+    if (runtime.hasForward && runtime.hasInverse)
+      return [runtime objectPointForBound:bound
+                                   aspect:aspect
+                                    mouse:(simd_float2){0, 0}
+                                haveMouse:NO];
     return (simd_float2){(float)bound.v[0],
                          (float)(bound.n >= 2 ? bound.v[1] : bound.v[0])};
+  }
   return [runtime objectPointForBound:bound
                                aspect:aspect
                                 mouse:(simd_float2){0, 0}
@@ -389,13 +419,23 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
 - (KKExprVal)inverseBoundForObjectMouse:(simd_float2)mouse
                                boundNow:(KKExprVal)boundNow
                                  aspect:(double)aspect {
+  return [self inverseBoundForObjectMouse:mouse
+                                 boundNow:boundNow
+                                   aspect:aspect
+                                 fraction:-1.0];
+}
+
+- (KKExprVal)inverseBoundForObjectMouse:(simd_float2)mouse
+                               boundNow:(KKExprVal)boundNow
+                                 aspect:(double)aspect
+                               fraction:(double)fraction {
   return [_inverse evalWithValue:boundNow
                             vars:[self _varsForBound:boundNow
                                               aspect:aspect
                                                mouse:mouse
                                            haveMouse:YES
                                                extra:nil
-                                                frac:-1.0]];
+                                                frac:fraction]];
 }
 
 - (NSArray<NSNumber *> *)laneValuesFromBound:(KKExprVal)bound {

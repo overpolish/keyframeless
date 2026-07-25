@@ -5,8 +5,7 @@
 
 #import "MirageInspectorView.h"
 
-#import "Constants.h"      // MirageCustomDefaultShaderSource
-#import "Plugin_Private.h" // +availableLanesForShaderSource:
+#import "Constants.h" // MirageCustomDefaultShaderSource
 #import "MirageCategory.h"
 #import "MirageDirectives.h" // #color / #float ... default parsing
 #import "MirageInspectorView+Guides.h"
@@ -15,6 +14,7 @@
 #import "MirageLocalized.h"
 #import "MirageMiniViewerRenderer.h"
 #import "MirageThumbnailRenderer.h"
+#import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimingGuide.h>
 @import KKCommunity;
@@ -178,8 +178,11 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   return self;
 }
 
-// Render each shipped built-in shader (Plasma) to a thumbnail once per process,
-// using a throwaway renderer whose timeline holds just that shader's code.
+// Render each shipped built-in shader (Plasma, Rounded) to a thumbnail once per
+// process, using a throwaway renderer whose timeline holds just that shader's
+// code. Directive lanes aren't seeded, so each one draws at its DECLARED
+// defaults - which is what makes a filter's thumbnail meaningful, since it
+// lands on the bundled PreviewSource frame rather than on black.
 - (void)_bakeBuiltinThumbnails {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -189,7 +192,8 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
         continue;
       MirageMiniViewerRenderer *r = [[MirageMiniViewerRenderer alloc] init];
       KKTimeline *t = [KKTimeline timeline];
-      KKLane *lane = [KKLane laneWithKey:kMirageCodeLaneLabel label:kMirageCodeLaneLabel];
+      KKLane *lane = [KKLane laneWithKey:kMirageCodeLaneLabel
+                                   label:kMirageCodeLaneLabel];
       lane.valueType = KKLaneValueTypeCode;
       lane.codeString = e.sections[@"Image"];
       t.lanes = @[ lane ];

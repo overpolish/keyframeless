@@ -7,9 +7,9 @@
 
 #import <KeyframelessKit/KKPluginHost.h> // KKProcessFrameDurationSeconds
 #import <KeyframelessKit/KKPositionMiniController.h>
-#import <KeyframelessKit/KKResizeCursor.h>     // KKPointMoveCursor
-#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneKeyedAtFraction
+#import <KeyframelessKit/KKResizeCursor.h> // KKPointMoveCursor
 #import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneKeyedAtFraction
 
 @implementation KKPointOSCSet {
   __weak KKMiniViewerRenderer *_renderer;
@@ -193,8 +193,15 @@
   KKPositionMiniController *handle = [self _handleHitAtPoint:p contentRect:cr];
   if (handle) {
     _active = handle;
+    // Grab ONLY - deliberately no apply on mouse-down. The drag is delta-based,
+    // so applying at the press point is a no-op for the grabbed keypose, but
+    // the commit still runs KKLaneBySettingValuesAtIndex's HOLD-LINK
+    // propagation, which stamps this keypose's value onto its linked
+    // neighbours. A mere click therefore collapsed a linked pair onto one
+    // point, flattening the segment between them - which read as a
+    // just-smoothed arc snapping back to linear (spatialSmooth stayed set the
+    // whole time, the geometry was what got destroyed).
     [handle beginPointDragAtPoint:p contentRect:cr];
-    [handle applyPointDragToPoint:p contentRect:cr canvas:canvas modifiers:0];
     return YES;
   }
   KKPositionMiniController *path = [self _pathHitAtPoint:p contentRect:cr];

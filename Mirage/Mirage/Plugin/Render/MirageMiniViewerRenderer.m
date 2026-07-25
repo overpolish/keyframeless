@@ -77,6 +77,13 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
   NSMutableArray<NSString *> *labels = [NSMutableArray array];
   NSMutableSet<NSString *> *noSnap =
       [NSMutableSet set]; // `skipsnapping` labels
+  // Blocks that remap their placement (authored toPos/fromPos), keyed by lane:
+  // the mini has to apply the SAME warp as the viewer or an offset-valued
+  // position lane draws here at the frame origin while the viewer draws it
+  // where it belongs.
+  NSMutableDictionary<NSString *, MirageOSCBlockRuntime *> *warped =
+      [NSMutableDictionary dictionary];
+  __weak KKMiniViewerRenderer *weakRenderer = self;
   for (MirageOSCBlockRuntime *b in
        [MirageOSCBlockRuntime runtimesForSource:src
                                           lanes:self.laneTemplates ?: @[]])
@@ -84,10 +91,45 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
       [labels addObject:b.binds]; // uniform name = lane identity
       if (!b.snaps)
         [noSnap addObject:b.binds];
+      if (b.hasForward && b.hasInverse) {
+        // Without this every uniform the warp REFERENCES resolves to 0, so a
+        // forward like `mid + uPosition` collapses to a constant and the handle
+        // sits at a fixed wrong spot. Same provider the expr set uses.
+        b.laneValueProvider = ^NSArray<NSNumber *> *(NSString *label) {
+          return [weakRenderer rootValuesForLabel:label];
+        };
+        warped[b.binds] = b;
+      }
     }
   [self.pointSet setLaneLabels:labels];
-  for (KKPositionMiniController *c in self.pointSet.controllers)
+  for (KKPositionMiniController *c in self.pointSet.controllers) {
     c.snapDisabled = [noSnap containsObject:c.laneLabel];
+    MirageOSCBlockRuntime *b = warped[c.laneLabel];
+    if (!b) {
+      c.laneToObjectWarp = nil;
+      c.objectToLaneWarp = nil;
+      continue;
+    }
+    // aspect 1.0, as elsewhere in this renderer: the mini evaluates blocks
+    // without a content rect in hand. Only a warp that itself references
+    // `aspect` would notice.
+    c.laneToObjectWarp = ^simd_float2(simd_float2 lane, double fraction) {
+      KKExprVal bound = {{lane.x, lane.y, 0, 0}, 2};
+      return [b objectPointForBound:bound
+                             aspect:1.0
+                              mouse:(simd_float2){0, 0}
+                          haveMouse:NO
+                           fraction:fraction];
+    };
+    c.objectToLaneWarp = ^simd_float2(simd_float2 obj, double fraction) {
+      KKExprVal now = {{obj.x, obj.y, 0, 0}, 2};
+      KKExprVal v = [b inverseBoundForObjectMouse:obj
+                                         boundNow:now
+                                           aspect:1.0
+                                         fraction:fraction];
+      return (simd_float2){(float)v.v[0], (float)v.v[1]};
+    };
+  }
 }
 
 - (KKRotationOSCSet *)rotSet {

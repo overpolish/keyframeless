@@ -365,7 +365,12 @@ static const CGFloat kHandleHitTolPt = 12.0;
     _pathGrabbed = YES;
     _pathIndex = hi;
     _pathPart = isOut ? 1 : 2;
-    [self applyPathDragToPoint:p contentRect:cr modifiers:0];
+    // Grab ONLY - deliberately no apply on mouse-down. A tangent is written as
+    // an ABSOLUTE offset (cursor - anchor), unlike the anchor branch below
+    // which is delta-based and so no-ops at the press point. Applying it here
+    // meant a mere CLICK rewrote both handles to (clickPoint - anchor):
+    // clicking near the anchor collapsed them to ~zero, degenerating the
+    // bezier so a just-smoothed segment snapped back to looking linear.
     return YES;
   }
   NSInteger ai = [self _pathAnchorHitAtPoint:p contentRect:cr];
@@ -505,9 +510,40 @@ static const CGFloat kHandleHitTolPt = 12.0;
   static const float kThreshPt = 6.0f;
   float thrX = cr.size.width > 0 ? kThreshPt / (float)cr.size.width : 0.01f;
   float thrY = cr.size.height > 0 ? kThreshPt / (float)cr.size.height : 0.01f;
+  KKLane *lane = [self _lane];
+  // Mirrors the viewer: with a placement warp the lane value isn't where the
+  // handle is drawn, but the canvas anchors are object space - so snap in
+  // OBJECT space (keypose targets warped to match) and map the result back.
+  // Snapping the raw lane value sent an offset-valued handle to the frame's
+  // bottom-left corner.
+  if (self.laneToObjectWarp && self.objectToLaneWarp) {
+    double frac = self.renderer.editFraction;
+    KKLane *warped = [lane copy];
+    NSMutableArray<KKKeyPose *> *kps = [warped.keyposes mutableCopy];
+    for (NSUInteger i = 0; i < kps.count; i++) {
+      KKKeyPose *k = kps[i];
+      if (k.values.count < 2)
+        continue;
+      simd_float2 w = self.laneToObjectWarp(
+          (simd_float2){k.values[0].floatValue, k.values[1].floatValue},
+          k.time);
+      KKKeyPose *nk = [k copy];
+      nk.values = @[ @(w.x), @(w.y) ];
+      kps[i] = nk;
+    }
+    warped.keyposes = kps;
+    simd_float2 obj =
+        self.laneToObjectWarp((simd_float2){(float)*nx, (float)*ny}, frac);
+    simd_float2 s = KKPositionSnapPoint(_snapEngine, obj, warped, excludeIndex,
+                                        self.externalSnapTargets, thrX, thrY);
+    simd_float2 back = self.objectToLaneWarp(s, frac);
+    *nx = back.x;
+    *ny = back.y;
+    return;
+  }
   simd_float2 snapped = KKPositionSnapPoint(
-      _snapEngine, (simd_float2){(float)*nx, (float)*ny}, [self _lane],
-      excludeIndex, self.externalSnapTargets, thrX, thrY);
+      _snapEngine, (simd_float2){(float)*nx, (float)*ny}, lane, excludeIndex,
+      self.externalSnapTargets, thrX, thrY);
   *nx = snapped.x;
   *ny = snapped.y;
 }

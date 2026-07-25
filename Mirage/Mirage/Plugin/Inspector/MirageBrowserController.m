@@ -184,13 +184,34 @@ static const CGFloat kSlideDistance = 12.0;
   _popoverContentView = note.userInfo[@"contentView"];
   _parentWindow = popoverWindow;
 
+  [self _showWhenVisible:popoverWindow card:card attempt:0];
+}
+
+// Wait for the popover window to actually be on screen, then show beside it.
+//
+// Retried rather than checked once: the first time this popover opens its views
+// are built from scratch, so it is routinely still invisible when a single
+// fixed delay elapses - and the old one-shot check simply returned, leaving the
+// browser hidden until the user closed and reopened (by which point the window
+// was warm and made the deadline). Bounded so a popover that never appears
+// stops the chain instead of polling forever.
+- (void)_showWhenVisible:(NSWindow *)popoverWindow
+                    card:(NSRect)card
+                 attempt:(NSInteger)attempt {
+  static const NSInteger kMaxAttempts = 20; // ~2s at kShowDelay
   __weak typeof(self) weak = self;
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kShowDelay * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
         __strong typeof(weak) s = weak;
-        if (!s || s->_parentWindow != popoverWindow || !popoverWindow.isVisible)
+        // A different popover took over (or this one closed): abandon quietly.
+        if (!s || s->_parentWindow != popoverWindow)
           return;
+        if (!popoverWindow.isVisible) {
+          if (attempt + 1 < kMaxAttempts)
+            [s _showWhenVisible:popoverWindow card:card attempt:attempt + 1];
+          return;
+        }
         [s _showBesideCard:card ofWindow:popoverWindow];
       });
 }

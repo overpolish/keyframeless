@@ -42,6 +42,7 @@ A block lives in `//` comments (so the GLSL stays valid) and looks like directiv
 - It **starts** at a `// @osc <Name>` line. `<Name>` is the control's display name and its hideable-element key in the viewer's On-Screen Controls settings. A trailing `{` on the header is allowed and ignored.
 - It **continues** through following `//   key = value` comment lines.
 - It **ends** at the first non-comment line, a blank comment line, a `//   }` line, or the next `// @osc`. (So separate each block from the next with a blank line or a `}`.)
+- **One line per `key = value`.** There is no line continuation: a comment line inside a block with no `=` is discarded (the sole exception is the bare `skipsnapping` flag), so a wrapped expression silently loses everything after the first line and leaves the block with unbalanced parentheses. Split a long expression into **locals** instead, which is what they are for.
 - Up to **8** blocks per shader, up to **12** locals per block.
 
 Put the block anywhere in the source; it doesn't have to sit next to the uniform it binds (though next to it reads best).
@@ -133,7 +134,23 @@ uniform vec2 uCorner;
 
 ### `position` - the full motion path
 
-`primitive = position` backs a point with the complete position control: the playhead handle, an **editable motion path** through the keyposes, tangents, and anchors. It is **declaration-only** - `binds` must be a `#point` lane, and there are no `toPos`/`fromPos` (the control _is_ the lane, you can't remap it).
+`primitive = position` backs a point with the complete position control: the playhead handle, an **editable motion path** through the keyposes, tangents, and anchors. `binds` must be a `#point` lane.
+
+Normally it needs no expressions: the control _is_ the lane, placed at its value. But it **may** author `toPos`/`fromPos` (set both, there is no numeric 2D inversion) to **remap where the whole control is drawn** - handle, path samples, keypose anchors and tangent endpoints all move through the forward, and input inverts back. Reach for this when the lane's value is not itself a frame position - an **offset**, where `0,0` means "in place", would otherwise draw the entire path down at the frame's bottom-left instead of around the thing it offsets from:
+
+```glsl
+// #point label="Position" default="0,0"
+uniform vec2 uPosition;              // an OFFSET, not a place
+
+// @osc Position
+//   primitive = position
+//   binds     = uPosition
+//   mid       = vec2(uCrop.z + uCrop.x * 0.5, 1.0 - uCrop.w - uCrop.y * 0.5)
+//   toPos     = mid + uPosition     // drawn around the window's centre
+//   fromPos   = pos - mid           // dragged position -> offset
+```
+
+Each path sample is mapped at **its own** time, so a forward referencing an animated uniform (the crop above) follows it along the path rather than pinning every sample to the crop's current value.
 
 ```glsl
 // #point label="Position" osc=position default="0.5,0.5"
@@ -173,8 +190,9 @@ uniform vec4 uCrop;                   // W,H,X,Y as top-left 0..1
 // @osc Crop
 //   primitive = box
 //   binds     = uCrop
-//   toRect    = rect(vec2(uCrop.z, 1.0 - uCrop.w - uCrop.y),
-//                    vec2(uCrop.z + uCrop.x, 1.0 - uCrop.w))
+//   lo        = vec2(uCrop.z, 1.0 - uCrop.w - uCrop.y)
+//   hi        = vec2(uCrop.z + uCrop.x, 1.0 - uCrop.w)
+//   toRect    = rect(lo, hi)
 //   fromRect  = vec4(rect.width, rect.height, rect.min.x, 1.0 - rect.max.y)
 ```
 
@@ -209,7 +227,8 @@ This is what `osc={z,x,y}` synthesizes.
 ## What's not (yet) here
 
 - **Per-part `drag[...]` overrides** (a rule scoped to one handle) are described in the design spec but **not implemented** - don't emit them.
-- A `ring` or `box` **must** author its inverse (`fromR` / `fromRect`); only a scalar `point` has the numeric-inversion fallback.
+- A `ring` or `box` **must** author its inverse (`fromR` / `fromRect`); only a scalar `point` has the numeric-inversion fallback. A remapped `position` must author both.
+- `size` is accepted by the parser but **resolves to 0** at runtime - it is never bound. Use `aspect` and express lengths in frame-height units (`min(w * aspect, h)`) until that is fixed.
 
 ## Worked example: pivot + ring + rotation, all custom
 

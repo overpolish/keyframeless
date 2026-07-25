@@ -281,6 +281,40 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     ctl.guideProvider = self;
     ctl.templateLane = b.templateLane;
     ctl.snapDisabled = !b.snaps; // `skipsnapping` on the position sugar/block
+    // An authored `toPos`/`fromPos` on a `position` block remaps the whole
+    // control - handle, path samples, keypose anchors, tangents - via the
+    // warps KKPositionOSC already applies point-wise. Without it the value is
+    // placed literally, so a lane that means an OFFSET (0,0 = "in place")
+    // draws at the frame's bottom-left instead of at the thing it offsets
+    // from. Set BOTH or NEITHER: there is no numeric 2D inversion.
+    if (b.hasForward && b.hasInverse) {
+      MirageOSCBlockRuntime *blk = b;
+      ctl.laneToObjectWarp = ^simd_float2(simd_float2 lane, double fraction) {
+        __strong MirageOSC *s = weakSelf;
+        if (!s)
+          return lane;
+        KKExprVal bound = {{lane.x, lane.y, 0, 0}, 2};
+        return [blk objectPointForBound:bound
+                                 aspect:[s _exprAspect]
+                                  mouse:(simd_float2){0, 0}
+                              haveMouse:NO
+                               fraction:fraction];
+      };
+      ctl.objectToLaneWarp = ^simd_float2(simd_float2 obj, double fraction) {
+        __strong MirageOSC *s = weakSelf;
+        if (!s)
+          return obj;
+        KKExprVal now = {{obj.x, obj.y, 0, 0}, 2};
+        KKExprVal v = [blk inverseBoundForObjectMouse:obj
+                                             boundNow:now
+                                               aspect:[s _exprAspect]
+                                             fraction:fraction];
+        return (simd_float2){(float)v.v[0], (float)v.v[1]};
+      };
+    } else {
+      ctl.laneToObjectWarp = nil;
+      ctl.objectToLaneWarp = nil;
+    }
     nextPos[label] = ctl;
     [posOrder addObject:label];
   }
@@ -666,14 +700,16 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
           return;
         double frac = [self fractionAtTime:time];
         KKTimeline *snap = KKProcessTimelineSnapshot();
-        KKTimeline *tl =
-            snap ? KKTimelineSettingValuesNearestFraction(snap, b.binds, frac, values)
-                 : nil;
+        KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
+                                    snap, b.binds, frac, values)
+                              : nil;
         if (!tl) {
           tl = snap ? [snap copy] : [KKTimeline timeline];
-          KKLane *seed = [b.templateLane copy] ?: [KKLane laneWithKey:b.binds label:b.binds];
+          KKLane *seed = [b.templateLane copy]
+                             ?: [KKLane laneWithKey:b.binds label:b.binds];
           seed.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
-          NSMutableArray<KKLane *> *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+          NSMutableArray<KKLane *> *lanes =
+              [NSMutableArray arrayWithArray:tl.lanes];
           [lanes addObject:seed];
           tl.lanes = lanes;
         }

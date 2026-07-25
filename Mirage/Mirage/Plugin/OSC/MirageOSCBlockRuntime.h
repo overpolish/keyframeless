@@ -54,6 +54,7 @@ extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
 @property(nonatomic, readonly, nullable)
     KKLane *templateLane; // seeds first write
 @property(nonatomic, readonly) BOOL hasInverse;
+@property(nonatomic, readonly) BOOL hasForward;
 @property(nonatomic, readonly) BOOL isInt;    // whole-number lane: writes round
 @property(nonatomic, readonly) BOOL linked;   // ellipse fields aspect-linked
 @property(nonatomic, readonly) BOOL bodyMove; // box: interior drags the rect
@@ -110,6 +111,18 @@ extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
                              mouse:(simd_float2)mouse
                          haveMouse:(BOOL)haveMouse;
 
+/// As above, but evaluating referenced uniforms AT `fraction` rather than at
+/// the current tick. A `position` block's warp maps every motion-path sample,
+/// each belonging to its own time, so a forward referencing an ANIMATED uniform
+/// (a crop the path is drawn relative to) has to follow it per sample or the
+/// far end of the path lands where the crop is NOW, not where it will be.
+/// Pass -1 for "current tick".
+- (simd_float2)objectPointForBound:(KKExprVal)bound
+                            aspect:(double)aspect
+                             mouse:(simd_float2)mouse
+                         haveMouse:(BOOL)haveMouse
+                          fraction:(double)fraction;
+
 /// Object-space (0..1, Y-up) point where a point/position handle sits for the
 /// given raw lane values: a `point` at its forward object point, a `position`
 /// at its value directly (identity placement). Shared by the viewer and mini so
@@ -144,6 +157,14 @@ extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
 - (KKExprVal)inverseBoundForObjectMouse:(simd_float2)mouse
                                boundNow:(KKExprVal)boundNow
                                  aspect:(double)aspect;
+
+/// As above, evaluating referenced uniforms AT `fraction`. Pairs with the
+/// fraction-taking forward so a warp's two directions can't disagree about when
+/// they are. Pass -1 for "current tick".
+- (KKExprVal)inverseBoundForObjectMouse:(simd_float2)mouse
+                               boundNow:(KKExprVal)boundNow
+                                 aspect:(double)aspect
+                               fraction:(double)fraction;
 
 /// EXPR-unit bound -> clamped lane-unit values (×divisor, clamp
 /// [laneMin,laneMax], round when `isInt`, `fieldCount` components) ready for a

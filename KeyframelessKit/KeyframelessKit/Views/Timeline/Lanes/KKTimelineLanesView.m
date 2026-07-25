@@ -464,8 +464,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 - (void)_applyLaneFilterHidden:(NSSet<NSString *> *)hidden {
   [_advancedGraph applyHiddenLaneLabels:hidden];
   KKTimeline *gt = [self _graphTimeline];
-  NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneKeys(gt.lanes, nil);
+  NSSet<NSString *> *condVisible = KKConditionalVisibleLaneKeys(gt.lanes, nil);
   NSInteger optedIn = 0;
   for (KKLane *l in gt.lanes)
     if (l.enabled && [condVisible containsObject:l.key])
@@ -601,11 +600,14 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       [(id<KKPopoverExtraRow>)row popoverDidRefresh];
   }
 
+  // Matched on `key` (identity) but shown by `displayName`: the trigger's text
+  // is display-only, so pushing keys here surfaced raw uniform names
+  // ("uRadius, uCrop") in the Animated summary.
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in [self _ownerScopedAvailableLanes])
     if ([self _isAnimatableLabel:tmpl.key] &&
         [condVisible containsObject:tmpl.key])
-      [opted addObject:tmpl.key];
+      [opted addObject:tmpl.displayName.length ? tmpl.displayName : tmpl.key];
   _dropdownTrigger.selectedLabels = opted;
   // Hierarchical summary (layer > group > lane | …) from the opted-in KKLanes,
   // which carry the layerKey/categoryKey grouping; "All" only when nothing is
@@ -743,9 +745,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.codeSaveNamePlaceholder = tmpl.codeSaveNamePlaceholder;
     [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     lane.enabled = NO; // constant until the dropdown makes it animatable
-    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                          values:[self _defaultValuesForLabel:
-                                                           tmpl.key]]];
+    [lane
+        insertKeypose:[KKKeyPose
+                          keyposeAtTime:0.0
+                                 values:[self
+                                            _defaultValuesForLabel:tmpl.key]]];
     [lanes addObject:lane];
   }
   // Display order: the user's drag-to-reorder list if set, else the plugin's
@@ -978,8 +982,14 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // (Canvas) merges OTHER owners' lanes into the `_graphTimeline` ivar, so skip
   // it there; an empty template set is a transient pre-seed state.
   if (!_graphTimeline && _availableLanes.count) {
+    // Keyed on `key`, NOT `label`: identity lives on the key, and a dynamic
+    // lane's key is its raw uniform name while its label is the display name.
+    // Collecting labels here and testing them against `l.key` matched only for
+    // lanes whose key happens to equal their label (Speed, Grain), so every
+    // shader-declared lane was filtered out of the graph timeline - taking the
+    // graph, the opted-in count, the dropdown and the empty state with it.
     NSSet<NSString *> *declared =
-        [NSSet setWithArray:[_availableLanes valueForKey:@"label"]];
+        [NSSet setWithArray:[_availableLanes valueForKey:@"key"]];
     NSMutableArray<KKLane *> *kept = [NSMutableArray array];
     for (KKLane *l in gt.lanes)
       if ([declared containsObject:l.key])

@@ -66,3 +66,8 @@ static const UInt32 kParamToImage = 204;
 /// Mirage lane's codeString is empty, and seeds the "Mirage" lane in the
 /// catalog. Defined in Plugin+Render.
 extern NSString *MirageCustomDefaultShaderSource(void);
+
+/// The shipped Rounded filter (rounded corners + crop + slide, `#alpha`
+/// masked), offered as a built-in catalog entry beside the default plasma.
+/// Defined alongside it in MirageCustomShader.
+extern NSString *MirageRoundedShaderSource(void);

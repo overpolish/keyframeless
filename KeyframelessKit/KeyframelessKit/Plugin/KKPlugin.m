@@ -19,23 +19,6 @@ static NSMutableSet<NSString *> *gKKLiveUUIDs;
 static os_unfair_lock gKKLiveLock = OS_UNFAIR_LOCK_INIT;
 static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
 
-/// Serialises the deferred link-manifest writes -pluginInstanceAddedToDocument
-/// hands off (see there for why they can't run inline).
-///
-/// Serial, not concurrent: a document load fires that callback once per
-/// instance, so a project with dozens of effects would otherwise hit the host
-/// with dozens of simultaneous round-trips at exactly its busiest moment. Off
-/// the main queue because the work blocks on the host, and blocking the
-/// plugin's main thread would just move the stall somewhere equally bad.
-static dispatch_queue_t KKLinkManifestQueue(void) {
-  static dispatch_queue_t queue;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    queue = dispatch_queue_create("co.overpolish.keyframeless.linkmanifest",
-                                  DISPATCH_QUEUE_SERIAL);
-  });
-  return queue;
-}
 #import "KKPlugin_Private.h"
 #import "KKUpdateChecker.h"
 #import <AppKit/AppKit.h>
@@ -147,25 +130,12 @@ static dispatch_queue_t KKLinkManifestQueue(void) {
 - (void)writeLinkManifest {
   NSArray<KKLane *> *lanes = [self linkableLanesForManifest];
   NSArray<KKLinkLayerSource *> *layers = [self linkableLayersForManifest];
-  if (lanes == nil && layers == nil) {
-    // Expected for a plugin that never opted in. But it is ALSO what an
-    // unresolved FxParameterRetrievalAPI_v6 looks like from the deferred
-    // add-path, which is the one thing this fix could plausibly regress - hence
-    // the log rather than a silent return. DIAGNOSTIC: remove once confirmed.
-    KKLogDebug(@"KKPlugin: link manifest skipped, no lanes/layers (%@)",
-               [self linkManifestEffectName]);
-    return;
-  }
+  if (lanes == nil && layers == nil)
+    return; // not a link source
   id<FxTimingAPI_v4> t =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  if (!t) {
-    // DIAGNOSTIC (remove once the deferred add-path is confirmed): the
-    // load-time call now runs off the FxPlug callback, so this is where we'd
-    // find out the host APIs only resolve inside one.
-    KKLogWarn(@"KKPlugin: link manifest skipped, no FxTimingAPI (deferred=%d)",
-              !NSThread.isMainThread);
+  if (!t)
     return;
-  }
   CMTime effStart = kCMTimeZero, dur = kCMTimeZero, effStartTL = kCMTimeZero;
   [t startTimeForEffect:&effStart];
   [t durationTimeForEffect:&dur];
@@ -216,9 +186,27 @@ static dispatch_queue_t KKLinkManifestQueue(void) {
   // What matters is that this callback RETURNS, so the load can finish and the
   // locks drop; the manifest landing a beat later costs nothing, since its
   // whole job is to advertise an idle effect that isn't rendering anyway.
+  //
+  // It runs on MAIN inside an ACTION SCOPE, not on a background queue: off the
+  // FxPlug callback the parameter APIs stop resolving, so -writeLinkManifest
+  // read no lanes and silently registered nothing ("link manifest skipped, no
+  // lanes/layers"). FxCustomParameterActionAPI_v4 is the only API that resolves
+  // before -startAction:, and the retrieval API resolves inside the scope. The
+  // scope only READS, so it adds no undo entry.
   __weak typeof(self) weakSelf = self;
-  dispatch_async(KKLinkManifestQueue(), ^{
-    [weakSelf writeLinkManifest];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    id<FxCustomParameterActionAPI_v4> actionAPI =
+        [s.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!actionAPI) {
+      KKLogWarn(@"KKPlugin: link manifest skipped, no action API");
+      return;
+    }
+    [actionAPI startAction:s];
+    [s writeLinkManifest];
+    [actionAPI endAction:s];
   });
   if (uuid.length == 0)
     return;
