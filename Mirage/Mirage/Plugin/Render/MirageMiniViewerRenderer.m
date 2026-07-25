@@ -586,6 +586,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   // the block's tail goes unwritten and samples whatever the buffer last held.
   colorPoolN = MirageFillAudioPool(poolModel, colorPool,
                                    self.audioTimelineTimeSec, values);
+  // `// #gradient` ramps last, so the three pools above keep their offsets.
+  colorPoolN = [poolModel fillGradientPool:colorPool valuesForLabel:values];
 
   id<MTLTexture> srcLin = [self _linearSourceView:source];
   // srcLin is linear (FCP's float source, or the sRGB view that linearises the

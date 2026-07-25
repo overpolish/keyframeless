@@ -77,6 +77,20 @@ MirageDirectiveDefaultValuesForLabel(NSString *source, NSString *label) {
         return @[ @(d[0]), @(d[1]), @(d[2]), @(d[3]) ];
       }
   }
+
+  // Gradients: identity is the uniform name; the seed is the directive's
+  // `default="#hex@pos,..."` else the black -> white ramp, flattened the same
+  // way MirageAppendGradientLanes seeds the lane.
+  const MirageGradientProp *gp = model.gradientProps;
+  for (int i = 0; i < model.gradientCount; i++) {
+    if (![label isEqualToString:@(gp[i].name)])
+      continue;
+    NSMutableArray<NSNumber *> *flat = [NSMutableArray array];
+    for (int s = 0; s < gp[i].defStopCount; s++)
+      for (int k = 0; k < KK_GRADIENT_STOP_STRIDE; k++)
+        [flat addObject:@(gp[i].defStops[s][k])];
+    return flat;
+  }
   return nil;
 }
 

@@ -208,6 +208,55 @@ static void KKEmitAudioProps(NSString *userSource, NSMutableString *body,
   }
 }
 
+// `// #gradient` props: a stop array (rgb in .xyz, position in .w), the
+// midpoints packed 4 per vec4, and a count meta. The shader never sees that
+// packing - `<name>At(t)` samples the ramp and `<name>Stops` is the live stop
+// count. Appended AFTER the audio bands so all three earlier pools keep their
+// offsets. The sampler functions go in `fns` rather than `defines` because they
+// call kkGradBias, which is emitted with the colour helpers further down.
+static void KKEmitGradientProps(NSString *userSource, NSMutableString *body,
+                                NSMutableString *members,
+                                NSMutableString *defines,
+                                NSMutableString *fns) {
+  MirageShaderModel *model = [MirageShaderModel modelForSource:userSource];
+  const MirageGradientProp *grads = model.gradientProps;
+  for (int i = 0; i < model.gradientCount; i++) {
+    NSString *nm = @(grads[i].name);
+    int n = grads[i].maxStops;
+    [members appendFormat:@"  vec4 %@_kks[%d];\n  vec4 %@_kkm[%d];\n"
+                          @"  vec4 %@_kkmeta;\n",
+                          nm, n, nm, (n + 3) / 4, nm];
+    [defines appendFormat:@"#define %@Stops (int(%@_kkmeta.x))\n", nm, nm];
+    // Chained saturating mix: below a segment its fraction is 0 (the colour so
+    // far stands), above it the fraction is 1 (the segment's end colour wins),
+    // so after the loop `c` is the ramp at t. Branch-free, and correct for any
+    // live stop count without a dynamic loop bound.
+    [fns appendFormat:
+             @"vec3 %@At(float t) {\n"
+             @"  t = clamp(t, 0.0, 1.0);\n"
+             @"  int kkn = %@Stops;\n"
+             @"  vec3 c = %@_kks[0].rgb;\n"
+             @"  for (int i = 0; i + 1 < %d; i++) {\n"
+             @"    if (i + 1 >= kkn) break;\n"
+             @"    float p0 = %@_kks[i].w, p1 = %@_kks[i + 1].w;\n"
+             @"    float f = clamp((t - p0) / max(p1 - p0, 1e-5), 0.0, 1.0);\n"
+             @"    c = mix(c, %@_kks[i + 1].rgb,\n"
+             @"            kkGradBias(f, %@_kkm[i >> 2][i & 3]));\n"
+             @"  }\n"
+             @"  return c;\n}\n",
+             nm, nm, nm, n, nm, nm, nm, nm];
+    NSString *pat = [NSString
+        stringWithFormat:
+            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*\\[[^\\]]*\\]\\s*;%@", nm,
+            kKKUniformStripTail];
+    [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
+        replaceMatchesInString:body
+                       options:0
+                         range:NSMakeRange(0, body.length)
+                  withTemplate:@""];
+  }
+}
+
 // The sRGB decode + core film-grain overlay every display path calls. Grain is
 // ported verbatim from MirageCommon.h so Custom grain matches the built-in
 // Types; it is applied in gamma space before encoding.
@@ -218,6 +267,15 @@ static void KKAppendColorHelpers(NSMutableString *s) {
           @"  bvec3 lo = lessThanEqual(c, vec3(0.04045));\n"
           @"  return mix(pow((c + 0.055) / 1.055, vec3(2.4)), c / 12.92, "
           @"vec3(lo));\n}\n"];
+  // A gradient stop's MIDPOINT: where the halfway colour of the segment BELOW
+  // it lands. Two straight ramps meeting at (m, 0.5) - the same piecewise bias
+  // KKGradientSampleStopsToLUT applies, so the shader matches the gradient bar
+  // in the inspector exactly rather than approximately.
+  [s appendString:@"float kkGradBias(float f, float m) {\n"
+                  @"  if (m <= 0.0 || m >= 1.0) return f;\n"
+                  @"  return (f <= m) ? 0.5 * (f / m)\n"
+                  @"                  : 0.5 + 0.5 * ((f - m) / (1.0 - m));\n"
+                  @"}\n"];
   [s appendString:
           @"float kkGrainHash(vec2 p){p=fract(p*vec2(123.34,456.21));"
           @"p+=dot(p,p+45.164);return fract(p.x*p.y);}\n"
@@ -288,12 +346,15 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                      NSInteger *outUserLineOffset, BOOL bufferMode) {
   NSMutableString *colorMembers = [NSMutableString string];
   NSMutableString *colorDefines = [NSMutableString string];
+  NSMutableString *gradientFns = [NSMutableString string];
   NSMutableString *body = [userSource mutableCopy];
-  // Emission order (colours, scalars, audio) must stay canonical: the std140
-  // member order IS the pool layout the model's offsets describe.
+  // Emission order (colours, scalars, audio, gradients) must stay canonical:
+  // the std140 member order IS the pool layout the model's offsets describe.
   KKEmitColorProps(userSource, body, colorMembers, colorDefines);
   KKEmitScalarProps(userSource, body, colorMembers, colorDefines);
   KKEmitAudioProps(userSource, body, colorMembers, colorDefines);
+  KKEmitGradientProps(userSource, body, colorMembers, colorDefines,
+                      gradientFns);
 
   NSMutableString *s = [NSMutableString string];
   [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"
@@ -346,6 +407,7 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                     @"vec4 getToColor(vec2 uv){ return texture(iChannel1, uv); "
                     @"}\n"];
   KKAppendColorHelpers(s);
+  [s appendString:gradientFns]; // after kkGradBias, which the samplers call
   [s appendString:@"\n"];
   // The user's source begins on the next line: a glslang error at wrapped line
   // L is the editor's line (L - <newlines so far>).

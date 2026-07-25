@@ -9,6 +9,7 @@
 
 #import "MirageAudioProps.h"
 #import "MirageColorProps.h"
+#import "MirageGradientProps.h"
 #import "MirageOSCBlock.h"
 #import "MirageScalarProps.h"
 
@@ -43,6 +44,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (const MirageAudioProp *)audioProps;
 @property(nonatomic, readonly) int audioPoolUsed;
 
+@property(nonatomic, readonly) int gradientCount;
+- (const MirageGradientProp *)gradientProps;
+@property(nonatomic, readonly) int gradientPoolUsed;
+
 /// The unified OSC declaration list: every inline `osc=` directive opt-in
 /// expanded to a standard `@osc` block (sugar first, mirroring the checklist's
 /// source order), then the authored `// @osc` blocks. An authored block that
@@ -73,6 +78,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// scalars).
 - (int)fillScalarPool:(vector_float4 *)pool
        valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel;
+
+/// Fill the `// #gradient` props into the pool at their canonical offsets
+/// (LAST, after the audio bands): the stop array, the packed midpoints, and the
+/// count meta. Lane values arrive as the flat `[position, r, g, b, midpoint]`
+/// stop array and are sorted by position on the way in, so the shader's sampler
+/// can assume monotonic stops. Returns the running total vec4 count.
+- (int)fillGradientPool:(vector_float4 *)pool
+         valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel;
 
 @end
 

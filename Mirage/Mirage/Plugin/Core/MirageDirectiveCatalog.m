@@ -6,6 +6,7 @@
 #import "MirageDirectiveCatalog.h"
 
 #import "MirageDirectiveVocab.h" // vocabulary tables (shares E / Colored / kVAR)
+#import "MirageShaderModel.h"    // `// #gradient` sampler names
 
 // The shader's declared uniform names (`uniform <type> <name>`), for `binds =`
 // / `link =` value completion. Array subscripts are stripped.
@@ -71,6 +72,32 @@ static int VectorSizeForIdentifier(NSString *text, NSString *base) {
   NSString *t = [text substringWithRange:[m rangeAtIndex:1]];
   return [t isEqualToString:@"vec3"] ? 3
                                      : ([t isEqualToString:@"vec4"] ? 4 : 2);
+}
+
+// What a `// #gradient` uniform is actually CALLED in shader code. Its declared
+// array is stripped by the transpiler and replaced by a sampler, so completing
+// the bare name would only ever produce an undeclared-identifier error.
+static NSArray<NSDictionary<NSString *, NSString *> *> *
+GradientSymbols(NSString *text) {
+  MirageShaderModel *model = [MirageShaderModel modelForSource:text];
+  const MirageGradientProp *props = model.gradientProps;
+  NSMutableArray *out = [NSMutableArray array];
+  for (int i = 0; i < model.gradientCount; i++) {
+    NSString *nm = @(props[i].name);
+    NSString *at = [nm stringByAppendingString:@"At"];
+    NSMutableDictionary *fn =
+        [E(at, [at stringByAppendingString:@"(t)"],
+           @"The ramp's colour at t, from 0 to 1.",
+           [at stringByAppendingString:@"("]) mutableCopy];
+    fn[@"color"] = kVAR;
+    [out addObject:fn];
+    NSString *cnt = [nm stringByAppendingString:@"Stops"];
+    NSMutableDictionary *n =
+        [E(cnt, cnt, @"How many stops the ramp has.", cnt) mutableCopy];
+    n[@"color"] = kVAR;
+    [out addObject:n];
+  }
+  return out;
 }
 
 // The `// #` directive line just above `base`'s `uniform` declaration, or nil -
@@ -391,6 +418,7 @@ MirageDirectiveCompletions(NSString *text, NSUInteger caret,
       return @[]; // don't pop on empty word in code
     NSMutableArray *pool = [NSMutableArray arrayWithArray:MirageGLSLIdents()];
     [pool addObjectsFromArray:DeclaredUniforms(text)];
+    [pool addObjectsFromArray:GradientSymbols(text)];
     NSArray *items = FilterByPrefix(pool, word);
     if (items.count)
       *outReplaceRange = NSMakeRange(wordStart, caret - wordStart);

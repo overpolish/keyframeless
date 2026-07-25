@@ -439,6 +439,41 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
   }
 }
 
+// Append one lane per `// #gradient` property: a stop-editor row (the shared
+// KKGradientControl - drag stops, midpoints, favourites, reverse, distribute).
+//
+// Stops-only, NOT the composite type/angle form: a gradient here is a colour
+// ramp the shader samples by whatever position it likes (a radius, an audio
+// level, a UV axis), so a linear/radial toggle and an angle knob would be
+// controls the shader has no obligation to honour.
+static inline void MirageAppendGradientLanes(NSMutableArray<KKLane *> *lanes,
+                                             NSString *source) {
+  MirageShaderModel *model = [MirageShaderModel modelForSource:source];
+  const MirageGradientProp *props = model.gradientProps;
+  for (int pi = 0; pi < model.gradientCount; pi++) {
+    const MirageGradientProp *p = &props[pi];
+    // Identity = the uniform name (stable across rename/reorder), like every
+    // other directive lane; the label is display-only.
+    KKLane *lane = [KKLane laneWithKey:@(p->name) label:@(p->label)];
+    lane.valueType = KKLaneValueTypeGradient;
+    lane.gradientShowsTypeAngle = NO;
+    lane.animatable = YES;
+    lane.enabled = NO;
+    // Variable length (stops come and go), so no per-component bounds.
+    lane.componentMin = @[];
+    lane.componentMax = @[];
+    lane.groupKey = @(p->name);
+    lane.categoryKey = @"Colors";
+    lane.categorySymbol = @"paintpalette";
+    NSMutableArray<NSNumber *> *flat = [NSMutableArray array];
+    for (int i = 0; i < p->defStopCount; i++)
+      for (int k = 0; k < KK_GRADIENT_STOP_STRIDE; k++)
+        [flat addObject:@(p->defStops[i][k])];
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:flat]];
+    [lanes addObject:lane];
+  }
+}
+
 // One of an `// #audio` property's animatable knobs (gate / release /
 // smoothness). They differ only in name, unit, range and default - everything
 // else has to agree or they'd scatter out of the Audio group and out of the
@@ -882,8 +917,10 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   shader.codeDirectiveKinds = MirageDirectiveKindTokens();
   [lanes addObject:shader];
 
-  // Dynamic colour group parsed from the shader's `// #color` directive.
+  // Dynamic colour group parsed from the shader's `// #color` directive, then
+  // its `// #gradient` ramps in the same group.
   MirageAppendColorLanes(lanes, shaderSource);
+  MirageAppendGradientLanes(lanes, shaderSource);
 
   return lanes;
 }

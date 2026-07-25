@@ -7,7 +7,7 @@ summary: Declaring inspector controls and on-screen controls in a Custom shader 
 
 A Custom shader can expose its own **inspector controls** and **on-screen controls (OSCs)** by annotating its uniforms. Put a `// #<kind>` comment on the line **before** a `uniform` declaration, and Mirage builds a matching, fully keyframeable timeline lane for it. The uniform's value then comes from that lane (and its keyposes / OSC) instead of being a fixed constant.
 
-- **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu or pill), `#angle` (a dial), `#color` (a colour well), `#multi` (2-4 numbers), `#seed`.
+- **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu or pill), `#angle` (a dial), `#color` (a colour well), `#gradient` (a colour ramp), `#multi` (2-4 numbers), `#seed`.
 - **Spatial controls:** `#point` (a draggable position handle). Add `osc` to a value control for an on-screen ring, box, or rotation ring that edits the same lane.
 - **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep.
 - Attributes tune each one: `label=`, `min=` / `max=`, `default=`, and `osc=` place the on-screen control. The rest of this doc details every kind.
@@ -32,6 +32,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 | ----------- | ------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `#color`    | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)                                   |
 | `#color`    | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count                                     |
+| `#gradient` | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count               |
 | `#float`    | `float n;`         | slider                                           | the raw value                                                                 |
 | `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                         |
 | `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** — transition progress; see below                                     |
@@ -126,7 +127,7 @@ Reach for `native` only when the shader genuinely produces its own smear (trails
 - `label="Nice Name"` - inspector display name (defaults to a prettified uniform name: `uCornerRadius` -> "Corner Radius").
 - `min=` / `max=` - hard value range. Omit either to leave that side unbounded (the field accepts any value past the slider's ends) - so a bare `min=` lets a field go negative. `#progress` ignores both: it is always 0-100%.
 - `slidermin=` / `slidermax=` - the slider's visible span, overriding the default ends (`min`/`max` when set, else a nominal 0 / 1 / 10 / 100%). Use this to give an unbounded field a sensible slider range, or to make the slider a comfortable sub-range of a wider field. The field still accepts values outside the slider.
-- `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`. `#color` takes a hex default: `default="#RRGGBB"` (or `#RRGGBBAA`) for a single swatch, or a comma list `default="#06080F,#1B4A6B,#57E0FF"` for a palette - the list seeds the swatches AND sets the default active count (still clamped by `min`/`max`). A bare `default=3` on a palette stays count-only (built-in palette colours). The default colours are also what **Reset to default** reverts each swatch to, so a shader's intended palette lives in its source.
+- `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`. `#color` takes a hex default: `default="#RRGGBB"` (or `#RRGGBBAA`) for a single swatch, or a comma list `default="#06080F,#1B4A6B,#57E0FF"` for a palette - the list seeds the swatches AND sets the default active count (still clamped by `min`/`max`). A bare `default=3` on a palette stays count-only (built-in palette colours). `#gradient` takes hex stops with optional positions: `default="#06080F@0,#57E0FF@0.4,#FFFFFF"`. The default colours are also what **Reset to default** reverts each swatch to, so a shader's intended palette lives in its source.
 - `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index) and `dropdown` (see below).
 - `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag). By default its fields are floats; add `percent` for whole-number `%` fields (delivered to the shader as 0..1, like a single `#percent`) or `int` for whole-number fields (delivered raw). Example: `// #multi label="Crop Size" fields={W,H} percent min=1 max=100 default="100,100"`.
 - **Per-field bounds on a `#multi`:** `min={a,b,c,d}` / `max={a,b,c,d}` set each component's hard range independently, overriding the scalar `min=`/`max=`. The list may be partial and slots may be empty - an empty slot falls back to the scalar attr, or stays unbounded if none.
@@ -152,6 +153,31 @@ uniform int uStyle;
 The row then shows the current pick and expands a searchable list in place. It's the right call when the options are **many** (past a handful the pills wrap into a wall that pushes the rest of the panel down) or **long-worded**. Keep the pills for a short set - a dropdown hides the options behind a click and makes comparing them slower.
 
 It's opt-in rather than automatic on a count, because a control that changed shape at the 6th option would surprise you more than either default.
+
+### `#gradient` (a colour ramp)
+
+`#color` gives you one colour, or a palette of loose swatches. `#gradient` gives you a **ramp**: colours at positions, blending between them, sampled by whatever number you like.
+
+```glsl
+// #gradient label="Ramp" default="#06080F,#57E0FF,#FFFFFF"
+uniform vec4 uRamp[8];
+```
+
+The `[8]` is the **stop capacity** - how many stops the user can grow the ramp to, not how many it starts with. Keep it to what you'd actually want (8 is generous); each slot costs pool space shared with every other control.
+
+Sample it with the generated `uRampAt(t)`, which takes a position `0..1` and returns a `vec3`. Never index the `vec4` array yourself - the packing is an implementation detail and the declared array doesn't survive compilation. `uRampStops` gives the live stop count if you need it.
+
+```glsl
+vec3 col = uRampAt(length(uv));            // radial ramp
+vec3 col = uRampAt(uv.x);                  // left to right
+vec3 col = uRampAt(uMusicBand(0));         // colour by how loud the bass is
+```
+
+**The shader owns the geometry.** There's no linear/radial toggle and no angle knob, because a gradient here isn't a fill - it's a lookup you drive with anything: a radius, a UV axis, a noise value, an audio level, a distance field. That's also why `#gradient` takes **no `osc`** and can't be referenced from an OSC expression.
+
+Attributes: `label=`, and `default="#hex@pos,..."`. Positions are optional and clamped to `0..1`; stops that omit one are spread evenly between the ones that state theirs, so `default="#000,#f00,#fff"` lands on 0 / 0.5 / 1. With no `default=` the ramp starts black → white. As with `#color`, the directive's stops are what **Reset to default** reverts to.
+
+The lane is fully animatable and keyframes like anything else. Adding or removing a stop between keyposes is fine - the two ramps are resampled onto a shared set of positions and blended, rather than the first one being held. Midpoints (the bias handle between two stops) are editable on the bar and animate with everything else; there's no directive attribute for them, since shaping a falloff is something you do by eye.
 
 ### `#audio` is the odd one out
 

@@ -77,6 +77,13 @@ static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
                                      iv.intensity, iv.frequency)
                      : localT;
 
+  // A stops-only gradient lane (no type/angle prefix - Mirage's `// #gradient`)
+  // still needs the structural blend: a plain per-component lerp of
+  // [p, r, g, b, m] holds the first keyframe outright the moment a keyframe
+  // adds or removes a stop, because the component counts no longer line up.
+  if (lane.valueType == KKLaneValueTypeGradient && !lane.gradientShowsTypeAngle)
+    return KKGradientStopsInterp(a.values, b.values, easedT);
+
   // Composite gradient lanes interpolate specially: type is held, angle lerps,
   // stops blend structurally - a per-component lerp of [type, angle, stops...]
   // would be nonsense (type 0<->1) and breaks on a stop-count change.
@@ -231,10 +238,11 @@ double KKHermiteJoinBlend(double frac, double boundary, double window,
 static NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
                                                                   double frac) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
-  // Composite gradient values aren't a vector of independent scalars, so the C1
+  // Gradient values aren't a vector of independent scalars, so the C1
   // per-component join blend would corrupt them - use the raw (gradient-aware)
-  // interpolation directly.
-  if (lane.valueType == KKLaneValueTypeGradient && lane.gradientShowsTypeAngle)
+  // interpolation directly. True of both shapes: the composite [type, angle,
+  // stops...] and the stops-only flat array.
+  if (lane.valueType == KKLaneValueTypeGradient)
     return KKLaneRawValueAtFraction(lane, frac);
   if (kps.count < 3)
     return KKLaneRawValueAtFraction(lane, frac); // no interior join to round

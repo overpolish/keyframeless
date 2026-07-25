@@ -4,12 +4,12 @@
  */
 
 #import "Constants.h"
-#import <KeyframelessKit/KKLog.h>
 #import "MirageAudioPool.h" // MirageFillAudioPool (the Sonar spectrogram)
 #import "MirageDirectives.h"
 #import "MirageInspectorView.h"
 #import "MirageStateBlob.h"
 #import "Plugin+Render_Internal.h"
+#import <KeyframelessKit/KKLog.h>
 
 #import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKMotionBlur.h>
@@ -106,6 +106,8 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   // `timelineTime:fromInputTime:`, because an FxPlug render time in FCP is the
   // input's native media clock.
   poolN = MirageFillAudioPool(model, outState->colorPool, timelineSec, values);
+  // `// #gradient` ramps last, so the three pools above keep their offsets.
+  poolN = [model fillGradientPool:outState->colorPool valuesForLabel:values];
   outState->colorPoolCount = poolN;
 }
 
@@ -129,7 +131,8 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   KKTimeline *timeline = [self _timelineFromParams:getAPI];
   NSString *shaderSrc = nil;
   for (KKLane *lane in timeline.lanes)
-    if ([lane.key isEqualToString:kMirageCodeLaneLabel] && lane.codeString.length) {
+    if ([lane.key isEqualToString:kMirageCodeLaneLabel] &&
+        lane.codeString.length) {
       shaderSrc = lane.codeString;
       break;
     }

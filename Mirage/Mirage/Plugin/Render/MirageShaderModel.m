@@ -138,16 +138,18 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
   MirageColorProp _colors[KK_SHADER_MAX_COLOR_PROPS];
   MirageScalarProp _scalars[KK_SHADER_MAX_SCALAR_PROPS];
   MirageAudioProp _audio[KK_SHADER_MAX_AUDIO_PROPS];
-  MirageOSCBlock _oscBlocks[KK_SHADER_MAX_SCALAR_PROPS + KK_SHADER_MAX_OSC_BLOCKS];
+  MirageGradientProp _gradients[KK_SHADER_MAX_GRADIENT_PROPS];
+  MirageOSCBlock
+      _oscBlocks[KK_SHADER_MAX_SCALAR_PROPS + KK_SHADER_MAX_OSC_BLOCKS];
 }
 
 - (instancetype)initWithSource:(NSString *)source {
   if (!(self = [super init]))
     return nil;
   _source = [source copy];
-  int cUsed = 0, sUsed = 0, aUsed = 0;
-  _colorCount = MirageParseColorProps(source, _colors,
-                                      KK_SHADER_MAX_COLOR_PROPS, &cUsed);
+  int cUsed = 0, sUsed = 0, aUsed = 0, gUsed = 0;
+  _colorCount =
+      MirageParseColorProps(source, _colors, KK_SHADER_MAX_COLOR_PROPS, &cUsed);
   _colorPoolUsed = cUsed;
   _scalarCount = MirageParseScalarProps(
       source, _scalars, KK_SHADER_MAX_SCALAR_PROPS, cUsed, &sUsed);
@@ -155,6 +157,10 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
   _audioCount = MirageParseAudioProps(source, _audio, KK_SHADER_MAX_AUDIO_PROPS,
                                       cUsed + sUsed, &aUsed);
   _audioPoolUsed = aUsed;
+  _gradientCount =
+      MirageParseGradientProps(source, _gradients, KK_SHADER_MAX_GRADIENT_PROPS,
+                               cUsed + sUsed + aUsed, &gUsed);
+  _gradientPoolUsed = gUsed;
 
   // Unified OSC declarations: directive sugar first (mirroring the
   // checklist's source order), then authored blocks; an authored block
@@ -332,6 +338,67 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
 
 - (const MirageAudioProp *)audioProps {
   return _audio;
+}
+
+- (const MirageGradientProp *)gradientProps {
+  return _gradients;
+}
+
+- (int)fillGradientPool:(vector_float4 *)pool
+         valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel {
+  for (int pi = 0; pi < _gradientCount; pi++) {
+    const MirageGradientProp *p = &_gradients[pi];
+    // Look up by the uniform NAME (lane identity), not the display label.
+    NSArray<NSNumber *> *v = valuesForLabel(@(p->name));
+    // The lane's flat stop array, or the directive's defaults when the lane
+    // isn't there yet (a fresh instance, or a shader edited to add a gradient
+    // before the lanes rebuild).
+    float stops[KK_SHADER_MAX_GRADIENT_STOPS][KK_GRADIENT_STOP_STRIDE];
+    int count = 0;
+    if (v.count >= 2 * KK_GRADIENT_STOP_STRIDE) {
+      count = (int)(v.count / KK_GRADIENT_STOP_STRIDE);
+      if (count > p->maxStops)
+        count = p->maxStops;
+      for (int i = 0; i < count; i++)
+        for (int k = 0; k < KK_GRADIENT_STOP_STRIDE; k++)
+          stops[i][k] = v[i * KK_GRADIENT_STOP_STRIDE + k].floatValue;
+    } else {
+      count = p->defStopCount;
+      if (count > p->maxStops)
+        count = p->maxStops;
+      memcpy(stops, p->defStops,
+             sizeof(float) * (size_t)count * KK_GRADIENT_STOP_STRIDE);
+    }
+    // The sampler walks segments in order and saturates each one, so a stop
+    // that sorts out of place would blend backwards. Interpolating between two
+    // keyposes CAN reorder them (a stop dragged past its neighbour), so sort
+    // here rather than trusting the editor. Insertion sort: at most 16 stops.
+    for (int i = 1; i < count; i++) {
+      float key[KK_GRADIENT_STOP_STRIDE];
+      memcpy(key, stops[i], sizeof(key));
+      int j = i - 1;
+      while (j >= 0 && stops[j][0] > key[0]) {
+        memcpy(stops[j + 1], stops[j], sizeof(key));
+        j--;
+      }
+      memcpy(stops[j + 1], key, sizeof(key));
+    }
+
+    int mid = p->poolOffset + p->maxStops; // packed midpoints follow the stops
+    for (int i = 0; i < p->maxStops; i++)
+      pool[p->poolOffset + i] = (vector_float4){0, 0, 0, 0};
+    for (int i = 0; i < (p->maxStops + 3) / 4; i++)
+      pool[mid + i] = (vector_float4){0.5f, 0.5f, 0.5f, 0.5f};
+    for (int i = 0; i < count; i++) {
+      // rgb in .xyz, position in .w - the sampler needs both per stop, and
+      // pairing them saves the pool a second array.
+      pool[p->poolOffset + i] =
+          (vector_float4){stops[i][1], stops[i][2], stops[i][3], stops[i][0]};
+      pool[mid + (i >> 2)][i & 3] = stops[i][4];
+    }
+    pool[mid + (p->maxStops + 3) / 4] = (vector_float4){(float)count, 0, 0, 0};
+  }
+  return _colorPoolUsed + _scalarPoolUsed + _audioPoolUsed + _gradientPoolUsed;
 }
 
 @end

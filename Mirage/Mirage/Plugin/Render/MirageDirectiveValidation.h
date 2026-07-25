@@ -45,6 +45,13 @@ static inline NSString *MirageFirstDuplicateUniform(NSString *source) {
       return nm;
     [seen addObject:nm];
   }
+  const MirageGradientProp *gp = m.gradientProps;
+  for (int i = 0; i < m.gradientCount; i++) {
+    NSString *nm = @(gp[i].name);
+    if ([seen containsObject:nm])
+      return nm;
+    [seen addObject:nm];
+  }
   return nil;
 }
 

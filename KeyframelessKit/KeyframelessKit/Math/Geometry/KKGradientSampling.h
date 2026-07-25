@@ -53,6 +53,14 @@ NSArray<NSNumber *> *KKGradientInterpFlatLUT(NSArray<NSNumber *> *fromFlat,
                                              NSArray<NSNumber *> *toFlat,
                                              double t, int size);
 
+/// Interpolate two FLAT stop arrays (`[position, r, g, b, midpoint]` per stop)
+/// at `t`. Blends stop-for-stop when the counts match, and resamples both onto
+/// the union of their positions when they differ - so a keyframe that adds or
+/// removes a stop still animates instead of popping. Returns a flat stop array.
+NSArray<NSNumber *> *KKGradientStopsInterp(NSArray<NSNumber *> *fromFlat,
+                                           NSArray<NSNumber *> *toFlat,
+                                           double t);
+
 /// Interpolate two COMPOSITE gradient values - `[type, angleDegrees, <flat
 /// stops>]` - at `t`. `type` is held from `from` (discrete, never animated),
 /// `angle` is lerped, and the stops are interpolated structurally when both
