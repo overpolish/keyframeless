@@ -8,6 +8,7 @@
 #import <Foundation/Foundation.h>
 
 #import "MirageAudioProps.h"
+#import "MirageBuiltinProps.h"
 #import "MirageColorProps.h"
 #import "MirageGradientProps.h"
 #import "MirageOSCBlock.h"
@@ -47,6 +48,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) int gradientCount;
 - (const MirageGradientProp *)gradientProps;
 @property(nonatomic, readonly) int gradientPoolUsed;
+
+/// The opt-in built-in controls (`// #speed`, `// #seed`, `// #grain`). A
+/// shader that declares none renders with them neutral: speed 1, offset 0, no
+/// grain, and no lanes for any of them.
+@property(nonatomic, readonly) MirageBuiltins builtins;
 
 /// The unified OSC declaration list: every inline `osc=` directive opt-in
 /// expanded to a standard `@osc` block (sugar first, mirroring the checklist's

@@ -83,4 +83,13 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void);
 /// tables rather than from the docs.
 NSArray<NSDictionary<NSString *, NSString *> *> *MirageMotionBlurModes(void);
 
+/// A curated set of SF Symbol names for a `group=`'s icon slot. NOT a
+/// whitelist: any symbol macOS knows resolves at runtime, and the parser takes
+/// whatever is typed. There is no API to enumerate the ~6,900 installed
+/// symbols, and offering all of them would be worse than offering the few
+/// dozen that suit a shader control group, so this is a discovery list. Every
+/// name here was checked against `imageWithSystemSymbolName:` - see
+/// MirageUnknownGroupSymbol for what happens to one that isn't.
+NSArray<NSDictionary<NSString *, NSString *> *> *MirageGroupSymbols(void);
+
 NS_ASSUME_NONNULL_END

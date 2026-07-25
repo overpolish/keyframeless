@@ -10,6 +10,7 @@
 
 #ifndef __METAL_VERSION__
 
+#import <AppKit/AppKit.h> // NSImage, to resolve a `group=` icon name
 #import <Foundation/Foundation.h>
 #import <ctype.h>
 #import <math.h>
@@ -52,6 +53,71 @@ static inline NSString *MirageFirstDuplicateUniform(NSString *source) {
       return nm;
     [seen addObject:nm];
   }
+  return nil;
+}
+
+/// The first directive keyword (`color` / `audio` / `gradient`) that carries a
+/// `group=` it isn't allowed to, or nil when none does. These three land in
+/// dedicated groups of their own, so honouring a group would either be ignored
+/// silently or split a colour set away from its swatches. This is a
+/// source-level scan rather than a model check because their parsers never read
+/// `group=` at all, so there is nothing on the parsed prop to inspect.
+static inline NSString *MirageFirstMisplacedGroup(NSString *source) {
+  if (!source.length)
+    return nil;
+  NSRegularExpression *re = [NSRegularExpression
+      regularExpressionWithPattern:
+          @"(?m)^[ \\t]*//[ \\t]*#(color|audio|gradient)\\b([^\\n]*)$"
+                           options:0
+                             error:nil];
+  NSRegularExpression *groupRe =
+      [NSRegularExpression regularExpressionWithPattern:@"\\bgroup\\s*="
+                                                options:0
+                                                  error:nil];
+  __block NSString *found = nil;
+  [re enumerateMatchesInString:source
+                       options:0
+                         range:NSMakeRange(0, source.length)
+                    usingBlock:^(NSTextCheckingResult *m, NSMatchingFlags f,
+                                 BOOL *stop) {
+                      NSString *attrs =
+                          [source substringWithRange:[m rangeAtIndex:2]];
+                      if (!attrs.length)
+                        return;
+                      if ([groupRe firstMatchInString:attrs
+                                              options:0
+                                                range:NSMakeRange(
+                                                          0, attrs.length)]) {
+                        found = [source substringWithRange:[m rangeAtIndex:1]];
+                        *stop = YES;
+                      }
+                    }];
+  return found;
+}
+
+/// The first `group=` icon naming an SF Symbol this Mac doesn't have, or nil
+/// when every one resolves. Worth catching: an unknown name isn't an error
+/// anywhere downstream, it just draws the blank placeholder, so `sparkle` typed
+/// for `sparkles` silently produces a group with no icon and nothing to explain
+/// it. Any installed symbol is accepted - the completion list is discovery, not
+/// a whitelist.
+static inline NSString *MirageUnknownGroupSymbol(NSString *source) {
+  if (!source.length)
+    return nil;
+  MirageShaderModel *m = [MirageShaderModel modelForSource:source];
+  NSMutableArray<NSString *> *symbols = [NSMutableArray array];
+  const MirageScalarProp *sp = m.scalarProps;
+  for (int i = 0; i < m.scalarCount; i++)
+    if (sp[i].groupSymbol[0])
+      [symbols addObject:@(sp[i].groupSymbol)];
+  MirageBuiltins b = m.builtins; // a local: `builtins` returns by value
+  const MirageBuiltinProp *bp[] = {&b.speed, &b.seed, &b.grain};
+  for (int i = 0; i < 3; i++)
+    if (bp[i]->present && bp[i]->groupSymbol[0])
+      [symbols addObject:@(bp[i]->groupSymbol)];
+  for (NSString *s in symbols)
+    if (![NSImage imageWithSystemSymbolName:s accessibilityDescription:nil])
+      return s;
   return nil;
 }
 

@@ -40,6 +40,42 @@ DeclaredUniforms(NSString *text) {
   return out;
 }
 
+// The group names already used in `text`, so the second directive to join a
+// group completes the name the first one coined instead of inviting a typo
+// that would silently make a second group. Ordered first-seen, deduped
+// case-sensitively (the names ARE the group identity).
+static NSArray<NSDictionary<NSString *, NSString *> *> *
+DeclaredGroups(NSString *text) {
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    re = [NSRegularExpression
+        regularExpressionWithPattern:@"\\bgroup\\s*=\\s*\\{?\\s*\"([^\"]+)\""
+                             options:0
+                               error:nil];
+  });
+  NSMutableArray *out = [NSMutableArray array];
+  NSMutableSet *seen = [NSMutableSet set];
+  [re enumerateMatchesInString:text
+                       options:0
+                         range:NSMakeRange(0, text.length)
+                    usingBlock:^(NSTextCheckingResult *m, NSMatchingFlags f,
+                                 BOOL *stop) {
+                      NSString *n =
+                          [text substringWithRange:[m rangeAtIndex:1]];
+                      if (!n.length || [seen containsObject:n])
+                        return;
+                      [seen addObject:n];
+                      // Closes the quote the caret is already inside.
+                      NSMutableDictionary *e =
+                          [E(n, n, @"A group this shader already uses.",
+                             [n stringByAppendingString:@"\""]) mutableCopy];
+                      e[@"color"] = kVAR;
+                      [out addObject:e];
+                    }];
+  return out;
+}
+
 static BOOL IsIdentChar(unichar c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
          (c >= '0' && c <= '9') || c == '_';
@@ -526,6 +562,84 @@ MirageDirectiveCompletions(NSString *text, NSUInteger caret,
     if (modes.count)
       *outReplaceRange = NSMakeRange(wordStart, caret - wordStart);
     return modes;
+  }
+
+  // `group=` takes a QUOTED name, optionally braced with an icon after it. The
+  // generic `key=` rule below can't see either: it fires only with the caret
+  // right after the `=`, and here the caret is inside a quote. Group names also
+  // contain spaces, so the caret word (ident chars only) is the wrong unit -
+  // the partial runs from the opening quote.
+  if (!inBlock) {
+    static NSRegularExpression *gre;
+    static dispatch_once_t gonce;
+    dispatch_once(&gonce, ^{
+      gre = [NSRegularExpression
+          regularExpressionWithPattern:@"\\bgroup\\s*=\\s*([^=]*)$"
+                               options:0
+                                 error:nil];
+    });
+    NSTextCheckingResult *gm =
+        [gre firstMatchInString:beforeWordBody
+                        options:0
+                          range:NSMakeRange(0, beforeWordBody.length)];
+    if (gm) {
+      NSString *tail = [beforeWordBody substringWithRange:[gm rangeAtIndex:1]];
+      NSUInteger quotes = 0;
+      for (NSUInteger i = 0; i < tail.length; i++)
+        if ([tail characterAtIndex:i] == '"')
+          quotes++;
+      BOOL braced = [tail rangeOfString:@"{"].location != NSNotFound;
+      BOOL inside = (quotes % 2) == 1;
+      // Is the value FINISHED? A braced one ends at its `}`, a bare one at its
+      // closing quote. Until then the caret is still inside the attribute, and
+      // nothing else is legal there - so an unfinished value either offers its
+      // own completions or offers NOTHING, and never falls through to the
+      // attribute keys below (which would suggest `label=` from inside a
+      // half-typed `group={"Glow", "wind"`, where it can't be typed).
+      BOOL closed = braced ? [tail rangeOfString:@"}"].location != NSNotFound
+                           : quotes >= 2;
+      if (!closed) {
+        // Slot 0 is the group name; slot 1 the icon, braced form only and only
+        // once a comma separates it from the name (before that the user still
+        // has to type the comma, and an icon inserted there would fuse onto
+        // the name).
+        NSArray *pool = nil;
+        if (quotes <= 1) {
+          pool = DeclaredGroups(text);
+        } else if (braced && quotes <= 3) {
+          NSRange lq = [tail rangeOfString:@"\"" options:NSBackwardsSearch];
+          BOOL comma = quotes == 3 || (lq.location != NSNotFound &&
+                                       [[tail substringFromIndex:NSMaxRange(lq)]
+                                           rangeOfString:@","]
+                                               .location != NSNotFound);
+          if (comma)
+            pool = MirageGroupSymbols();
+        }
+        NSUInteger valueStart = wordStart;
+        if (inside) {
+          NSRange q = [beforeWordBody rangeOfString:@"\""
+                                            options:NSBackwardsSearch];
+          if (q.location != NSNotFound)
+            valueStart = bodyStart + NSMaxRange(q);
+        }
+        NSString *partial = [text
+            substringWithRange:NSMakeRange(valueStart, caret - valueStart)];
+        NSArray *items = FilterByPrefix(pool, partial);
+        if (!inside) { // no opening quote yet, so type it for them
+          NSMutableArray *m = [NSMutableArray arrayWithCapacity:items.count];
+          for (NSDictionary<NSString *, NSString *> *e in items) {
+            NSMutableDictionary *c = [e mutableCopy];
+            c[@"insert"] =
+                [@"\"" stringByAppendingString:e[@"insert"] ?: e[@"name"]];
+            [m addObject:c];
+          }
+          items = m;
+        }
+        if (items.count)
+          *outReplaceRange = NSMakeRange(valueStart, caret - valueStart);
+        return items; // possibly empty: inside the value, so nothing else fits
+      }
+    }
   }
 
   if (valuePos) {

@@ -48,6 +48,14 @@ typedef struct MirageScalarProp {
     int hasMin;     // `min=` was specified (else the field is unbounded below)
     char name[64];  // GLSL uniform name
     char label[80]; // display label
+    // Which inspector group the control lands in (`group={"Glow Options",
+    // "sparkles"}`, the symbol optional). Empty = the default group. Groups are
+    // free-form strings discovered first-seen from the lane list, so the order
+    // controls appear in the source is the order their groups appear in the
+    // inspector. `#color` / `#audio` / `#gradient` have dedicated groups and
+    // reject the attribute (see MirageFirstMisplacedGroup).
+    char group[80];
+    char groupSymbol[40];
     int poolOffset; // vec4 index in the pool (value in .x, or xy for a point)
     double fmin, fmax,
         fdefault;        // float (percent: in 0..100); fmax = nominal when

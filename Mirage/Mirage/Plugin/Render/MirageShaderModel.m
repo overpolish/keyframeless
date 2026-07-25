@@ -161,6 +161,9 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
       MirageParseGradientProps(source, _gradients, KK_SHADER_MAX_GRADIENT_PROPS,
                                cUsed + sUsed + aUsed, &gUsed);
   _gradientPoolUsed = gUsed;
+  // The opt-in built-ins. No pool slots: they drive the shared uniforms, so
+  // they take no offset and don't shift anything after them.
+  _builtins = MirageParseBuiltins(source);
 
   // Unified OSC declarations: directive sugar first (mirroring the
   // checklist's source order), then authored blocks; an authored block
@@ -313,7 +316,7 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
     case MirageScalarKindFloat:
     case MirageScalarKindPercent:
     case MirageScalarKindProgress:
-    case MirageScalarKindSeed:
+    case MirageScalarKindRandom:
     case MirageScalarKindInt:
     case MirageScalarKindAngle:
     case MirageScalarKindBool:

@@ -7,10 +7,11 @@ summary: Declaring inspector controls and on-screen controls in a Custom shader 
 
 A Custom shader can expose its own **inspector controls** and **on-screen controls (OSCs)** by annotating its uniforms. Put a `// #<kind>` comment on the line **before** a `uniform` declaration, and Mirage builds a matching, fully keyframeable timeline lane for it. The uniform's value then comes from that lane (and its keyposes / OSC) instead of being a fixed constant.
 
-- **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu or pill), `#angle` (a dial), `#color` (a colour well), `#gradient` (a colour ramp), `#multi` (2-4 numbers), `#seed`.
+- **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu or pill), `#angle` (a dial), `#color` (a colour well), `#gradient` (a colour ramp), `#multi` (2-4 numbers), `#random` (a dice field).
 - **Spatial controls:** `#point` (a draggable position handle). Add `osc` to a value control for an on-screen ring, box, or rotation ring that edits the same lane.
 - **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep.
-- Attributes tune each one: `label=`, `min=` / `max=`, `default=`, and `osc=` place the on-screen control. The rest of this doc details every kind.
+- **Built-ins:** `#speed`, `#seed`, `#grain` opt into engine controls and stand alone (no uniform).
+- Attributes tune each one: `label=`, `min=` / `max=`, `default=`, `group=` (which inspector group it lands in), and `osc=` place the on-screen control. The rest of this doc details every kind.
 
 ```glsl
 // #float label="Amount" min=0 max=2 default=0.5
@@ -21,7 +22,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 
 **Rules that always hold:**
 
-- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search).
+- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The three built-ins (`#speed` / `#seed` / `#grain`) are the exception: they annotate nothing and stand on their own line.
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
@@ -37,15 +38,49 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 | `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                         |
 | `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** — transition progress; see below                                     |
 | `#int`      | `float n;`         | integer slider                                   | `int`                                                                         |
-| `#seed`     | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                         |
+| `#random`   | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                         |
 | `#angle`    | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)                                        |
 | `#bool`     | `bool n;`          | checkbox                                         | `bool`                                                                        |
 | `#choice`   | `int n;`           | segmented pills                                  | `int` selected index (0-based)                                                |
 | `#point`    | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)                            |
 | `#multi`    | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                                                |
 | `#audio`    | `vec4 n[N];`       | audio source picker                              | live spectrum `nBand(i)`+`nBands`; `flow` adds cumulative `nFlow` (see below) |
+| `#speed`    | _(none)_           | Speed slider                                     | nothing directly - scales `iTime`                                             |
+| `#seed`     | _(none)_           | Seed field                                       | nothing directly - offsets `iTime`                                            |
+| `#grain`    | _(none)_           | Grain + Grain Size                               | nothing directly - grain is overlaid on the output                            |
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
+
+## Groups
+
+Every control lands in an inspector **group**. Without `group=` a control goes to **Options**. Name a group and the control moves there, creating it if it's the first to ask:
+
+```glsl
+// #float label="Glow" group="Glow Options" min=0 max=1
+uniform float uGlow;
+
+// #percent label="Falloff" group={"Glow Options", "sparkles"}
+uniform float uFalloff;
+```
+
+Both forms are accepted: `group="Name"` on its own, or `group={"Name", "sf.symbol"}` to give the group an icon. The icon only has to be named **once** per group - any other control joining the group inherits it, so the short form is fine everywhere else. The symbol is any SF Symbol name macOS knows (the editor offers a curated list and flags a name that doesn't resolve).
+
+- **Group order** is: `Shader`, `Audio`, `Colors` first (always, in that order), then your own groups in the order the shader first names them. Move a directive above another and its group moves up with it.
+- **`#color`, `#audio` and `#gradient` reject `group=`** - they collect into their own dedicated groups, and a group there would either be ignored or split a colour set away from its swatches. Using it is a compile error in the editor.
+
+## The built-ins: `#speed`, `#seed`, `#grain`
+
+Three controls the engine provides rather than the shader. They **stand alone** (no uniform beneath them), and they are **opt-in** - a shader that doesn't declare them renders with speed 1, no time offset and no grain:
+
+```glsl
+// #speed group={"Motion", "wind"}
+// #seed group="Motion"
+// #grain default=20 size=3
+```
+
+- `#speed` multiplies `iTime`. `#seed` offsets where `iTime` starts.
+- `#grain` adds **two** lanes, the amount and its cell size. `default=` seeds the amount (a percentage), `size=` the cell size in pixels. `label=` renames the amount only.
+- All three take `label=` and `group=` like any other control.
 
 ### `#alpha` (masking your own clip)
 

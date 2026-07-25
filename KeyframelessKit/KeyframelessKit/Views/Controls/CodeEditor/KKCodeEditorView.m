@@ -353,7 +353,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
     [NSLayoutConstraint activateConstraints:@[
       [_tabBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_tabBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-      [_tabBar.topAnchor constraintEqualToAnchor:self.topAnchor],
+      [_tabBar.topAnchor constraintEqualToAnchor:_saveBar.bottomAnchor],
       _tabBarHeight,
       [_lineGutter.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_lineGutter.topAnchor constraintEqualToAnchor:_tabBar.bottomAnchor],
@@ -369,7 +369,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
       _errorBarHeight,
       [_resultBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_resultBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-      [_resultBar.bottomAnchor constraintEqualToAnchor:_saveBar.topAnchor],
+      [_resultBar.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
       _resultBarHeight,
       [_resultLabel.leadingAnchor
           constraintEqualToAnchor:_resultBar.leadingAnchor
@@ -394,9 +394,13 @@ NSNotificationName const KKCodeEditorReloadNotification =
           constraintEqualToAnchor:_resultBar.centerYAnchor],
       [_resultCopyButton.widthAnchor constraintEqualToConstant:13.0],
       [_resultCopyButton.heightAnchor constraintEqualToConstant:13.0],
+      // Above the tab bar, not under the editor: the name is the identity of
+      // the whole thing being edited, so it reads as a heading rather than a
+      // footer. Collapsed to height 0 when `savable` is off, which puts the tab
+      // bar back at the top with nothing above it.
       [_saveBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_saveBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-      [_saveBar.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+      [_saveBar.topAnchor constraintEqualToAnchor:self.topAnchor],
       _saveBarHeight,
       // Field pinned with equal top/bottom insets (symmetric padding); the Save
       // button matches the field's height and centre.

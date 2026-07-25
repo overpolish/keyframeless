@@ -21,7 +21,7 @@ typedef enum MirageScalarKind {
   MirageScalarKindFloat = 0,
   MirageScalarKindPercent,
   MirageScalarKindProgress,
-  MirageScalarKindSeed,
+  MirageScalarKindRandom,
   MirageScalarKindPoint,
   MirageScalarKindInt,
   MirageScalarKindAngle,
@@ -41,18 +41,19 @@ typedef struct MirageScalarKindSpec {
       isMulti;
 } MirageScalarKindSpec;
 
-//                             kind                       keyword     cho prg pct sed pnt bool int ang mlt
+//                             kind                       keyword     cho prg
+//                             pct sed pnt bool int ang mlt
 static const MirageScalarKindSpec kMirageScalarKinds[] = {
-    {MirageScalarKindFloat,    "float",                    0,  0,  0,  0,  0,  0,  0,  0,  0},
-    {MirageScalarKindPercent,  "percent",                  0,  0,  1,  0,  0,  0,  0,  0,  0},
-    {MirageScalarKindProgress, "progress",                 0,  1,  1,  0,  0,  0,  0,  0,  0},
-    {MirageScalarKindSeed,     "seed",                     0,  0,  0,  1,  0,  0,  0,  0,  0},
-    {MirageScalarKindPoint,    "point",                    0,  0,  0,  0,  1,  0,  0,  0,  0},
-    {MirageScalarKindInt,      "int",                      0,  0,  0,  0,  0,  0,  1,  0,  0},
-    {MirageScalarKindAngle,    "angle",                    0,  0,  0,  0,  0,  0,  0,  1,  0},
-    {MirageScalarKindBool,     "bool",                     0,  0,  0,  0,  0,  1,  0,  0,  0},
-    {MirageScalarKindChoice,   "choice",                   1,  0,  0,  0,  0,  0,  0,  0,  0},
-    {MirageScalarKindMulti,    "multi",                    0,  0,  0,  0,  0,  0,  0,  0,  1},
+    {MirageScalarKindFloat, "float", 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {MirageScalarKindPercent, "percent", 0, 0, 1, 0, 0, 0, 0, 0, 0},
+    {MirageScalarKindProgress, "progress", 0, 1, 1, 0, 0, 0, 0, 0, 0},
+    {MirageScalarKindRandom, "random", 0, 0, 0, 1, 0, 0, 0, 0, 0},
+    {MirageScalarKindPoint, "point", 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    {MirageScalarKindInt, "int", 0, 0, 0, 0, 0, 0, 1, 0, 0},
+    {MirageScalarKindAngle, "angle", 0, 0, 0, 0, 0, 0, 0, 1, 0},
+    {MirageScalarKindBool, "bool", 0, 0, 0, 0, 0, 1, 0, 0, 0},
+    {MirageScalarKindChoice, "choice", 1, 0, 0, 0, 0, 0, 0, 0, 0},
+    {MirageScalarKindMulti, "multi", 0, 0, 0, 0, 0, 0, 0, 0, 1},
 };
 #define KK_MIRAGE_SCALAR_KIND_COUNT                                            \
   ((int)(sizeof(kMirageScalarKinds) / sizeof(kMirageScalarKinds[0])))

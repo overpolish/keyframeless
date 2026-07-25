@@ -1,6 +1,48 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "\"%@\" isn't an SF Symbol on this Mac - check the name in the SF Symbols app": {
+      "comment": "Mirage unknown group-icon validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ist auf diesem Mac kein SF Symbol – prüfe den Namen in der App „SF Symbols“"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» no es un SF Symbol en este Mac: comprueba el nombre en la app SF Symbols"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« %@ » n'est pas un SF Symbol sur ce Mac : vérifiez le nom dans l'app SF Symbols"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」はこの Mac の SF Symbol ではありません。SF Symbols アプリで名前を確認してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"%@\"은(는) 이 Mac의 SF Symbol이 아닙니다. SF Symbols 앱에서 이름을 확인하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@”不是此 Mac 上的 SF Symbol，请在 SF Symbols App 中核对名称"
+          }
+        }
+      }
+    },
     "-1, 0 or 1 for the sign.": {
       "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
       "extractionState": "manual",
@@ -8733,6 +8775,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "编写着色器"
+          }
+        }
+      }
+    },
+    "`#%@` can't set a group: colours, audio and gradients have their own": {
+      "comment": "Mirage group-on-dedicated-directive validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#%@` kann keine Gruppe setzen: Farben, Audio und Verläufe haben ihre eigene"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#%@` no puede definir un grupo: los colores, el audio y los degradados tienen el suyo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#%@` ne peut pas définir de groupe : les couleurs, l'audio et les dégradés ont le leur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#%@` はグループを指定できません。カラー、オーディオ、グラデーションには専用のグループがあります"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#%@`은(는) 그룹을 설정할 수 없습니다. 색상, 오디오, 그라디언트에는 전용 그룹이 있습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#%@` 无法设置分组：颜色、音频和渐变有各自的分组"
           }
         }
       }

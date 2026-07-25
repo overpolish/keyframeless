@@ -42,8 +42,8 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
             @"#gradient "),
           E(@"#multi", @"#multi",
             @"2-4 numbers in one control, like a size or offset.", @"#multi "),
-          E(@"#seed", @"#seed", @"A random-seed field with a dice button.",
-            @"#seed "),
+          E(@"#random", @"#random", @"A random-seed field with a dice button.",
+            @"#random "),
           E(@"#point", @"#point",
             @"A draggable point in the frame, delivering its "
             @"position.",
@@ -59,6 +59,15 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
           E(@"#motionblur", @"#motionblur",
             @"Who renders motion blur: accumulate, native, or off.",
             @"#motionblur "),
+          E(@"#speed", @"#speed",
+            @"Adds a Speed control that scales the shader's time.", @"#speed"),
+          E(@"#seed", @"#seed",
+            @"Adds a Seed control that offsets where the shader's time "
+            @"starts.",
+            @"#seed"),
+          E(@"#grain", @"#grain",
+            @"Adds Grain and Grain Size controls, overlaid on the result.",
+            @"#grain"),
           E(@"#alpha", @"#alpha",
             @"Take control of transparency, to mask part of "
             @"the frame so a lower clip shows through.",
@@ -96,6 +105,13 @@ MirageDirectiveAttributeKeys(void) {
             @"link="),
           E(@"axis", @"axis=", @"Which axes a rotate control spins: x, y, z.",
             @"axis="),
+          E(@"group", @"group=",
+            @"Which inspector group the control goes in. Either "
+            @"group=\"Name\" or group={\"Name\", \"sf.symbol\"} to pick the "
+            @"group's icon too.",
+            @"group=\""),
+          E(@"size", @"size=", @"#grain: the grain's cell size, in pixels.",
+            @"size="),
         ],
         kKEY);
     // Bare flags / values - coral (keyword value) so the popup swatch matches
@@ -160,6 +176,119 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"percent",      @"int",        @"px", // #multi units/modifiers
       @"accumulate",   @"native",     @"off" // #motionblur modes
     ]];
+  });
+  return v;
+}
+
+// The icon slot of a `group={"Name", "symbol"}`. Descriptions are empty on
+// purpose: an SF Symbol's name IS its description, and a line of prose per
+// icon would be 84 strings saying nothing. The insert closes the quote the
+// caret is already inside.
+NSArray<NSDictionary<NSString *, NSString *> *> *MirageGroupSymbols(void) {
+  static NSArray *v;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    v = Colored(
+        @[
+          E(@"wind", @"wind", @"", @"wind\""),
+          E(@"tornado", @"tornado", @"", @"tornado\""),
+          E(@"hare", @"hare", @"", @"hare\""),
+          E(@"tortoise", @"tortoise", @"", @"tortoise\""),
+          E(@"timer", @"timer", @"", @"timer\""),
+          E(@"clock", @"clock", @"", @"clock\""),
+          E(@"metronome", @"metronome", @"", @"metronome\""),
+          E(@"speedometer", @"speedometer", @"", @"speedometer\""),
+          E(@"arrow.clockwise", @"arrow.clockwise", @"", @"arrow.clockwise\""),
+          E(@"arrow.triangle.2.circlepath", @"arrow.triangle.2.circlepath", @"",
+            @"arrow.triangle.2.circlepath\""),
+          E(@"figure.walk.motion", @"figure.walk.motion", @"",
+            @"figure.walk.motion\""),
+          E(@"gauge", @"gauge", @"", @"gauge\""),
+          E(@"sparkles", @"sparkles", @"", @"sparkles\""),
+          E(@"sun.max", @"sun.max", @"", @"sun.max\""),
+          E(@"bolt", @"bolt", @"", @"bolt\""),
+          E(@"flame", @"flame", @"", @"flame\""),
+          E(@"lightbulb", @"lightbulb", @"", @"lightbulb\""),
+          E(@"moon", @"moon", @"", @"moon\""),
+          E(@"star", @"star", @"", @"star\""),
+          E(@"rays", @"rays", @"", @"rays\""),
+          E(@"light.max", @"light.max", @"", @"light.max\""),
+          E(@"sun.dust", @"sun.dust", @"", @"sun.dust\""),
+          E(@"circle", @"circle", @"", @"circle\""),
+          E(@"square", @"square", @"", @"square\""),
+          E(@"triangle", @"triangle", @"", @"triangle\""),
+          E(@"hexagon", @"hexagon", @"", @"hexagon\""),
+          E(@"diamond", @"diamond", @"", @"diamond\""),
+          E(@"capsule", @"capsule", @"", @"capsule\""),
+          E(@"oval", @"oval", @"", @"oval\""),
+          E(@"rectangle", @"rectangle", @"", @"rectangle\""),
+          E(@"seal", @"seal", @"", @"seal\""),
+          E(@"pentagon", @"pentagon", @"", @"pentagon\""),
+          E(@"octagon", @"octagon", @"", @"octagon\""),
+          E(@"circle.grid.3x3", @"circle.grid.3x3", @"", @"circle.grid.3x3\""),
+          E(@"square.grid.3x3", @"square.grid.3x3", @"", @"square.grid.3x3\""),
+          E(@"circle.hexagongrid", @"circle.hexagongrid", @"",
+            @"circle.hexagongrid\""),
+          E(@"point.3.connected.trianglepath.dotted",
+            @"point.3.connected.trianglepath.dotted", @"",
+            @"point.3.connected.trianglepath.dotted\""),
+          E(@"grid", @"grid", @"", @"grid\""),
+          E(@"squareshape", @"squareshape", @"", @"squareshape\""),
+          E(@"paintpalette", @"paintpalette", @"", @"paintpalette\""),
+          E(@"paintbrush", @"paintbrush", @"", @"paintbrush\""),
+          E(@"eyedropper", @"eyedropper", @"", @"eyedropper\""),
+          E(@"drop", @"drop", @"", @"drop\""),
+          E(@"drop.fill", @"drop.fill", @"", @"drop.fill\""),
+          E(@"camera.filters", @"camera.filters", @"", @"camera.filters\""),
+          E(@"swatchpalette", @"swatchpalette", @"", @"swatchpalette\""),
+          E(@"circle.lefthalf.filled", @"circle.lefthalf.filled", @"",
+            @"circle.lefthalf.filled\""),
+          E(@"waveform", @"waveform", @"", @"waveform\""),
+          E(@"waveform.path", @"waveform.path", @"", @"waveform.path\""),
+          E(@"speaker.wave.2", @"speaker.wave.2", @"", @"speaker.wave.2\""),
+          E(@"music.note", @"music.note", @"", @"music.note\""),
+          E(@"dial.low", @"dial.low", @"", @"dial.low\""),
+          E(@"dial.high", @"dial.high", @"", @"dial.high\""),
+          E(@"water.waves", @"water.waves", @"", @"water.waves\""),
+          E(@"cloud.fog", @"cloud.fog", @"", @"cloud.fog\""),
+          E(@"snowflake", @"snowflake", @"", @"snowflake\""),
+          E(@"leaf", @"leaf", @"", @"leaf\""),
+          E(@"mountain.2", @"mountain.2", @"", @"mountain.2\""),
+          E(@"globe", @"globe", @"", @"globe\""),
+          E(@"aqi.medium", @"aqi.medium", @"", @"aqi.medium\""),
+          E(@"sparkle", @"sparkle", @"", @"sparkle\""),
+          E(@"move.3d", @"move.3d", @"", @"move.3d\""),
+          E(@"rotate.3d", @"rotate.3d", @"", @"rotate.3d\""),
+          E(@"scale.3d", @"scale.3d", @"", @"scale.3d\""),
+          E(@"crop", @"crop", @"", @"crop\""),
+          E(@"aspectratio", @"aspectratio", @"", @"aspectratio\""),
+          E(@"arrow.up.left.and.arrow.down.right",
+            @"arrow.up.left.and.arrow.down.right", @"",
+            @"arrow.up.left.and.arrow.down.right\""),
+          E(@"perspective", @"perspective", @"", @"perspective\""),
+          E(@"skew", @"skew", @"", @"skew\""),
+          E(@"camera.aperture", @"camera.aperture", @"", @"camera.aperture\""),
+          E(@"circle.dashed", @"circle.dashed", @"", @"circle.dashed\""),
+          E(@"camera.metering.spot", @"camera.metering.spot", @"",
+            @"camera.metering.spot\""),
+          E(@"scribble", @"scribble", @"", @"scribble\""),
+          E(@"textformat", @"textformat", @"", @"textformat\""),
+          E(@"number", @"number", @"", @"number\""),
+          E(@"gearshape", @"gearshape", @"", @"gearshape\""),
+          E(@"wand.and.stars", @"wand.and.stars", @"", @"wand.and.stars\""),
+          E(@"wand.and.rays", @"wand.and.rays", @"", @"wand.and.rays\""),
+          E(@"slider.horizontal.3", @"slider.horizontal.3", @"",
+            @"slider.horizontal.3\""),
+          E(@"switch.2", @"switch.2", @"", @"switch.2\""),
+          E(@"function", @"function", @"", @"function\""),
+          E(@"chevron.left.forwardslash.chevron.right",
+            @"chevron.left.forwardslash.chevron.right", @"",
+            @"chevron.left.forwardslash.chevron.right\""),
+          E(@"cube", @"cube", @"", @"cube\""),
+          E(@"square.stack.3d.up", @"square.stack.3d.up", @"",
+            @"square.stack.3d.up\""),
+        ],
+        kVAR);
   });
   return v;
 }

@@ -7,7 +7,7 @@ summary: Writing and editing custom Shadertoy-style shaders in Mirage
 
 Mirage is a blank shader canvas: paste a Shadertoy "Image" shader (or write your own GLSL) into the **Mirage** editor and it runs live on the clip. The **full GLSL language works** - so if a single-pass Image shader runs on Shadertoy, it almost always runs here unchanged. Paste it and go.
 
-- The editor is the **Mirage** lane at the bottom of the Core section: a syntax-highlighted code pane with live error reporting.
+- The editor is the **Mirage** lane in its own **Shader** group: a syntax-highlighted code pane with live error reporting, with the shader's name field above it.
 - Your entry point is Shadertoy's `void mainImage(out vec4 fragColor, in vec2 fragCoord)`, and the built-in inputs (`iTime`, `iChannel0`, `iResolution`, ...) all work.
 - Add your own sliders, colours, and on-screen handles by annotating uniforms with `// #` directives (see the directives help).
 
@@ -18,7 +18,7 @@ Use them exactly as on Shadertoy:
 | Name                     | Type        | Meaning                                                                                                                                                                                                                       |
 | ------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `iResolution`            | `vec3`      | output size in px (`.xy`), `.z` = 1                                                                                                                                                                                           |
-| `iTime`                  | `float`     | seconds, scaled by the shared **Speed** and offset by **Seed**                                                                                                                                                                |
+| `iTime`                  | `float`     | seconds, scaled by **Speed** and offset by **Seed** when the shader declares `// #speed` / `// #seed` (otherwise plain clip time)                                                                                             |
 | `iProgress`              | `float`     | clip fraction, `0` at the first frame to `1` at the last, linear. Deliberately NOT scaled by Speed/Seed. In a transition template this is the GL Transitions `progress`; see the `// #progress` directive to expose the curve |
 | `iTimeDelta`             | `float`     | seconds/frame (approx)                                                                                                                                                                                                        |
 | `iFrame`                 | `int`       | frame index (approx)                                                                                                                                                                                                          |
@@ -95,12 +95,14 @@ The editor has a tab strip. It starts on the single **Image** tab; the **+** men
 - **Channel routing is positional:** `iChannel0` -> Buffer A, `iChannel1` -> Buffer B, `iChannel2` -> Buffer C, `iChannel3` -> Buffer D, for any buffer that exists. A channel with no matching buffer falls back to the source clip (ch0) or noise. So a paste-in that expects "iChannel0 = Buffer A" works, but one wiring a channel to external footage does not (there's no per-pass routing UI yet).
 - **Feedback works.** A buffer may read its own (or a later buffer's) _previous_ frame - the engine keeps persistent ping-pong state per pass. That's what makes motion trails, fluid, and reaction-diffusion (Gray-Scott etc.) possible. Scrubbing is deterministic: the engine re-simulates from checkpoints so a given timeline frame always looks the same. Feedback sims run at a capped resolution (~360-tall) on purpose - reaction-diffusion / fluid patterns are a few cells wide and barely develop on a fine grid; the mini-viewer matches.
 
-## Shared controls that affect a Custom shader
+## Built-in controls a shader can opt into
 
-- **Speed** multiplies `iTime` (0 freezes it, 2 runs it twice as fast).
-- **Seed** offsets where `iTime` starts, for per-clip variety. A looping shader built around `mod(iTime, N)` can show a visible "jump" once per loop; nudging Seed or lowering Speed slides that seam out of the clip.
-- **Grain** / **Grain Size** overlay a core film grain applied on top of the shader's output.
-- Any positioning, scale, rotation, colour, etc. a shader wants is exposed by **declaring its own controls** with `// #` directives (see the directives doc), not by fixed shared controls. A shader otherwise positions itself in code.
+These three are **opt-in**: a shader that doesn't declare them gets neither the controls nor their effect (speed 1, no time offset, no grain). They are the only directives that stand alone rather than annotating a uniform, because they drive shared engine values rather than something the shader declares.
+
+- `// #speed` adds **Speed**, multiplying `iTime` (0 freezes it, 2 runs it twice as fast).
+- `// #seed` adds **Seed**, offsetting where `iTime` starts, for per-clip variety. A looping shader built around `mod(iTime, N)` can show a visible "jump" once per loop; nudging Seed or lowering Speed slides that seam out of the clip. For a per-shader random seed bound to your own uniform, use `#random` instead - see the directives doc.
+- `// #grain` adds **Grain** and **Grain Size**, a film grain overlaid on the shader's output. `default=` seeds the amount, `size=` the cell size.
+- Any positioning, scale, rotation, colour, etc. a shader wants is exposed by **declaring its own controls** with `// #` directives (see the directives doc). A shader otherwise positions itself in code.
 
 ## The editor
 
@@ -112,3 +114,4 @@ The Mirage editor is a small dark (GitHub-Dark) code pane: live GLSL syntax high
 - Start single-pass (one `mainImage` in the Image tab); reach for Buffer tabs only when a shader needs an offscreen pass or frame-to-frame feedback.
 - Sampling an unused `iChannel1-3` gives smooth value noise - good for grain, fbm, hashing. Two exceptions: a Buffer routed to that channel, and `iChannel1` when the "To" image well is filled (then it's a second clip, not noise).
 - If a pasted shader renders differently near the end of a clip, it's usually the shader's own `mod(iTime, N)` loop seam positioned by Seed, not a bug.
+- Grain is opt-in. A shader ported from elsewhere that looks flatter than expected in 8-bit may want `// #grain` back.

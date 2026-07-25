@@ -133,7 +133,7 @@ static void KKEmitScalarDefine(const MirageScalarProp *p,
   case MirageScalarKindFloat:
   case MirageScalarKindPercent:
   case MirageScalarKindProgress:
-  case MirageScalarKindSeed:
+  case MirageScalarKindRandom:
     if (rotate) {
       KKEmitRotateDefine(blk, nm, acc, defines);
       break;

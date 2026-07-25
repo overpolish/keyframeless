@@ -10,13 +10,19 @@ summary: What Mirage does
 - A shader can **react to the audio in your project** with the `#audio` directive: publish the music or dialogue from Sonar (the free tab in Keyframeless X), pick it from the shader's menu, and the look moves to it - on playback and in the export. See the audio-sonar and audio-shader-directive docs.
 - Saving a shader to the browser tags it with a **category** - one of **Generator** (draws its own look), **Audio** (reacts to a `#audio` binding), **Filter** (processes the clip on `iChannel0`), **Transition** (blends two clips across `iProgress`), or **Layout** (draws a clip into one region - picture-in-picture, split, quarters - and stays transparent elsewhere with `// #alpha`). It's a save-time label, not a code setting: nothing in the shader source changes with it, and Generator is the default. The browser filters by category (the icon pills above the list) and badges each card with its type. A shader that does more than one thing is filed under whichever the author leads with.
 
-## Shared controls (always present)
+## Built-in controls (opt-in)
 
-- **Speed** - motion-rate multiplier for `iTime` (0 freezes, higher is faster).
-- **Seed** - offsets where `iTime` starts, for per-clip variety (non-animatable).
-- **Grain** / **Grain Size** - a core film-grain overlay applied on top of the shader's output (subtle by default; breaks 8-bit banding, scales up to stylistic grain).
+Three controls the engine provides rather than the shader. A shader asks for them with a standalone directive; one that doesn't gets neither the control nor its effect:
 
-Any other control - colours, amounts, positions, angles - is something the shader itself declares via a directive. A shader with no directives shows just these shared controls plus the code editor.
+- `// #speed` - **Speed**, a motion-rate multiplier for `iTime` (0 freezes, higher is faster).
+- `// #seed` - **Seed**, offsetting where `iTime` starts, for per-clip variety (non-animatable).
+- `// #grain` - **Grain** / **Grain Size**, a film-grain overlay on top of the shader's output (breaks 8-bit banding, scales up to stylistic grain).
+
+Every other control - colours, amounts, positions, angles - is something the shader itself declares via a directive. A shader with no directives at all shows just the code editor.
+
+## Groups
+
+Controls are grouped in the inspector. A control with no `group=` goes to **Options**; `group="Name"` (or `group={"Name", "sf.symbol"}` to set the group's icon) puts it anywhere you like. Groups appear in a fixed order - **Shader**, **Audio**, **Colors** - followed by the shader's own groups in the order it first names them. Colours, audio and gradients always use their own groups and can't be moved. See the directives doc.
 
 ## On-screen controls
 

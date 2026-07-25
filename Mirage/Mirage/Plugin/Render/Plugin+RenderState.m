@@ -64,8 +64,8 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   common.seed = seed;
   common.time = timeSec;
   common.progress = (float)frac;
-  common.grain =
-      grainV.count ? grainV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
+  // No lane = the shader never opted into `// #grain`, so no grain at all.
+  common.grain = grainV.count ? grainV[0].floatValue / 100.0f : 0.0f;
   common.grainSize =
       grainSizeV.count ? grainSizeV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
   outState->common = common;

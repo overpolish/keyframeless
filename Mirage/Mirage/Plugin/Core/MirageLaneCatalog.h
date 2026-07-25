@@ -55,7 +55,7 @@ static inline KKLane *MirageMakeColorLane(NSString *idLabel,
   // swatches share the array's group (so they co-edit), keeping unrelated
   // shader lanes out of each other's keypose popover.
   color.groupKey = group;
-  color.categoryKey = @"Colors";
+  color.categoryKey = kMirageColorCategory;
   color.categorySymbol = @"paintpalette";
   [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                          values:@[
@@ -83,7 +83,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
   bar.paletteGeneratorBar = YES;
   bar.animatable = NO;
   bar.enabled = NO;
-  bar.categoryKey = @"Colors";
+  bar.categoryKey = kMirageColorCategory;
   bar.categorySymbol = @"paintpalette";
   [lanes addObject:bar];
 
@@ -114,7 +114,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
     count.componentMax = @[ @(p->maxCount) ]; // field up to the directive max
     count.sliderMax = @(MIN((NSInteger)p->maxCount, kSliderCap));
     count.groupKey = name; // joins its array's keypose-popover group
-    count.categoryKey = @"Colors";
+    count.categoryKey = kMirageColorCategory;
     count.categorySymbol = @"paintpalette";
     [count insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[ @(p->defaultCount) ]]];
@@ -222,8 +222,16 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
     // Each scalar/point is independent: its own keypose-popover group, so a
     // point OSC's keypose popover doesn't list every other shader uniform.
     lane.groupKey = @(p->name);
-    lane.categoryKey = @"Mirage";
-    lane.categorySymbol = @"slider.horizontal.3";
+    // The group is the shader's to name (`group={"Glow", "sparkles"}`), falling
+    // back to the shared default. Groups are discovered first-seen from the
+    // lane list, so declaration order in the source is inspector order. An
+    // empty name carrying a symbol counts as unset: a bespoke icon on the
+    // default group would dress it up as a declared one.
+    NSString *grp = @(p->group);
+    lane.categoryKey = grp.length ? grp : kMirageDefaultGroup;
+    lane.categorySymbol = (grp.length && p->groupSymbol[0])
+                              ? @(p->groupSymbol)
+                              : kMirageDefaultGroupSymbol;
     switch (p->kind) {
     case MirageScalarKindChoice: {
       lane.integerValued = YES;
@@ -244,7 +252,7 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
                                             values:@[ @(p->cdefault) ]]];
       break;
     }
-    case MirageScalarKindSeed: {
+    case MirageScalarKindRandom: {
       lane.seedField = YES; // dice reroll
       lane.integerValued = YES;
       lane.animatable = NO; // structural like the core Seed
@@ -463,7 +471,7 @@ static inline void MirageAppendGradientLanes(NSMutableArray<KKLane *> *lanes,
     lane.componentMin = @[];
     lane.componentMax = @[];
     lane.groupKey = @(p->name);
-    lane.categoryKey = @"Colors";
+    lane.categoryKey = kMirageColorCategory;
     lane.categorySymbol = @"paintpalette";
     NSMutableArray<NSNumber *> *flat = [NSMutableArray array];
     for (int i = 0; i < p->defStopCount; i++)
@@ -653,9 +661,28 @@ MirageAppendAudioLanes(NSMutableArray<KKLane *> *lanes, NSString *source,
 static inline NSArray<KKLane *> *
 MirageBuildAvailableLanesForSource(NSString *shaderSource,
                                    NSDictionary<NSString *, id> *tickets) {
-  // Lane order (top-to-bottom default): the Core lanes, then the dynamic colour
-  // swatches last (parsed from the shader). Users can reorder in the inspector.
+  // Lanes are BUILT in a convenient order and REORDERED by group at the end
+  // (see the bucketing pass before the return, which is what actually decides
+  // top-to-bottom order). Users can reorder further in the inspector.
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
+  // The built-ins are opt-in (`// #speed` / `// #seed` / `// #grain`): most
+  // shaders drive their own motion and want no grain, so an always-present set
+  // of them was four dead controls on top of every inspector. Declaring none
+  // renders neutral (speed 1, offset 0, no grain) - see MirageBuiltinProps.h.
+  MirageBuiltins builtins =
+      [MirageShaderModel modelForSource:shaderSource].builtins;
+  // Group per built-in, defaulting like any other control. They are emitted
+  // ahead of the scalar lanes, so a group first named by a built-in leads the
+  // inspector regardless of where it sits in the source.
+  KKLane * (^applyBuiltinGroup)(KKLane *, const MirageBuiltinProp *) =
+      ^KKLane *(KKLane *lane, const MirageBuiltinProp *p) {
+        NSString *grp = @(p->group);
+        lane.categoryKey = grp.length ? grp : kMirageDefaultGroup;
+        lane.categorySymbol = (grp.length && p->groupSymbol[0])
+                                  ? @(p->groupSymbol)
+                                  : kMirageDefaultGroupSymbol;
+        return lane;
+      };
 
   // The plugin is Custom-only (GLSL). The Type pill and the built-in per-type
   // controls (Colors etc.) are removed for now - the built-in types will return
@@ -664,80 +691,98 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // `visibleWhen Type` gate; with Type absent they simply always show (an
   // absent controller can't gate), so they need no change.
 
-  // Speed: shared motion-rate multiplier.
-  KKLane *speed = [KKLane laneWithKey:@"Speed" label:@"Speed"];
-  speed.valueType = KKLaneValueTypeFloat;
-  speed.componentMin = @[ @0.0 ];
-  speed.componentMax = @[ @3.0 ];
-  speed.animatable = YES;
-  speed.enabled = NO;
-  speed.categoryKey = @"Core";
-  speed.categorySymbol = @"circle.dotted";
-  speed.visibleWhenKey = @"Type";
-  speed.visibleWhenValues =
-      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12 ]; // + Custom
-  [speed insertKeypose:[KKKeyPose
-                           keyposeAtTime:0.0
-                                  values:@[ @(KK_SHADER_GRAD_DEFAULT_SPEED) ]]];
-  [lanes addObject:speed];
+  // Speed: shared motion-rate multiplier (`// #speed`).
+  if (builtins.speed.present) {
+    KKLane *speed = [KKLane laneWithKey:@"Speed" label:@"Speed"];
+    speed.valueType = KKLaneValueTypeFloat;
+    speed.componentMin = @[ @0.0 ];
+    speed.componentMax = @[ @3.0 ];
+    speed.animatable = YES;
+    speed.enabled = NO;
+    speed.visibleWhenKey = @"Type";
+    speed.visibleWhenValues =
+        @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12 ]; // + Custom
+    double def = builtins.speed.hasDefault ? builtins.speed.fdefault
+                                           : KK_SHADER_GRAD_DEFAULT_SPEED;
+    [speed insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(def) ]]];
+    if (builtins.speed.label[0])
+      speed.label = @(builtins.speed.label);
+    [lanes addObject:applyBuiltinGroup(speed, &builtins.speed)];
+  }
 
   // Seed: shared start-time offset (a "start frame"), non-animatable integer
-  // with a dice field. Any value; the slider range is nominal.
-  KKLane *seed = [KKLane laneWithKey:@"Seed" label:@"Seed"];
-  seed.valueType = KKLaneValueTypeFloat;
-  seed.seedField = YES;
-  seed.integerValued = YES;
-  seed.componentMin = @[ @0.0 ];
-  seed.componentMax = @[ @1000000.0 ];
-  seed.animatable = NO;
-  seed.enabled = NO;
-  seed.categoryKey = @"Core";
-  seed.categorySymbol = @"circle.dotted";
-  seed.visibleWhenKey = @"Type";
-  seed.visibleWhenValues =
-      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12 ]; // + Custom
-  [seed insertKeypose:[KKKeyPose
-                          keyposeAtTime:0.0
-                                 values:@[ @(KK_SHADER_GRAD_DEFAULT_SEED) ]]];
-  [lanes addObject:seed];
+  // with a dice field (`// #seed`). A per-shader random seed bound to a uniform
+  // is `// #random`, a separate directive. Any value; the slider range is
+  // nominal.
+  if (builtins.seed.present) {
+    KKLane *seed = [KKLane laneWithKey:@"Seed" label:@"Seed"];
+    seed.valueType = KKLaneValueTypeFloat;
+    seed.seedField = YES;
+    seed.integerValued = YES;
+    seed.componentMin = @[ @0.0 ];
+    seed.componentMax = @[ @1000000.0 ];
+    seed.animatable = NO;
+    seed.enabled = NO;
+    seed.visibleWhenKey = @"Type";
+    seed.visibleWhenValues =
+        @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12 ]; // + Custom
+    double def = builtins.seed.hasDefault ? builtins.seed.fdefault
+                                          : KK_SHADER_GRAD_DEFAULT_SEED;
+    [seed insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(def) ]]];
+    if (builtins.seed.label[0])
+      seed.label = @(builtins.seed.label);
+    [lanes addObject:applyBuiltinGroup(seed, &builtins.seed)];
+  }
 
-  // Grain + Grain Size: the core film-grain overlay, shared by every type. A
-  // subtle nonzero default breaks 8-bit banding out of the box and scales up to
-  // stylistic grain; applied in the shader epilogue with a per-type multiplier
-  // (Grainy reads grainier by default).
-  NSArray<NSNumber *> *allTypes = @[
-    @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12
-  ]; // incl. Custom
-  struct {
-    NSString *label;
-    double def, min, max;
-    NSString *unit;
-    BOOL integer;
-  } coreGrain[] = {
-      {@"Grain", KK_CORE_GRAIN_DEFAULT * 100.0, 0.0, 100.0, @"%", NO},
-      {@"Grain Size", KK_CORE_GRAINSIZE_DEFAULT, 1.0, 12.0, @"px", YES},
-  };
-  for (unsigned s = 0; s < sizeof(coreGrain) / sizeof(coreGrain[0]); s++) {
-    KKLane *lane = [KKLane laneWithKey:coreGrain[s].label
-                                 label:coreGrain[s].label];
-    lane.valueType = KKLaneValueTypeFloat;
-    lane.componentMin = @[ @(coreGrain[s].min) ];
-    lane.componentMax = @[ @(coreGrain[s].max) ];
-    lane.componentUnits = @[ coreGrain[s].unit ];
-    lane.integerValued = coreGrain[s].integer; // grain size is whole pixels
-    lane.animatable = YES;
-    lane.enabled = NO;
-    lane.categoryKey = @"Core";
-    lane.categorySymbol = @"circle.dotted";
-    lane.visibleWhenKey = @"Type";
-    lane.visibleWhenValues = allTypes;
-    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                          values:@[ @(coreGrain[s].def) ]]];
-    [lanes addObject:lane];
+  // Grain + Grain Size: the film-grain overlay (`// #grain`), applied in the
+  // shader epilogue. One directive, two lanes - the amount and its cell size
+  // are the same control to the author, so asking for the grain gives both.
+  // `default=` seeds the amount, `size=` the cell size. Opting in starts at a
+  // subtle value that also breaks up 8-bit banding, and scales to stylistic.
+  if (builtins.grain.present) {
+    NSArray<NSNumber *> *allTypes = @[
+      @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12
+    ]; // incl. Custom
+    struct {
+      NSString *label;
+      double def, min, max;
+      NSString *unit;
+      BOOL integer;
+    } coreGrain[] = {
+        {@"Grain",
+         builtins.grain.hasDefault ? builtins.grain.fdefault
+                                   : KK_CORE_GRAIN_DEFAULT * 100.0,
+         0.0, 100.0, @"%", NO},
+        {@"Grain Size",
+         builtins.grain.hasSize ? builtins.grain.fsize
+                                : KK_CORE_GRAINSIZE_DEFAULT,
+         1.0, 12.0, @"px", YES},
+    };
+    for (unsigned s = 0; s < sizeof(coreGrain) / sizeof(coreGrain[0]); s++) {
+      KKLane *lane = [KKLane laneWithKey:coreGrain[s].label
+                                   label:coreGrain[s].label];
+      lane.valueType = KKLaneValueTypeFloat;
+      lane.componentMin = @[ @(coreGrain[s].min) ];
+      lane.componentMax = @[ @(coreGrain[s].max) ];
+      lane.componentUnits = @[ coreGrain[s].unit ];
+      lane.integerValued = coreGrain[s].integer; // grain size is whole pixels
+      lane.animatable = YES;
+      lane.enabled = NO;
+      lane.visibleWhenKey = @"Type";
+      lane.visibleWhenValues = allTypes;
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:@[ @(coreGrain[s].def) ]]];
+      // `label=` renames the amount; the size lane keeps its own name, which
+      // still reads correctly under a renamed amount ("Halation" / "Grain
+      // Size").
+      if (s == 0 && builtins.grain.label[0])
+        lane.label = @(builtins.grain.label);
+      [lanes addObject:applyBuiltinGroup(lane, &builtins.grain)];
+    }
   }
 
   // Dynamic scalar params (`// #float` sliders, `// #choice` pills) declared by
-  // the shader, in their own "Mirage" group (distinct from Core).
+  // the shader, in whatever group each one asks for.
   MirageAppendScalarLanes(lanes, shaderSource);
 
   // Dynamic audio bindings (`// #audio`): a dropdown of Sonar's published
@@ -764,7 +809,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // default.
   shader.codeTabCatalog =
       @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
-  shader.codeSavable = YES; // show the save bar (name + Save) under the editor
+  shader.codeSavable = YES; // show the save bar (name + Save) above the editor
   shader.codeSaveNamePlaceholder =
       RLoc(@"Shader name", @"Save-shader name field placeholder.");
   // What the save bar's category picker offers. Display names, in
@@ -773,7 +818,10 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   shader.codeSaveCategories = MirageCategoryDisplayNames();
   shader.animatable = NO;
   shader.enabled = NO;
-  shader.categoryKey = @"Core";
+  // Its own group. "Core" is gone (its lanes are opt-in built-ins now, each
+  // landing in whatever group its directive names), and the code editor is the
+  // one row that is never a control, so it gets a group to itself.
+  shader.categoryKey = kMirageShaderCategory;
   shader.categorySymbol = @"chevron.left.forwardslash.chevron.right";
   // Live validation in the editor: transpile on edit (memoised) and surface the
   // first glslang error as a bar + flagged line. Only compiled into the XPC
@@ -866,6 +914,27 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                                @"a unique uniform name",
                                @"Mirage duplicate-uniform validation error."),
                            dupU];
+    // `group=` on a directive that already has a group of its own. Colours,
+    // audio bindings and gradients are collected into dedicated groups, so a
+    // group here would be silently dropped.
+    NSString *badGroup = MirageFirstMisplacedGroup(code);
+    if (badGroup.length)
+      return [NSString
+          stringWithFormat:RLoc(@"`#%@` can't set a group: colours, audio and "
+                                @"gradients have their own",
+                                @"Mirage group-on-dedicated-directive "
+                                @"validation error."),
+                           badGroup];
+    // A `group=` icon macOS doesn't know. Harmless to the render, but it draws
+    // a blank placeholder, so the author sees a group with no icon and no
+    // reason why.
+    NSString *badSymbol = MirageUnknownGroupSymbol(code);
+    if (badSymbol.length)
+      return [NSString
+          stringWithFormat:RLoc(@"\"%@\" isn't an SF Symbol on this Mac - "
+                                @"check the name in the SF Symbols app",
+                                @"Mirage unknown group-icon validation error."),
+                           badSymbol];
     // An OSC opt-in on an incompatible uniform: osc=point needs a vec2, a
     // radial OSC (osc=ring / osc=box) needs a float/int slider or a vec2
     // #multi, a rotate osc={..} needs one distinct x/y/z axis per value
@@ -945,7 +1014,49 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   MirageAppendColorLanes(lanes, shaderSource);
   MirageAppendGradientLanes(lanes, shaderSource);
 
-  return lanes;
+  // Group order: the three groups that are not the shader's to name lead, in a
+  // fixed order, then the shader's own groups in the order it declares them.
+  // Groups are otherwise discovered first-seen from this array, which would
+  // shuffle Colours and Audio around as directives were edited above them.
+  // Bucketing rather than sorting keeps each group's rows in build order.
+  NSMutableArray<NSString *> *order =
+      [@[ kMirageShaderCategory, kMirageAudioCategory, kMirageColorCategory ]
+          mutableCopy];
+  for (KKLane *l in lanes)
+    if (l.categoryKey.length && ![order containsObject:l.categoryKey])
+      [order addObject:l.categoryKey];
+  NSMutableArray<KKLane *> *ordered =
+      [NSMutableArray arrayWithCapacity:lanes.count];
+  for (NSString *cat in order)
+    for (KKLane *l in lanes)
+      if ([l.categoryKey isEqualToString:cat])
+        [ordered addObject:l];
+  for (KKLane *l in lanes)
+    if (!l.categoryKey.length) // uncategorised (if any) sit at the end
+      [ordered addObject:l];
+
+  // One icon per group. Lanes in the same group can disagree about it - a
+  // `group={"Motion", "wind"}` on one directive and a bare `group={"Motion"}`
+  // on the next - and the header shows whichever lane it happens to read, so
+  // the icon looked like it ignored the declaration. First lane that names a
+  // symbol of its own wins for the whole group.
+  NSMutableDictionary<NSString *, NSString *> *groupSymbols =
+      [NSMutableDictionary dictionary];
+  for (KKLane *l in ordered) {
+    if (!l.categoryKey.length || !l.categorySymbol.length)
+      continue;
+    if ([l.categorySymbol isEqualToString:kMirageDefaultGroupSymbol])
+      continue; // the fallback isn't a declaration, so it can't win
+    if (!groupSymbols[l.categoryKey])
+      groupSymbols[l.categoryKey] = l.categorySymbol;
+  }
+  for (KKLane *l in ordered) {
+    NSString *sym = l.categoryKey.length ? groupSymbols[l.categoryKey] : nil;
+    if (sym.length)
+      l.categorySymbol = sym;
+  }
+
+  return ordered;
 }
 
 // Back-compat entry: the default-shader lane set. Source-specific dynamic lanes

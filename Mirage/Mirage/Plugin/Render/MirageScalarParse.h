@@ -96,7 +96,7 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
     p->cdefault = def;
     break;
   }
-  case MirageScalarKindSeed: {
+  case MirageScalarKindRandom: {
     // A random seed: any integer, non-animatable, dice-rerolled. Passes
     // straight to the float uniform (no normalization).
     p->fmin = 0.0;
@@ -397,6 +397,8 @@ static inline int MirageParseScalarProps(NSString *source,
             ? [attrs substringWithRange:[lm rangeAtIndex:1]]
             : MiragePrettifyUniformName(nm);
     strncpy(p.label, label.UTF8String ?: "", sizeof(p.label) - 1);
+    MirageParseGroupAttr(attrs, p.group, sizeof(p.group), p.groupSymbol,
+                         sizeof(p.groupSymbol));
     p.poolOffset = pool;
     MirageScalarParseOSC(attrs, &p);
     MirageScalarParseDefaults(attrs, &p);
