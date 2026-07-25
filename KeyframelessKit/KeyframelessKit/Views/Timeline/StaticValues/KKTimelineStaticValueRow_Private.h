@@ -8,8 +8,8 @@
 // cannot see the primary class's backing store - reach the same state the main
 // .m builds. The primary @interface lives in KKTimelineLanesView_Private.h.
 
-#import "KKTimelineLanesView_Private.h"
 #import "KKTimeline.h" // KKLaneValueType
+#import "KKTimelineLanesView_Private.h"
 
 @class KKCheckboxView;
 @class KKChoiceChecklistView;
@@ -104,6 +104,7 @@ FOUNDATION_EXPORT const CGFloat kChoiceListMaxBody;
   CGFloat _labelColumnW; // uniform label-column width (0 = natural)
   NSLayoutConstraint *_titleWidthConstraint; // the label column, restretchable
   BOOL _locked;          // locked layer: row is read-only (dimmed, no input)
+  BOOL _codeTitleHidden; // code row built with `codeHidesTitle`
 }
 @end
 

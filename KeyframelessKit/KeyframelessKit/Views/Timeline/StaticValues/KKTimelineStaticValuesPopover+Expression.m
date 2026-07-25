@@ -18,9 +18,9 @@
 #import "KKLog.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
+#import "KKTimeline.h"
 #import "KKTimelineStaticValuesPopover_Private.h"
 #import "KKTimingEvaluation.h" // KKTimelineLaneValueAtFraction
-#import "KKTimeline.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <QuartzCore/QuartzCore.h>
@@ -75,13 +75,13 @@
   // opens (empty partial), not on every keystroke.
   ed.linkCompletionProvider =
       ^NSArray<NSDictionary<NSString *, NSString *> *> *(NSString *partial) {
-        __strong typeof(weak) s = weak;
-        if (!s)
-          return nil;
-        if (partial.length == 0)
-          [s _refreshLinkManifests];
-        return [s _linkCompletionItemsForPartial:partial];
-      };
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return nil;
+    if (partial.length == 0)
+      [s _refreshLinkManifests];
+    return [s _linkCompletionItemsForPartial:partial];
+  };
   // Left override: the discovered-clip insert menu (drops a `${Clip.Param}`
   // token). Right override: the expand/collapse chevron. Both carry the label
   // on their identifier for the action, and are sized to the row's gutter
@@ -158,18 +158,18 @@
       [NSMutableArray array];
   for (KKLinkManifest *man in _linkManifests) {
     NSString *seen = [NSString
-        stringWithFormat:KKLoc(@"Last seen %@",
-                               @"Expression insert menu: subtitle under a "
-                               @"source clip; %@ is a relative time like '2 "
-                               @"minutes ago' or 'now'."),
-                         [relFmt localizedStringForDate:
-                                     [NSDate dateWithTimeIntervalSinceNow:
-                                                 -man.lastSeenAgeSec]
-                                         relativeToDate:[NSDate date]]];
+        stringWithFormat:
+            KKLoc(@"Last seen %@",
+                  @"Expression insert menu: subtitle under a "
+                  @"source clip; %@ is a relative time like '2 "
+                  @"minutes ago' or 'now'."),
+            [relFmt localizedStringForDate:[NSDate dateWithTimeIntervalSinceNow:
+                                                       -man.lastSeenAgeSec]
+                            relativeToDate:[NSDate date]]];
     void (^add)(NSString *, NSString *) = ^(NSString *name, NSString *full) {
-      if (partial.length &&
-          [full rangeOfString:partial options:NSCaseInsensitiveSearch]
-                  .location == NSNotFound)
+      if (partial.length && [full rangeOfString:partial
+                                        options:NSCaseInsensitiveSearch]
+                                    .location == NSNotFound)
         return;
       [out addObject:@{
         @"name" : name,
@@ -272,9 +272,10 @@
     // layer - choosing Layer > Param inserts `${Clip.Layer.Param}` (stored
     // as `${uuid.layerID.label}` by the same onChange translation).
     for (KKLinkLayerSource *layer in man.layers) {
-      NSMenuItem *layerItem = [[NSMenuItem alloc] initWithTitle:layer.displayName
-                                                         action:NULL
-                                                  keyEquivalent:@""];
+      NSMenuItem *layerItem =
+          [[NSMenuItem alloc] initWithTitle:layer.displayName
+                                     action:NULL
+                              keyEquivalent:@""];
       // Per-layer thumbnail (the source bakes each layer isolated over its
       // footage), same treatment as the clip-level image above.
       NSString *layerThumbPath = [KKLinkBus thumbnailPathForUUID:man.uuid
@@ -304,8 +305,7 @@
         pit.target = self;
         pit.representedObject = @{
           @"label" : label,
-          @"token" : [NSString stringWithFormat:@"${%@.%@.%@}",
-                                                man.displayName,
+          @"token" : [NSString stringWithFormat:@"${%@.%@.%@}", man.displayName,
                                                 layer.displayName, paramDisplay]
         };
         [layerSub addItem:pit];
@@ -760,6 +760,22 @@
       return;
     [ed applyExternalText:[s _displayFromStored:stored]];
   });
+}
+
+// Re-translate every open expression editor against a FRESH manifest read.
+// A source's DISPLAY name can change while the popover is open (renaming the
+// shader a self-reference points at), but an editor holds text translated when
+// its row was BUILT - and a category switch only shows and hides rows, it never
+// rebuilds them. Without this the old name sits in the editor until the popover
+// is closed and reopened. Editors mid-typing are left alone by
+// applyExternalText:.
+- (void)_retranslateExprEditors {
+  if (_exprEditorByLabel.count == 0)
+    return; // nothing to retranslate, so skip the directory read entirely
+  [self _refreshLinkManifests];
+  for (KKLane *lane in _lanes)
+    if (_exprEditorByLabel[lane.key])
+      [self _resyncExprEditorTextForLane:lane];
 }
 
 // Update the popover's cached `_lanes` entry for `label` so a subsequent resize

@@ -123,6 +123,9 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// `codeString` and the rest to `codeTabs`.
 @property(nonatomic, copy, nullable) void (^onCodeSectionsChanged)
     (NSArray<NSDictionary<NSString *, NSString *> *> *sections);
+/// For a `codeSavable` row: fired when the save-bar name is committed.
+@property(nonatomic, copy, nullable) void (^onCodeSaveNameChanged)
+    (NSString *name);
 /// Bracket a continuous slider drag so the host coalesces it to one undo /
 /// one persist (mirrors the mini viewer).
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
@@ -330,6 +333,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 @property(nonatomic, copy, nullable) void (^onHandleCodeSections)
     (NSString *label, NSArray<NSDictionary<NSString *, NSString *> *> *sections)
         ;
+
+/// Fired when the save bar's name field is committed (blur / Enter) on a
+/// `codeSavable` row. The host writes it to the lane's `codeSaveName`.
+@property(nonatomic, copy, nullable) void (^onHandleCodeSaveName)
+    (NSString *label, NSString *name);
 
 /// Persist several lane constants at once, as ONE undo entry. Used by the
 /// palette generator (rerolling N colours) - the per-lane drag path can only

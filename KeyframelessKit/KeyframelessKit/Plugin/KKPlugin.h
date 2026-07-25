@@ -99,6 +99,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// <timecode>"). Defaults to the bundle name. Override to force a specific
 /// label.
 - (NSString *)linkManifestEffectName;
+/// What the picker SHOWS for this instance, as "<name> @ <timecode>". Defaults
+/// to -linkManifestEffectName. Override when an instance has a name of its own
+/// (Mirage returns the running shader's name), so a project with several of the
+/// same effect reads as its content rather than N identical rows. Distinct from
+/// -linkManifestEffectName on purpose: that one is the bus's scoping key and
+/// must stay constant per plugin.
+- (NSString *)linkManifestDisplayName;
 /// Advertise this clip as a link source: compute its absolute span from the
 /// timing API and write its manifest (uuid + display name + params) via
 /// KKLinkWriteManifest. No-op unless -linkableLanesForManifest returns lanes.

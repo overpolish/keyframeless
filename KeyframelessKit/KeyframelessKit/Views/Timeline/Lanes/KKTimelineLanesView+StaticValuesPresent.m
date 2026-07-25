@@ -295,6 +295,10 @@
         __strong typeof(weak) s = weak;
         [s _setLaneCodeSections:sections forLabel:label];
       };
+  staticView.onHandleCodeSaveName = ^(NSString *label, NSString *name) {
+    __strong typeof(weak) s = weak;
+    [s _setLaneCodeSaveName:name forLabel:label];
+  };
   // Palette reroll: commit every changed swatch inside one drag-undo bracket so
   // the whole set persists as a single undo entry (the per-lane drag path only
   // commits one label per bracket, which is why the batch path exists).

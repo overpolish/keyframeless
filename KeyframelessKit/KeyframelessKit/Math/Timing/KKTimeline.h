@@ -268,6 +268,19 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// localized). nil = the editor's generic "Name". Static template config (not
 /// serialized), carried template->reconciled like `codeSavable`.
 @property(nonatomic, copy, nullable) NSString *codeSaveNamePlaceholder;
+/// For a `codeSavable` lane: the name the user typed in the save bar. Unlike
+/// the placeholder this is INSTANCE data serialized beside `codeString` - what
+/// is being edited deserves a name that survives a reopen, and a host can read
+/// it back to label the instance (Mirage names its link-bus source with it).
+/// Set on save and on loading a named entry; nil / empty = unnamed.
+@property(nonatomic, copy, nullable) NSString *codeSaveName;
+/// For a `KKLaneValueTypeCode` lane: drop the row's title, giving the editor
+/// the full row. For a lane that sits alone in its own category the heading
+/// only repeats the group header above it. The lane KEEPS its label (the lane
+/// filter and parameter-order lists still need a name for it) - this hides it
+/// in one place. Static template config (not serialized), carried
+/// template->reconciled like `codeSavable`.
+@property(nonatomic) BOOL codeHidesTitle;
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>
@@ -595,8 +608,8 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// property's flat value lives NEXT TO the lane definition, instead of a
 /// per-label seeding cascade at every timeline build site. Build-time
 /// config; never serialized.
-@property(nonatomic, copy, nullable) NSArray<NSNumber *> *_Nullable (^templateSeedProvider)
-    (id ownerContext);
+@property(nonatomic, copy, nullable)
+    NSArray<NSNumber *> *_Nullable (^templateSeedProvider)(id ownerContext);
 
 /// THE lane identity: an opaque, plugin-minted key, unique within a timeline
 /// and stable across sessions. The engine keys everything on this - lookups,

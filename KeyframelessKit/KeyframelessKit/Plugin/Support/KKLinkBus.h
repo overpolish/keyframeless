@@ -229,11 +229,16 @@ typedef NS_ENUM(NSInteger, KKLinkOutOfRange) {
 /// lanes, palette-generator bars). Call from the render tick, where the clip's
 /// absolute span resolves. Engine-generic: one call gives any plugin discovery
 /// for free.
-FOUNDATION_EXPORT void KKLinkWriteManifest(id<PROAPIAccessing> api,
-                                           NSArray<KKLane *> *lanes,
-                                           double clipStartSec,
-                                           double clipDurSec,
-                                           NSString *effectName);
+/// `effectName` is the plugin's IDENTITY (scoping key for bus operations like
+/// +reconcileEffectName:); `displayBaseName` is what the picker SHOWS, as
+/// "<displayBaseName> @ <timecode>". They differ when an instance has a name of
+/// its own (a Mirage clip running a named shader). Pass nil / empty to show the
+/// effect name - never fold a per-instance name into `effectName` itself, or
+/// orphan cleanup stops matching that instance's manifests.
+FOUNDATION_EXPORT void
+KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
+                    double clipStartSec, double clipDurSec,
+                    NSString *effectName, NSString *_Nullable displayBaseName);
 
 /// Layered variant of KKLinkWriteManifest for plugins whose referenceable
 /// params live on per-layer timelines (layers are "sub-clips": Canvas). Each
@@ -244,16 +249,17 @@ FOUNDATION_EXPORT void KKLinkWriteManifest(id<PROAPIAccessing> api,
 FOUNDATION_EXPORT void KKLinkWriteManifestWithLayers(
     id<PROAPIAccessing> api, NSArray<KKLane *> *topLevelLanes,
     NSArray<KKLinkLayerSource *> *layers, double clipStartSec,
-    double clipDurSec, NSString *effectName);
+    double clipDurSec, NSString *effectName,
+    NSString *_Nullable displayBaseName);
 
 /// Per-layer counterpart of KKLinkPublishReferenceableLanes: publishes each
 /// referenceable lane of `layer.lanes` keyed `<uuid>.<layerID>.<label>` - the
 /// token a subscriber's `${Clip.Layer.Param}` stores. Same idempotency and
 /// render-tick contract as the flat variant.
-FOUNDATION_EXPORT void
-KKLinkPublishReferenceableLayer(id<PROAPIAccessing> api,
-                                KKLinkLayerSource *layer, double tlStart,
-                                double tlEnd);
+FOUNDATION_EXPORT void KKLinkPublishReferenceableLayer(id<PROAPIAccessing> api,
+                                                       KKLinkLayerSource *layer,
+                                                       double tlStart,
+                                                       double tlEnd);
 
 /// Auto-publish every referenceable lane in `lanes` as a link-bus curve keyed
 /// `<uuid>.<label>` (the token another clip stores when it references
@@ -298,9 +304,9 @@ typedef NSArray<NSNumber *> *_Nullable (^KKLinkRefOverride)(NSString *refName);
 /// expression references (see KKLinkRefOverride). `refOverride == nil` is
 /// identical to the plain form.
 FOUNDATION_EXPORT
-    NSArray<NSNumber *> *_Nullable KKLinkResolvedLaneValueWithOverride(
-        KKLane *lane, double frac, double timelineSec, double clipDurSec,
-        KKLinkRefOverride _Nullable refOverride);
+NSArray<NSNumber *> *_Nullable KKLinkResolvedLaneValueWithOverride(
+    KKLane *lane, double frac, double timelineSec, double clipDurSec,
+    KKLinkRefOverride _Nullable refOverride);
 
 /// The source names a timeline's lanes reference - the `${refs}` across all
 /// lanes' linkExpressions - so a subscriber knows which sources to watch for

@@ -358,6 +358,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     KKLane *lane = [lanes[i] copy];
     lane.codeString = image;
     lane.codeTabs = tabs.count ? tabs : nil;
+    // Loading a named shader names the instance: the save bar shows it, and
+    // the link-bus source is labelled with it instead of a bare "Mirage".
+    lane.codeSaveName = entry.name.length ? entry.name : nil;
     lanes[i] = lane;
     found = YES;
   }

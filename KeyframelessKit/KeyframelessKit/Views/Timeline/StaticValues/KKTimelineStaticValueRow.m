@@ -527,8 +527,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   if (fabs(labelColumnWidth - _labelColumnW) <= 0.5)
     return;
   _labelColumnW = labelColumnWidth;
-  _titleWidthConstraint.constant = labelColumnWidth > 0 ? labelColumnWidth
-                                                        : 54.0;
+  _titleWidthConstraint.constant =
+      labelColumnWidth > 0 ? labelColumnWidth : 54.0;
   // A wrapping pill row's block width (and so its height) derives from the
   // column - re-derive through the same path a popover resize uses.
   [self updateContentWidth:_contentWidth];
@@ -836,7 +836,13 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     editor.savable = lane.codeSavable;
     editor.saveCategoryLabels = lane.codeSaveCategories;
     editor.saveNamePlaceholder = lane.codeSaveNamePlaceholder;
+    editor.saveName = lane.codeSaveName;
     __weak typeof(self) weak = self;
+    editor.onSaveNameChange = ^(NSString *name) {
+      __strong typeof(weak) s = weak;
+      if (s.onCodeSaveNameChanged)
+        s.onCodeSaveNameChanged(name);
+    };
     if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
       // Tabbed: section 0 is Image (the lane's codeString), then any added
       // extra sections from codeTabs. `codeTabCatalog` feeds the "+" menu.
@@ -864,6 +870,10 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     }
     [self addSubview:editor];
     // Title sits top-left; the editor fills the row below it, edge to edge.
+    // `codeHidesTitle` drops the title and hands the editor that space too -
+    // the row height is unchanged, so the code area simply grows.
+    _codeTitleHidden = lane.codeHidesTitle;
+    title.hidden = _codeTitleHidden;
     [NSLayoutConstraint activateConstraints:@[
       [title.leadingAnchor constraintEqualToAnchor:titleLead
                                           constant:titleLeadInset],
@@ -873,8 +883,10 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
                                            constant:KKPaddingLG],
       [editor.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                             constant:-KKPaddingLG],
-      [editor.topAnchor constraintEqualToAnchor:title.bottomAnchor
-                                       constant:KKPaddingSM],
+      [editor.topAnchor
+          constraintEqualToAnchor:(_codeTitleHidden ? self.topAnchor
+                                                    : title.bottomAnchor)
+                         constant:KKPaddingSM],
       [editor.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
                                           constant:-KKPaddingSM],
     ]];
@@ -1692,8 +1704,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     _locked = lane.locked;
     self.alphaValue = _locked ? 0.5 : 1.0;
     NSString *codeShown = KKLocalizedParamName(lane.displayName);
-    _titleField.stringValue = codeShown ?: @"";
-    _titleField.toolTip = codeShown;
+    _titleField.stringValue = _codeTitleHidden ? @"" : (codeShown ?: @"");
+    _titleField.toolTip = _codeTitleHidden ? nil : codeShown;
     return;
   }
   // Re-bound the field + slider to the lane's CURRENT range before applying the

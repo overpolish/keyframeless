@@ -163,7 +163,7 @@
     // still assigned explicitly per keypose, matching the old constructor's
     // fresh-interval default.
     KKKeyPose *src = lane.keyposes.firstObject;
-    KKKeyPose *(^seedAt)(double) = ^KKKeyPose *(double t) {
+    KKKeyPose * (^seedAt)(double) = ^KKKeyPose *(double t) {
       if (!src)
         return [KKKeyPose keyposeAtTime:t values:v];
       KKKeyPose *kp = [[src keyposeBySettingValues:v] keyposeBySettingTime:t];
@@ -200,10 +200,9 @@
   } else {
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
     KKKeyPose *src = lane.keyposes.firstObject;
-    lane.keyposes = @[
-      src ? [[src keyposeBySettingValues:v] keyposeBySettingTime:0.0]
-          : [KKKeyPose keyposeAtTime:0.0 values:v]
-    ];
+    lane.keyposes =
+        @[ src ? [[src keyposeBySettingValues:v] keyposeBySettingTime:0.0]
+               : [KKKeyPose keyposeAtTime:0.0 values:v] ];
   }
   [self _replaceLane:lane forLabel:label];
 }
@@ -223,10 +222,8 @@
   // from-scratch rebuild.
   KKLane *lane = [existing copy];
   KKKeyPose *src = lane.keyposes.firstObject;
-  lane.keyposes = @[
-    src ? [src keyposeBySettingValues:values]
-        : [KKKeyPose keyposeAtTime:0.0 values:values]
-  ];
+  lane.keyposes = @[ src ? [src keyposeBySettingValues:values]
+                         : [KKKeyPose keyposeAtTime:0.0 values:values] ];
   [self _replaceLane:lane forLabel:label];
 }
 
@@ -270,6 +267,23 @@
   [self _replaceLane:lane forLabel:label];
   if (self.onCodeCommitted)
     self.onCodeCommitted(lane.codeString);
+}
+
+// Commit the save bar's name. Lane-level text like the code itself, so it goes
+// through the same lane-replace path - which means it persists, undoes, and
+// travels with a copied clip exactly like the source does. No
+// `onCodeCommitted`: the SOURCE didn't change, and firing it would rebuild the
+// source-derived lane set for a rename.
+- (void)_setLaneCodeSaveName:(NSString *)name forLabel:(NSString *)label {
+  KKLane *existing = [self _laneForLabel:label];
+  if (!existing)
+    return;
+  NSString *n = name.length ? name : nil;
+  if ([(existing.codeSaveName ?: @"") isEqualToString:(n ?: @"")])
+    return; // a blur with no change must not cost an undo entry
+  KKLane *lane = [existing copy];
+  lane.codeSaveName = n;
+  [self _replaceLane:lane forLabel:label];
 }
 
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label {

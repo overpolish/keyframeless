@@ -170,6 +170,7 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
 - (BOOL)_syncExprEditorForLane:(KKLane *)lane
                       afterRow:(_KKStaticValueRow *)valueRow;
 - (void)_resyncExprEditorTextForLane:(KKLane *)lane;
+- (void)_retranslateExprEditors;
 // Core (main .m) - re-fit the popover after an editor row grows / shrinks.
 - (void)_applyContentSize;
 @end

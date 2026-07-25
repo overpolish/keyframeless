@@ -113,20 +113,20 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _miniViewer = nil;
 }
 
-- (void)reconfigureForEditsKeypose:(BOOL)editsKeypose
-                         withLanes:(NSArray<KKLane *> *)lanes
-                    excludedLabels:(NSArray<NSString *> *)excludedLabels
-                       headerTitle:(NSString *)headerTitle
-                      headerDetail:(NSString *)headerDetail
-                        headerIcon:(NSImage *)headerIcon
-                        renderMode:(KKMiniViewerRenderMode)renderMode
-                     onModeChanged:
-                         (void (^)(KKMiniViewerRenderMode))onModeChanged
-                     onHandleValue:(void (^)(NSString *, NSArray<NSNumber *> *))
-                                       onHandleValue
-                       onDragBegin:(void (^)(void))onDragBegin
-                         onDragEnd:(void (^)(void))onDragEnd
-                        onNavigate:(void (^)(NSInteger))onNavigate {
+- (void)
+    reconfigureForEditsKeypose:(BOOL)editsKeypose
+                     withLanes:(NSArray<KKLane *> *)lanes
+                excludedLabels:(NSArray<NSString *> *)excludedLabels
+                   headerTitle:(NSString *)headerTitle
+                  headerDetail:(NSString *)headerDetail
+                    headerIcon:(NSImage *)headerIcon
+                    renderMode:(KKMiniViewerRenderMode)renderMode
+                 onModeChanged:(void (^)(KKMiniViewerRenderMode))onModeChanged
+                 onHandleValue:(void (^)(NSString *,
+                                         NSArray<NSNumber *> *))onHandleValue
+                   onDragBegin:(void (^)(void))onDragBegin
+                     onDragEnd:(void (^)(void))onDragEnd
+                    onNavigate:(void (^)(NSInteger))onNavigate {
   _editsKeypose = editsKeypose;
   _onHandleValue = [onHandleValue copy];
   _onDragBegin = [onDragBegin copy];
@@ -858,6 +858,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         if (!ss)
           return;
         ss->_selectedCategory = categoryKey;
+        // A source may have been renamed since these rows were built (the
+        // shader's own name lives a category away), and switching category
+        // only reveals rows - it doesn't rebuild them.
+        [ss _retranslateExprEditors];
         [ss _applyCategoryFilter];
         [ss _resizePopoverToSelectedCategory];
         if (ss.onCategoryChanged)
@@ -1134,8 +1138,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // width; odd-index (H/Y-like) use height, with the inverse on typed input.
   // Covers Crop (W,H,X,Y), Position X/Y, Anchor X/Y. The componentUnits string
   // is cosmetic and does NOT drive this - a lane can show "px" while storing
-  // raw pixels (a raw px radius). Returns 0 until the feed resolves, which the row
-  // treats as "fall back to raw norm".
+  // raw pixels (a raw px radius). Returns 0 until the feed resolves, which the
+  // row treats as "fall back to raw norm".
   if (lane.componentsScaleWithMedia) {
     NSArray<NSString *> *units = lane.componentUnits;
     row.componentScale = ^double(NSInteger i) {
@@ -1199,6 +1203,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         if (s.onHandleCodeSections)
           s.onHandleCodeSections(label, sections);
       };
+  row.onCodeSaveNameChanged = ^(NSString *name) {
+    __strong typeof(weak) s = weak;
+    if (s.onHandleCodeSaveName)
+      s.onHandleCodeSaveName(label, name);
+  };
   row.onDragBegin = ^{
     __strong typeof(weak) s = weak;
     if (s->_onDragBegin)

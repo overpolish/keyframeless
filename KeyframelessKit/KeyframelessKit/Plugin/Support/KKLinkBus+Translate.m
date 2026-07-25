@@ -94,16 +94,16 @@ KKLinkStoredExpressionFromDisplay(NSString *display,
         NSUInteger i = [layer.paramDisplayNames indexOfObject:param];
         if (i == NSNotFound)
           continue;
-        stored = [NSString stringWithFormat:@"%@.%@.%@", man.uuid,
-                                            layer.layerID,
-                                            layer.paramLabels[i]];
+        stored =
+            [NSString stringWithFormat:@"%@.%@.%@", man.uuid, layer.layerID,
+                                       layer.paramLabels[i]];
         break;
       }
       if (!stored) {
         NSUInteger i = [man.paramDisplayNames indexOfObject:rest];
         if (i != NSNotFound)
-          stored = [NSString stringWithFormat:@"%@.%@", man.uuid,
-                                              man.paramLabels[i]];
+          stored = [NSString
+              stringWithFormat:@"%@.%@", man.uuid, man.paramLabels[i]];
       }
       if (stored && (!best || man.lastSeenAgeSec < bestAge)) {
         best = stored;
@@ -297,11 +297,10 @@ static void KKLinkParamLists(NSArray<KKLane *> *lanes,
   *outDisplays = displays;
 }
 
-static KKLinkManifest *KKLinkBaseManifest(id<PROAPIAccessing> api,
-                                          NSArray<KKLane *> *lanes,
-                                          double clipStartSec,
-                                          double clipDurSec,
-                                          NSString *effectName) {
+static KKLinkManifest *
+KKLinkBaseManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
+                   double clipStartSec, double clipDurSec, NSString *effectName,
+                   NSString *displayBaseName) {
   NSString *uuid = KKInstanceUUIDForAPI(api);
   if (uuid.length == 0)
     return nil; // no identity yet (fresh instance before any UI) - skip
@@ -309,9 +308,12 @@ static KKLinkManifest *KKLinkBaseManifest(id<PROAPIAccessing> api,
   m.uuid = uuid;
   m.effectName = effectName ?: @"";
   m.documentID = KKLinkDocumentIDForAPI(api) ?: @"";
-  m.displayName =
-      [NSString stringWithFormat:@"%@ @ %@", effectName ?: @"Effect",
-                                 KKLinkTimecode(clipStartSec)];
+  // The instance's own name when it has one, else the effect's.
+  NSString *base = displayBaseName.length
+                       ? displayBaseName
+                       : (effectName.length ? effectName : @"Effect");
+  m.displayName = [NSString
+      stringWithFormat:@"%@ @ %@", base, KKLinkTimecode(clipStartSec)];
   m.clipStartSec = clipStartSec;
   m.clipDurSec = clipDurSec;
   NSArray<NSString *> *labels, *displays;
@@ -323,9 +325,9 @@ static KKLinkManifest *KKLinkBaseManifest(id<PROAPIAccessing> api,
 
 void KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
                          double clipStartSec, double clipDurSec,
-                         NSString *effectName) {
-  KKLinkManifest *m =
-      KKLinkBaseManifest(api, lanes, clipStartSec, clipDurSec, effectName);
+                         NSString *effectName, NSString *displayBaseName) {
+  KKLinkManifest *m = KKLinkBaseManifest(api, lanes, clipStartSec, clipDurSec,
+                                         effectName, displayBaseName);
   if (m)
     [KKLinkBus writeManifest:m];
 }
@@ -334,9 +336,11 @@ void KKLinkWriteManifestWithLayers(id<PROAPIAccessing> api,
                                    NSArray<KKLane *> *topLevelLanes,
                                    NSArray<KKLinkLayerSource *> *layers,
                                    double clipStartSec, double clipDurSec,
-                                   NSString *effectName) {
-  KKLinkManifest *m = KKLinkBaseManifest(api, topLevelLanes, clipStartSec,
-                                         clipDurSec, effectName);
+                                   NSString *effectName,
+                                   NSString *displayBaseName) {
+  KKLinkManifest *m =
+      KKLinkBaseManifest(api, topLevelLanes, clipStartSec, clipDurSec,
+                         effectName, displayBaseName);
   if (!m)
     return;
   NSMutableArray<KKLinkLayerSource *> *out =
@@ -389,8 +393,8 @@ void KKLinkPublishReferenceableLayer(id<PROAPIAccessing> api,
     // Key MUST match the layered token `${uuid.layerID.label}` a subscriber
     // stores; loadCurve reads the same `<uuid>.<layerID>.<label>` file, so
     // resolution needs no layer awareness at all.
-    NSString *linkID = [NSString
-        stringWithFormat:@"%@.%@.%@", uuid, layer.layerID, lane.key];
+    NSString *linkID =
+        [NSString stringWithFormat:@"%@.%@.%@", uuid, layer.layerID, lane.key];
     [KKLinkBus publishLane:lane
                     linkID:linkID
              timelineStart:tlStart

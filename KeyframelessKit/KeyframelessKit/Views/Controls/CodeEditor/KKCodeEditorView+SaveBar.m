@@ -41,6 +41,21 @@ static const CGFloat kSaveCategoryListMaxBody = 168.0;
                   @"Code editor save-bar name field placeholder (generic).");
 }
 
+- (NSString *)saveName {
+  return _saveNameField.stringValue ?: @"";
+}
+
+- (void)setSaveName:(NSString *)name {
+  NSString *n = name ?: @"";
+  if ([_saveNameField.stringValue isEqualToString:n])
+    return; // don't disturb an in-progress edit with an identical re-apply
+  _saveNameField.stringValue = n;
+  _saveButton.enabled =
+      [n stringByTrimmingCharactersInSet:NSCharacterSet
+                                             .whitespaceAndNewlineCharacterSet]
+          .length > 0;
+}
+
 - (NSArray<NSString *> *)saveCategoryLabels {
   return _saveCategoryLabels;
 }
@@ -152,6 +167,16 @@ static const CGFloat kSaveCategoryListMaxBody = 168.0;
             .length > 0;
 }
 
+// Commit the name on blur. Enter routes here too, via the doCommandBySelector
+// below dropping first responder.
+- (void)controlTextDidEndEditing:(NSNotification *)note {
+  if (note.object != _saveNameField || !self.onSaveNameChange)
+    return;
+  self.onSaveNameChange([_saveNameField.stringValue
+      stringByTrimmingCharactersInSet:NSCharacterSet
+                                          .whitespaceAndNewlineCharacterSet]);
+}
+
 // Esc / Enter drop focus (blur), matching the code editor + value fields.
 - (BOOL)control:(NSControl *)control
                textView:(NSTextView *)textView
@@ -172,6 +197,11 @@ static const CGFloat kSaveCategoryListMaxBody = 168.0;
                                           .whitespaceAndNewlineCharacterSet];
   if (!name.length)
     return;
+  // Saving commits the name too. Without this, typing a name and hitting Save
+  // straight away (no blur) would save the entry under it while the instance
+  // stayed unnamed.
+  if (self.onSaveNameChange)
+    self.onSaveNameChange(name);
   NSMutableDictionary *info = [@{
     KKCodeEditorSaveNameKey : name,
     KKCodeEditorSaveSectionsKey : [self sections]

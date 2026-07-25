@@ -810,6 +810,9 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   shader.codeTabCatalog =
       @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
   shader.codeSavable = YES; // show the save bar (name + Save) above the editor
+  // No row heading: the lane sits alone in the "Shader" group, so a "Shader"
+  // title under a "Shader" header said it twice. The editor takes the space.
+  shader.codeHidesTitle = YES;
   shader.codeSaveNamePlaceholder =
       RLoc(@"Shader name", @"Save-shader name field placeholder.");
   // What the save bar's category picker offers. Display names, in

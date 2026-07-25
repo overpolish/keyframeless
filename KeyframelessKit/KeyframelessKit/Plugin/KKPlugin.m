@@ -127,6 +127,10 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   return n.length ? n : NSStringFromClass([self class]);
 }
 
+- (NSString *)linkManifestDisplayName {
+  return [self linkManifestEffectName]; // no per-instance name by default
+}
+
 - (void)writeLinkManifest {
   NSArray<KKLane *> *lanes = [self linkableLanesForManifest];
   NSArray<KKLinkLayerSource *> *layers = [self linkableLayersForManifest];
@@ -145,9 +149,9 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
     return;
   double tlStart = CMTimeGetSeconds(effStartTL);
   if (layers != nil) {
-    KKLinkWriteManifestWithLayers(self.apiManager, lanes ?: @[], layers,
-                                  tlStart, durSec,
-                                  [self linkManifestEffectName]);
+    KKLinkWriteManifestWithLayers(
+        self.apiManager, lanes ?: @[], layers, tlStart, durSec,
+        [self linkManifestEffectName], [self linkManifestDisplayName]);
     // Publish each layer's actual curves so a `${uuid.layerID.label}`
     // reference on another clip resolves.
     for (KKLinkLayerSource *layer in layers)
@@ -159,7 +163,8 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
     return;
   }
   KKLinkWriteManifest(self.apiManager, lanes, tlStart, durSec,
-                      [self linkManifestEffectName]);
+                      [self linkManifestEffectName],
+                      [self linkManifestDisplayName]);
   // Publish the same lanes' actual curves so a `${uuid.label}` reference on
   // another clip resolves (the manifest only advertises the label set).
   KKLinkPublishReferenceableLanes(self.apiManager, lanes, tlStart,

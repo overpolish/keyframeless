@@ -746,6 +746,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.codeSavable = tmpl.codeSavable;
     lane.codeSaveCategories = tmpl.codeSaveCategories;
     lane.codeSaveNamePlaceholder = tmpl.codeSaveNamePlaceholder;
+    lane.codeHidesTitle = tmpl.codeHidesTitle;
     [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     lane.enabled = NO; // constant until the dropdown makes it animatable
     [lane

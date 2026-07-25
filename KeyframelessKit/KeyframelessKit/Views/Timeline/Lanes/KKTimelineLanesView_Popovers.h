@@ -200,6 +200,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_setLaneCodeSections:
             (NSArray<NSDictionary<NSString *, NSString *> *> *)sections
                     forLabel:(NSString *)label;
+- (void)_setLaneCodeSaveName:(nullable NSString *)name
+                    forLabel:(NSString *)label;
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label;
 - (void)_setLaneLinkExpression:(nullable NSString *)expr
                       forLabel:(NSString *)label;

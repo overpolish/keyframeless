@@ -298,18 +298,18 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
 // omit-if-default choices, so a new kind may be added but existing rows must
 // not change meaning.
 typedef NS_ENUM(NSUInteger, KKLaneFieldKind) {
-  KKLaneFieldObject,      // copy-only field (object / block / scalar); kind is
-                          // irrelevant unless the row is Serialized
-  KKLaneFieldString,      // omit-if-nil NSString (read type-checked)
-  KKLaneFieldArray,       // omit-if-nil NSArray (read type-checked)
-  KKLaneFieldPairedArray, // written iff the `paired` gate property is non-nil,
-                          // as (value ?: @[]); read like Array
-  KKLaneFieldBoolOmitNO,  // @YES written only when set; absent = NO
-  KKLaneFieldBoolOmitYES, // @NO written only when cleared; absent = YES
-  KKLaneFieldBoolAlways,  // always written; absent (legacy data) = YES
-  KKLaneFieldIntAlways,   // always written; left at init default when absent
-  KKLaneFieldIntOmitZero, // written only when != 0; only set when present
-  KKLaneFieldDoubleAlways,   // always written; absent = 0
+  KKLaneFieldObject,       // copy-only field (object / block / scalar); kind is
+                           // irrelevant unless the row is Serialized
+  KKLaneFieldString,       // omit-if-nil NSString (read type-checked)
+  KKLaneFieldArray,        // omit-if-nil NSArray (read type-checked)
+  KKLaneFieldPairedArray,  // written iff the `paired` gate property is non-nil,
+                           // as (value ?: @[]); read like Array
+  KKLaneFieldBoolOmitNO,   // @YES written only when set; absent = NO
+  KKLaneFieldBoolOmitYES,  // @NO written only when cleared; absent = YES
+  KKLaneFieldBoolAlways,   // always written; absent (legacy data) = YES
+  KKLaneFieldIntAlways,    // always written; left at init default when absent
+  KKLaneFieldIntOmitZero,  // written only when != 0; only set when present
+  KKLaneFieldDoubleAlways, // always written; absent = 0
   KKLaneFieldDoublePositive, // written only when > 0; absent = 0
 };
 
@@ -359,6 +359,8 @@ static const KKLaneField kKKLaneFields[] = {
      KKLaneFieldSerialized | KKLaneFieldTemplateCanonical},
     {@"codeString", @"code_string", nil, KKLaneFieldString,
      KKLaneFieldSerialized},
+    {@"codeSaveName", @"code_save_name", nil, KKLaneFieldString,
+     KKLaneFieldSerialized},
     {@"codeTabs", @"code_tabs", nil, KKLaneFieldArray, KKLaneFieldSerialized},
     {@"codeTabCatalog", nil, nil, KKLaneFieldObject,
      KKLaneFieldTemplateCanonical}, // static config
@@ -375,6 +377,8 @@ static const KKLaneField kKKLaneFields[] = {
     {@"codeDirectiveKinds", nil, nil, KKLaneFieldObject,
      KKLaneFieldTemplateCanonical},
     {@"codeSavable", nil, nil, KKLaneFieldObject, KKLaneFieldTemplateCanonical},
+    {@"codeHidesTitle", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical},
     {@"codeSaveCategories", nil, nil, KKLaneFieldObject,
      KKLaneFieldTemplateCanonical},
     {@"codeSaveNamePlaceholder", nil, nil, KKLaneFieldObject,
@@ -423,8 +427,7 @@ static const KKLaneField kKKLaneFields[] = {
      KKLaneFieldSerialized | KKLaneFieldPickerMeta},
     {@"oscEditedOnly", @"osc_edited_only", nil, KKLaneFieldBoolOmitNO,
      KKLaneFieldSerialized | KKLaneFieldPickerMeta},
-    {@"positionPathDriven", nil, nil, KKLaneFieldObject,
-     KKLaneFieldPickerMeta},
+    {@"positionPathDriven", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
     {@"ownerScoped", @"owner_scoped", nil, KKLaneFieldBoolOmitNO,
      KKLaneFieldSerialized | KKLaneFieldPickerMeta},
     {@"choiceLabels", @"choice_labels", nil, KKLaneFieldArray,
@@ -432,12 +435,10 @@ static const KKLaneField kKKLaneFields[] = {
     {@"choiceIcons", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
     {@"choiceValues", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
     {@"wrapsChoicePills", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
-    {@"choiceUsesDropdown", nil, nil, KKLaneFieldObject,
-     KKLaneFieldPickerMeta},
+    {@"choiceUsesDropdown", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
     {@"choiceUnknownLabels", nil, nil, KKLaneFieldObject,
      KKLaneFieldPickerMeta},
-    {@"choiceUnknownBadge", nil, nil, KKLaneFieldObject,
-     KKLaneFieldPickerMeta},
+    {@"choiceUnknownBadge", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
     {@"isToggle", @"is_toggle", nil, KKLaneFieldBoolOmitNO,
      KKLaneFieldSerialized | KKLaneFieldPickerMeta},
     {@"autoSizesComponentLabels", @"autosize_component_labels", nil,
@@ -452,9 +453,8 @@ static const KKLaneField kKKLaneFields[] = {
      KKLaneFieldPairedArray, KKLaneFieldSerialized | KKLaneFieldPickerMeta},
     {@"visibleWhenAndKey", @"visible_when_and_key", nil, KKLaneFieldString,
      KKLaneFieldSerialized | KKLaneFieldPickerMeta},
-    {@"visibleWhenAndValues", @"visible_when_and_values",
-     @"visibleWhenAndKey", KKLaneFieldPairedArray,
-     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"visibleWhenAndValues", @"visible_when_and_values", @"visibleWhenAndKey",
+     KKLaneFieldPairedArray, KKLaneFieldSerialized | KKLaneFieldPickerMeta},
     {@"maxControllerKey", @"max_controller_key", nil, KKLaneFieldString,
      KKLaneFieldSerialized | KKLaneFieldPickerMeta},
     {@"componentMaxByControllerValue", @"max_by_controller_value",

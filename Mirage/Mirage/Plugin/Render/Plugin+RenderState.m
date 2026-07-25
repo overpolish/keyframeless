@@ -168,7 +168,23 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
 }
 
 - (NSString *)linkManifestEffectName {
+  // The bus's scoping key, NOT a label: +reconcileEffectName: uses it to find
+  // this plugin's orphaned manifests, so it stays constant per plugin even
+  // though the display name below varies per instance.
   return @"Mirage";
+}
+
+- (NSString *)linkManifestDisplayName {
+  // What another clip's reference picker shows. A project with six Mirage
+  // clips otherwise lists six identical "Mirage @ <tc>" rows, distinguishable
+  // only by timecode, so name each by the shader it's running.
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (getAPI)
+    for (KKLane *l in [self _timelineFromParams:getAPI].lanes)
+      if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeSaveName.length)
+        return l.codeSaveName;
+  return [self linkManifestEffectName];
 }
 
 // Tell the inspector where this clip sits in PROJECT time, so its mini-viewer

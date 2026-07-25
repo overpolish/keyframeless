@@ -153,6 +153,15 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 /// domain-specific.
 @property(nonatomic, copy, null_resettable) NSString *saveNamePlaceholder;
 
+/// The name currently in the save bar's field. A host seeds it from its own
+/// storage and reads it back through `onSaveNameChange`, so the name survives
+/// the editor being rebuilt (inspector reopen, undo, preset apply).
+@property(nonatomic, copy, null_resettable) NSString *saveName;
+
+/// Fired when the user COMMITS a name (blur / Enter), not per keystroke - a
+/// host persisting this would otherwise record one undo entry per character.
+@property(nonatomic, copy, nullable) void (^onSaveNameChange)(NSString *name);
+
 /// When YES, shows a save bar under the editor: a name field + Save button
 /// (disabled until a name is entered). Pressing Save posts
 /// `KKCodeEditorSaveRequestedNotification` (declared in KKTimeline.h, the
