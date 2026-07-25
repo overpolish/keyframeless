@@ -56,6 +56,9 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
             @"A 0-100% sweep that auto-runs across a "
             @"transition.",
             @"#progress "),
+          E(@"#motionblur", @"#motionblur",
+            @"Who renders motion blur: accumulate, native, or off.",
+            @"#motionblur "),
           E(@"#alpha", @"#alpha",
             @"Take control of transparency, to mask part of "
             @"the frame so a lower clip shows through.",
@@ -134,7 +137,8 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"rotate",                                           // primitives / kinds
       @"dot",          @"square",     @"hollow",   @"arc", // point styles
       @"skipsnapping", @"lockaspect", @"dropdown",         // bare flags
-      @"percent",      @"int",        @"px" // #multi units/modifiers
+      @"percent",      @"int",        @"px", // #multi units/modifiers
+      @"accumulate",   @"native"             // #motionblur modes ("off" = none)
     ]];
   });
   return v;

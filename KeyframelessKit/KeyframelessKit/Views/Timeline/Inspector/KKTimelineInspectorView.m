@@ -598,9 +598,17 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   if (_availableLanes.count && timeline.lanes.count) {
     NSMutableDictionary<NSString *, NSString *> *labelByKey =
         [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
-    for (KKLane *t in _availableLanes)
-      if (t.key.length && t.label.length)
+    // Every declared key, INCLUDING templates with no label - those still
+    // exist, so the orphan test must not mistake "unlabelled" for "gone".
+    NSMutableSet<NSString *> *templateKeys =
+        [NSMutableSet setWithCapacity:_availableLanes.count];
+    for (KKLane *t in _availableLanes) {
+      if (!t.key.length)
+        continue;
+      [templateKeys addObject:t.key];
+      if (t.label.length)
         labelByKey[t.key] = t.label;
+    }
     NSMutableArray<KKLane *> *relabelled = nil;
     for (NSUInteger i = 0; i < timeline.lanes.count; i++) {
       KKLane *l = timeline.lanes[i];
@@ -616,6 +624,20 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     if (relabelled) {
       timeline = [timeline copy];
       timeline.lanes = relabelled;
+    }
+    // Orphans: a lane the source no longer declares. Dropped from the ROWS
+    // only - it stays in `timeline` (and so in the blob), so re-declaring the
+    // directive restores its keyframes untouched.
+    if (_hidesLanesWithoutTemplate) {
+      NSMutableArray<KKLane *> *live =
+          [NSMutableArray arrayWithCapacity:timeline.lanes.count];
+      for (KKLane *l in timeline.lanes)
+        if ([templateKeys containsObject:KKPlainLaneLabel(l.key ?: @"")])
+          [live addObject:l];
+      if (live.count != timeline.lanes.count) {
+        timeline = [timeline copy];
+        timeline.lanes = live;
+      }
     }
   }
   [_basicView applyTimeline:timeline];

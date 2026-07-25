@@ -120,10 +120,17 @@ static BOOL MirageExprMiniBoxControlsX(NSInteger idx) {
   // A referenced uniform (center = uOrigin, …) reads the mini's ROOT lane
   // value (un-link-resolved, matching the radial sets' centre handling).
   __weak KKMiniViewerRenderer *weakRenderer = _renderer;
-  for (MirageOSCBlockRuntime *b in _runtimes)
+  for (MirageOSCBlockRuntime *b in _runtimes) {
     b.laneValueProvider = ^NSArray<NSNumber *> *(NSString *label) {
       return [weakRenderer rootValuesForLabel:label];
     };
+    // `size` is the SOURCE media resolution, not the preview's, so an
+    // expression written against real pixels means the same here as in the
+    // viewer.
+    b.mediaSizeProvider = ^CGSize(void) {
+      return weakRenderer.canvas.sourceMediaSize;
+    };
+  }
 }
 
 static BOOL MirageExprMiniIsRing(MirageOSCBlockRuntime *b) {
@@ -314,10 +321,11 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
     // the lane fields; a unit-less (or single-component) value box keeps the
     // raw/percent form.
     if (b.fieldCount > 2 || (b.boundComponentUnits.count && raw.count >= 2)) {
-      readout = [MirageOSCBlockRuntime boxReadoutForValues:raw
-                                                     units:b.boundComponentUnits
-                                           scalesWithMedia:b.boundScalesWithMedia
-                                                 mediaSize:mediaSize];
+      readout =
+          [MirageOSCBlockRuntime boxReadoutForValues:raw
+                                               units:b.boundComponentUnits
+                                     scalesWithMedia:b.boundScalesWithMedia
+                                           mediaSize:mediaSize];
     } else {
       readout = KKBoxOSCReadoutString(raw, b.divisor == 100.0, b.isInt);
     }

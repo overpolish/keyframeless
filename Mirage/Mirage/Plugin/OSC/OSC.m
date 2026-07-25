@@ -331,6 +331,9 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
         ^NSArray<NSNumber *> *(NSString *label, double frac) {
       return [weakSelf _exprRawLaneValuesForLabel:label atFraction:frac];
     };
+    b.mediaSizeProvider = ^CGSize(void) {
+      return [weakSelf _exprMediaSize];
+    };
     if ([b.primitive isEqualToString:@"position"])
       continue; // backed by _posControllers above, not an expr part
     id ctl;
@@ -523,6 +526,23 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       return w / h;
   }
   return 1.0;
+}
+
+// The frame in MEDIA PIXELS, backing the `size` expression builtin. The canvas
+// rect is in view points and scales with the viewer's zoom, so de-zooming it
+// recovers the source resolution - the same derivation KKCropOSC uses for its
+// px readout. Zero when the canvas isn't resolvable, which reads as "unknown"
+// rather than as some other frame size.
+- (CGSize)_exprMediaSize {
+  CGPoint tr = CGPointZero, bl = CGPointZero;
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+    return CGSizeZero;
+  id<FxOnScreenControlAPI_v2> zoomAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double zoom = zoomAPI ? [zoomAPI canvasZoom] : 1.0;
+  if (zoom < 0.001)
+    zoom = 1.0;
+  return CGSizeMake(fabs(tr.x - bl.x) / zoom, fabs(tr.y - bl.y) / zoom);
 }
 
 // Canvas position of the block's handle for a given bound value (forward expr

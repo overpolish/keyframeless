@@ -255,6 +255,7 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
   NSArray<NSNumber *> *_Nullable (^provider)(NSString *) = _laneValueProvider;
   NSArray<NSNumber *> *_Nullable (^fracProvider)(NSString *, double) =
       _laneValuesAtFractionProvider;
+  CGSize (^mediaProvider)(void) = _mediaSizeProvider;
   double evalFrac = frac;
   NSMutableDictionary<NSString *, NSValue *> *localVals =
       [NSMutableDictionary dictionary];
@@ -279,6 +280,10 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
       return (KKExprVal){{0.5, 0.5, 0, 0}, 2};
     if ([nm isEqualToString:@"aspect"])
       return KKExprScalar(ax);
+    if ([nm isEqualToString:@"size"]) {
+      CGSize sz = mediaProvider ? mediaProvider() : CGSizeZero;
+      return (KKExprVal){{sz.width, sz.height, 0, 0}, 2};
+    }
     if ([nm isEqualToString:@"pos"] || [nm isEqualToString:@"mouse"])
       return (KKExprVal){{hm ? m.x : 0, hm ? m.y : 0, 0, 0}, 2};
     NSValue *lv = localVals[nm];

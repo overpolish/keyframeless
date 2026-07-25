@@ -630,7 +630,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     // every refresh would flicker rows mid-toggle and is pure overhead for
     // single-owner plugins. The checked boxes always re-sync (cheap).
     NSArray<KKLane *> *scoped = [self _manageVisibleLanes];
-    NSArray<NSString *> *newLabels = [scoped valueForKey:@"label"];
+    // Keys, not labels: -currentLaneLabels returns keys, and a dynamic lane's
+    // label ("Ramp") never equals its key ("uRamp") - comparing the two kinds
+    // made this guard always miss, rebuilding on every refresh.
+    NSArray<NSString *> *newLabels = [scoped valueForKey:@"key"];
     if (![newLabels isEqualToArray:[_openManageView currentLaneLabels]])
       [_openManageView setLanes:scoped];
     [_openManageView updateCheckedLabels:[self _optedInLabelsSet]];

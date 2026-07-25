@@ -304,6 +304,59 @@ static NSString *CollapseSpacesOutsideQuotes(NSString *s) {
   return out;
 }
 
+// Is `body` (a comment's text, `//` already stripped) an actual directive
+// header rather than ordinary prose that happens to open with `#` or `@`?
+// Tidying re-flows a line to column 0 and reshapes the comment lines under it,
+// so a `// #1 pass: blur` note inside a function gets dragged to the margin
+// where it then LOOKS like a top-level directive.
+//
+// Two signals, both required:
+//
+//   1. The leading token is a registered kind - the same set the highlighter
+//      greens, so what the editor calls a directive and what Format touches
+//      can't disagree. Kills `// #1 pass: blur`.
+//   2. What follows is ATTRIBUTE-SHAPED: nothing, `key=…` / `key={…}` pairs,
+//      or bare registered flags (`skipsnapping`) and values (`native`). Kills
+//      `// #color of the sky is picked here`, which passes (1) - `#color` is a
+//      real kind, and the difference between the two is only ever the tail.
+//
+// Deliberately NOT keyed on indentation: a real directive can be indented (the
+// parsers allow leading whitespace), and prose can sit at column 0, so the tail
+// is the honest discriminator.
+static BOOL IsDirectiveHeader(NSString *body) {
+  if (body.length < 2)
+    return NO;
+  NSCharacterSet *ws = NSCharacterSet.whitespaceCharacterSet;
+  NSRange sp = [body rangeOfCharacterFromSet:ws];
+  NSString *token =
+      sp.location == NSNotFound ? body : [body substringToIndex:sp.location];
+  if (![MirageDirectiveKindTokens() containsObject:token])
+    return NO;
+  if (sp.location == NSNotFound)
+    return YES; // a bare kind (`#alpha`, `@osc`) has no tail to check
+  // Drop quoted runs before tokenising, so `label="My Label"` stays one
+  // attribute instead of splitting into `label="My` + a bare `Label"`.
+  NSString *tail = [[NSRegularExpression
+      regularExpressionWithPattern:@"\"[^\"]*\""
+                           options:0
+                             error:nil]
+      stringByReplacingMatchesInString:body
+                               options:0
+                                 range:NSMakeRange(sp.location,
+                                                   body.length - sp.location)
+                          withTemplate:@""];
+  for (NSString *raw in [tail componentsSeparatedByCharactersInSet:ws]) {
+    NSString *t = [raw stringByTrimmingCharactersInSet:ws];
+    if (t.length == 0 || [t containsString:@"="])
+      continue;
+    if ([MirageDirectiveValueKeywords() containsObject:t] ||
+        [MirageDirectiveKindTokens() containsObject:t])
+      continue;
+    return NO; // a bare word that isn't vocabulary - this is prose
+  }
+  return YES;
+}
+
 NSString *MirageTidyDirectives(NSString *source) {
   if (!source.length)
     return source;
@@ -317,8 +370,8 @@ NSString *MirageTidyDirectives(NSString *source) {
                          ? [[trimmed substringFromIndex:2]
                                stringByTrimmingCharactersInSet:ws]
                          : nil;
-    // An `// @…` block: normalize the header, then gather + align its fields.
-    if (body && [body hasPrefix:@"@"]) {
+    // An `// @osc` block: normalize the header, then gather + align its fields.
+    if (body && [body hasPrefix:@"@"] && IsDirectiveHeader(body)) {
       [out
           addObject:[@"// " stringByAppendingString:CollapseSpacesOutsideQuotes(
                                                         body)]];
@@ -356,7 +409,7 @@ NSString *MirageTidyDirectives(NSString *source) {
       continue;
     }
     // A `// #kind …` line: single-space its attributes (strings preserved).
-    if (body && [body hasPrefix:@"#"]) {
+    if (body && [body hasPrefix:@"#"] && IsDirectiveHeader(body)) {
       [out
           addObject:[@"// " stringByAppendingString:CollapseSpacesOutsideQuotes(
                                                         body)]];

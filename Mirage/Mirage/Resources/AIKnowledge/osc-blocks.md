@@ -228,7 +228,7 @@ This is what `osc={z,x,y}` synthesizes.
 
 - **Per-part `drag[...]` overrides** (a rule scoped to one handle) are described in the design spec but **not implemented** - don't emit them.
 - A `ring` or `box` **must** author its inverse (`fromR` / `fromRect`); only a scalar `point` has the numeric-inversion fallback. A remapped `position` must author both.
-- `size` is accepted by the parser but **resolves to 0** at runtime - it is never bound. Use `aspect` and express lengths in frame-height units (`min(w * aspect, h)`) until that is fixed.
+- `size` is the **source media resolution**, and is the same number in the viewer and the mini viewer. It is `(0, 0)` only when the frame genuinely can't be resolved, so guard a divide (`max(size.y, 1.0)`) rather than assuming it. Expressions stay in object space regardless - `size` is for converting a pixel-denominated value, not for positioning.
 
 ## Worked example: pivot + ring + rotation, all custom
 

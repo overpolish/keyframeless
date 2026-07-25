@@ -84,6 +84,13 @@ extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
 @property(nonatomic, copy, nullable)
     NSArray<NSNumber *> *_Nullable (^laneValueProvider)(NSString *label);
 
+/// The frame's size in MEDIA PIXELS, backing the `size` expression builtin
+/// (`aspect` is its x/y). A provider rather than a stored size because the
+/// viewer derives it from the live canvas rect and zoom, both of which move
+/// under the user. Unset resolves `size` to (0, 0) - the surface that owns the
+/// geometry is the only one that can answer.
+@property(nonatomic, copy, nullable) CGSize (^mediaSizeProvider)(void);
+
 /// Like laneValueProvider but AT a given clip fraction - the position warp's
 /// per-sample path mapping needs referenced uniforms at each sample's own
 /// time. When set, it wins for any evaluation that carries a fraction.

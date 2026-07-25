@@ -4,7 +4,6 @@
  */
 
 #import "Constants.h"
-#import "Plugin_Private.h"
 #import "MirageAISchema.h"
 #import "MirageDirectives.h"
 #import "MirageInspectorView+Guides.h"
@@ -15,6 +14,7 @@
 #import "MirageOSCBlockRuntime.h" // // @osc custom-handling blocks (checklist)
 #import "MirageOSCSnapshot.h" // OSC timeline snapshot + frame-duration setters
 #import "MiragePresets.h"     // MirageBuiltinPresets (built-in look presets)
+#import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKDataBlob.h>
@@ -23,10 +23,10 @@
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKPresets.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKTimingCompat.h>
-#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKUpdateChecker.h>
 @import KeyframelessAI;
 
@@ -80,7 +80,8 @@ static void MirageAIApplyShaderSource(MiragePlugin *plugin, NSString *newSrc,
       break;
     }
   if (!shaderLane) {
-    shaderLane = [KKLane laneWithKey:kMirageCodeLaneLabel label:kMirageCodeLaneLabel];
+    shaderLane = [KKLane laneWithKey:kMirageCodeLaneLabel
+                               label:kMirageCodeLaneLabel];
     shaderLane.valueType = KKLaneValueTypeCode;
     shaderLane.animatable = NO;
     shaderLane.enabled = NO;
@@ -170,7 +171,9 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
                                : 1.0;
         if (resultTimeline &&
             !KKTimelineIsBasicCompatible(resultTimeline, aiEndFrac))
-          [plugin patchUIStateKey:@"activeTab" value:@(1) paramID:kParamUIState];
+          [plugin patchUIStateKey:@"activeTab"
+                            value:@(1)
+                          paramID:kParamUIState];
       });
   if (!scoped) {
     [KKAIDraft setError:@"Couldn't open the FCP action scope to apply the "
@@ -310,12 +313,18 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
                                              audioTickets:self.audioTickets];
           KKInspectorPersistedState *st = ctx.persistedState;
           MirageInspectorView *v = [[MirageInspectorView alloc]
-              initWithAPIManager:self.apiManager
-                     loopEnabled:st.loopEnabled
-           maintainTimingEnabled:st.maintainTimingEnabled
-                       activeTab:st.activeTab
-                  availableLanes:available
-                        timeline:timeline];
+                 initWithAPIManager:self.apiManager
+                        loopEnabled:st.loopEnabled
+              maintainTimingEnabled:st.maintainTimingEnabled
+                          activeTab:st.activeTab
+                     availableLanes:available
+                           timeline:timeline];
+          // Every Mirage lane is declared by the shader (or is a fixed Core
+          // lane), so the template set IS the complete list of what exists -
+          // anything else in the timeline is a control the source has stopped
+          // declaring, and showing it as a live row under its raw uniform name
+          // just offers an edit that goes nowhere.
+          v.hidesLanesWithoutTemplate = YES;
           // Per-instance rendezvous paths (keyed by the instance UUID) so two
           // stacked Mirage clips read/write distinct /tmp files instead of
           // the clip below showing the top clip's source in its mini-viewer.
@@ -339,7 +348,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
     if (!view)
       return nil;
 
-        // On-screen-control visibility: master tick + per-element pills (Origin,
+    // On-screen-control visibility: master tick + per-element pills (Origin,
     // Path) + opt-click-hide + opt-reveal. The element key is the lane label
     // (KKPositionOSC / the mini controller key their visibility on it). Shared
     // glue in KKPlugin (OSCVisibility); the renderer is the mini-viewer
@@ -534,26 +543,21 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
   __weak typeof(self) weakSelf = self;
   return [KKAIBannerHost
       makeStandardPluginButtonWithProductContext:productContext
-                                    examplePairs:examples
-                                     placeholder:placeholder
-                                checkForAIUpdate:^(void (^report)(
-                                    NSString *version, NSString *notesURL)) {
-                                  [[KKUpdateChecker shared]
-                                      checkAIUpdateWithCompletion:^(BOOL avail) {
-                                        KKUpdateChecker *c =
-                                            [KKUpdateChecker shared];
-                                        report(c.aiAvailableVersion,
-                                               c.aiNotesURL.absoluteString);
-                                      }];
-                                }
-                                           onRun:^(NSString *prompt) {
-                                     __strong typeof(weakSelf) strong =
-                                         weakSelf;
-                                     if (!strong)
-                                       return;
-                                     [strong _runAIPrompt:prompt
-                                           productContext:productContext];
-                                   }];
+      examplePairs:examples
+      placeholder:placeholder
+      checkForAIUpdate:^(
+          void (^report)(NSString *version, NSString *notesURL)) {
+        [[KKUpdateChecker shared] checkAIUpdateWithCompletion:^(BOOL avail) {
+          KKUpdateChecker *c = [KKUpdateChecker shared];
+          report(c.aiAvailableVersion, c.aiNotesURL.absoluteString);
+        }];
+      }
+      onRun:^(NSString *prompt) {
+        __strong typeof(weakSelf) strong = weakSelf;
+        if (!strong)
+          return;
+        [strong _runAIPrompt:prompt productContext:productContext];
+      }];
 }
 
 - (void)_runAIPrompt:(NSString *)prompt
@@ -572,22 +576,26 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
       self.apiManager, self, nil,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
         id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
-        currentJSON = KKTimelineAICurrentJSON(getAPI, [MiragePlugin availableLanes]);
-        // Other clips this one can reference in a cross-clip ${Clip.Param} expression
-        // (excluding itself), for the AI's expression route.
+        currentJSON =
+            KKTimelineAICurrentJSON(getAPI, [MiragePlugin availableLanes]);
+        // Other clips this one can reference in a cross-clip ${Clip.Param}
+        // expression (excluding itself), for the AI's expression route.
         NSString *selfLinkUUID = KKInstanceUUIDForAPI(self.apiManager);
         availableSources = KKLinkAvailableSourcesJSON(
             selfLinkUUID, KKLinkDocumentIDForAPI(self.apiManager));
-        // Raw timeline blob (carries the "Mirage" code lane the AI may rewrite) and
-        // the current shader source. Pass "" when it's the untouched default so a
-        // from-scratch ask starts clean; a customised shader is passed so the AI
-        // edits it in place ("add a slider", "make the ripples bigger").
+        // Raw timeline blob (carries the "Mirage" code lane the AI may rewrite)
+        // and the current shader source. Pass "" when it's the untouched
+        // default so a from-scratch ask starts clean; a customised shader is
+        // passed so the AI edits it in place ("add a slider", "make the ripples
+        // bigger").
         timelineBlob = KKReadCustomParamString(getAPI, kKKParamTimelineData);
         NSString *rawShaderSrc = @"";
         KKTimeline *readTimeline =
-            timelineBlob.length ? [KKTimeline timelineFromJSON:timelineBlob] : nil;
+            timelineBlob.length ? [KKTimeline timelineFromJSON:timelineBlob]
+                                : nil;
         for (KKLane *l in readTimeline.lanes)
-          if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
+          if ([l.key isEqualToString:kMirageCodeLaneLabel] &&
+              l.codeString.length) {
             rawShaderSrc = l.codeString;
             break;
           }
@@ -599,8 +607,8 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
         NSDictionary *uiState =
             (uiJson.length
                  ? [NSJSONSerialization
-                       JSONObjectWithData:[uiJson
-                                              dataUsingEncoding:NSUTF8StringEncoding]
+                       JSONObjectWithData:
+                           [uiJson dataUsingEncoding:NSUTF8StringEncoding]
                                   options:0
                                     error:nil]
                  : nil)
@@ -615,7 +623,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
         clipDurSec = CMTimeGetSeconds(clipDur);
         if (clipDurSec <= 0 || isnan(clipDurSec))
           clipDurSec = 5.0;
-  });
+      });
   if (!scoped) {
     [KKAIDraft setRouting:NO];
     [KKAIDraft setError:@"Couldn't open the FCP action scope."];

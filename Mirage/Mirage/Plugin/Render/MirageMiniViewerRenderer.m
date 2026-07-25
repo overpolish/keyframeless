@@ -98,6 +98,12 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
         b.laneValueProvider = ^NSArray<NSNumber *> *(NSString *label) {
           return [weakRenderer rootValuesForLabel:label];
         };
+        // `size` is the SOURCE media resolution, not the preview's - a warp
+        // written against real pixels has to mean the same thing here as in
+        // the viewer or the mini draws the handle somewhere else.
+        b.mediaSizeProvider = ^CGSize(void) {
+          return weakRenderer.canvas.sourceMediaSize;
+        };
         warped[b.binds] = b;
       }
     }

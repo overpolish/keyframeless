@@ -7,9 +7,9 @@
 
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimelineInspectorButtons.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
-#import <KeyframelessKit/KKTimeline.h>
 
 @protocol PROAPIAccessing;
 @protocol KKMiniViewerDelegate;
@@ -113,6 +113,22 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// directive). Not set == the lane set is fixed at init.
 @property(nonatomic, copy, nullable)
     NSArray<KKLane *> * (^availableLanesProvider)(NSString *code);
+
+/// When YES, a persisted lane whose key matches NO available-lane template is
+/// hidden from the rows. For a source-derived lane set (see
+/// `availableLanesProvider`) that is a lane the shader has stopped declaring -
+/// its directive was renamed, commented out, or deleted - and without this it
+/// keeps showing as a live row under its raw uniform key, editing nothing.
+///
+/// Hidden, never deleted: the lane stays in the timeline, so restoring the
+/// directive brings its keyframes back intact. Shader editing is iterative and
+/// a stray keystroke in a uniform name would otherwise destroy animation.
+///
+/// Default NO, because it is only meaningful when the templates are the
+/// complete authority on what exists. A plugin whose timeline legitimately
+/// carries lanes with no template (Canvas's per-layer lanes, which are minted
+/// per layer rather than declared) must leave this off or its rows vanish.
+@property(nonatomic) BOOL hidesLanesWithoutTemplate;
 /// Fired AFTER a code lane commit re-derives the available-lanes set (see
 /// `availableLanesProvider`), on the main thread, with the committed source.
 /// Lets a host whose ON-SCREEN-CONTROL set is also source-derived (e.g. a
