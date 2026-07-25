@@ -134,33 +134,62 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
   return n;
 }
 
+// Every parse runs into a scratch buffer sized to the cap, then the model keeps
+// a copy sized to what the source ACTUALLY declared. The caps are big and the
+// structs are fat (an OSC block carries its expression strings inline, ~4.4KB
+// each), so a fixed-array model charged every shader for the maximum: a
+// three-slider shader cost the same ~144KB as a twenty-control one, times the
+// LRU cache. Models are immutable and built once, so the exact size is known by
+// the time it matters. NULL for a zero count is fine - every consumer loops to
+// the matching count.
+static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
+  if (count <= 0)
+    return NULL;
+  void *kept = malloc(stride * (size_t)count);
+  memcpy(kept, scratch, stride * (size_t)count);
+  return kept;
+}
+
 @implementation MirageShaderModel {
-  MirageColorProp _colors[KK_SHADER_MAX_COLOR_PROPS];
-  MirageScalarProp _scalars[KK_SHADER_MAX_SCALAR_PROPS];
-  MirageAudioProp _audio[KK_SHADER_MAX_AUDIO_PROPS];
-  MirageGradientProp _gradients[KK_SHADER_MAX_GRADIENT_PROPS];
-  MirageOSCBlock
-      _oscBlocks[KK_SHADER_MAX_SCALAR_PROPS + KK_SHADER_MAX_OSC_BLOCKS];
+  MirageColorProp *_colors;
+  MirageScalarProp *_scalars;
+  MirageAudioProp *_audio;
+  MirageGradientProp *_gradients;
+  MirageOSCBlock *_oscBlocks;
 }
 
 - (instancetype)initWithSource:(NSString *)source {
   if (!(self = [super init]))
     return nil;
   _source = [source copy];
+  // Scratch, not ivars - the scalar and OSC buffers are far too big to sit on
+  // the stack at the cap.
+  MirageColorProp *cTmp =
+      calloc(KK_SHADER_MAX_COLOR_PROPS, sizeof(MirageColorProp));
+  MirageScalarProp *sTmp =
+      calloc(KK_SHADER_MAX_SCALAR_PROPS, sizeof(MirageScalarProp));
+  MirageAudioProp *aTmp =
+      calloc(KK_SHADER_MAX_AUDIO_PROPS, sizeof(MirageAudioProp));
+  MirageGradientProp *gTmp =
+      calloc(KK_SHADER_MAX_GRADIENT_PROPS, sizeof(MirageGradientProp));
+  MirageOSCBlock *oTmp =
+      calloc(KK_SHADER_MAX_SCALAR_PROPS + KK_SHADER_MAX_OSC_BLOCKS,
+             sizeof(MirageOSCBlock));
+
   int cUsed = 0, sUsed = 0, aUsed = 0, gUsed = 0;
   _colorCount =
-      MirageParseColorProps(source, _colors, KK_SHADER_MAX_COLOR_PROPS, &cUsed);
+      MirageParseColorProps(source, cTmp, KK_SHADER_MAX_COLOR_PROPS, &cUsed);
   _colorPoolUsed = cUsed;
   int sTrunc = 0;
   _scalarCount = MirageParseScalarProps(
-      source, _scalars, KK_SHADER_MAX_SCALAR_PROPS, cUsed, &sUsed, &sTrunc);
+      source, sTmp, KK_SHADER_MAX_SCALAR_PROPS, cUsed, &sUsed, &sTrunc);
   _scalarTruncated = sTrunc != 0;
   _scalarPoolUsed = sUsed;
-  _audioCount = MirageParseAudioProps(source, _audio, KK_SHADER_MAX_AUDIO_PROPS,
+  _audioCount = MirageParseAudioProps(source, aTmp, KK_SHADER_MAX_AUDIO_PROPS,
                                       cUsed + sUsed, &aUsed);
   _audioPoolUsed = aUsed;
   _gradientCount =
-      MirageParseGradientProps(source, _gradients, KK_SHADER_MAX_GRADIENT_PROPS,
+      MirageParseGradientProps(source, gTmp, KK_SHADER_MAX_GRADIENT_PROPS,
                                cUsed + sUsed + aUsed, &gUsed);
   _gradientPoolUsed = gUsed;
   // The opt-in built-ins. No pool slots: they drive the shared uniforms, so
@@ -170,18 +199,40 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
   // Unified OSC declarations: directive sugar first (mirroring the
   // checklist's source order), then authored blocks; an authored block
   // binding a uniform suppresses that uniform's sugar.
-  MirageOSCBlock explicitBlocks[KK_SHADER_MAX_OSC_BLOCKS];
+  MirageOSCBlock *explicitBlocks =
+      calloc(KK_SHADER_MAX_OSC_BLOCKS, sizeof(MirageOSCBlock));
   int ne =
       MirageParseOSCBlocks(source, explicitBlocks, KK_SHADER_MAX_OSC_BLOCKS);
   NSMutableSet<NSString *> *explicitBinds = [NSMutableSet set];
   for (int i = 0; i < ne; i++)
     if (strlen(explicitBlocks[i].binds))
       [explicitBinds addObject:@(explicitBlocks[i].binds)];
-  int ns = MirageSynthesizeOSCBlocks(_scalars, _scalarCount, explicitBinds,
-                                     _oscBlocks, KK_SHADER_MAX_SCALAR_PROPS);
-  memcpy(_oscBlocks + ns, explicitBlocks, (size_t)ne * sizeof(MirageOSCBlock));
+  int ns = MirageSynthesizeOSCBlocks(sTmp, _scalarCount, explicitBinds, oTmp,
+                                     KK_SHADER_MAX_SCALAR_PROPS);
+  memcpy(oTmp + ns, explicitBlocks, (size_t)ne * sizeof(MirageOSCBlock));
   _oscBlockCount = ns + ne;
+  free(explicitBlocks);
+
+  _colors = MirageShrinkCopy(cTmp, sizeof(MirageColorProp), _colorCount);
+  _scalars = MirageShrinkCopy(sTmp, sizeof(MirageScalarProp), _scalarCount);
+  _audio = MirageShrinkCopy(aTmp, sizeof(MirageAudioProp), _audioCount);
+  _gradients =
+      MirageShrinkCopy(gTmp, sizeof(MirageGradientProp), _gradientCount);
+  _oscBlocks = MirageShrinkCopy(oTmp, sizeof(MirageOSCBlock), _oscBlockCount);
+  free(cTmp);
+  free(sTmp);
+  free(aTmp);
+  free(gTmp);
+  free(oTmp);
   return self;
+}
+
+- (void)dealloc {
+  free(_colors);
+  free(_scalars);
+  free(_audio);
+  free(_gradients);
+  free(_oscBlocks);
 }
 
 + (instancetype)modelForSource:(NSString *)source {

@@ -17,18 +17,54 @@
 // the pattern radiates from (a point handle) and a Scale (a ring around that
 // centre) - so a fresh instance has real OSCs, not just code. Default values
 // reproduce the plain plasma: Center at the frame middle, Scale 3.
+//
+// Doubles as the worked example for the directive syntax, so it deliberately
+// shows both `group=` forms and one opt-in built-in. Keep it that way when
+// touching it.
 NSString *MirageCustomDefaultShaderSource(void) {
-  return @"// #point label=\"Center\" osc default=\"0.5,0.5\"\n"
+  return @"// SPDX-FileCopyrightText: 2026 overpolish\n"
+         @"// SPDX-License-Identifier: MIT\n"
+         @"\n"
+         @"// The built-in Speed lane, which scales iTime. It annotates no "
+         @"uniform because\n"
+         @"// it drives one the plugin already gives every shader. Opt-in, as "
+         @"the seed and\n"
+         @"// grain built-ins are - leave it out and the shader just runs at "
+         @"speed 1. No\n"
+         @"// group= here, so it lands in the default group.\n"
+         @"// #speed\n"
+         @"\n"
+         @"// The long form of group=: name plus the SF Symbol the group "
+         @"header draws.\n"
+         @"// #point label=\"Center\" group={\"Pattern\", "
+         @"\"circle.hexagongrid\"} osc default=\"0.5,0.5\"\n"
          @"uniform vec2 uCenter;\n"
-         @"// #float label=\"Scale\" osc=ring link=uCenter min=1 max=8 "
-         @"default=3\n"
+         @"\n"
+         @"// The short form: the group already has its icon from the first "
+         @"control that\n"
+         @"// named one, so this just joins it.\n"
+         @"// #percent label=\"Scale\" group=\"Pattern\" osc=ring link=uCenter "
+         @"min=25 max=400 default=100\n"
          @"uniform float uScale;\n"
          @"\n"
-         @"void mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n"
-         @"    vec2 uv = (fragCoord - uCenter) / iResolution.xy;\n"
-         @"    vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx * uScale + "
-         @"vec3(0.0, 2.0, 4.0));\n"
-         @"    fragColor = vec4(col, 1.0);\n"
+         @"// Cycles across the frame at 100%. Scale DIVIDES this, so the lane "
+         @"reads as a\n"
+         @"// zoom: turn it up and the pattern gets bigger. Multiplying would "
+         @"make it a\n"
+         @"// frequency instead, where raising it packs in more repetitions "
+         @"and the picture\n"
+         @"// appears to pull away - which is the wrong way round for "
+         @"something called\n"
+         @"// Scale.\n"
+         @"const float kBaseFrequency = 3.0;\n"
+         @"\n"
+         @"void mainImage(out vec4 fragColor, in vec2 fragCoord)\n"
+         @"{\n"
+         @"\tvec2 uv = (fragCoord - uCenter) / iResolution.xy;\n"
+         @"\tfloat freq = kBaseFrequency / max(uScale, 0.001);\n"
+         @"\tvec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx * freq + vec3(0.0, 2.0, "
+         @"4.0));\n"
+         @"\tfragColor = vec4(col, 1.0);\n"
          @"}\n";
 }
 

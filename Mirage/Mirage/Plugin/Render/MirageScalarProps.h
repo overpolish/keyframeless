@@ -25,11 +25,14 @@
 // the pool (value in .x), appended AFTER the colour props so the colour path is
 // unchanged. The transpiler folds them into the block with `#define <name>
 // (<name>_kk.x)` (float) / `(int(<name>_kk.x))` (choice).
-// Raised from 12 when the shipped Frame shader outgrew it. The real ceiling is
-// KK_SHADER_COLOR_POOL (48 vec4s shared with colours / audio / gradients), which
-// the parser enforces separately; this is just the prop array. Overshooting it
-// used to drop the extra controls SILENTLY - see MirageScalarTruncated.
-#define KK_SHADER_MAX_SCALAR_PROPS 20
+// This is a PARSE bound, not a per-model cost: MirageShaderModel parses into a
+// scratch buffer this size and then keeps only what the source declared, so
+// raising it costs one transient allocation rather than fattening every cached
+// model. The real ceiling is KK_SHADER_COLOR_POOL (vec4s shared with colours /
+// audio / gradients, one per scalar), which the parser enforces separately.
+// Overshooting used to drop the extra controls SILENTLY - see
+// MirageScalarTruncated.
+#define KK_SHADER_MAX_SCALAR_PROPS 64
 typedef struct MirageScalarProp {
     // Which directive keyword declared this prop (registry row). Behaviour
     // chains switch on this; the is* flags below are the stamped template
