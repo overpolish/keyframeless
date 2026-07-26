@@ -91,11 +91,14 @@ UPDATE_CHECKER="$REPO_ROOT/KeyframelessKit/KeyframelessKit/Update/KKUpdateChecke
 # These are Template's fixed UUIDs from Info.plist - must be unique per plugin.
 OLD_UUID_EFFECT="E62BB814-A76B-4438-B1B1-090145A42CC2"
 OLD_UUID_OSC="A1B70771-EDBB-4D3B-81B6-DB70B74CEDE4"
-OLD_UUID_GROUP="450150AA-FB81-4198-BB73-058CFEF39F5C"
 
 NEW_UUID_EFFECT=$(uuidgen | tr '[:lower:]' '[:upper:]')
 NEW_UUID_OSC=$(uuidgen | tr '[:lower:]' '[:upper:]')
-NEW_UUID_GROUP=$(uuidgen | tr '[:lower:]' '[:upper:]')
+
+# The plug-in GROUP uuid is deliberately NOT regenerated: every plugin shares
+# Template's, so they all land in the one "Keyframeless" category in Motion and
+# Final Cut instead of each creating a group of its own. Minting a fresh one
+# here is what produced the old "Canvas Group" / "Mirage Group" split.
 
 # ── Step 1: Copy ──────────────────────────────────────────────────────────────
 
@@ -159,11 +162,10 @@ PLIST="$DEST/$PLUGIN_NAME/Plugin/Info.plist"
 
 sed -i '' "s/$OLD_UUID_EFFECT/$NEW_UUID_EFFECT/g" "$PLIST"
 sed -i '' "s/$OLD_UUID_OSC/$NEW_UUID_OSC/g"       "$PLIST"
-sed -i '' "s/$OLD_UUID_GROUP/$NEW_UUID_GROUP/g"   "$PLIST"
 
 ok "UUIDs: effect=$NEW_UUID_EFFECT"
 ok "       osc   =$NEW_UUID_OSC"
-ok "       group =$NEW_UUID_GROUP"
+ok "       group = shared (Keyframeless)"
 
 # ── Step 5: Register in bump-version.sh ───────────────────────────────────────
 
