@@ -22,6 +22,21 @@
       "name": "Keyframeless AI",
       "kind": "local AI helper",
       "payhip": "https://store.overpolish.co/b/ESy4d"
+    },
+    "magicmove": {
+      "name": "MagicMove",
+      "kind": "FxPlug effect, now a Mirage template",
+      "payhip": "https://store.overpolish.co/b/80FRU"
+    },
+    "rounded": {
+      "name": "Rounded",
+      "kind": "FxPlug effect, now a Mirage template",
+      "payhip": "https://store.overpolish.co/b/H5SUW"
+    },
+    "glow": {
+      "name": "Glow",
+      "kind": "FxPlug effect, now a Mirage template",
+      "payhip": "https://store.overpolish.co/b/MfWRG"
     }
   }
 }

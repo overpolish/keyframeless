@@ -31,13 +31,13 @@
         <div class="group">
           <span class="tag feature">New</span>
           <ul class="bullets">
-            <li>Expressions: drive any property from a small formula instead of a plain value or keyframes. Right-click a property's label in the Constants or keypose editor and choose Add Expression to open an inline editor under it. Build on the property's own animation with <code>value</code>, move it over time with <code>t</code> (or <code>progress</code> and <code>ct</code>, which are relative to the clip), loop it smoothly through the same easings the timeline uses, and add controlled randomness with <code>random</code> and <code>noise</code>. Reference another clip's parameters with the insert button to make one property follow another, and drive the parts of a Position or Size independently with <code>value.x</code> and <code>vec2(...)</code>. The editor colour-highlights the formula, flags mistakes, and previews the live result with a sparkline as you type</li>
+            <li>Expressions: drive any property from a formula instead of a value or keyframes. Right-click a property label and choose Add Expression</li>
+            <li>Live preview: play or scrub the timeline with a keypose or Constants editor open and its preview follows the playhead, then snaps back to the frame you're editing</li>
           </ul>
         </div>
         <div class="group">
           <span class="tag improvement">Improved</span>
           <ul class="bullets">
-            <li>The keypose and Constants editors now preview playback live: play or scrub the timeline with one open and its preview follows the playhead - footage and effect together, with the on-screen controls hidden - then snaps back to the frame you're editing when you stop, so you never have to close the editor to watch the animation</li>
             <li>The timeline ruler is always available now, even before anything is animated, so you can scrub the playhead straight from the inspector (and preview it in an open editor) without leaving it</li>
             <li>The keypose or interval you're editing now highlights in the timeline, and the Constants button lights up while its panel is open, so it's always clear what the editor is controlling</li>
             <li>The keypose, Constants, and interval editors now open in one consistent spot beside the inspector instead of jumping around as you move between them, and each has a close button</li>
