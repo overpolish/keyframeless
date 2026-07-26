@@ -319,7 +319,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                    defaultTag:[self.renderCache
                                                   clipFractionAtSeconds:
                                                       CMTimeGetSeconds(
-                                                          renderTime)]];
+                                                          renderTime)]
+                                  renderCache:self.renderCache];
 
   // Passthrough: sample the source straight into the destination via the kit's
   // shared full-screen-quad infra + the kit-bundle passthrough shaders. Canvas

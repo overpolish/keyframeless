@@ -60,6 +60,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
   self = [super init];
   if (self) {
     _descriptorPath = [descriptorPath copy];
+    _playheadFrac = -1.0; // unknown until a playing render tick sets it
     _slots = [NSMutableArray array];
     [_slots addObject:[[_KKMiniFeedSlot alloc] init]];
   }
@@ -218,6 +219,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     @"srcHeight" : @(first.srcH),
     @"generation" : @(first.generation),
     @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
+    @"playheadFrac" : @(_playheadFrac),
     @"slots" : slotEntries,
   } mutableCopy];
   NSDictionary *ch1 = [self _channel1EntryLocked];

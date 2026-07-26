@@ -188,6 +188,11 @@ NS_ASSUME_NONNULL_BEGIN
                                     outCheckbox
                           gearButton:
                               (NSButton *__strong _Nonnull *_Nonnull)outGear;
+/// Mirror the motion-blur row onto the mini-viewer renderer so the preview
+/// blurs like the render does. Called from every setter that changes a term
+/// of it (enabled / shutter angle / samples / frame duration). Implemented in
+/// the main .m beside -_pushLinkTimeToMiniViewer, which pushes the same way.
+- (void)pushMotionBlurToMiniViewer;
 @end
 
 // Layout constants shared between the main .m and the +ParameterRows category.

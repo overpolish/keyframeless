@@ -504,6 +504,13 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   if (![desc isKindOfClass:NSDictionary.class])
     return;
 
+  // Where the PLAYHEAD was when this descriptor was published, or < 0 when the
+  // publisher had no fresh sample / wasn't playing. Live playback evaluates the
+  // effect at this rather than the frame's own tag - see the +Draw.m note.
+  NSNumber *phNum = desc[@"playheadFrac"];
+  _feedPlayheadFrac =
+      [phNum isKindOfClass:NSNumber.class] ? phNum.doubleValue : -1.0;
+
   CGSize prevMedia = _sourceMediaSize;
   _sourceMediaSize = CGSizeMake([desc[@"srcWidth"] doubleValue],
                                 [desc[@"srcHeight"] doubleValue]);

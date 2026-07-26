@@ -11,6 +11,7 @@
 #import <KeyframelessKit/KKPlugin.h>
 
 @class FxImageTile;
+@class KKRenderCache;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -24,6 +25,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// sub-tiles (parent Scale > 100%) and dest/source aspect mismatches (FCP
 /// library-preview render). `defaultTag` is the slot tag used when no
 /// `boundaryReqFracs` entry exists. Call from renderDestinationImage:.
+///
+/// `renderCache` (optional) supplies the playhead sample that paces the
+/// single-slot publish during playback. FCP's render schedule is NOT the
+/// playhead: it stalls on the first frame through pre-roll and then jumps, and
+/// it runs ahead to fill its cache. Consuming that stream directly made the
+/// mini skip the start of an animation and then race. With a fresh sample, a
+/// slot-0 frame more than a few frames AHEAD of the playhead is held back.
+/// Pass nil to publish unpaced (previous behaviour).
 - (void)
     kkPublishMiniViewerFeedForDestination:(FxImageTile *)destinationImage
                              sourceImages:(NSArray<FxImageTile *> *)sourceImages
@@ -34,7 +43,8 @@ NS_ASSUME_NONNULL_BEGIN
                              (nullable NSArray<NSNumber *> *)boundaryReqFracs
                           multiSlotActive:(BOOL)multiSlotActive
                         changesOutputSize:(BOOL)changesOutputSize
-                               defaultTag:(double)defaultTag;
+                               defaultTag:(double)defaultTag
+                              renderCache:(nullable KKRenderCache *)renderCache;
 
 /// Publish an image-well parameter's frame as the feed's SECOND texture, so a
 /// mini-viewer can preview a shader that samples two sources.

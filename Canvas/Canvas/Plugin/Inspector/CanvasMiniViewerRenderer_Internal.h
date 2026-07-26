@@ -40,6 +40,11 @@ NS_ASSUME_NONNULL_BEGIN
   // (Rotation under a drawing tool). Kept apart so neither clobbers the other.
   NSArray<NSString *> *_phaseSuppressedLabels;
   NSArray<NSString *> *_toolSuppressedLabels;
+  // "Fast" motion-blur scratch (see +MotionBlur): the composite rendered alone
+  // and its screen-space velocity, both at preview size. Rebuilt on size /
+  // format change, reused every frame.
+  id<MTLTexture> _mbColorTex;
+  id<MTLTexture> _mbVelocityTex;
 }
 // Set the toolbar's tool-based handle suppression; unioned with the boundary
 // popover's per-phase suppression instead of overwriting it.
@@ -159,6 +164,11 @@ NS_ASSUME_NONNULL_BEGIN
 // fill layers into the preview dest (the inspector-process twin of the main
 // render).
 @interface CanvasMiniViewerRenderer (Composite)
+@end
+
+// Velocity-buffer ("Fast") motion blur for the preview, so a blurred preview
+// costs a fixed number of passes instead of re-rendering the stack per sample.
+@interface CanvasMiniViewerRenderer (MotionBlur)
 @end
 
 @interface CanvasMiniViewerRenderer (Interaction)

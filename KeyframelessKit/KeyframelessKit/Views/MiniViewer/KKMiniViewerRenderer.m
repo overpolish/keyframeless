@@ -11,6 +11,8 @@
 #import "KKOSCVisibilityModel.h"
 #import "KKResizeCursor.h"
 #import <KeyframelessKit/KKLinkBus.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKTimeline.h>
@@ -47,6 +49,13 @@ static const int kKKRotationRingSamples = 192;
 static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 
 @implementation KKMiniViewerRenderer {
+  BOOL _previewMotionBlurSampling;
+  // Motion-blur sample targets, rebuilt only when the preview's size or format
+  // changes (see -_motionBlurSampleTexturesCount:like:).
+  NSArray<id<MTLTexture>> *_mbSampleTextures;
+  NSUInteger _mbSampleW;
+  NSUInteger _mbSampleH;
+  MTLPixelFormat _mbSampleFormat;
   KKMiniViewerCropEditor *_cropEditor;
   // Live-override store: per-label in-flight drag values. Populated by the
   // popover's onHandleValue during a drag, cleared on drag end. Bound to
@@ -749,7 +758,146 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   self.canvas = canvas;
   if (!source || !dest || !cb)
     return NO;
+  if ([self _motionBlurSampleCount] >= 2) {
+    // Fast first when the subclass can do it: fixed cost instead of N renders.
+    // It declines (returns NO) if unsupported or setup fails, and accumulate is
+    // the correct fallback in both cases.
+    if (_previewMotionBlurTechnique == 0 &&
+        [self encodeFastMotionBlurFromSource:source
+                                        into:dest
+                             shutterFraction:_previewMotionBlurShutterSeconds /
+                                             _clipDurationSeconds
+                               commandBuffer:cb])
+      return YES;
+    return [self _encodeMotionBlurredFromSource:source
+                                           into:dest
+                                  commandBuffer:cb];
+  }
   return [self encodeEffectFromSource:source into:dest commandBuffer:cb];
+}
+
+- (BOOL)encodeFastMotionBlurFromSource:(id<MTLTexture>)source
+                                  into:(id<MTLTexture>)dest
+                       shutterFraction:(double)shutterFraction
+                         commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
+  return NO; // no velocity buffer by default
+}
+
+// 0 = don't blur. Every term has to be usable: the shutter only becomes a clip
+// FRACTION (which is all `editFraction` understands) once the clip duration is
+// known.
+- (NSInteger)_motionBlurSampleCount {
+  if (!_previewMotionBlurEnabled || _previewMotionBlurSamples < 2 ||
+      _previewMotionBlurShutterSeconds <= 0.0 || _clipDurationSeconds <= 0.0)
+    return 0;
+  return MIN(_previewMotionBlurSamples, (NSInteger)KK_MOTION_BLUR_MAX_SAMPLES);
+}
+
+// Pooled sample targets, one per sample, matching dest's size and format.
+// Rebuilt only when those change - the preview redraws at 60fps, so allocating
+// per frame would churn badly at high sample counts.
+- (NSArray<id<MTLTexture>> *)_motionBlurSampleTexturesCount:(NSInteger)n
+                                                       like:(id<MTLTexture>)dest {
+  if (_mbSampleTextures.count == (NSUInteger)n && _mbSampleW == dest.width &&
+      _mbSampleH == dest.height && _mbSampleFormat == dest.pixelFormat)
+    return _mbSampleTextures;
+
+  MTLTextureDescriptor *td = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:dest.pixelFormat
+                                   width:dest.width
+                                  height:dest.height
+                               mipmapped:NO];
+  td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  td.storageMode = MTLStorageModePrivate;
+  NSMutableArray<id<MTLTexture>> *out = [NSMutableArray arrayWithCapacity:n];
+  for (NSInteger i = 0; i < n; i++) {
+    id<MTLTexture> t = [dest.device newTextureWithDescriptor:td];
+    if (!t)
+      return nil;
+    [out addObject:t];
+  }
+  _mbSampleTextures = out;
+  _mbSampleW = dest.width;
+  _mbSampleH = dest.height;
+  _mbSampleFormat = dest.pixelFormat;
+  return _mbSampleTextures;
+}
+
+- (BOOL)_encodeMotionBlurredFromSource:(id<MTLTexture>)source
+                                  into:(id<MTLTexture>)dest
+                         commandBuffer:(id<MTLCommandBuffer>)cb {
+  NSInteger n = [self _motionBlurSampleCount];
+  NSArray<id<MTLTexture>> *samples = [self _motionBlurSampleTexturesCount:n
+                                                                    like:dest];
+  id<MTLRenderPipelineState> acc = [self _motionBlurAccumulatePipelineFor:dest];
+  if (samples.count != (NSUInteger)n || !acc) // fall back rather than draw nothing
+    return [self encodeEffectFromSource:source into:dest commandBuffer:cb];
+
+  // Match the render's sample distribution exactly (see
+  // +[KKMotionBlur sampleTimesForState:]): the window TRAILS the frame,
+  // spanning [t - shutter, t], so the blur streaks behind the current position.
+  // Centring it here would put the smear on the wrong side of the movement.
+  double shutterFrac = _previewMotionBlurShutterSeconds / _clipDurationSeconds;
+  double base = _editFraction;
+  BOOL ok = YES;
+  _previewMotionBlurSampling = YES;
+  for (NSInteger i = 0; i < n && ok; i++) {
+    double t = (double)i / (double)(n - 1);
+    // Assign the ivar, not the property: subclasses may react to the setter,
+    // and this is a transient value restored before anything else observes it.
+    _editFraction = MAX(0.0, MIN(1.0, base - shutterFrac * t));
+    ok = [self encodeEffectFromSource:source
+                                 into:samples[i]
+                        commandBuffer:cb];
+  }
+  _previewMotionBlurSampling = NO;
+  _editFraction = base;
+  if (!ok)
+    return [self encodeEffectFromSource:source into:dest commandBuffer:cb];
+
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = dest;
+  rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+  rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+  id<MTLRenderCommandEncoder> enc =
+      [cb renderCommandEncoderWithDescriptor:rpd];
+  float dw = (float)dest.width, dh = (float)dest.height;
+  [enc setViewport:(MTLViewport){0, 0, dw, dh, -1.0, 1.0}];
+  KKVertex2D verts[] = {
+      {{dw / 2.0f, -dh / 2.0f}, {1.0, 1.0}},
+      {{-dw / 2.0f, -dh / 2.0f}, {0.0, 1.0}},
+      {{dw / 2.0f, dh / 2.0f}, {1.0, 0.0}},
+      {{-dw / 2.0f, dh / 2.0f}, {0.0, 0.0}},
+  };
+  simd_uint2 vp = {(unsigned)dw, (unsigned)dh};
+  [enc setVertexBytes:verts
+               length:sizeof(verts)
+              atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&vp length:sizeof(vp) atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setRenderPipelineState:acc];
+  for (NSUInteger i = 0; i < samples.count; i++)
+    [enc setFragmentTexture:samples[i] atIndex:i];
+  int sc = (int)n;
+  [enc setFragmentBytes:&sc length:sizeof(sc) atIndex:0];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  [enc endEncoding];
+  return YES;
+}
+
+- (id<MTLRenderPipelineState>)_motionBlurAccumulatePipelineFor:
+    (id<MTLTexture>)dest {
+  // Same shader the render path accumulates with, so the averaging matches.
+  return [[KKMetalDeviceCache sharedCache]
+      buildAndRegisterPipelineStateForPluginID:@"KKMiniViewerMotionBlur"
+                                    registryID:dest.device.registryID
+                                   pixelFormat:dest.pixelFormat
+                                      bundleID:[NSBundle bundleForClass:[KKMiniViewerRenderer class]]
+                                                   .bundleIdentifier
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKMotionBlurAccumulateFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
 }
 
 - (BOOL)_labelSuppressed:(NSString *)label {

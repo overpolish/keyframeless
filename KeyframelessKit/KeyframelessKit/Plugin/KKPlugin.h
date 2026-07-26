@@ -72,6 +72,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// helper (see KKPlugin+MiniViewerFeed); recreated when the path changes.
 @property(nonatomic, strong, nullable) KKMiniViewerFeed *miniViewerFeed;
 @property(nonatomic, copy, nullable) NSString *miniViewerFeedPath;
+/// Smoothed lead of the render stream over the playhead, in clip fractions,
+/// maintained by the feed helper. < 0 until a first sample lands.
+///
+/// The raw playhead sample is far COARSER than the frame tags (measured: ~15Hz
+/// against a 60Hz tag stream, because the poller is a main-queue timer in a
+/// process that is busy rendering), so subtracting it directly quantised the
+/// animation into 4-frame steps. The lead itself is near-constant, so smoothing
+/// it and subtracting from the per-frame tag keeps 60Hz smoothness AND
+/// playhead-correct timing.
+@property(atomic) double miniViewerPlayheadLead;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 

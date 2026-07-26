@@ -132,6 +132,10 @@ NS_ASSUME_NONNULL_BEGIN
   // recent (a scroll/pinch never targets a handle), so a dense path doesn't pay
   // ~35ms of hit-testing per scroll event - that was the real pan throttle.
   NSTimeInterval _lastPanZoomTime;
+  // Playhead fraction from the feed descriptor, < 0 when the publisher had no
+  // fresh sample. Live playback evaluates the effect here instead of at the
+  // frame's own tag (FCP renders a constant ~0.27s ahead of the playhead).
+  double _feedPlayheadFrac;
 }
 - (CGRect)contentRectInViewPoints;
 - (CGSize)sourceMediaSize;

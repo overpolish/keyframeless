@@ -81,6 +81,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// need. Ignored once real source slots are published (they carry their own).
 @property(nonatomic) CGSize mediaSize;
 
+/// Live playhead fraction (0..1) at publish time, or < 0 when unknown / not
+/// playing. Published as `playheadFrac` in the descriptor.
+///
+/// FCP renders a CONSTANT ~0.27s (16-20 frames at 60fps) ahead of the playhead,
+/// so a slot's own `tag` - correct for its pixels - is that far ahead of where
+/// the viewer actually is, and an animation previewed at the tag visibly starts
+/// early. Truly delaying the frames would mean buffering ~20 surfaces (~9MB
+/// each), so instead a live-playback consumer evaluates the EFFECT at this
+/// fraction while still drawing the delivered pixels. Measured, not assumed.
+@property(nonatomic) double playheadFrac;
+
 /// Largest source frame size seen by the publish gate, for a FILTER path. FCP
 /// re-runs the same instance at a tiny project-library / browser-thumbnail size
 /// (~112x64, ~same aspect as the timeline), which the aspect gate can't catch;

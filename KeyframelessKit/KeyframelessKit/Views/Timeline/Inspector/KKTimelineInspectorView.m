@@ -445,6 +445,9 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 - (void)setMiniViewerDelegate:(id<KKMiniViewerDelegate>)delegate {
   _miniViewerDelegate = delegate;
   _basicView.miniViewerDelegate = delegate;
+  // The motion-blur row is usually seeded BEFORE the delegate is attached, so
+  // seed the fresh delegate rather than waiting for the next settings change.
+  [self pushMotionBlurToMiniViewer];
 }
 
 - (void)setMiniGrabsKeyFocusOnClick:(BOOL)grabs {
@@ -704,10 +707,31 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   }
 }
 
+// The preview has no timing API, so the shutter WINDOW is resolved here (where
+// the frame duration is known) rather than shipping the raw angle. Same KVC
+// approach as -_pushLinkTimeToMiniViewer: a delegate predating these keys is
+// simply skipped, so non-blurring plugins are unaffected.
+- (void)pushMotionBlurToMiniViewer {
+  NSObject *del = (NSObject *)_miniViewerDelegate;
+  if (!del)
+    return;
+  double shutterSec = 0.0;
+  if (_frameDurationSeconds > 0.0 && _mbShutterAngle > 0.0)
+    shutterSec = (_mbShutterAngle / 360.0) * _frameDurationSeconds;
+  @try {
+    [del setValue:@(_mbCheckbox.isChecked) forKey:@"previewMotionBlurEnabled"];
+    [del setValue:@(shutterSec) forKey:@"previewMotionBlurShutterSeconds"];
+    [del setValue:@(_mbSamples) forKey:@"previewMotionBlurSamples"];
+    [del setValue:@(_mbTechnique) forKey:@"previewMotionBlurTechnique"];
+  } @catch (...) {
+  }
+}
+
 - (void)setFrameDurationSeconds:(double)seconds {
   _frameDurationSeconds = seconds;
   [_basicView setFrameDurationSeconds:seconds];
   [_detachedView setFrameDurationSeconds:seconds];
+  [self pushMotionBlurToMiniViewer]; // the shutter window depends on it
 }
 
 - (void)setPlayheadFraction:(double)frac {

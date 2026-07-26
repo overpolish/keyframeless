@@ -296,7 +296,8 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                  defaultTag:[self.renderCache
                                                 clipFractionAtSeconds:
                                                     CMTimeGetSeconds(
-                                                        renderTime)]];
+                                                        renderTime)]
+                                renderCache:self.renderCache];
   // The "To" well as a second feed texture, so the mini-viewer can preview a
   // two-texture (GL-transition) shader instead of falling through to
   // iChannel1's noise.

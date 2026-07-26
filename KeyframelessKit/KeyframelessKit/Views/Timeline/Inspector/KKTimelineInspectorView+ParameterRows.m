@@ -551,6 +551,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
 - (void)setMotionBlurEnabled:(BOOL)enabled {
   _mbCheckbox.isChecked = enabled;
   _mbSettingsButton.enabled = enabled;
+  [self pushMotionBlurToMiniViewer];
 }
 
 - (void)setMotionBlurShutterAngle:(double)shutterAngle
@@ -560,6 +561,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
   [_mbSettingsView applyShutterAngle:shutterAngle
                              samples:samples
                            technique:_mbTechnique];
+  [self pushMotionBlurToMiniViewer];
 }
 
 - (void)setMotionBlurTechnique:(KKMotionBlurTechnique)technique {
@@ -570,6 +572,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
   [_mbSettingsView applyShutterAngle:_mbShutterAngle
                              samples:_mbSamples
                            technique:_mbTechnique];
+  [self pushMotionBlurToMiniViewer];
 }
 
 - (void)_mbSettingsClicked:(id)sender {

@@ -99,6 +99,9 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   self = [super init];
   if (self) {
     _apiManager = apiManager;
+    // Sentinel for "never measured", so the first usable sample seeds the lead
+    // outright instead of the smoothing crawling up from a bogus zero.
+    _miniViewerPlayheadLead = -1.0;
     // Warm the parameter-link app-group container off-thread at process start,
     // so the first link resolve on the render thread doesn't stall on the ~1-2s
     // cold container lookup mid-frame. One call covers every plugin (each

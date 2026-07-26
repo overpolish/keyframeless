@@ -47,6 +47,16 @@ double KKProcessFrameDurationSeconds(void);
 /// "Maintain Timing" remap to anchor keyposes to absolute media time.
 @property(nonatomic) double sourceInSec;
 @property(nonatomic) double frameDurSec;
+/// Latest playhead sample, written by KKPlayheadPoller on MAIN and read from
+/// the RENDER threads by the mini-viewer feed gate. One writer, one reader,
+/// no set-then-read protocol between them - the reader only ever takes the
+/// most recent sample - so this is the "store the cached value" shape, not a
+/// shared transient flag. `atomic` (no `nonatomic`) so the accessors are safe
+/// to cross that boundary. `playheadSampleWall` is CACurrentMediaTime at the
+/// sample; <= 0 means never sampled, and a stale value disables the gate.
+@property(atomic) double playheadFrac;
+@property(atomic) double playheadSampleWall;
+@property(atomic) BOOL playheadPlaying;
 @property(nonatomic) double lastPushedClipDuration;
 @property(nonatomic) double lastPushedClipProjectStart;
 @property(nonatomic) BOOL loopEnabled;

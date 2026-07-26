@@ -73,6 +73,57 @@ NS_ASSUME_NONNULL_BEGIN
 /// local lane must read the bus, not the local value. Empty = legacy
 /// bare-label matching (pre-identity plugins).
 @property(nonatomic, copy, nullable) NSString *linkSelfUUID;
+
+/// Motion blur for the PREVIEW, mirroring the inspector's motion-blur row.
+///
+/// The preview re-renders the effect once per sample at a staggered
+/// `editFraction` across the shutter window and averages the results, which is
+/// the same sample-and-accumulate the render uses. Two deliberate differences:
+///
+/// - Fast (velocity-reconstruction) is used only when the subclass implements
+///   `encodeFastMotionBlurFromSource:...`; otherwise it falls back to
+///   accumulating, which is what a plugin with no analytic velocity (Mirage's
+///   arbitrary GLSL) must do.
+/// - There is no when-to-fire gate. The render skips quiet frames via
+///   `+[KKMotionBlur frameShouldBlurForMode:...]`; here a quiet frame's samples
+///   all land on the same values and average to the unblurred image anyway, so
+///   the gate would only save time, and the cost is already paid per preview
+///   frame.
+///
+/// `previewMotionBlurShutterSeconds` is the shutter window (shutterAngle/360 x frame
+/// duration) - the inspector computes it, since the preview has no timing API.
+/// Blur is skipped unless enabled, samples >= 2, shutter > 0 and
+/// `clipDurationSeconds` > 0 (the shutter has to become a clip fraction).
+@property(nonatomic) BOOL previewMotionBlurEnabled;
+@property(nonatomic) double previewMotionBlurShutterSeconds;
+@property(nonatomic) NSInteger previewMotionBlurSamples;
+/// 0 = Fast (velocity reconstruction), 1 = Accurate (accumulate). Matches
+/// KKMotionBlurTechnique; typed as NSInteger so the header stays free of the
+/// motion-blur enum.
+@property(nonatomic) NSInteger previewMotionBlurTechnique;
+
+/// Fast (velocity-reconstruction) blur, for a subclass that can emit a
+/// per-pixel velocity buffer. Cost is fixed in the tap count rather than
+/// proportional to the sample count, which is the whole point of Fast during
+/// playback.
+///
+/// `shutterFraction` is the shutter window expressed in clip fractions: the
+/// velocity is the displacement from `editFraction - shutterFraction` to
+/// `editFraction`, the same convention the render uses.
+///
+/// Return NO to decline (unsupported, or setup failed) and the base falls back
+/// to accumulating, so a subclass may implement this partially and still be
+/// correct. Default returns NO.
+- (BOOL)encodeFastMotionBlurFromSource:(id<MTLTexture>)source
+                                  into:(id<MTLTexture>)dest
+                       shutterFraction:(double)shutterFraction
+                         commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
+
+/// YES only while `encodeEffectFromSource:` is being called for a motion-blur
+/// sample. Subclasses use it to drop work whose result the averaging would
+/// destroy anyway - Mirage skips its 1080-tall grain-fidelity intermediate,
+/// which is what makes N samples affordable there.
+@property(nonatomic, readonly) BOOL previewMotionBlurSampling;
 /// Number of slots the canvas is currently iterating. KKMiniViewerView
 /// sets this before its per-slot processSourceTexture loop. Subclasses
 /// can use it to differentiate "single-slot, source is the pre-rendered

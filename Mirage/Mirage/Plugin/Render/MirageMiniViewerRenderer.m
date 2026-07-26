@@ -406,6 +406,14 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
 // into the small mini texture, so grain / dither / any resolution-dependent
 // effect looks like a proper minified copy of the FCP render.
 - (id<MTLTexture>)hiResTargetForDest:(id<MTLTexture>)dest {
+  // Motion blur re-renders this N times per preview frame, and at 1080 that
+  // made each sample as expensive as a full render tick. The intermediate only
+  // buys correct MINIFICATION of grain / dither, which the blur's averaging
+  // destroys anyway, so skip it while sampling. Mirage can't use the Fast
+  // (velocity) technique - an arbitrary GLSL shader has no analytic velocity -
+  // so the sample path has to be affordable on its own.
+  if (self.previewMotionBlurSampling)
+    return nil;
   NSUInteger dh = dest.height;
   const NSUInteger refH = 1080;
   if (dh == 0 || dh >= refH)
@@ -582,7 +590,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   // so accumulate / off / absent all keep iMotionBlur at 0 in both paths.
   if (MirageMotionBlurModeForSource(image) == MirageMotionBlurModeNative) {
     base.transition.y = self.motionBlurShutterFraction;
-    base.transition.z = (float)self.motionBlurSamples;
+    base.transition.z = (float)self.previewMotionBlurSamples;
   }
   // A shader's `// #color` properties -> the colour pool (bound after the fixed
   // uniforms, same as the FCP render).

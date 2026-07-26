@@ -116,10 +116,22 @@
         // footage the feed just delivered rather than trailing a
         // separately-polled playhead. The multi-slot fan-out already keys off
         // the same tag.
+        // During live playback prefer the publisher's PLAYHEAD fraction over the
+        // frame's own tag. The tag is correct for its pixels, but FCP renders a
+        // constant ~0.27s (16-20 frames at 60fps) ahead of the playhead, so
+        // evaluating at the tag ran the animation that far early - a keypose
+        // visibly started part-way in. Buffering the pixels to delay them
+        // properly would cost ~20 surfaces at ~9MB, so the delivered frame is
+        // drawn as-is and only the effect is pulled back into sync with the
+        // viewer. Falls back to the tag when the publisher had no fresh sample
+        // (< 0), which is also the whole multi-slot path.
+        double evalFrac = slot.tag;
+        if (liveOverride && _feedPlayheadFrac >= 0.0)
+          evalFrac = _feedPlayheadFrac;
         @try {
-          [(NSObject *)del setValue:@(slot.tag) forKey:@"editFraction"];
+          [(NSObject *)del setValue:@(evalFrac) forKey:@"editFraction"];
           if (savedLink)
-            [(NSObject *)del setValue:@(linkClipStart + slot.tag * linkClipDur)
+            [(NSObject *)del setValue:@(linkClipStart + evalFrac * linkClipDur)
                                forKey:@"linkTimelineSec"];
         } @catch (...) {
         }

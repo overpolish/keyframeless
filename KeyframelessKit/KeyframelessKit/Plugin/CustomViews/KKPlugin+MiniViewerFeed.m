@@ -5,9 +5,12 @@
 
 #import "KKPlugin+MiniViewerFeed.h"
 
+#import "KKLog.h"
 #import "KKMetalDeviceCache.h"
 #import "KKMiniViewerFeed.h"
+#import "KKPluginHost.h" // KKRenderCache
 #import <FxPlug/FxPlugSDK.h>
+#import <QuartzCore/QuartzCore.h>
 
 @implementation KKPlugin (MiniViewerFeed)
 
@@ -20,7 +23,8 @@
                              (NSArray<NSNumber *> *)boundaryReqFracs
                           multiSlotActive:(BOOL)multiSlotActive
                         changesOutputSize:(BOOL)changesOutputSize
-                               defaultTag:(double)defaultTag {
+                               defaultTag:(double)defaultTag
+                              renderCache:(KKRenderCache *)renderCache {
   if (sourceImages.count == 0 || !destinationImage.ioSurface)
     return;
 
@@ -113,6 +117,57 @@
       if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05)
         continue;
     }
+    double tag = (slotIdx < boundaryReqFracs.count)
+                     ? boundaryReqFracs[slotIdx].doubleValue
+                     : defaultTag;
+    // Publish where the PLAYHEAD is, alongside the frame's own tag. FCP renders
+    // a constant ~0.27s (16-20 frames at 60fps) ahead of the playhead, so a
+    // live-playback consumer that evaluates the effect at `tag` runs the whole
+    // animation that far early - visible as a keypose starting part-way in.
+    // Delaying the pixels would need ~20 buffered surfaces; instead the consumer
+    // draws the delivered frame but evaluates the EFFECT here. Stale sample or
+    // not playing publishes -1 = unknown, and the consumer falls back to `tag`.
+    //
+    // Gating the publish on this instead was tried and reverted: a CONSTANT lead
+    // means every frame is early, so holding frames without a buffer is just
+    // dropping them, and the preview fell to the escape-hatch cadence.
+    if (slotIdx == 0 && renderCache) {
+      static const double kSampleFreshSec = 0.30;
+      // The raw sample updates at ~15Hz against a 60Hz tag stream, so publishing
+      // it directly stepped the animation 4 frames at a time. Publish
+      // `tag - lead` instead: the lead is near-constant, so a smoothed estimate
+      // of it subtracted from the smooth per-frame tag gives both the right
+      // moment and a per-frame-smooth fraction.
+      static const double kLeadSmoothing = 0.05; // ~20 samples to settle
+      double nowMach = CACurrentMediaTime();
+      double sampleWall = renderCache.playheadSampleWall;
+      BOOL usable = renderCache.playheadPlaying && sampleWall > 0.0 &&
+                    (nowMach - sampleWall) < kSampleFreshSec;
+      // Only REFINE the lead on a usable sample, but keep applying the last one
+      // regardless. The poller doesn't report `playing` until ~0.2s after
+      // playback actually starts, and discarding the lead over that gap made the
+      // preview fall back to the raw (0.25s-early) tag and then snap back once
+      // it re-seeded - visible as a flicker of the wrong animation phase at the
+      // start. The lead is a property of FCP's render pipeline, not of this
+      // moment, so it carries across runs. Safe to publish while stopped too:
+      // the consumer only reads it while live playback is active.
+      if (usable) {
+        double rawLead = tag - renderCache.playheadFrac;
+        // A scrub or loop-wrap can momentarily make this meaningless; a negative
+        // or absurd lead contributes nothing rather than poisoning the average.
+        if (rawLead < 0.0 || rawLead > 0.5)
+          rawLead = 0.0;
+        double lead = self.miniViewerPlayheadLead;
+        lead = (lead < 0.0) ? rawLead
+                            : lead + kLeadSmoothing * (rawLead - lead);
+        self.miniViewerPlayheadLead = lead;
+      }
+      double lead = self.miniViewerPlayheadLead;
+      // Never measured (first playback of this instance) - fall back to the tag.
+      self.miniViewerFeed.playheadFrac =
+          (lead < 0.0) ? -1.0 : MAX(0.0, MIN(1.0, tag - lead));
+    }
+
     KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
     MTLPixelFormat pf =
         [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
@@ -127,9 +182,6 @@
       [cache returnCommandQueueToCache:q];
       continue;
     }
-    double tag = (slotIdx < boundaryReqFracs.count)
-                     ? boundaryReqFracs[slotIdx].doubleValue
-                     : defaultTag;
     [self.miniViewerFeed updateSlot:slotIdx
                   withSourceTexture:srcTex
                                 tag:tag
