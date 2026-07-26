@@ -243,7 +243,56 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
     @"Buffer D" : MirageFrameBufferDSource(),
   };
   frame.thumbnail = sBuiltinThumbnails[@"Frame"];
-  return @[ plasma, frame ];
+  // Card values: Frame's border, glow and bloom all default to 0, so a
+  // defaults bake shows the source frame with slightly rounded corners and
+  // nothing else. Pixel sizes are for the 320x180 bake.
+  frame.thumbnailValues = @{
+    @"uSize" : @[ @56 ], // room for the glow to spread before the card edge
+    @"uRadius" : @[ @30 ],
+    // Pixels are measured against the 1080-tall REFERENCE render, not the
+    // 320x180 card: ~30px reads as a 5px border once downscaled.
+    @"uBorderWidth" : @[ @30 ],
+    @"uBorderColor" : @[ @1.0, @1.0, @1.0, @1.0 ], // white, not glow-tinted
+    @"uGlowSize" : @[ @260 ],
+    // Glow Color's ALPHA is the strength, and its default #FFFFFFB3 caps the
+    // whole glow at 70% - full alpha is what makes it read on the card at all.
+    @"uGlowColor" : @[ @1.0, @1.0, @1.0, @1.0 ],
+    @"uGlowPickup" : @[ @60 ], // drifts toward the shot's colour, still bright
+    // Feather is a GAMMA on the blurred silhouette (mix(3.0, 0.5, feather)),
+    // so it runs the opposite way to intuition: LOW feather = high exponent =
+    // a dim glow crushed against the shape. The silhouette peaks near 0.5
+    // alpha, so 35% gave 0.5^2.13 = 0.23 and read as barely there; 90% gives
+    // 0.5^0.75 = 0.59.
+    @"uGlowFeather" : @[ @90 ],
+    @"uBloom" : @[ @25 ],
+  };
+
+  // The former standalone MagicMove plugin. `layout` like Frame: it reads the
+  // clip but what it IS is an `#alpha`-masked placement of one region of the
+  // frame, and stacking instances on Final Cut's lanes is the point.
+  MirageCatalogEntry *magicMove = [MirageCatalogEntry new];
+  magicMove.entryID = @"builtin.magicmove";
+  magicMove.name = @"Magic Move";
+  magicMove.author = @"";
+  magicMove.category = kMirageCategoryLayout;
+  magicMove.version = 1;
+  magicMove.folderPath = @"";
+  magicMove.builtin = YES;
+  magicMove.sections = @{
+    @"Image" : MirageMagicMoveShaderSource(),
+    @"Buffer B" : MirageMagicMoveBufferBSource(),
+  };
+  magicMove.thumbnail = sBuiltinThumbnails[@"Magic Move"];
+  // Card values: Magic Move's defaults are an IDENTITY transform, which bakes
+  // a card identical to the untouched preview photo. Scale it down and tip it
+  // so the card reads as a transform.
+  magicMove.thumbnailValues = @{
+    @"uScale" : @[ @62, @62 ],
+    // X/Y tip the picture in perspective, Z spins it in plane - all three, so
+    // the card shows the 3D transform rather than a flat rotation.
+    @"uRotation" : @[ @14, @-22, @-9 ],
+  };
+  return @[ plasma, frame, magicMove ];
 }
 
 - (void)deleteEntryID:(NSString *)entryID {

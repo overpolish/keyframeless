@@ -89,16 +89,19 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   return g ?: srcTex;
 }
 
-- (BOOL)renderCustomMultipassWithUniforms:(KKGLSLUniforms)u
-                                colorPool:(const simd_float4 *)colorPool
-                                poolCount:(int)poolCount
-                              imageSource:(NSString *)imageSource
-                            bufferSources:(NSArray<NSString *> *)bufferSources
-                               frameIndex:(NSInteger)frameIndex
-                               dtPerFrame:(float)dtPerFrame
-                         destinationImage:(FxImageTile *)destinationImage
-                             sourceImages:
-                                 (NSArray<FxImageTile *> *)sourceImages {
+- (BOOL)
+    renderCustomMultipassWithUniforms:(KKGLSLUniforms)u
+                            colorPool:(const simd_float4 *)colorPool
+                            poolCount:(int)poolCount
+                          imageSource:(NSString *)imageSource
+                        bufferSources:(NSArray<NSString *> *)bufferSources
+                           frameIndex:(NSInteger)frameIndex
+                           dtPerFrame:(float)dtPerFrame
+                              mbState:(KKMotionBlurState)mbState
+                           renderTime:(CMTime)renderTime
+                       sampleUniforms:(MirageSampleUniformsBlock)sampleUniforms
+                     destinationImage:(FxImageTile *)destinationImage
+                         sourceImages:(NSArray<FxImageTile *> *)sourceImages {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   uint64_t registryID = destinationImage.deviceRegistryID;
   id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
@@ -281,6 +284,66 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
       imgU.chanRes[c] =
           (simd_float4){(float)ct.width, (float)ct.height, 1.0f, 0.0f};
   }
+  // Accumulate motion blur over a multi-pass chain. Only the IMAGE pass re-runs
+  // per sub-sample; the buffers above were encoded ONCE and every sample reads
+  // the same textures. That is sound precisely because this chain has no
+  // feedback: a non-feedback buffer is a pure function of the current uniforms,
+  // identical at every sub-sample, so re-simulating it N times would compute
+  // the same pixels N times. A FEEDBACK chain is a function of history and
+  // cannot be shared like this - hence the guard.
+  BOOL mbAccumulate =
+      mbState.enabled && sampleUniforms != nil && !needsFeedback;
+  if (mbAccumulate) {
+    BOOL blurred = [KKMotionBlur
+        applyToDestinationImage:destinationImage
+                   sourceImages:sourceImages
+                          state:mbState
+                     renderTime:renderTime
+                    renderBlock:^BOOL(int sampleIndex,
+                                      id<MTLTexture> sampleDest,
+                                      id<MTLCommandBuffer> commandBuffer,
+                                      NSArray<id<MTLTexture>> *inputTextures) {
+                      KKGLSLUniforms su = imgU;
+                      const simd_float4 *sPool = colorPool;
+                      int sCount = poolCount;
+                      sampleUniforms(sampleIndex, &su, &sPool, &sCount);
+                      // The buffer chain's own channel resolutions still apply:
+                      // only the animation clock and pool differ per sample.
+                      for (int c = 0; c < 4; c++)
+                        su.chanRes[c] = imgU.chanRes[c];
+                      return [self
+                          encodeFullScreenQuadIntoTexture:sampleDest
+                                         destinationImage:destinationImage
+                                            commandBuffer:commandBuffer
+                                           sourceTextures:inputTextures
+                                                 commands:^(
+                                                     id<MTLRenderCommandEncoder>
+                                                         enc,
+                                                     NSArray<id<MTLTexture>>
+                                                         *inputs) {
+                                                   [enc setRenderPipelineState:
+                                                            imagePS];
+                                                   KKBindGLSLUniforms(
+                                                       enc, &su, sPool, sCount);
+                                                   KKBindCustomChannelTextures(
+                                                       enc, imgTR, imgCh,
+                                                       srcSampler, noiseTex,
+                                                       chSampler);
+                                                   [enc
+                                                       drawPrimitives:
+                                                           MTLPrimitiveTypeTriangleStrip
+                                                          vertexStart:0
+                                                          vertexCount:4];
+                                                 }];
+                    }];
+    if (blurred) {
+      if (ckptQueue)
+        [cache returnCommandQueueToCache:ckptQueue];
+      return YES;
+    }
+    // Fall through to a single pass on any bail.
+  }
+
   BOOL ok = [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages

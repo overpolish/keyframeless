@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png" />
     <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
-    <meta name="kk-version" content="2.0.2" />
+    <meta name="kk-version" content="3.0.0" />
   </head>
   <body>
     <main class="wrap">
@@ -25,8 +25,14 @@
       </header>
       <section class="release">
         <div class="release-head">
-          <h2>2.0.2</h2>
+          <h2>3.0.0</h2>
           <span class="date">TBD</span>
+        </div>
+        <div class="group">
+          <span class="tag feature">New</span>
+          <ul class="bullets">
+            <li>Expressions: drive any property from a small formula instead of a plain value or keyframes. Right-click a property's label in the Constants or keypose editor and choose Add Expression to open an inline editor under it. Build on the property's own animation with <code>value</code>, move it over time with <code>t</code> (or <code>progress</code> and <code>ct</code>, which are relative to the clip), loop it smoothly through the same easings the timeline uses, and add controlled randomness with <code>random</code> and <code>noise</code>. Reference another clip's parameters with the insert button to make one property follow another, and drive the parts of a Position or Size independently with <code>value.x</code> and <code>vec2(...)</code>. The editor colour-highlights the formula, flags mistakes, and previews the live result with a sparkline as you type</li>
+          </ul>
         </div>
         <div class="group">
           <span class="tag improvement">Improved</span>
@@ -41,6 +47,9 @@
         <div class="group">
           <span class="tag fix">Fixed</span>
           <ul class="bullets">
+            <li>Fixed an on-screen control in an editor's preview sometimes sticking to the cursor when a keypose editor was open over the Constants panel: the drag could stop responding partway through, and the undo that followed could crash Final Cut</li>
+            <li>Fixed the inspector using a whole CPU core while simply sitting open, which made the interface sluggish</li>
+            <li>Fixed the layers panel occasionally not appearing beside an editor the first time one was opened after launching Final Cut, where it took closing and reopening the editor to bring it back</li>
             <li>Fixed a crash that could occur when opening a keypose editor from the Constants panel</li>
             <li>The inspector's option menus (on-screen controls, parameter order, and so on) now close when you click anywhere off them</li>
             <li>Fixed hidden on-screen controls not reappearing when holding Option in Motion</li>

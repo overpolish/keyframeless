@@ -6,6 +6,7 @@
 #import "KKCodeEditorSubviews.h"
 #import "KKFieldEditorSupport.h"
 #import "KKGLSLSyntax.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
 #import "NSColor+KKColors.h"
 #import <QuartzCore/QuartzCore.h>
 
@@ -334,6 +335,8 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
 
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  if (KKTrackingAreaMatches(_track, self.bounds))
+    return;
   if (_track)
     [self removeTrackingArea:_track];
   _track = [[NSTrackingArea alloc]

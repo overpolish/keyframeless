@@ -40,8 +40,11 @@ typedef struct KKGLSLUniforms {
 /// Blur popover (enabled / shutter / samples) is unchanged; this only decides
 /// who consumes those settings.
 typedef enum MirageMotionBlurMode {
-  /// Plugin re-renders N sub-frame samples and averages them (single-pass only;
-  /// a multi-pass shader silently renders once). The default.
+  /// Plugin re-renders N sub-frame samples and averages them. The default.
+  /// Works multi-pass too: a non-feedback buffer chain is encoded ONCE and
+  /// every sample re-runs only the image pass. A FEEDBACK chain cannot be
+  /// shared that way (its state is a function of history) and is rejected by
+  /// validation.
   MirageMotionBlurModeAccumulate = 0,
   /// The shader owns its own blur (feedback trails / an internal loop). The
   /// plugin renders once and exposes the popover settings as iMotionBlur (0..1
@@ -111,6 +114,13 @@ KKGLSLTranspileResult *KKTranspileGLSL(NSString *userGLSL);
 // The `// #motionblur <accumulate|native|off>` mode a source declares (default
 // accumulate when the directive is absent or unrecognized).
 MirageMotionBlurMode MirageMotionBlurModeForSource(NSString *userGLSL);
+
+// Whether the source asks for motion blur to start ENABLED - a bare `on` after
+// the mode word (`// #motionblur on`, `// #motionblur native on`). Applied when
+// the shader is applied from the browser, not on every code commit, so a user
+// who turns it off keeps it off. NO for a source with no `#motionblur` line:
+// blur costs N renders per frame and most shaders should not opt every user in.
+BOOL MirageMotionBlurDefaultsOnForSource(NSString *userGLSL);
 
 // Bind the fixed KKGLSLUniforms at buffer(0), followed by a shader's `//
 // #color` property pool (the std140 tail: `poolCount` vec4s) as one contiguous

@@ -31,6 +31,11 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
     memset(b, 0, sizeof(*b));
     MirageOSCSetField(b->name, sizeof(b->name), nm);
     MirageOSCSetField(b->binds, sizeof(b->binds), nm);
+    // Glyph word off the directive. Set for every primitive rather than just
+    // `point`, so the renderers keep deciding which styles mean anything to
+    // them - the sugar's job is only to carry the word through.
+    if (p->oscStyle[0])
+      MirageOSCSetField(b->style, sizeof(b->style), @(p->oscStyle));
     b->skipSnapping = p->skipSnapping; // `skipsnapping` on the sugar directive
     NSString *center =
         strlen(p->linkName)
@@ -75,8 +80,16 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
     // The value <-> geometry bijection in EXPR units (a percent lane's 0..100
     // arrives /100), through the shared radius-ring curve.
     double div = p->isPercent ? 100.0 : 1.0;
-    double mn = p->fmin / div;
-    double span = (p->fmax - p->fmin) / div;
+    // A #multi bounded the braced way (`min={1,1} max={800,800}`) never sets
+    // the SCALAR fmin/fmax - the scalar regex can't match `min={`, so they keep
+    // their defaults (0, and 100 for a percent). Reading them here collapsed
+    // span to 1.0, so the control drew at ringExtent(value) instead of
+    // ringExtent((value - min) / span): Magic Move's Scale filled the frame at
+    // 100%. Component 0 is the reference axis (a linked box holds the ratio).
+    double lo = p->isMulti ? p->mmin[0] : p->fmin;
+    double hi = p->isMulti ? p->mmax[0] : p->fmax;
+    double mn = lo / div;
+    double span = (hi - lo) / div;
     if (span <= 0)
       span = 1.0;
     b->linked = p->aspectLinked != 0;
@@ -120,15 +133,38 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
                       @"max(c - rect.min, rect.max - c) * "
                       @"vec2(max(1.0, aspect), max(1.0, 1.0 / aspect))");
     li++;
+    // `anchor=`: grow FROM the anchor instead of symmetrically about `c`. The
+    // anchor's normalised position inside the content (-1..1 per axis, 0 =
+    // centred) offsets the box by -ext * af, so the anchor side stays put and
+    // the opposite one grows - the same geometry KKScaleHandlePositions uses
+    // for the transform gizmo. The inverse divides by (1 + |af|) because the
+    // far side is that much further from the anchor than a centred box's edge.
+    BOOL anchored = p->anchorName[0] != 0;
+    if (anchored) {
+      MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"af");
+      MirageOSCSetField(
+          b->localExprs[li], sizeof(b->localExprs[li]),
+          [NSString
+              stringWithFormat:@"clamp((%s - vec2(0.5)) * 2.0, -1.0, 1.0)",
+                               p->anchorName]);
+      li++;
+      MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"bc");
+      MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]),
+                        @"c - ext * af");
+      li++;
+    }
     b->localCount = li;
     MirageOSCSetField(b->forward, sizeof(b->forward),
-                      @"rect(c - ext, c + ext)");
+                      anchored ? @"rect(bc - ext, bc + ext)"
+                               : @"rect(c - ext, c + ext)");
     BOOL vec = p->isMulti && p->fieldCount != 1;
-    MirageOSCSetField(
-        b->inverse, sizeof(b->inverse),
-        [NSString stringWithFormat:vec ? @"%g + ringNorm(d) * %g"
-                                       : @"%g + ringNorm(max(d.x, d.y)) * %g",
-                                   mn, span]);
+    NSString *dExpr = anchored ? @"(d / (1.0 + abs(af)))" : @"d";
+    NSString *inverse =
+        vec ? [NSString
+                  stringWithFormat:@"%g + ringNorm(%@) * %g", mn, dExpr, span]
+            : [NSString stringWithFormat:@"%g + ringNorm(max(%@.x, %@.y)) * %g",
+                                         mn, dExpr, dExpr, span];
+    MirageOSCSetField(b->inverse, sizeof(b->inverse), inverse);
     n++;
   }
   return n;
@@ -356,10 +392,11 @@ static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
       float c[4] = {0, 0, 0, 0};
       for (int k = 0; k < p->fieldCount && k < 4; k++)
         c[k] = (float)(v.count > k ? v[k].doubleValue : p->mdef[k]);
-      if (MirageOSCBlockIsRotate([self oscBlockForUniform:p->name]))
-        for (int k = 0; k < 4; k++)
-          c[k] =
-              roundf(c[k]); // rotation is whole degrees, even from an OSC drag
+      // Deliberately NOT rounded, for rotation or anything else: this value is
+      // resolved per RENDERED FRAME, so quantizing here strands an animated
+      // rotation on whole degrees - a slow spin then only moves every Nth
+      // frame and reads as stutter. Whole degrees belong in the inspector
+      // (`integerValued` on the lane), not in what reaches the shader.
       if (p->isPercent)
         for (int k = 0; k < 4; k++)
           c[k] /= 100.0f; // lane is 0..100 %, shader wants 0..1
@@ -376,8 +413,6 @@ static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
     case MirageScalarKindChoice: {
       double val = v.count ? v[0].doubleValue
                            : (p->isChoice ? (double)p->cdefault : p->fdefault);
-      if (p->isAngle)
-        val = round(val); // angles are whole degrees, even from an OSC drag
       if (p->isPercent)
         val /= 100.0; // lane is 0..100 %, shader wants 0..1
       pool[p->poolOffset] = (vector_float4){(float)val, 0, 0, 0};

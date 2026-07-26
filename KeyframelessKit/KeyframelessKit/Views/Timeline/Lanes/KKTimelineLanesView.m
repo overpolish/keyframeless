@@ -14,6 +14,7 @@
 #import "KKTimelineBasicView.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKTimingEvaluation.h" // KKLaneClampToComponentRange
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKLog.h>
@@ -692,11 +693,51 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       // template, not user-editable). Re-assert them so lanes from older
       // blobs that didn't serialize these still render correctly.
       KKLane *fixed = [lanes[presentIdx] copy];
+      // Capture the OLD shape before the template overwrites the metadata:
+      // arity comes from the stored values, which kkApplyTemplateCanonicalFrom
+      // does not touch, but valueType it does.
+      KKLaneValueType oldType = fixed.valueType;
+      NSUInteger oldArity = fixed.keyposes.firstObject.values.count;
       // One call re-asserts every template-canonical + picker-metadata field
       // (value type, bounds, labels/colors, aspect linkability, integer
       // display, code-lane static config...) - the descriptor table's
       // TemplateCanonical role IS the definition of "not user state".
       [fixed kkApplyTemplateCanonicalFrom:tmpl];
+      // A lane is matched by KEY, and in Mirage the key is the shader's
+      // uniform name - so switching template can land a DIFFERENT control on
+      // the same name (Plasma's `Scale`, a 1-component float, onto Magic
+      // Move's `Scale`, a vec2). The metadata above is now the new template's
+      // while the keyposes are still the old control's, which is how a vec2
+      // Scale ended up reading "100%" with an empty second field.
+      //
+      // Reset only when the SHAPE changed - component count or value type.
+      // Anything else (a widened max, renamed labels, new units) keeps the
+      // user's animation: editing your own shader's `max=` must not silently
+      // destroy its keyframes. Values that no longer fit the new bounds are
+      // clamped rather than dropped.
+      NSUInteger newArity = tmpl.keyposes.firstObject.values.count;
+      BOOL shapeChanged =
+          (oldType != tmpl.valueType) ||
+          (oldArity > 0 && newArity > 0 && oldArity != newArity);
+      if (shapeChanged && tmpl.keyposes.count) {
+        fixed.keyposes = [[NSArray alloc] initWithArray:tmpl.keyposes
+                                              copyItems:YES];
+      } else if (fixed.keyposes.count) {
+        NSMutableArray<KKKeyPose *> *clamped =
+            [NSMutableArray arrayWithCapacity:fixed.keyposes.count];
+        for (KKKeyPose *kp in fixed.keyposes) {
+          NSArray<NSNumber *> *v =
+              KKLaneClampToComponentRange(fixed, kp.values);
+          if (v == kp.values || [v isEqualToArray:kp.values]) {
+            [clamped addObject:kp];
+            continue;
+          }
+          KKKeyPose *fixedKp = [kp copy];
+          fixedKp.values = v;
+          [clamped addObject:fixedKp];
+        }
+        fixed.keyposes = clamped;
+      }
       // codeString is user data (a code lane's text), so keep the saved value;
       // only fall back to the template default when it's missing (older blob).
       if (!fixed.codeString.length)
@@ -838,6 +879,14 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     KKLane *lane = [tlLane copy];
     [lane kkApplyPickerMetadataFrom:tmpl];
     lane.aspectLinkable = tmpl.aspectLinkable;
+    // ...but a lane that was NOT linkable before has no user state to keep: it
+    // never had the toggle, so its stored NO is a leftover from whatever the
+    // key used to mean. Lanes are reused by key, so a shader edit that turns a
+    // float `uScale` into a vec2 lands here and would otherwise start unlocked
+    // however the template asks. Only re-inject in that case - a lane that was
+    // already linkable keeps whatever the user set.
+    if (tmpl.aspectLinkable && !tlLane.aspectLinkable)
+      lane.aspectLinked = tmpl.aspectLinked;
     lane.autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
     lane.integerValued = tmpl.integerValued;
     if (tmpl.componentMin.count)

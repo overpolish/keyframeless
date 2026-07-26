@@ -49,24 +49,24 @@ Put the block anywhere in the source; it doesn't have to sit next to the uniform
 
 ## Fields
 
-| Field          | Applies to           | Meaning                                                                                    |
-| -------------- | -------------------- | ------------------------------------------------------------------------------------------ |
-| `primitive`    | all                  | `point` / `position` / `ring` / `box` / `rotate`. Required.                                |
-| `binds`        | all                  | The uniform (lane) the control edits. Required.                                            |
-| `style`        | point                | Glyph look: `dot` / `square` / `hollow` / `arc`. Default `dot`.                            |
-| `cursor`       | all                  | Hover cursor: `move` / `crosshair` / `pointing` / `resize-h` / `resize-v` / `resize-diag`. |
-| `skipsnapping` | point                | Bare flag (or `= true`) opting the handle out of the default Cmd-held snap (see below).    |
-| `toPos`        | point                | Forward: value -> handle position (object space).                                          |
-| `fromPos`      | point                | Inverse: dragged position (`pos`) -> value. Optional (see below).                          |
-| `toR`          | ring                 | Forward: value -> radius/radii, in min-side fractions.                                     |
-| `fromR`        | ring                 | Inverse: dragged radius (`r`) -> value. Required for a ring.                               |
-| `toRect`       | box                  | Forward: value -> rectangle (`rect(min, max)`).                                            |
-| `fromRect`     | box                  | Inverse: dragged rectangle (`rect`) -> value. Required for a box.                          |
-| `center`       | ring / rotate        | Object-space placement. A bare point-uniform name follows it live. Default = frame centre. |
-| `axes`         | rotate               | Enabled axis subset, e.g. `z` / `y x` / `z x y`. Default `z`.                              |
-| `linked`       | ring / box (2-field) | `true` aspect-links the two components (Shift inverts during a drag).                      |
-| `body`         | box                  | `none` disables the interior body-move (a centred box has no position to write).           |
-| any other      | all                  | A **local variable** (see Locals).                                                         |
+| Field          | Applies to           | Meaning                                                                                                                         |
+| -------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `primitive`    | all                  | `point` / `position` / `ring` / `box` / `rotate`. Required.                                                                     |
+| `binds`        | all                  | The uniform (lane) the control edits. Required.                                                                                 |
+| `style`        | point                | Glyph look: `dot` / `square` / `hollow` / `arc`. Default `dot`. Also available as a bare word on `osc=` sugar - see directives. |
+| `cursor`       | all                  | Hover cursor: `move` / `crosshair` / `pointing` / `resize-h` / `resize-v` / `resize-diag`.                                      |
+| `skipsnapping` | point                | Bare flag (or `= true`) opting the handle out of the default Cmd-held snap (see below).                                         |
+| `toPos`        | point                | Forward: value -> handle position (object space).                                                                               |
+| `fromPos`      | point                | Inverse: dragged position (`pos`) -> value. Optional (see below).                                                               |
+| `toR`          | ring                 | Forward: value -> radius/radii, in min-side fractions.                                                                          |
+| `fromR`        | ring                 | Inverse: dragged radius (`r`) -> value. Required for a ring.                                                                    |
+| `toRect`       | box                  | Forward: value -> rectangle (`rect(min, max)`).                                                                                 |
+| `fromRect`     | box                  | Inverse: dragged rectangle (`rect`) -> value. Required for a box.                                                               |
+| `center`       | ring / rotate        | Object-space placement. A bare point-uniform name follows it live. Default = frame centre.                                      |
+| `axes`         | rotate               | Enabled axis subset, e.g. `z` / `y x` / `z x y`. Default `z`.                                                                   |
+| `linked`       | ring / box (2-field) | `true` aspect-links the two components (Shift inverts during a drag).                                                           |
+| `body`         | box                  | `none` disables the interior body-move (a centred box has no position to write).                                                |
+| any other      | all                  | A **local variable** (see Locals).                                                                                              |
 
 Forward and inverse names are per-primitive but interchangeable in the parser - `toPos`/`toR`/`toRect` all set the forward; `fromPos`/`fromR`/`fromRect` all set the inverse. Use the one that reads right for the primitive.
 

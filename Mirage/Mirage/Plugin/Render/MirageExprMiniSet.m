@@ -6,6 +6,7 @@
 #import "MirageExprMiniSet.h"
 
 #import "MirageOSCBlockRuntime.h"
+#import <KeyframelessKit/KKOSCGlyphStyle.h> // KKOSCMiniGlyphRatio
 #import <KeyframelessKit/KKResizeCursor.h>  // KKVisibilityShow/HideCursor
 #import <KeyframelessKit/KKSnapEngine.h>    // Cmd-held point snapping (parity)
 #import <KeyframelessKit/KeyframelessKit.h> // KKLane
@@ -167,8 +168,13 @@ static BOOL MirageExprMiniIsGlyph(MirageOSCBlockRuntime *b) {
 
 // Grab radius (overlay px) matching the viewer: the hollow ring is a touch
 // larger than a dot.
+// Grab radius, in mini points. The VIEWER grabs a glyph at ~1.1x its drawn
+// outer (9px drawn, 10px grab), and mini glyphs draw at KKOSCMiniGlyphRatio of
+// that - so the grab has to scale with them or it reaches twice past what is on
+// screen, and a glyph swallows whatever sits around it.
 static CGFloat MirageExprMiniGrab(MirageOSCBlockRuntime *b) {
-  return [b.styleName isEqualToString:@"hollow"] ? 12.0 : 10.0;
+  CGFloat viewerGrab = [b.styleName isEqualToString:@"hollow"] ? 12.0 : 10.0;
+  return viewerGrab * KKOSCMiniGlyphRatio;
 }
 
 static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
@@ -374,6 +380,17 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
   return [self _runtimeAtPoint:p contentRect:cr] != nil;
+}
+
+- (BOOL)glyphHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
+  for (MirageOSCBlockRuntime *b in _runtimes) {
+    if (!MirageExprMiniIsGlyph(b) || ![self _activeRuntime:b forContentRect:cr])
+      continue;
+    CGPoint c = [self _centerForRuntime:b contentRect:cr];
+    if (hypot(p.x - c.x, p.y - c.y) <= MirageExprMiniGrab(b))
+      return YES;
+  }
+  return NO;
 }
 
 // The lane's persisted aspect lock when it carries aspect metadata, else the

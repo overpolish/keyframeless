@@ -4621,44 +4621,44 @@
         }
       }
     },
-    "Multi-pass shaders can't use the default motion blur - add `// #motionblur native` to blur it yourself, or `// #motionblur off` to hide the control": {
-      "comment": "Mirage multi-pass motion-blur validation error.",
+    "Feedback shaders can't use the default motion blur - add `// #motionblur native` to blur it yourself, or `// #motionblur off` to hide the control": {
+      "comment": "Mirage feedback motion-blur validation error.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mehrpass-Shader können die Standard-Bewegungsunschärfe nicht verwenden: Füge `// #motionblur native` hinzu, um sie selbst zu berechnen, oder `// #motionblur off`, um das Steuerelement auszublenden"
+            "value": "Feedback-Shader können die Standard-Bewegungsunschärfe nicht verwenden: Füge `// #motionblur native` hinzu, um sie selbst zu berechnen, oder `// #motionblur off`, um das Steuerelement auszublenden"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los shaders multipaso no pueden usar el desenfoque de movimiento predeterminado: añade `// #motionblur native` para aplicarlo tú mismo, o `// #motionblur off` para ocultar el control"
+            "value": "Los shaders con retroalimentación no pueden usar el desenfoque de movimiento predeterminado: añade `// #motionblur native` para aplicarlo tú mismo, o `// #motionblur off` para ocultar el control"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les shaders multipasses ne peuvent pas utiliser le flou de mouvement par défaut : ajoutez `// #motionblur native` pour le gérer vous-même, ou `// #motionblur off` pour masquer la commande"
+            "value": "Les shaders à rétroaction ne peuvent pas utiliser le flou de mouvement par défaut : ajoutez `// #motionblur native` pour le gérer vous-même, ou `// #motionblur off` pour masquer la commande"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "マルチパスシェーダーは標準のモーションブラーを使用できません。自分でぼかす場合は `// #motionblur native` を、コントロールを非表示にする場合は `// #motionblur off` を追加してください"
+            "value": "フィードバックシェーダーは標準のモーションブラーを使用できません。自分でぼかす場合は `// #motionblur native` を、コントロールを非表示にする場合は `// #motionblur off` を追加してください"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "다중 패스 셰이더는 기본 모션 블러를 사용할 수 없습니다. 직접 처리하려면 `// #motionblur native`를, 컨트롤을 숨기려면 `// #motionblur off`를 추가하세요"
+            "value": "피드백 셰이더는 기본 모션 블러를 사용할 수 없습니다. 직접 처리하려면 `// #motionblur native`를, 컨트롤을 숨기려면 `// #motionblur off`를 추가하세요"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "多通道着色器无法使用默认运动模糊，请添加 `// #motionblur native` 自行处理，或添加 `// #motionblur off` 以隐藏该控件"
+            "value": "反馈着色器无法使用默认运动模糊，请添加 `// #motionblur native` 自行处理，或添加 `// #motionblur off` 以隐藏该控件"
           }
         }
       }

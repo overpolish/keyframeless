@@ -4,6 +4,7 @@
  */
 
 #import "KKPresetRowView.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
 
 #import "KKHelpViewSubviews.h" // _KKCapsuleView (app-wide InfoBadge look)
 #import "KKLocalized.h"
@@ -294,6 +295,9 @@ NSRect KKPresetScreenRectForView(NSView *v) {
 
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  // InVisibleRect, so an existing one needs no rebuild at all.
+  if (self.trackingAreas.count == 1)
+    return;
   for (NSTrackingArea *ta in [self.trackingAreas copy])
     [self removeTrackingArea:ta];
   NSTrackingArea *ta = [[NSTrackingArea alloc]

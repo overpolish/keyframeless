@@ -5,6 +5,7 @@
 
 #import "KKLocalized.h"
 #import "KKTimelineBasicView_Private.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
 
 #import "KKCheckboxView.h"
 #import "KKKeyposeSymbol.h"
@@ -638,6 +639,8 @@ void KKBasicValueExtent(KKBasicProj p, double *outLo, double *outHi) {
 
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  if (KKTrackingAreaMatches(_trackingArea, NSZeroRect))
+    return; // InVisibleRect: the rect is AppKit's, so nothing to track here
   if (_trackingArea)
     [self removeTrackingArea:_trackingArea];
   _trackingArea = [[NSTrackingArea alloc]

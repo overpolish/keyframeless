@@ -6,6 +6,7 @@
 #import "KKLog.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView_Private.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
 #import "NSColor+KKColors.h"
 
 @implementation _KKMiniViewerOverlay {
@@ -14,6 +15,13 @@
   BOOL _toolDrawing;
   NSTrackingArea *_optTrackingArea;
   BOOL _optReveal;
+  // Live only while _dragging: catch the drag ticks and the mouseUp when they
+  // land in a DIFFERENT window from the press (a keypose popover opened over
+  // the constants popover - both nonactivating). Without this the drag latches
+  // with no further ticks and no end, which also leaves the plugin's undo group
+  // open and aborts FCP's next undo.
+  id _dragGlobalMonitor;
+  id _dragLocalMonitor;
 }
 
 - (BOOL)isFlipped {
@@ -293,6 +301,9 @@
   // popovers already use for keyboard).
   [self.window makeKeyWindow];
   _dragging = YES;
+  [self _installDragMonitors];
+  KKLogInfo(@"[dragundo] mouseDown overlay=%p canvas=%p win=%p key=%d", self,
+            (void *)c, (void *)self.window, self.window.isKeyWindow);
   if (c.onHandleDragBegin)
     c.onHandleDragBegin();
   [d miniViewer:c
@@ -364,17 +375,97 @@
 // dragging (lost mouseUp), and from teardown - so onHandleDragBegin always has
 // a matching onHandleDragEnd and the plugin's drag undo group never leaks.
 - (void)_endActiveHandleDragReason:(NSString *)reason {
+  [self _removeDragMonitors];
   if (!_dragging)
     return;
   _dragging = NO;
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
-  (void)reason;
+  KKLogInfo(@"[dragundo] end overlay=%p reason=%@", self, reason);
   if ([d respondsToSelector:@selector(miniViewerEndHandleDrag:)])
     [d miniViewerEndHandleDrag:c];
   if (c.onHandleDragEnd)
     c.onHandleDragEnd();
   [self setNeedsDisplay:YES];
+}
+
+// Feed a drag tick from a SCREEN-space location: a monitored event belongs to
+// another window (or to no window at all), so its locationInWindow can't be
+// converted against this overlay directly.
+- (void)_dragTickAtScreenPoint:(NSPoint)screenPoint
+                     modifiers:(NSEventModifierFlags)mods {
+  if (!_dragging || !self.window)
+    return;
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  CGPoint p =
+      [self convertPoint:[self.window convertPointFromScreen:screenPoint]
+                fromView:nil];
+  CGRect cr = [c contentRectInViewPoints];
+  if ([d respondsToSelector:
+              @selector(miniViewer:dragHandleToPoint:contentRect:modifiers:)])
+    [d miniViewer:c dragHandleToPoint:p contentRect:cr modifiers:mods];
+  else
+    [d miniViewer:c dragHandleToPoint:p contentRect:cr];
+  [self setNeedsDisplay:YES];
+}
+
+// Watch drag/up for the duration of a drag whose events may not come back to
+// this overlay. The local monitor ignores anything in THIS window - natural
+// delivery already handles that and a second tick would double-apply the move.
+- (void)_installDragMonitors {
+  __weak _KKMiniViewerOverlay *weak = self;
+  NSEventMask mask = NSEventMaskLeftMouseUp | NSEventMaskLeftMouseDragged;
+  if (!_dragGlobalMonitor)
+    _dragGlobalMonitor = [NSEvent
+        addGlobalMonitorForEventsMatchingMask:mask
+                                      handler:^(NSEvent *e) {
+                                        // A global event has no window: its
+                                        // location is already screen space.
+                                        if (e.type == NSEventTypeLeftMouseUp)
+                                          [weak _endActiveHandleDragReason:
+                                                    @"mouseUp outside the app"];
+                                        else
+                                          [weak
+                                              _dragTickAtScreenPoint:
+                                                  e.locationInWindow
+                                                           modifiers:
+                                                               e.modifierFlags];
+                                      }];
+  if (!_dragLocalMonitor)
+    _dragLocalMonitor = [NSEvent
+        addLocalMonitorForEventsMatchingMask:mask
+                                     handler:^NSEvent *(NSEvent *e) {
+                                       __strong _KKMiniViewerOverlay *s = weak;
+                                       if (!s || e.window == s.window)
+                                         return e;
+                                       if (e.type == NSEventTypeLeftMouseUp) {
+                                         [s _endActiveHandleDragReason:
+                                                 @"mouseUp in another window"];
+                                         return e;
+                                       }
+                                       NSPoint sp =
+                                           e.window
+                                               ? [e.window
+                                                     convertPointToScreen:
+                                                         e.locationInWindow]
+                                               : e.locationInWindow;
+                                       [s _dragTickAtScreenPoint:sp
+                                                       modifiers:
+                                                           e.modifierFlags];
+                                       return e;
+                                     }];
+}
+
+- (void)_removeDragMonitors {
+  if (_dragGlobalMonitor) {
+    [NSEvent removeMonitor:_dragGlobalMonitor];
+    _dragGlobalMonitor = nil;
+  }
+  if (_dragLocalMonitor) {
+    [NSEvent removeMonitor:_dragLocalMonitor];
+    _dragLocalMonitor = nil;
+  }
 }
 
 // If this overlay is pulled from its window (popover dismissed or mini-viewer
@@ -388,6 +479,7 @@
 }
 
 - (void)dealloc {
+  [self _removeDragMonitors];
   if (_dragging)
     KKLogWarn(@"[dragundo] overlay=%p dealloc'd mid-drag - onHandleDragEnd "
               @"was DROPPED",
@@ -399,6 +491,8 @@
 // pointer is over; we mirror the Option state onto the renderer.
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  if (KKTrackingAreaMatches(_optTrackingArea, self.bounds))
+    return; // see KKTrackingAreaMatches: rebuilding every cycle never settles
   if (_optTrackingArea)
     [self removeTrackingArea:_optTrackingArea];
   _optTrackingArea = [[NSTrackingArea alloc]

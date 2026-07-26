@@ -20,6 +20,14 @@ id<MTLTexture> MirageNewBufferTexture(id<MTLDevice> device, NSUInteger w,
 // Frames kept as checkpoints before the oldest is evicted.
 static const NSInteger kMaxCheckpoints = 24;
 
+// Output resolutions kept before the least-recently-used set is dropped. Three
+// covers the resolutions a plugin instance genuinely alternates between (the
+// viewer, a reduced playback pass, an export or preview); a fourth is a
+// resolution it has moved on from. Evicting one costs a feedback shader its
+// history, so it re-sims from clear the next time that resolution appears -
+// which is why this is an LRU cap and not "keep only the current one".
+static const NSInteger kMaxResolutionSets = 3;
+
 @implementation MirageFeedbackSet
 
 + (instancetype)setInStore:(NSMutableDictionary *)store
@@ -40,6 +48,29 @@ static const NSInteger kMaxCheckpoints = 24;
     fb->hasState = NO;
     fb->w = w;
     fb->h = h;
+  }
+  // Stamp this set as the most recently used, then drop the coldest ones over
+  // the cap. The stamp is the store's own high-water mark + 1 rather than a
+  // process-global counter, so there is no mutable static to go wrong across
+  // XPC instances.
+  uint64_t high = 0;
+  for (MirageFeedbackSet *other in store.allValues)
+    if (other->touch > high)
+      high = other->touch;
+  fb->touch = high + 1;
+  while ((NSInteger)store.count > kMaxResolutionSets) {
+    NSString *coldestKey = nil;
+    uint64_t coldest = UINT64_MAX;
+    for (NSString *k in store) {
+      MirageFeedbackSet *s = store[k];
+      if (s->touch < coldest) {
+        coldest = s->touch;
+        coldestKey = k;
+      }
+    }
+    if (!coldestKey)
+      break;
+    [store removeObjectForKey:coldestKey];
   }
   return fb;
 }

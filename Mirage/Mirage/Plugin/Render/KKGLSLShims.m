@@ -113,6 +113,31 @@ MirageMotionBlurMode MirageMotionBlurModeForSource(NSString *src) {
   return MirageMotionBlurModeAccumulate;
 }
 
+BOOL MirageMotionBlurDefaultsOnForSource(NSString *src) {
+  if (!src.length)
+    return NO;
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    // The whole directive line after `#motionblur`, so the `on` is found
+    // whether or not a mode word precedes it.
+    re = [NSRegularExpression
+        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#motionblur\\b(.*)$"
+                             options:0
+                               error:nil];
+  });
+  NSTextCheckingResult *m = [re firstMatchInString:src
+                                           options:0
+                                             range:NSMakeRange(0, src.length)];
+  if (!m || [m rangeAtIndex:1].location == NSNotFound)
+    return NO;
+  NSString *rest = [src substringWithRange:[m rangeAtIndex:1]];
+  return
+      [rest rangeOfString:@"\\bon\\b"
+                  options:NSRegularExpressionSearch | NSCaseInsensitiveSearch]
+          .location != NSNotFound;
+}
+
 // Fold a GL-Transitions shader into the image-shader convention.
 //
 // Both rewrites are LINE-COUNT SAFE so a glslang error still maps to the

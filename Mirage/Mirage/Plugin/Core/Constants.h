@@ -70,6 +70,8 @@ extern NSString *MirageCustomDefaultShaderSource(void);
 /// The shipped Frame filter: crops the clip to a rounded window, then borders,
 /// shadows and (with an audio source) pulses it. Masks with `#alpha` so the
 /// corners are genuinely transparent.
+extern NSString *MirageMagicMoveShaderSource(void);
+extern NSString *MirageMagicMoveBufferBSource(void);
 extern NSString *MirageFrameShaderSource(void);
 /// Frame's other sections: shared blur helper, then the two halves of the
 /// separable glow blur. Buffer A is skipped so ch0 keeps the source clip.

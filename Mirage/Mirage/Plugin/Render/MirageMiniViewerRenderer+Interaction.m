@@ -106,13 +106,21 @@
   // The rotation set sizes its rings from the renderer's live canvas; set it
   // before the sets run (super would set it, but we call the sets first).
   self.canvas = canvas;
-  // Points foreground, then rings, then boxes, then rotation rings (matching
-  // the viewer precedence).
+  // Positions, then the `@osc` primitives (point / ring / box), then rotation
+  // rings LAST. The viewer walks one list in declaration order, so a point
+  // declared before a rotate wins there; the mini splits them into two sets and
+  // loses that ordering, so the rotate set has to go last or its rings swallow
+  // any handle sitting inside them (an anchor at the pivot, always).
+  // A point glyph outranks a position handle on the same pixel - the position
+  // hit-tests as a filled disc even though it draws as an arc, so an anchor at
+  // the pivot is otherwise unreachable. Matches the viewer.
+  if ([[self _syncedExprSet] glyphHitAtPoint:p contentRect:cr])
+    return YES;
   if ([[self _syncedSet] handleHitAtPoint:p contentRect:cr])
     return YES;
-  if ([[self _syncedRotSet] handleHitAtPoint:p contentRect:cr])
-    return YES;
   if ([[self _syncedExprSet] handleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([[self _syncedRotSet] handleHitAtPoint:p contentRect:cr])
     return YES;
   return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
 }
@@ -123,19 +131,26 @@
   if (CGRectIsEmpty(cr))
     return nil;
   self.canvas = canvas; // rotation set reads the canvas for ring sizing
-  NSCursor *c = [[self _syncedSet] cursorAtPoint:p contentRect:cr];
-  if (c)
-    return c;
-  c = [[self _syncedRotSet] cursorAtPoint:p contentRect:cr];
+  NSCursor *c = nil;
+  if ([[self _syncedExprSet] glyphHitAtPoint:p contentRect:cr])
+    c = [[self _syncedExprSet] cursorAtPoint:p contentRect:cr];
+  if (!c)
+    c = [[self _syncedSet] cursorAtPoint:p contentRect:cr];
   if (c)
     return c;
   c = [[self _syncedExprSet] cursorAtPoint:p contentRect:cr];
+  if (c)
+    return c;
+  c = [[self _syncedRotSet] cursorAtPoint:p contentRect:cr];
   return c ?: [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
+  if ([[self _syncedExprSet] glyphHitAtPoint:p contentRect:cr] &&
+      [[self _syncedExprSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
+    return;
   if ([[self _syncedSet] beginDragAtPoint:p contentRect:cr canvas:canvas]) {
     // Let the position drag snap onto the point OSCs (symmetric with the point
     // drag snapping onto positions). Seed the shared target set for this drag.
@@ -145,6 +160,11 @@
       c.externalSnapTargets = pts;
     return;
   }
+  // DRAG routing keeps the ORIGINAL order (rotate before the other primitives).
+  // Only hit-test / cursor / opt-click take the glyph-first precedence above:
+  // reordering the drag as well let the expr set claim the ticks of a rotation
+  // drag that the rotate set had already begun, so the ring stuck in its
+  // pressed state and never moved or ended.
   if ([[self _syncedRotSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   if ([[self _syncedExprSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
@@ -197,6 +217,12 @@
     optClickHandleAtPoint:(CGPoint)p
               contentRect:(CGRect)cr {
   if ([super miniViewer:canvas optClickHandleAtPoint:p contentRect:cr])
+    return YES;
+  // Same precedence as the hit test / drag: a glyph on the pixel beats the
+  // position handle whose disc covers it, so an anchor at the pivot can be
+  // opt-clicked to hide it.
+  if ([[self _syncedExprSet] glyphHitAtPoint:p contentRect:cr] &&
+      [[self _syncedExprSet] optClickAtPoint:p contentRect:cr canvas:canvas])
     return YES;
   if ([[self _syncedSet] optClickAtPoint:p contentRect:cr canvas:canvas])
     return YES;

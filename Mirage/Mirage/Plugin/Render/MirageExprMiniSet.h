@@ -52,6 +52,12 @@ NS_ASSUME_NONNULL_BEGIN
                                     mediaSize:(CGSize)mediaSize;
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr;
+/// Is a POINT GLYPH under `p`? Narrower than -handleHitAtPoint: (no rings, no
+/// boxes), so the host can give glyphs precedence over the position set. A
+/// position hit-tests as a filled disc even though it draws as an arc, so a
+/// glyph parked at the same spot - an anchor at the pivot - is otherwise
+/// unreachable. Pure query; nothing is primed or claimed.
+- (BOOL)glyphHitAtPoint:(CGPoint)p contentRect:(CGRect)cr;
 - (nullable NSCursor *)cursorAtPoint:(CGPoint)p contentRect:(CGRect)cr;
 /// Grab whatever handle is under `p`. YES if claimed (host should NOT fall
 /// through to super).

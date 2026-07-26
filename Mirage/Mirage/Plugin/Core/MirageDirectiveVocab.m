@@ -103,7 +103,15 @@ MirageDirectiveAttributeKeys(void) {
             @"units={"),
           E(@"center", @"center=",
             @"Where a ring or box sits in the frame, 0 to 1.", @"center="),
-          E(@"link", @"link=", @"Pin a ring centre to a #point control.",
+          E(@"anchor", @"anchor=",
+            @"Box OSC: grow FROM this #point instead of symmetrically about "
+            @"the centre - a corner anchor keeps that corner put and grows "
+            @"the opposite one.",
+            @"anchor="),
+          E(@"link", @"link=",
+            @"Pin a ring / box centre to a #point control (`link=uCenter`), or "
+            @"to a computed centre with the quoted form "
+            @"(`link=\"uPosition + uAnchor - vec2(0.5)\"`).",
             @"link="),
           E(@"axis", @"axis=", @"Which axes a rotate control spins: x, y, z.",
             @"axis="),
@@ -127,6 +135,18 @@ MirageDirectiveAttributeKeys(void) {
                     @"Opt a point/position handle out of the default "
                     @"Cmd-held snap.",
                     @"skipsnapping"),
+                  // The glyph words, bare beside `osc=` - the sugar form of an
+                  // authored block's `style =`, so the wording matches the
+                  // enum offered for that key.
+                  E(@"dot", @"dot", @"osc= glyph: a filled dot. The default.",
+                    @"dot"),
+                  E(@"square", @"square", @"osc= glyph: a filled square.",
+                    @"square"),
+                  E(@"hollow", @"hollow", @"osc= glyph: a small hollow ring.",
+                    @"hollow"),
+                  E(@"arc", @"arc",
+                    @"osc= glyph: an arc handle, like a position control.",
+                    @"arc"),
                   E(@"accumulate", @"accumulate",
                     @"#motionblur: the default. The plugin re-renders your "
                     @"shader across the shutter and averages it. Exact for any "
@@ -141,6 +161,10 @@ MirageDirectiveAttributeKeys(void) {
                     @"#motionblur: no blur, and the Motion Blur control is "
                     @"cleared.",
                     @"off"),
+                  E(@"on", @"on",
+                    @"#motionblur: start ENABLED when this shader is applied "
+                    @"(the user can still turn it off).",
+                    @"on"),
                 ],
                 kKW)];
   });
@@ -176,7 +200,7 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"dot",          @"square",     @"hollow",   @"arc", // point styles
       @"skipsnapping", @"lockaspect", @"dropdown",         // bare flags
       @"percent",      @"int",        @"px", // #multi units/modifiers
-      @"accumulate",   @"native",     @"off" // #motionblur modes
+      @"accumulate",   @"native",     @"off",      @"on" // #motionblur modes
     ]];
   });
   return v;

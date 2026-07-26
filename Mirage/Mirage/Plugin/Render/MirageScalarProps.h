@@ -87,6 +87,10 @@ typedef struct MirageScalarProp {
     // multi-axis rotate (`osc={z}`/`osc={y,x}`/`osc={z,x,y}`) - the Nth listed
     // axis drives value component N, so order is meaningful.
     char oscKind[16];
+    // Bare glyph word on the directive (`osc=point square`): "dot" / "square" /
+    // "hollow" / "arc", empty = the primitive's default. Same values an
+    // authored block's `style =` takes; this is the sugar for it.
+    char oscStyle[16];
     int skipSnapping; // `skipsnapping` on the osc directive: opt this handle out
                       // of the default Cmd-held snap (point + position sugar)
     char oscAxis;
@@ -94,8 +98,12 @@ typedef struct MirageScalarProp {
     int oscAxisCount;
     char uniformType[8];       // declared GLSL type: float/int/vec2/vec3/vec4/bool
     double rcenterx, rcentery; // ring OSC center, object space 0..1 (default 0.5)
-    char linkName[64];         // ring OSC: `link=<uniform>` -> centre follows that
-                               // #point's live value (empty = fixed `center=`)
+    char anchorName[64];       // box OSC: `anchor=<#point uniform>` -> the box
+                               // grows FROM that anchor (pins the anchor side)
+                               // instead of symmetrically about its centre
+    char linkName[160];        // ring/box OSC: `link=<uniform>` -> centre follows
+                               // that #point's live value, or `link="<expr>"` for
+                               // a computed centre (empty = fixed `center=`)
     int isMulti;               // `#multi`: an N-component numeric field (vec2/vec3)
     int fieldCount;            // number of components (from fields={} / arity)
     char fieldLabels[256];     // comma-separated per-component field names

@@ -4,8 +4,10 @@
  */
 
 #import "MirageInspectorView.h"
+#import "MirageOSCSnapshot.h" // publish the OSC timeline snapshot
 
-#import "Constants.h" // MirageCustomDefaultShaderSource
+#import "Constants.h"        // MirageCustomDefaultShaderSource
+#import "KKGLSLTranspiler.h" // MirageMotionBlurDefaultsOnForSource
 #import "MirageCategory.h"
 #import "MirageDirectives.h" // #color / #float ... default parsing
 #import "MirageInspectorView+Guides.h"
@@ -192,11 +194,12 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   return self;
 }
 
-// Render each shipped built-in shader (Plasma, Frame) to a thumbnail once per
-// process, using a throwaway renderer whose timeline holds just that shader's
-// code. Directive lanes aren't seeded, so each one draws at its DECLARED
-// defaults - which is what makes a filter's thumbnail meaningful, since it
-// lands on the bundled PreviewSource frame rather than on black.
+// Render each shipped built-in shader to a thumbnail once per process, using a
+// throwaway renderer whose timeline holds that shader's code plus whatever card
+// values the entry declares. Everything not overridden draws at its DECLARED
+// default, which is what makes a filter's thumbnail meaningful - it lands on
+// the bundled PreviewSource frame rather than on black. The overrides exist for
+// the shaders whose defaults are visually inert (see `thumbnailValues`).
 - (void)_bakeBuiltinThumbnails {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -221,7 +224,22 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
         if (e.sections[name].length)
           [tabs addObject:@{@"name" : name, @"code" : e.sections[name]}];
       lane.codeTabs = tabs.count ? tabs : nil;
-      t.lanes = @[ lane ];
+      // Card values, where the entry declares them: one minimal lane per
+      // override, keyed by the UNIFORM NAME (which is the lane identity the
+      // render resolves against, so no other metadata is needed - a missing
+      // lane falls back to the directive default, which is exactly what every
+      // un-overridden control still does).
+      NSMutableArray<KKLane *> *laneSet = [NSMutableArray arrayWithObject:lane];
+      [e.thumbnailValues
+          enumerateKeysAndObjectsUsingBlock:^(
+              NSString *uniform, NSArray<NSNumber *> *values, BOOL *stop) {
+            if (!uniform.length || !values.count)
+              return;
+            KKLane *seed = [KKLane laneWithKey:uniform label:uniform];
+            [seed insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:values]];
+            [laneSet addObject:seed];
+          }];
+      t.lanes = laneSet;
       r.timeline = t;
       NSData *jpeg = MirageRenderThumbnailJPEG(r, 320, 180);
       if (jpeg)
@@ -345,11 +363,6 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
 // channel (the host writes the timeline param in an action scope).
 - (void)_loadEntry:(MirageCatalogEntry *)entry {
   KKTimeline *current = _miniViewerRenderer.timeline;
-  KKLogInfo(@"Mirage[apply] load '%@' sections=%lu currentTimeline=%@ "
-            @"onTimelineMutated=%@",
-            entry.name, (unsigned long)entry.sections.count,
-            current ? @"yes" : @"NIL",
-            self.onTimelineMutated ? @"yes" : @"NIL");
   if (!current || !entry.sections.count)
     return;
 
@@ -404,6 +417,16 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
 
   KKTimeline *updated = [current copy];
   updated.lanes = lanes;
+  // Publish to the OSC's process snapshot BEFORE the host write. The OSC
+  // builds its controls from that snapshot, and it is otherwise only refreshed
+  // by parameterChanged - i.e. after FCP round-trips the write below. Until
+  // then the snapshot still has the OLD code lane (or, on a fresh instance,
+  // none at all, so -_currentShaderSource falls back to the default Plasma
+  // source). Either way the OSC keeps the PREVIOUS shader's controls: applying
+  // MagicMove left Plasma's single position handle + ring registered, so a
+  // click on the new shader's rotation ring hit nothing and the control looked
+  // dead until something forced a resync.
+  MirageSetTimelineSnapshot(updated);
   if (self.onTimelineMutated)
     self.onTimelineMutated(updated);
   [self applyTimeline:updated];
@@ -415,6 +438,18 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // param) so the viewer refreshes to the loaded shader immediately.
   if (self.onBoundaryPreviewNeedsRender)
     self.onBoundaryPreviewNeedsRender();
+
+  // A shader whose `// #motionblur` line says `on` starts with blur enabled
+  // (Magic Move: a transform without it reads as a hard cut per frame). Only
+  // on APPLY - doing this on every code commit would re-tick the box under a
+  // user who deliberately turned it off. Write the persisted blob too, not
+  // just the checkbox, so it survives the round-trip.
+  if (MirageMotionBlurDefaultsOnForSource(entry.sections[@"Image"])) {
+    [self setMotionBlurEnabled:YES];
+    if (self.onMotionBlurChanged)
+      self.onMotionBlurChanged(YES, 180.0, [self motionBlurDefaultSamples],
+                               KKMotionBlurTechniqueAccurate);
+  }
 
   // (The source-derived OSC set re-wires via -applyTimeline: above, which fires
   // onCodeCommitted when the effective shader source changes.)

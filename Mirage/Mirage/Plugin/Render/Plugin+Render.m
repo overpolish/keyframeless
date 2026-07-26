@@ -305,6 +305,53 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                   wellParameterID:kParamToImage];
 }
 
+// FCP renders browser / effect-library thumbnails at a REDUCED pixel size, but
+// a `units="px"` control (Frame's Border Width, Glow Size, Noise Scale) is an
+// absolute pixel count authored against the canonical frame. Unscaled, the same
+// 30px covers ~6x more of a thumbnail than of the full render - which is why a
+// Frame thumbnail's border and glow looked massive next to the real thing.
+//
+// FxTileableEffect exposes no render-scale API. The reliable idiom is the
+// SOURCE image's inversePixelTransform (pixel -> canonical); the destination's
+// pixelTransform is both the wrong matrix and the wrong direction.
+static float MirageRenderScale(NSArray<FxImageTile *> *sourceImages) {
+  if (sourceImages.count == 0)
+    return 1.0f;
+  FxImageTile *src = sourceImages[0];
+  FxMatrix44 *inv = src.inversePixelTransform;
+  if (!inv)
+    return 1.0f;
+  FxRect sp = src.imagePixelBounds;
+  FxPoint2D ll =
+      [inv transform2DPoint:(FxPoint2D){(float)sp.left, (float)sp.bottom}];
+  FxPoint2D ur =
+      [inv transform2DPoint:(FxPoint2D){(float)sp.right, (float)sp.top}];
+  float canonW = ur.x - ll.x;
+  float pxW = (float)(sp.right - sp.left);
+  if (canonW <= 0.0f || pxW <= 0.0f)
+    return 1.0f;
+  float scale = pxW / canonW;
+  return isfinite(scale) && scale > 0.0f ? scale : 1.0f;
+}
+
+// Scale every RAW-pixel scalar in a filled pool. Points and #multi px fields
+// are stored normalised (0..1 of the frame) and already scale themselves, so
+// only the single-value `units="px"` scalars need it.
+static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
+                                  int poolCount, float scale) {
+  if (!model || !pool || scale == 1.0f)
+    return;
+  const MirageScalarProp *props = model.scalarProps;
+  for (int i = 0; i < model.scalarCount; i++) {
+    const MirageScalarProp *p = &props[i];
+    if (p->isPoint || p->isMulti || p->fieldUnit[0] != 'p')
+      continue;
+    if (p->poolOffset < 0 || p->poolOffset >= poolCount)
+      continue;
+    pool[p->poolOffset].x *= scale;
+  }
+}
+
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
                    pluginState:(NSData *)pluginState
@@ -359,6 +406,15 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
     return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
   };
 
+  // Absolute-pixel controls scale with the render (thumbnail vs full frame).
+  // Applied to the decoded pool here, so every downstream path - single pass,
+  // multi-pass, and each motion-blur sample below - binds already-scaled
+  // values.
+  const float pixelScale = MirageRenderScale(sourceImages);
+  MirageShaderModel *pxModel = [MirageShaderModel modelForSource:imageSrc];
+  MirageScalePixelProps(pxModel, base.colorPool, base.colorPoolCount,
+                        pixelScale);
+
   // Who owns the blur (the shader's `// #motionblur` directive, default
   // accumulate). Native shaders blur themselves (feedback trails / an internal
   // loop), so hand them the popover settings as uniforms and skip the plugin's
@@ -399,7 +455,12 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
     // through to a single pass.
     if (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled && n > 1) {
       MiragePluginState *states = malloc(sizeof(MiragePluginState) * (size_t)n);
-      BOOL ok = MirageStateBlobReadStates(pluginState, states, n) &&
+      BOOL readOK = MirageStateBlobReadStates(pluginState, states, n);
+      if (readOK)
+        for (NSInteger si = 0; si < n; si++)
+          MirageScalePixelProps(pxModel, states[si].colorPool,
+                                states[si].colorPoolCount, pixelScale);
+      BOOL ok = readOK &&
                 [self _renderSinglePassMotionBlurWithStates:states
                                                       count:n
                                                     mbState:mbState
@@ -429,15 +490,54 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
   NSInteger frameIndex =
       (frameDur > 0.0) ? (NSInteger)llround(base.common.time / frameDur) : -1;
   float dtPerFrame = (float)(frameDur * base.common.speed);
-  return [self renderCustomMultipassWithUniforms:u
-                                       colorPool:base.colorPool
-                                       poolCount:base.colorPoolCount
-                                     imageSource:withCommon(imageSrc)
-                                   bufferSources:bufSources
-                                      frameIndex:frameIndex
-                                      dtPerFrame:dtPerFrame
-                                destinationImage:destinationImage
-                                    sourceImages:sourceImages];
+
+  // Accumulate blur over a multi-pass chain. The chain's buffers are encoded
+  // once and every sub-sample reads them; only the image pass re-runs. The
+  // multipass call refuses this for a FEEDBACK chain (it needs history per
+  // sample, which cannot be shared), falling back to a single pass - so this is
+  // safe to offer unconditionally and the shader decides by what it declares.
+  MiragePluginState *mpStates = NULL;
+  MirageSampleUniformsBlock sampleUniforms = nil;
+  KKMotionBlurState mpMB = mbState;
+  if (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled && n > 1) {
+    mpStates = malloc(sizeof(MiragePluginState) * (size_t)n);
+    if (MirageStateBlobReadStates(pluginState, mpStates, n)) {
+      for (NSInteger si = 0; si < n; si++)
+        MirageScalePixelProps(pxModel, mpStates[si].colorPool,
+                              mpStates[si].colorPoolCount, pixelScale);
+      NSInteger sampleCount = n;
+      sampleUniforms = ^(NSInteger i, KKGLSLUniforms *outU,
+                         const simd_float4 **outPool, int *outCount) {
+        NSInteger si = i < 0 ? 0 : (i >= sampleCount ? sampleCount - 1 : i);
+        const MiragePluginState *st = &mpStates[si];
+        *outU = MirageBuildUniforms(st, mediaW, mediaH, encodeSRGB);
+        *outPool = st->colorPool;
+        *outCount = st->colorPoolCount;
+      };
+    } else {
+      free(mpStates);
+      mpStates = NULL;
+      mpMB.enabled = NO;
+    }
+  } else {
+    mpMB.enabled = NO;
+  }
+
+  BOOL mpOK = [self renderCustomMultipassWithUniforms:u
+                                            colorPool:base.colorPool
+                                            poolCount:base.colorPoolCount
+                                          imageSource:withCommon(imageSrc)
+                                        bufferSources:bufSources
+                                           frameIndex:frameIndex
+                                           dtPerFrame:dtPerFrame
+                                              mbState:mpMB
+                                           renderTime:renderTime
+                                       sampleUniforms:sampleUniforms
+                                     destinationImage:destinationImage
+                                         sourceImages:sourceImages];
+  if (mpStates)
+    free(mpStates);
+  return mpOK;
 }
 
 @end

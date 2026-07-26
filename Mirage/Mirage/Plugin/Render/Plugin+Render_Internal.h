@@ -8,6 +8,7 @@
 #import "KKGLSLTranspiler.h"
 #import "MirageTypes.h"
 #import "Plugin_Private.h"
+#import <KeyframelessKit/KKMotionBlur.h> // KKMotionBlurState
 
 // The seams of the (Render) category, split across:
 //
@@ -52,6 +53,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// step) drive the determinism: a sequential frame advances ONE step (cheap),
 /// the same frame is reused, a seek restores the nearest checkpoint and re-sims
 /// from there.
+/// Per-sample uniforms for accumulate motion blur over a multi-pass chain.
+/// `sampleUniforms` is called once per sub-sample to fill that sample's
+/// uniforms + colour pool for the IMAGE pass; the buffer chain is encoded once
+/// and shared, which is the whole point (see the accumulate note below).
+/// `mbState.enabled == NO` or a nil block renders a single image pass.
+typedef void (^MirageSampleUniformsBlock)(
+    NSInteger sampleIndex, KKGLSLUniforms *outU,
+    const simd_float4 *_Nonnull *_Nonnull outPool, int *outPoolCount);
+
 - (BOOL)renderCustomMultipassWithUniforms:(KKGLSLUniforms)u
                                 colorPool:(const simd_float4 *)colorPool
                                 poolCount:(int)poolCount
@@ -59,6 +69,10 @@ NS_ASSUME_NONNULL_BEGIN
                             bufferSources:(NSArray<NSString *> *)bufferSources
                                frameIndex:(NSInteger)frameIndex
                                dtPerFrame:(float)dtPerFrame
+                                  mbState:(KKMotionBlurState)mbState
+                               renderTime:(CMTime)renderTime
+                           sampleUniforms:(nullable MirageSampleUniformsBlock)
+                                              sampleUniforms
                          destinationImage:(FxImageTile *)destinationImage
                              sourceImages:
                                  (NSArray<FxImageTile *> *)sourceImages;

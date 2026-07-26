@@ -172,7 +172,11 @@ static inline void MirageConfigureRotateLane(KKLane *lane,
   // permuted back to canonical order.
   lane.valueType = KKLaneValueTypeAngle;
   lane.animatable = YES;
-  lane.integerValued = YES; // rotation dials snap to whole degrees
+  // NOT integer-valued: a ring drag lands on a fraction nearly every time, so
+  // the field shows 2 decimals rather than rounding away what the control
+  // produced. Scrubbing still steps 1 degree - that comes from the Angle value
+  // type, not from this flag.
+  lane.integerValued = NO;
   lane.componentMin = @[];
   lane.componentMax = @[];
   NSMutableArray<NSString *> *labels = [NSMutableArray array];
@@ -303,7 +307,7 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
 
       lane.valueType = KKLaneValueTypeAngle; // circular knob, whole degrees
       lane.animatable = YES;
-      lane.integerValued = YES; // angles snap to whole degrees
+      lane.integerValued = NO; // degrees show 2 decimals, as a drag produces
       // Unconstrained (accumulates past 360).
       lane.componentMin = @[];
       lane.componentMax = @[];
@@ -852,7 +856,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // shader multi-pass" is a question about the whole tab SET. The composer runs
   // first (KKCodeEditorView -_runValidator) and does see every section, so it
   // records what it saw for the validator to read.
-  __block BOOL sawBufferSection = NO;
+  __block BOOL sawFeedbackBuffer = NO;
   __block BOOL activeIsImage = YES;
   shader.codeValidationComposer =
       ^NSString *(NSString *activeName, NSString *activeCode,
@@ -860,16 +864,37 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                   NSInteger *outPrependLines) {
         activeIsImage = ![activeName isEqualToString:@"Common"] &&
                         ![activeName hasPrefix:@"Buffer"];
-        sawBufferSection = NO;
-        for (NSDictionary<NSString *, NSString *> *sec in sections)
-          if ([sec[@"name"] hasPrefix:@"Buffer"] && sec[@"code"].length)
-            sawBufferSection = YES;
         NSString *commonCode = nil;
         for (NSDictionary<NSString *, NSString *> *s in sections)
           if ([s[@"name"] isEqualToString:@"Common"]) {
             commonCode = s[@"code"];
             break;
           }
+        // FEEDBACK = a buffer reading itself or a LATER buffer, so its state is
+        // a function of history. Same test the render path runs on the
+        // transpiled channel mask, and the same reason: a feedback chain cannot
+        // share one simulation across motion-blur sub-samples, while a plain
+        // precompute chain can (it is a pure function of the current uniforms,
+        // identical at every sample). Transpiles are memoized, so re-running
+        // this per validation tick costs a dictionary hit once warm.
+        sawFeedbackBuffer = NO;
+        for (int k = 0; k < 4 && !sawFeedbackBuffer; k++) {
+          NSString *want = [NSString stringWithFormat:@"Buffer %c", 'A' + k];
+          for (NSDictionary<NSString *, NSString *> *sec in sections) {
+            if (![sec[@"name"] isEqualToString:want] || !sec[@"code"].length)
+              continue;
+            NSString *src =
+                commonCode.length
+                    ? [NSString
+                          stringWithFormat:@"%@\n%@", commonCode, sec[@"code"]]
+                    : sec[@"code"];
+            NSUInteger mask = KKTranspileGLSLBuffer(src).declaredChannelMask;
+            for (int c = k; c < 4; c++)
+              if (mask & (1u << c))
+                sawFeedbackBuffer = YES;
+            break;
+          }
+        }
         if ([activeName isEqualToString:@"Common"]) {
           if (outPrependLines)
             *outPrependLines = 0;
@@ -986,17 +1011,23 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                    @"Mirage point-OSC type error.");
       return [NSString stringWithFormat:fmt, badOSC];
     }
-    // Multi-pass + accumulate is a SILENT no-op: accumulate re-renders the
-    // shader at N sub-frame times, and a feedback buffer can't be re-simulated
-    // per sub-sample, so the plugin renders once and the user's Motion Blur
-    // slider does nothing at all. No error, no blur - just a dead control.
-    // Say so, and name the two declarations that resolve it.
-    if (activeIsImage && sawBufferSection &&
+    // FEEDBACK + accumulate is a SILENT no-op: accumulate re-renders the image
+    // pass at N sub-frame times, and a feedback buffer's state is a function of
+    // history so it cannot be re-simulated per sub-sample - the plugin renders
+    // once and the Motion Blur slider does nothing at all. No error, no blur,
+    // just a dead control. Say so, and name the declarations that resolve it.
+    //
+    // A NON-feedback chain is fine and takes the fast path: its buffers are a
+    // pure function of the current uniforms, so they are encoded ONCE and every
+    // sub-sample reads them, and only the image pass re-runs. That is what lets
+    // an expensive precompute (a source blur, say) sit in a buffer instead of
+    // being recomputed inside every sample.
+    if (activeIsImage && sawFeedbackBuffer &&
         MirageMotionBlurModeForSource(code) == MirageMotionBlurModeAccumulate)
-      return RLoc(@"Multi-pass shaders can't use the default motion blur - add "
+      return RLoc(@"Feedback shaders can't use the default motion blur - add "
                   @"`// #motionblur native` to blur it yourself, or `// "
                   @"#motionblur off` to hide the control",
-                  @"Mirage multi-pass motion-blur validation error.");
+                  @"Mirage feedback motion-blur validation error.");
     KKGLSLTranspileResult *r = KKTranspileGLSL(code);
     if (r.msl)
       return nil; // compiled clean

@@ -287,11 +287,18 @@
       return;
     // The overlay guarantees a balanced onHandleDragEnd (it ends any active
     // drag before a new press and on teardown), so a session should never
-    // already be open here. Keep the check as a tripwire in case another
-    // drag source regresses the invariant.
-    if (strong.miniDragSession.active)
+    // already be open here. If one is - a SECOND overlay (keypose popover over
+    // the constants popover) pressed while the first still held its session -
+    // close it before opening the next. Overwriting the property instead would
+    // end the old group AFTER the new one began, and that out-of-order
+    // endUndoGroup is what leaves FCP's undo stack pointing at a dead action
+    // (EXC_BAD_ACCESS in FFUndoHandler on the next Cmd-Z).
+    if (strong.miniDragSession.active) {
       KKLogWarn(@"[dragundo] onDragBegin while a session is already open - "
-                @"begin/end got unbalanced upstream");
+                @"closing the stale one first");
+      [strong.miniDragSession finish];
+      strong.miniDragSession = nil;
+    }
     strong.miniDragSession =
         [KKDragUndoSession beginWithAPIManager:strong.apiManager
                                      principal:strong

@@ -1295,6 +1295,42 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       break;
     }
   }
+  // A `point` glyph OUTRANKS a position handle that claimed the same pixel. A
+  // position hit-tests as a filled disc even though it draws as an arc - its
+  // middle stays grabbable on purpose - so a point parked there (an anchor at
+  // the pivot) could never be clicked.
+  //
+  // This runs AFTER the position loop and only rewrites the part it reported.
+  // Setting the part any earlier skips the block below, which is not a
+  // hit-test: it primes every ring / box / rotation controller each tick, and
+  // starving it leaves ALL of them unclickable.
+  if (*activePart != 0) {
+    double frac = [self fractionAtTime:time];
+    for (NSUInteger i = 0; i < _exprOrder.count; i++) {
+      NSString *name = _exprOrder[i];
+      MirageOSCBlockRuntime *b = _exprBlocks[name];
+      if (![b.primitive isEqualToString:@"point"])
+        continue;
+      BOOL reveal = NO;
+      if (![self _exprVisible:b atFraction:frac reveal:&reveal] && !reveal)
+        continue;
+      CGPoint c = [self _exprHandleCanvasForBlock:b atFraction:frac];
+      if (hypot(positionX - c.x, positionY - c.y) >
+          MirageExprGrabRadius(b.styleName))
+        continue;
+      *activePart = kMirageExprPartBase + (NSInteger)i;
+      NSCursor *cur = [self kkVisibilityCursorForLabel:name]
+                          ?: MirageOSCCursorForName(b.cursorName);
+      if (cur) {
+        id<FxOnScreenControlAPI_v4> curAPI =
+            [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+        [curAPI setCursor:cur];
+      }
+      self.pointCursorSet = YES;
+      break;
+    }
+  }
+
   // Custom `// @osc` controls hit-test last: a `point` by distance to its
   // forward-expression position within the glyph's grab radius, a `ring` by
   // its own edge hit-test (which also sets its resize / eye cursor).
@@ -1311,7 +1347,10 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
         rot.center = [self _exprRotationCenterForBlock:b atFraction:frac];
         rot.rotationActivePart = kMirageExprPartBase + (NSInteger)i;
         rot.optRevealActive = self.optRevealActive;
-        if ([rot hitTestRingAtX:positionX y:positionY atTime:time] >= 0) {
+        NSInteger ringHit = [rot hitTestRingAtX:positionX
+                                              y:positionY
+                                         atTime:time];
+        if (ringHit >= 0) {
           *activePart = kMirageExprPartBase + (NSInteger)i;
           self.pointCursorSet = YES;
           break;

@@ -137,11 +137,13 @@ Use `iProgress` when the shader should always run linearly; use `#progress` when
 
 The user's **Motion Blur** popover (on/off, shutter, samples) is separate from any directive. `// #motionblur <mode>` (on its own line, no uniform) only decides **who applies** those settings. Absent, the default is `accumulate`.
 
-- **`accumulate`** (default): the plugin re-renders the shader at N sub-frame times across the shutter and averages them. Correct for any ordinary animated single-pass shader with **nothing to declare** - it just works. (A multi-pass shader can't be accumulated, so it silently renders once; declare `native` instead.)
+- **`accumulate`** (default): the plugin re-renders the shader at N sub-frame times across the shutter and averages them. Correct for any ordinary animated shader with **nothing to declare** - it just works. Multi-pass is fine: a buffer chain that only reads earlier buffers is a pure function of the current uniforms, so it is encoded ONCE and each sample re-runs only the Image pass. That makes a buffer the right home for an expensive precompute (a source blur, say) - inline, it would be recomputed inside every sample. A **feedback** chain (a buffer reading itself or a later buffer) is the exception: its state depends on history, so it can't be shared across samples and validation asks you to declare `native` or `off` instead.
 - **`native`**: the shader **blurs itself** - a feedback trail, or its own internal sampling loop. The plugin renders once and hands you the popover settings as globals:
   - **`iMotionBlur`** - shutter as `0..1` (`0` when Motion Blur is off). Map it onto your effect, e.g. a trail's decay.
   - **`iMotionBlurSamples`** - the sample count, if you loop internally.
 - **`off`**: no motion blur for this shader.
+
+Add a bare **`on`** (`// #motionblur on`, `// #motionblur native on`) to start ENABLED when the shader is applied from the browser, for an effect that is wrong without it - a transform, say, which otherwise reads as a hard cut every frame. It seeds the control at apply time only, so a user who turns blur off keeps it off. Leave it out otherwise: blur costs N renders per frame.
 
 ```glsl
 // #motionblur native
@@ -191,20 +193,46 @@ Add `osc` (or `osc=<kind>`) to a directive to also draw a **draggable control on
 
 Each `osc=` value is **sugar** - a standard control with no math to write. For a **fully custom** control (a handle at a corner, a crop box, a ring whose value isn't its radius), author a `// @osc` block instead; see the osc-blocks reference for the primitives and their expressions.
 
-| `osc` value         | Valid on                                                   | On-screen control                                       |
-| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
-| `osc` / `osc=point` | `#point` (vec2)                                            | a position handle at the point                          |
-| `osc=ring`          | `#float` / `#percent` / `#int`, or 2-field `#multi` (vec2) | a radius **ellipse**; drag its edge to set the value(s) |
-| `osc=box`           | same as `osc=ring`                                         | a **rectangle** with 8 handles + a value readout        |
-| `osc={z}`           | `#angle` (float)                                           | a single **rotation ring** on the Z axis                |
-| `osc={y,x}`         | 2-field `#multi` (vec2)                                    | two rotation rings (Y and X axes)                       |
-| `osc={z,x,y}`       | 3-field `#multi` (vec3)                                    | three rotation rings (Z, X, Y axes)                     |
+| `osc` value            | Valid on                                                   | On-screen control                                                |
+| ---------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------- |
+| `osc` / `osc=position` | `#point` (vec2)                                            | the full position control: a handle plus an editable motion path |
+| `osc=point`            | `#point` (vec2)                                            | a plain draggable handle - just the glyph, no path               |
+| `osc=ring`             | `#float` / `#percent` / `#int`, or 2-field `#multi` (vec2) | a radius **ellipse**; drag its edge to set the value(s)          |
+| `osc=box`              | same as `osc=ring`                                         | a **rectangle** with 8 handles + a value readout                 |
+| `osc={z}`              | `#angle` (float)                                           | a single **rotation ring** on the Z axis                         |
+| `osc={y,x}`            | 2-field `#multi` (vec2)                                    | two rotation rings (Y and X axes)                                |
+| `osc={z,x,y}`          | 3-field `#multi` (vec3)                                    | three rotation rings (Z, X, Y axes)                              |
 
-A bare `osc` on `#point` defaults to a point handle; a bare `osc` on `#angle` defaults to a single-axis (Z) rotation ring.
+A bare `osc` on `#point` defaults to the **position** control (motion path and all) - write `osc=point` when you only want a handle. A bare `osc` on `#angle` defaults to a single-axis (Z) rotation ring.
 
 ### Ring vs box
 
 `osc=ring` and `osc=box` are the same control in two shapes - both size the value across `[min, max]`. A single-value field is a circle / square; a 2-field `#multi` (vec2) is an ellipse / rectangle with an independent radius per component. Drag a handle to resize; with `lockaspect` on the `#multi`, the ratio is held (Shift inverts the lock; Cmd = fine drag). The box also shows a readout in the field's units (e.g. `40%`, `5`, `0.4 x 0.2`).
+
+The centre comes from `center=x,y` (object space) or `link=<uniform>`, which tracks a `#point`'s live value. For a centre that isn't simply one point, `link="<expression>"` takes a full expression over the shader's own uniforms - e.g. a scale box whose content pivots about an anchor rather than about its position:
+
+```glsl
+// #multi percent label="Scale" fields={X,Y} lockaspect osc=box
+//   link="uPosition + (uAnchor - vec2(0.5)) * (vec2(1.0) - uScale)"
+//   min={1,1} max={800,800} default="100,100"
+uniform vec2 uScale;
+```
+
+Get this wrong and the control still _works_ - it just stops agreeing with the render as soon as the other uniforms move, which is easy to miss because it looks correct at the defaults.
+
+A box can also grow **from an anchor** rather than symmetrically about its centre. `anchor=<#point uniform>` pins the anchor side: a centred anchor is unchanged, an anchor in a corner keeps that corner put and grows the opposite one - the behaviour a transform's scale gizmo needs, so the box agrees with a render that scales about the same anchor.
+
+```glsl
+// #point label="Anchor" osc=point square default="0.5,0.5"
+uniform vec2 uAnchor;
+
+// #multi percent label="Scale" fields={X,Y} lockaspect osc=box
+//   link="uPosition + uAnchor - vec2(0.5)" anchor=uAnchor
+//   min={1,1} max={800,800} default="100,100"
+uniform vec2 uScale;
+```
+
+`link=` places the box's pivot; `anchor=` decides which way it grows from there. They are usually used together on a transform: the pivot is where the render scales from, and the anchor is where inside the content that pivot sits.
 
 ### Rotation: `osc={...}`
 
@@ -224,6 +252,24 @@ Each axis angle reaches the shader as **radians, negated** (a clockwise ring rea
 - `link=uPivot` - centre tracks another `#point` uniform's **live value**, so the control follows a draggable point. Useful for centring a ring / rotation on a position handle.
 
 (`#point` handles sit at their own value, so they don't take `center=` / `link=`.)
+
+### Glyph style
+
+A handle draws as a filled dot by default. Add a bare style word beside the `osc=` to change it:
+
+| word     | glyph                                     |
+| -------- | ----------------------------------------- |
+| `dot`    | filled dot (the default)                  |
+| `square` | filled square - reads as a pivot / anchor |
+| `hollow` | small hollow ring                         |
+| `arc`    | arc handle, like a position control's     |
+
+```glsl
+// #point label="Anchor" osc=point square default="0.5,0.5"
+uniform vec2 uAnchor;
+```
+
+It is the sugar for an authored block's `style =`, so the same words mean the same thing in both forms. Word order does not matter and it composes with the other bare flags (`osc=point square skipsnapping`). Style words are only read outside quotes, so a `label="Square Frame"` is safe.
 
 ### Snapping
 

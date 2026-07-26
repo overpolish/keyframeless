@@ -5,6 +5,7 @@
 
 #import "KKPopoverKeepAlive.h"
 #import "KKTimelineAdvancedView_Private.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
 
 // Global user preference (not per-clip): the Dynamic display warp is a viewing
 // aid, so it persists across sessions and clips like a UI setting, never in the
@@ -167,6 +168,9 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
 
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  if (!_interactionsBlocked &&
+      KKTrackingAreaMatches(_hoverTrackingArea, self.bounds))
+    return;
   if (_hoverTrackingArea) {
     [self removeTrackingArea:_hoverTrackingArea];
     _hoverTrackingArea = nil;

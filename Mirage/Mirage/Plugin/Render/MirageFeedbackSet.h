@@ -33,11 +33,21 @@ id<MTLTexture> _Nullable MirageNewBufferTexture(id<MTLDevice> device,
   // to F, so a deep seek is exact + bounded instead of a fixed window from
   // clear.
   NSMutableDictionary<NSNumber *, NSArray *> *checkpoints;
+  // LRU stamp, bumped on every lookup. Monotonic within the store rather than
+  // process-global (no mutable statics in an XPC plugin).
+  uint64_t touch;
 }
 
 /// The set `store` holds for `key`, created on first use. Reset to empty when
 /// its buffer resolution differs from `w`x`h` (the old textures are the wrong
 /// size and its history is meaningless at the new scale).
+///
+/// The store is capped: a set is per OUTPUT resolution, and a plugin instance
+/// meets several over its life (viewer zoom steps, playback half-res, export,
+/// library preview). Each one holds 8 live textures plus up to 24 checkpoints
+/// of 4, so an uncapped store grows without bound for as long as the instance
+/// lives. Least-recently-used sets are dropped past the cap; the set being
+/// looked up is always kept.
 + (instancetype)setInStore:(NSMutableDictionary *)store
                     forKey:(NSString *)key
                      width:(NSUInteger)w

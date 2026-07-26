@@ -24,6 +24,21 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong, nullable) NSImage *thumbnail;
 /// Section name (@"Image"/@"Common"/@"Buffer A"..) -> GLSL code.
 @property(nonatomic, copy) NSDictionary<NSString *, NSString *> *sections;
+/// BAKE-ONLY control values for the browser thumbnail: uniform name -> the
+/// lane values to seed before rendering the card. Not persisted and never used
+/// by a real render - purely so a shader whose DEFAULTS are visually inert
+/// still shows what it does. Magic Move at its defaults is an identity
+/// transform and Frame's border/glow default to 0, so both would otherwise bake
+/// a card indistinguishable from the untouched source frame.
+///
+/// Values are in the LANE's units, exactly as the inspector stores them: a
+/// `#percent` is 0..100, a `#point` is a 0..1 fraction, a single-value
+/// `units="px"` float is a raw pixel count. Pixels are measured against the
+/// 1080-TALL REFERENCE RESOLUTION the bake renders at before downscaling into
+/// the card (see -hiResTargetForDest:), NOT the card's own 320x180 - a value
+/// sized for the card comes out 6x too small.
+@property(nonatomic, copy, nullable)
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *thumbnailValues;
 /// A shipped, non-deletable starter shader (e.g. the default Plasma), so the
 /// browser always has at least one shader. Built-ins aren't on disk.
 @property(nonatomic) BOOL builtin;

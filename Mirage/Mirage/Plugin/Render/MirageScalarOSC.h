@@ -150,6 +150,28 @@ static inline void MirageScalarParseOSC(NSString *attrs, MirageScalarProp *p) {
         val ? val.lowercaseString
             : (p->isPoint ? @"position" : (p->isAngle ? @"rotate" : @""));
     strncpy(p->oscKind, kindStr.UTF8String ?: "", sizeof(p->oscKind) - 1);
+    // A bare glyph word (`osc=point square`), matching an authored block's
+    // `style =`. Quoted runs are dropped first: these are ordinary English
+    // words and a label like "Square Frame" must not be read as a style.
+    NSString *bare =
+        [[NSRegularExpression regularExpressionWithPattern:@"\"[^\"]*\""
+                                                   options:0
+                                                     error:nil]
+            stringByReplacingMatchesInString:attrs
+                                     options:0
+                                       range:NSMakeRange(0, attrs.length)
+                                withTemplate:@""];
+    NSTextCheckingResult *sm = [[NSRegularExpression
+        regularExpressionWithPattern:@"\\b(dot|square|hollow|arc)\\b"
+                             options:0
+                               error:nil]
+        firstMatchInString:bare
+                   options:0
+                     range:NSMakeRange(0, bare.length)];
+    if (sm && [sm rangeAtIndex:1].location != NSNotFound)
+      strncpy(p->oscStyle,
+              [bare substringWithRange:[sm rangeAtIndex:1]].UTF8String ?: "",
+              sizeof(p->oscStyle) - 1);
     // `skipsnapping`: opt a point/position handle out of the default Cmd snap.
     p->skipSnapping =
         ([[NSRegularExpression
@@ -197,15 +219,44 @@ static inline void MirageScalarParseOSC(NSString *attrs, MirageScalarProp *p) {
         p->rcentery =
             [attrs substringWithRange:[cm rangeAtIndex:2]].doubleValue;
       }
-      // `link=<uniform>`: the centre tracks that #point's live value instead
-      // of the fixed `center=`.
-      NSTextCheckingResult *lk = [[NSRegularExpression
-          regularExpressionWithPattern:@"\\blink\\s*=\\s*(\\w+)"
+      // `anchor=<uniform>`: a box grows FROM that #point rather than
+      // symmetrically about its centre - the anchor side stays pinned as the
+      // value changes (a corner anchor keeps that corner put and grows the
+      // opposite one). Matches KKScaleOSC's anchorLaneLabel behaviour.
+      NSTextCheckingResult *an = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\banchor\\s*=\\s*(\\w+)"
                                options:0
                                  error:nil]
           firstMatchInString:attrs
                      options:0
                        range:NSMakeRange(0, attrs.length)];
+      if (an && [an rangeAtIndex:1].location != NSNotFound)
+        strncpy(p->anchorName,
+                [attrs substringWithRange:[an rangeAtIndex:1]].UTF8String ?: "",
+                sizeof(p->anchorName) - 1);
+      // `link=<uniform>`: the centre tracks that #point's live value instead
+      // of the fixed `center=`. The QUOTED form `link="<expr>"` takes a full
+      // expression instead, for a centre that isn't simply one point - e.g. a
+      // scale box whose content pivots about an anchor:
+      // `link="uPosition + (uAnchor - vec2(0.5)) * (vec2(1.0) - uScale)"`.
+      // Try the quoted form first: the bare pattern would match only the
+      // leading word of an expression.
+      NSTextCheckingResult *lkExpr = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\blink\\s*=\\s*\"([^\"]*)\""
+                               options:0
+                                 error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+      NSTextCheckingResult *lk =
+          lkExpr
+              ?: [[NSRegularExpression
+                     regularExpressionWithPattern:@"\\blink\\s*=\\s*(\\w+)"
+                                          options:0
+                                            error:nil]
+                     firstMatchInString:attrs
+                                options:0
+                                  range:NSMakeRange(0, attrs.length)];
       if (lk && [lk rangeAtIndex:1].location != NSNotFound)
         strncpy(p->linkName,
                 [attrs substringWithRange:[lk rangeAtIndex:1]].UTF8String ?: "",
