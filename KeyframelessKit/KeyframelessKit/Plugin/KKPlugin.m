@@ -144,10 +144,24 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   [t startTimeForEffect:&effStart];
   [t durationTimeForEffect:&dur];
   [t timelineTime:&effStartTL fromInputTime:effStart];
+  // CMTimeGetSeconds returns NaN for an INVALID CMTime, and the timing API
+  // hands one back when this fires before the clip is fully placed (applying
+  // by DOUBLE-CLICK in the effects browser hits this; a drag-apply does not).
+  // NaN fails every comparison, so `durSec <= 0.0` waves it through, and the
+  // NaN reaches NSJSONSerialization in the manifest writer, which RAISES on a
+  // non-finite number. Uncaught, that kills the XPC process, and FCP then
+  // aborts in POOnScreenControl hitCheckWithViewCoords: against the dead
+  // connection on the next mouse move. Test finiteness explicitly.
   double durSec = CMTimeGetSeconds(dur);
+  double tlStart = CMTimeGetSeconds(effStartTL);
+  if (!isfinite(durSec) || !isfinite(tlStart)) {
+    KKLogWarn(@"KKPlugin: link manifest skipped, timing not ready "
+              @"(dur %f, tlStart %f)",
+              durSec, tlStart);
+    return;
+  }
   if (durSec <= 0.0)
     return;
-  double tlStart = CMTimeGetSeconds(effStartTL);
   if (layers != nil) {
     KKLinkWriteManifestWithLayers(
         self.apiManager, lanes ?: @[], layers, tlStart, durSec,

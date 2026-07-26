@@ -12,8 +12,8 @@
 
 #import "KKLog.h"
 #import "KKPluginInstanceState.h" // KKInstanceUUIDForAPI
-#import "KKTimingEvaluation.h"
 #import "KKTimeline.h"
+#import "KKTimingEvaluation.h"
 #import <FxPlug/FxPlugSDK.h> // PROAPIAccessing, FxProjectAPI
 
 // Same shared container the Sonar spectrograms use, so the bus works from the
@@ -127,6 +127,12 @@ static const double kKKManifestTouchSeconds = 10.0;
 static const long kKKManifestPruneSeconds = 7 * 24 * 3600; // 7 days
 
 static NSData *KKLinkManifestData(KKLinkManifest *m) {
+  // NSJSONSerialization RAISES on a non-finite number rather than returning an
+  // error, and an uncaught raise here takes the whole XPC process down. Callers
+  // guard their own timing, so this is the backstop: no manifest beats a dead
+  // plugin.
+  if (!isfinite(m.clipStartSec) || !isfinite(m.clipDurSec))
+    return nil;
   NSMutableDictionary *d = [@{
     @"uuid" : m.uuid ?: @"",
     @"name" : m.displayName ?: @"",
@@ -264,6 +270,10 @@ static os_unfair_lock gLinkPublishLock = OS_UNFAIR_LOCK_INIT;
         timelineEnd:(double)tlEnd
                unit:(NSString *)unit {
   if (!lane || linkID.length == 0)
+    return;
+  // Same non-finite raise as KKLinkManifestData, on the same call path (a
+  // publish follows every manifest write).
+  if (!isfinite(tlStart) || !isfinite(tlEnd))
     return;
   NSURL *dir = [self linksDirectory];
   if (!dir)
@@ -535,8 +545,7 @@ KKLinkDisambiguatedNames(NSArray<NSString *> *names) {
     } else {
       NSInteger k = c.integerValue + 1;
       seen[n] = @(k);
-      [outNames
-          addObject:[NSString stringWithFormat:@"%@ (%ld)", n, (long)k]];
+      [outNames addObject:[NSString stringWithFormat:@"%@ (%ld)", n, (long)k]];
     }
   }
   return outNames;
@@ -561,7 +570,8 @@ KKLinkDisambiguatedNames(NSArray<NSString *> *names) {
     // kKKManifestTouchSeconds.
     struct stat st;
     BOOL statOK = stat(url.fileSystemRepresentation, &st) == 0;
-    if (statOK && (nowWall - st.st_mtimespec.tv_sec) > kKKManifestPruneSeconds) {
+    if (statOK &&
+        (nowWall - st.st_mtimespec.tv_sec) > kKKManifestPruneSeconds) {
       [[NSFileManager defaultManager] removeItemAtURL:url error:nil];
       continue;
     }
@@ -684,18 +694,17 @@ KKLinkDisambiguatedNames(NSArray<NSString *> *names) {
 // Effect-level file: `<safe(uuid)>.thumb.jpg`. Layer-level:
 // `<safe(uuid)>.<safe(layerID)>.thumb.jpg` - the uuid-dot prefix is what the
 // prune/remove sweeps match on.
-+ (NSURL *)_thumbnailURLForUUID:(NSString *)uuid
-                        layerID:(NSString *)layerID {
++ (NSURL *)_thumbnailURLForUUID:(NSString *)uuid layerID:(NSString *)layerID {
   if (uuid.length == 0)
     return nil;
   NSURL *dir = [self thumbnailsDirectory];
   if (!dir)
     return nil;
-  NSString *stem = layerID.length
-                       ? [NSString stringWithFormat:@"%@.%@",
-                                                    KKLinkSafeFilename(uuid),
-                                                    KKLinkSafeFilename(layerID)]
-                       : KKLinkSafeFilename(uuid);
+  NSString *stem =
+      layerID.length
+          ? [NSString stringWithFormat:@"%@.%@", KKLinkSafeFilename(uuid),
+                                       KKLinkSafeFilename(layerID)]
+          : KKLinkSafeFilename(uuid);
   return [dir URLByAppendingPathComponent:
                   [stem stringByAppendingPathExtension:@"thumb.jpg"]];
 }
