@@ -33,6 +33,12 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
 @package
   NSMutableDictionary<NSString *, _KKStaticValueRow *> *_rowsByLabel;
   NSStackView *_stack;
+  // Hard ceiling at the popover's own (hardcoded, per-size) content width.
+  // Without it a single wide row - e.g. a 4-component lane whose auto-sized
+  // component labels are long - propagates its required width up through
+  // `row.width == stack.width` and NSPopover grows the whole popover past its
+  // size, leaving the centred category pill bar hanging over the edge.
+  NSLayoutConstraint *_maxWidthConstraint;
   // Vertical scroller (top/bottom fade shadows) hosting only the param-row
   // stack, so the mini-viewer + header + category pill stay sticky above and a
   // small / low-resolution display can scroll the rows instead of clipping

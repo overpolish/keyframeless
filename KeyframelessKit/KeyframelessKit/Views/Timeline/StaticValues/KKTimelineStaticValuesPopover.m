@@ -843,6 +843,29 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // falls back to the first category. Lets the constants popover drop a tab live
 // when its last constant lane is moved to animated, without reopening (no
 // mini-viewer blink).
+// Re-assert the popover's width ceiling - and the category bar's matching
+// intrinsic cap - for the CURRENT size class. Called from the nav rebuild (the
+// initial build, before the popover exists) and from every content-size apply,
+// so sm/md/lg moves the ceiling with it instead of pinning the popover to the
+// width it happened to be built at.
+//
+// The ceiling exists because a single wide row - e.g. a 4-component lane whose
+// auto-sized component labels are long - otherwise propagates its required
+// width up through `row.width == stack.width` and NSPopover grows the whole
+// popover past its hardcoded size, leaving the centred pill bar over the edge.
+- (void)_applyMaxWidthCeiling {
+  CGFloat maxW =
+      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath];
+  if (!_maxWidthConstraint) {
+    _maxWidthConstraint =
+        [self.widthAnchor constraintLessThanOrEqualToConstant:maxW];
+    _maxWidthConstraint.active = YES;
+  } else if (fabs(_maxWidthConstraint.constant - maxW) > 0.5) {
+    _maxWidthConstraint.constant = maxW;
+  }
+  _categoryPillBar.maxIntrinsicWidth = maxW - KKPaddingMD * 2;
+}
+
 - (void)_rebuildCategoryNavForLanes:(NSArray<KKLane *> *)lanes
                     initialCategory:(NSString *)requested {
   [_categoryPillBar removeFromSuperview];
@@ -880,6 +903,14 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     // name as many groups as it likes, so this isn't a rare case.
     KKPillBar *bar = [[KKPillBar alloc] initWithPillRow:pill];
     bar.translatesAutoresizingMaskIntoConstraints = NO;
+    // Cap the intrinsic width at what this popover actually has. Reporting the
+    // full pill run instead stretched the content VIEW past the popover's fixed
+    // contentSize (540 -> 597 with 9 categories) while the WINDOW stayed 540,
+    // so the bar overhung the edge until a reopen re-created the popover at the
+    // inflated size. Capped, the inner scroll takes over as intended below.
+    bar.maxIntrinsicWidth = [_KKStaticValuesPopoverView
+                                _popoverWidthForDescriptor:_descriptorPath] -
+                            KKPaddingMD * 2;
     // Hug the content while it fits, but near-zero compression resistance lets
     // it shrink so the inner scroll takes over instead of clipping.
     [bar setContentHuggingPriority:NSLayoutPriorityRequired - 1
@@ -908,6 +939,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _stackTopConstraint = [_rowsScroll.topAnchor constraintEqualToAnchor:top
                                                               constant:inset];
   _stackTopConstraint.active = YES;
+  // Idempotent; also covers the initial build, which runs before the popover
+  // (and so before the first -_applyContentSize).
+  [self _applyMaxWidthCeiling];
 }
 
 // (Re)seed the live per-lane values from the current `_lanes` snapshot, so the
@@ -1012,6 +1046,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // rows scroll rather than running off a small display. No-op before the popover
 // exists (initial sizing goes through -clampContentToScreenOfView:).
 - (void)_applyContentSize {
+  // Before the popover check: the ceiling must track the size class even on
+  // the paths that run while the popover is still being built.
+  [self _applyMaxWidthCeiling];
   if (!_popover)
     return;
   CGSize s = [self _naturalContentSize];

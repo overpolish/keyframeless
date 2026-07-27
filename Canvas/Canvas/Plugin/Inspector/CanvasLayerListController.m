@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 #import "CanvasLayerListController_Private.h"
 #import "CanvasLayerListView.h"
 #import "CanvasLayerRender.h"
@@ -11,6 +10,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h> // KKWriteCustomParamString
+#import <KeyframelessKit/KKPlugin.h>   // KKPerformUndoable
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -138,12 +138,12 @@ static const CGFloat kSlideDistance = 12.0;
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
         id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
         NSData *blob = [KKBezierPath blobFromPaths:paths];
-        KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
-                                 kParamLayerData);
-        // Set the selection in the SAME action so a blob+selection change undoes as
-        // one step. Read -> patch -> write kParamUIState (mirrors KKPlugin
-        // -patchUIStateKeys, but inside this action scope rather than its own). nil
-        // ids = leave selection untouched (blob-only write).
+        KKWriteCustomParamString(
+            setAPI, [blob base64EncodedStringWithOptions:0], kParamLayerData);
+        // Set the selection in the SAME action so a blob+selection change
+        // undoes as one step. Read -> patch -> write kParamUIState (mirrors
+        // KKPlugin -patchUIStateKeys, but inside this action scope rather than
+        // its own). nil ids = leave selection untouched (blob-only write).
         if (ids) {
           NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
           NSMutableDictionary *state =
@@ -164,7 +164,7 @@ static const CGFloat kSlideDistance = 12.0;
                   encoding:NSUTF8StringEncoding];
           KKWriteCustomParamString(setAPI, json, kParamUIState);
         }
-  });
+      });
   // Rebuild the open panel from the just-written param (no-op when closed).
   [self->_listView reloadFromParam];
 }
@@ -207,6 +207,11 @@ static const CGFloat kSlideDistance = 12.0;
   p.becomesKeyOnlyIfNeeded = NO;
   p.hasShadow = YES;
   p.releasedWhenClosed = NO;
+  // NSPanel defaults this to YES, and in a ViewBridge process activation
+  // churns constantly: each deactivation orders the panel out, which ALSO
+  // drops the parent/child link and orphans it until the popover is reopened.
+  // Same fix as Mirage's template browser panel.
+  p.hidesOnDeactivate = NO;
   p.backgroundColor = NSColor.clearColor;
   p.opaque = NO;
   // We drive the fade ourselves; suppress AppKit's default order-in animation.

@@ -105,11 +105,18 @@ static const CGFloat kSuffixSlotW = 17.0;
   [self addSubview:_prefix];
   [self addSubview:_field];
   [self addSubview:_suffix];
+  _prefixWidth = [_prefix.widthAnchor constraintEqualToConstant:kPrefixSlotW];
+  // Not required (and set before activation - a constraint can't cross the
+  // required boundary afterwards): an auto-sized label slot is a preference,
+  // so several wide component labels compress into a fixed-width popover
+  // instead of forcing the whole popover wider than its hardcoded size.
+  _prefixWidth.priority = NSLayoutPriorityRequired - 1;
   [NSLayoutConstraint activateConstraints:@[
     [_prefix.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_prefix.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    (_prefixWidth =
-         [_prefix.widthAnchor constraintEqualToConstant:kPrefixSlotW]),
+    _prefixWidth,
+    // Never collapse past the standard one-character slot.
+    [_prefix.widthAnchor constraintGreaterThanOrEqualToConstant:kPrefixSlotW],
     [_field.leadingAnchor constraintEqualToAnchor:_prefix.trailingAnchor
                                          constant:KKPaddingXS],
     [_field.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],

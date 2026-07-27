@@ -91,7 +91,20 @@ static const CGFloat kEdgeW = 16.0; // overflow-shadow gradient width
   // Hug the pill content so the bar can be right-aligned by Auto Layout
   // (label-left / control-right, matching the rest of the popover). When
   // the host pins it narrower than this, `layout` falls back to scrolling.
-  return _row.intrinsicContentSize;
+  NSSize s = _row.intrinsicContentSize;
+  // Never advertise more than the host can give: an over-wide intrinsic
+  // inflates the host's fitting width (see maxIntrinsicWidth).
+  if (_maxIntrinsicWidth > 0)
+    s.width = MIN(s.width, _maxIntrinsicWidth);
+  return s;
+}
+
+- (void)setMaxIntrinsicWidth:(CGFloat)maxIntrinsicWidth {
+  if (fabs(_maxIntrinsicWidth - maxIntrinsicWidth) < 0.5)
+    return;
+  _maxIntrinsicWidth = maxIntrinsicWidth;
+  [self invalidateIntrinsicContentSize];
+  self.needsLayout = YES;
 }
 
 - (BOOL)isFlipped {

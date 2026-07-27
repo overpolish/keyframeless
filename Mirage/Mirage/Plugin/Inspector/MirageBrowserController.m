@@ -102,6 +102,13 @@ static const CGFloat kSlideDistance = 12.0;
   p.becomesKeyOnlyIfNeeded = NO;
   p.hasShadow = YES;
   p.releasedWhenClosed = NO;
+  // NSPanel defaults this to YES. In a ViewBridge process activation churns
+  // constantly (and most of all while the first popover is still being built),
+  // and each deactivation ordered the panel out - which ALSO drops the
+  // parent/child link, orphaning it for good. The panel then never came back
+  // until the popover was closed and reopened: no close notification, no
+  // -_hide, parent window still alive and visible.
+  p.hidesOnDeactivate = NO;
   p.backgroundColor = NSColor.clearColor;
   p.opaque = NO;
   p.animationBehavior = NSWindowAnimationBehaviorNone;

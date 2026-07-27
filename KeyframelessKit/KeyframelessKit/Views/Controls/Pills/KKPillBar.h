@@ -35,6 +35,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// Row height (drives the bar's intrinsic height); set before adding.
 @property(nonatomic) BOOL grouped;
 
+/// Ceiling on the bar's intrinsic WIDTH (0 = unlimited, the default).
+///
+/// Without it a long pill run reports its full content width as the intrinsic
+/// size, which propagates into the host's fitting width: a fixed-size host
+/// (e.g. a popover pinned to a set content width) gets its content VIEW
+/// stretched past the window, and the bar visibly overhangs the edge instead
+/// of scrolling. Set this to the width actually available and the inner
+/// scroll takes over, which is the point of the bar.
+@property(nonatomic) CGFloat maxIntrinsicWidth;
+
 @end
 
 NS_ASSUME_NONNULL_END
