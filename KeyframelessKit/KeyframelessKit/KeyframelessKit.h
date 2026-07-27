@@ -53,6 +53,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLabelView.h>
 #import <KeyframelessKit/KKLaneRowView.h>
+#import <KeyframelessKit/KKLicense.h>
 #import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKLinkExpr.h>
 #import <KeyframelessKit/KKLinkWatcher.h>
@@ -144,4 +145,5 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/KKToolbar.h>
 #import <KeyframelessKit/KKUpdateChecker.h>
+#import <KeyframelessKit/KKWatermark.h>
 #import <KeyframelessKit/NSColor+KKColors.h>

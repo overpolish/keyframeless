@@ -238,6 +238,15 @@ struct AppShell: View {
 			PillTabBar(selected: $audioModel.selectedTab)
 			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
 			FeedbackButton(url: KKUpdateChecker.shared().feedbackURL)
+			// Trial covers Steno only; Sonar is free, so the button hides there.
+			if audioModel.selectedTab == .audio {
+				LicenseButton(
+					productID: LicenseProduct.steno,
+					productName: "Steno",
+					productSecret: "PAYHIP_SECRET_REDACTED",
+					purchaseURL: URL(string: "https://store.overpolish.co/b/pDFf6")
+				)
+			}
 			Spacer()
 			toolNav
 		}

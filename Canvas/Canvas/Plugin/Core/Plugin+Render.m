@@ -16,10 +16,12 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneDisplayValueAtFraction
 #import <KeyframelessKit/KKTimeline.h>       // KKTimelineRetimedForMediaAnchor
+#import <KeyframelessKit/KKLicense.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKMotionBlurReconstruct.h>
+#import <KeyframelessKit/KKWatermark.h>
 #import <KeyframelessKit/KKPlugin+MiniViewerFeed.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 
@@ -293,6 +295,21 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
+  BOOL ok = [self _renderDestinationImageInner:destinationImage
+                                  sourceImages:sourceImages
+                                   pluginState:pluginState
+                                        atTime:renderTime
+                                         error:outError];
+  if (ok)
+    KKWatermarkApplyIfUnlicensed(KKLicenseProductCanvas, destinationImage);
+  return ok;
+}
+
+- (BOOL)_renderDestinationImageInner:(FxImageTile *)destinationImage
+                        sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                         pluginState:(NSData *)pluginState
+                              atTime:(CMTime)renderTime
+                               error:(NSError *_Nullable *)outError {
   if (!sourceImages.count || !sourceImages[0].ioSurface ||
       !destinationImage.ioSurface) {
     KKLogError(@"Canvas render bail: src=%lu",

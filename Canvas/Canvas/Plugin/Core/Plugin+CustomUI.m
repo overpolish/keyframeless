@@ -17,6 +17,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
+#import <KeyframelessKit/KKLicense.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKOSCVisibilityDefaults.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
@@ -29,6 +30,7 @@
 #import <KeyframelessKit/KKTimingGuide.h>
 #import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKUpdateChecker.h>
+#import <KeyframelessKit/NSColor+KKColors.h>
 @import KeyframelessAI;
 
 @interface CanvasPlugin (GuideScene)
@@ -1315,6 +1317,31 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
                                            productContext:productContext
                                               allowCreate:YES];
                                    }];
+}
+
+- (nullable NSView *)licenseAccessoryView {
+  __weak typeof(self) weakSelf = self;
+  return [KKLicenseBannerHost
+      makeButtonWithProductID:KKLicenseProductCanvas
+                  productName:@"Canvas"
+                productSecret:
+                    @"PAYHIP_SECRET_REDACTED"
+                  purchaseURL:@"https://store.overpolish.co/b/aWpXq"
+                    tintColor:[NSColor accentMatchingHost]
+                  onActivated:^{
+                    // FCP keeps serving the cached (watermarked) frame at a
+                    // static playhead; a fresh nonce on the scratch param
+                    // forces the clean re-render immediately.
+                    [weakSelf
+                        kkInParamAction:^(
+                            id<FxParameterRetrievalAPI_v6> getAPI,
+                            id<FxParameterSettingAPI_v5> setAPI,
+                            CMTime actionTime) {
+                          KKWriteCustomParamString(setAPI,
+                                                   [[NSUUID UUID] UUIDString],
+                                                   kParamRenderNudge);
+                        }];
+                  }];
 }
 
 - (void)_runAIPrompt:(NSString *)prompt

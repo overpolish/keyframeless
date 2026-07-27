@@ -20,6 +20,7 @@
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKGLSLSyntax.h> // KKExprCatalogMarkdown (AI reference)
 #import <KeyframelessKit/KKHelpSection.h>
+#import <KeyframelessKit/KKLicense.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKPresets.h>
@@ -28,6 +29,7 @@
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKUpdateChecker.h>
+#import <KeyframelessKit/NSColor+KKColors.h>
 @import KeyframelessAI;
 
 // Apply-an-AI-result helpers, one per result kind. Each owns its FCP action
@@ -591,6 +593,31 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
           return;
         [strong _runAIPrompt:prompt productContext:productContext];
       }];
+}
+
+- (nullable NSView *)licenseAccessoryView {
+  __weak typeof(self) weakSelf = self;
+  return [KKLicenseBannerHost
+      makeButtonWithProductID:KKLicenseProductMirage
+                  productName:@"Mirage"
+                productSecret:
+                    @"PAYHIP_SECRET_REDACTED"
+                  purchaseURL:@"https://store.overpolish.co/b/wGE3c"
+                    tintColor:[NSColor accentMatchingHost]
+                  onActivated:^{
+                    // FCP keeps serving the cached (watermarked) frame at a
+                    // static playhead; a fresh nonce on the scratch param
+                    // forces the clean re-render immediately.
+                    [weakSelf
+                        kkInParamAction:^(
+                            id<FxParameterRetrievalAPI_v6> getAPI,
+                            id<FxParameterSettingAPI_v5> setAPI,
+                            CMTime actionTime) {
+                          KKWriteCustomParamString(setAPI,
+                                                   [[NSUUID UUID] UUIDString],
+                                                   kParamRenderNudge);
+                        }];
+                  }];
 }
 
 - (void)_runAIPrompt:(NSString *)prompt

@@ -14,7 +14,7 @@ import Foundation
 /// Overlapping clips are averaged.
 ///
 /// The analyzer is deliberately decoupled from how the clips were obtained
-/// (dialogue-only vs all-audio parse) and from any consumer (Shader et al) —
+/// (dialogue-only vs all-audio parse) and from any consumer (Shader et al) -
 /// it just produces a `Spectrogram`. Phase 1 also dumps a PNG so the result
 /// can be eyeballed against the audio before wiring the shared cache/reader.
 enum SpectrogramAnalyzer {

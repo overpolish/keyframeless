@@ -164,24 +164,6 @@
     },
     "%lld clips": {
       "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld clip"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld clips"
-                }
-              }
-            }
-          }
-        },
         "de": {
           "variations": {
             "plural": {
@@ -195,6 +177,24 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld Clips"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld clip"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld clips"
                 }
               }
             }
@@ -2331,16 +2331,16 @@
     },
     "Couldn't read any selected audio - the media may have moved (%@%@)": {
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Couldn't read any selected audio - the media may have moved (%1$@%2$@)"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Kein ausgewähltes Audio lesbar - die Medien wurden möglicherweise verschoben (%@%@)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Couldn't read any selected audio - the media may have moved (%1$@%2$@)"
           }
         },
         "es": {
@@ -9243,6 +9243,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "宽度"
+          }
+        }
+      }
+    },
+    "Without a license only the first 5 captions or titles export": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Lizenz werden nur die ersten 5 Untertitel oder Titel exportiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin licencia solo se exportan los primeros 5 subtítulos o títulos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sans licence, seuls les 5 premiers sous-titres ou titres sont exportés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライセンスがない場合、書き出せるのは最初の 5 件のキャプションまたはタイトルのみです"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "라이선스가 없으면 처음 5개의 캡션 또는 타이틀만 내보냅니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未激活许可证时仅导出前 5 条字幕或标题"
           }
         }
       }

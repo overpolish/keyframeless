@@ -11,10 +11,12 @@
 #import "MirageStateBlob.h"
 #import "Plugin+Render_Internal.h"
 
+#import <KeyframelessKit/KKLicense.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKWatermark.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -358,6 +360,21 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
+  BOOL ok = [self _renderDestinationImageInner:destinationImage
+                                  sourceImages:sourceImages
+                                   pluginState:pluginState
+                                        atTime:renderTime
+                                         error:outError];
+  if (ok)
+    KKWatermarkApplyIfUnlicensed(KKLicenseProductMirage, destinationImage);
+  return ok;
+}
+
+- (BOOL)_renderDestinationImageInner:(FxImageTile *)destinationImage
+                        sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                         pluginState:(NSData *)pluginState
+                              atTime:(CMTime)renderTime
+                               error:(NSError *_Nullable *)outError {
   if (sourceImages.count == 0 || !sourceImages[0].ioSurface ||
       !destinationImage.ioSurface) {
     if (outError != NULL) {

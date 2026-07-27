@@ -21,7 +21,11 @@ class AudioModelManager: ObservableObject {
 	struct ModelInfo: Identifiable {
 		let id: String
 		let displayName: String
+		/// Download size on disk (what actually comes over the wire).
 		let sizeDescription: String
+		/// Minimum system RAM to run comfortably, mirroring the Keyframeless AI
+		/// model list's RAM badge.
+		let minRAMGB: Int
 		let hint: String
 		let engine: Engine
 	}
@@ -37,39 +41,51 @@ class AudioModelManager: ObservableObject {
 	private nonisolated static let siliconModels: [ModelInfo] = [
 		ModelInfo(
 			id: "openai_whisper-tiny", displayName: "Tiny", sizeDescription: "~390 MB",
+			minRAMGB: 8,
 			hint: String(localized: "Fastest, best for rough drafts"), engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-base", displayName: "Base", sizeDescription: "~670 MB",
+			minRAMGB: 8,
 			hint: String(localized: "Good speed and accuracy"), engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-small", displayName: "Small", sizeDescription: "~1.4 GB",
+			minRAMGB: 8,
 			hint: String(localized: "Handles accents and noise"), engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-large-v3_turbo", displayName: "Large v3 Turbo",
 			sizeDescription: "~1.6 GB",
+			minRAMGB: 16,
 			hint: String(localized: "Near-large accuracy at speed"), engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-large-v3", displayName: "Large v3", sizeDescription: "~6 GB",
+			minRAMGB: 16,
 			hint: String(localized: "Best accuracy, final exports"), engine: .whisperKit),
+		// Parakeet download sizes are the CoreML repo totals (HF API): the
+		// "0.6b" in the name is parameter count, NOT megabytes.
 		ModelInfo(
 			id: "parakeet-tdt-0.6b-v2", displayName: "Parakeet 0.6B v2",
-			sizeDescription: "~600 MB",
+			sizeDescription: "~2.6 GB",
+			minRAMGB: 8,
 			hint: String(localized: "English only, fastest"), engine: .parakeet),
 		ModelInfo(
 			id: "parakeet-tdt-0.6b-v3", displayName: "Parakeet 0.6B v3",
-			sizeDescription: "~600 MB",
+			sizeDescription: "~3 GB",
+			minRAMGB: 8,
 			hint: String(localized: "25 European languages, fast"), engine: .parakeet),
 	]
 
 	private nonisolated static let intelModels: [ModelInfo] = [
 		ModelInfo(
 			id: "ggml-tiny-q5_1", displayName: "Tiny", sizeDescription: "~200 MB",
+			minRAMGB: 8,
 			hint: String(localized: "Fastest, best for rough drafts"), engine: .whisperCpp),
 		ModelInfo(
 			id: "ggml-base-q5_1", displayName: "Base", sizeDescription: "~300 MB",
+			minRAMGB: 8,
 			hint: String(localized: "Good speed and accuracy"), engine: .whisperCpp),
 		ModelInfo(
 			id: "ggml-small-q5_1", displayName: "Small", sizeDescription: "~600 MB",
+			minRAMGB: 8,
 			hint: String(localized: "Best accuracy for Intel"), engine: .whisperCpp),
 	]
 
@@ -315,8 +331,30 @@ class AudioModelManager: ObservableObject {
 
 	private func downloadParakeet(_ variant: String) async {
 		guard let version = Self.parakeetVersion(for: variant) else { return }
+		// FluidAudio's progressHandler activates its delegate-session download
+		// path, whose empty didFinishDownloadingTo swallows the async
+		// download(for:) completion - the await never resumes and the download
+		// hangs. So transport runs WITHOUT a handler (plain shared session) and
+		// progress is derived by polling bytes on disk against the known repo
+		// size: completed files land in the cache dir, the in-flight file is
+		// URLSession's CFNetworkDownload_*.tmp.
+		let expected = Self.parakeetExpectedBytes(for: version)
+		let cacheDir = AsrModels.defaultCacheDirectory(for: version)
+		let poller = Task.detached { [weak self] in
+			while !Task.isCancelled {
+				let bytes =
+					Self.directoryBytes(at: cacheDir) + Self.inflightDownloadBytes()
+				await MainActor.run { [weak self] in
+					self?.downloadProgress = min(
+						Double(bytes) / Double(expected), 0.99)
+				}
+				try? await Task.sleep(nanoseconds: 500_000_000)
+			}
+		}
+		defer { poller.cancel() }
 		do {
 			_ = try await AsrModels.download(version: version)
+			downloadProgress = 1
 			downloadedModels.insert(variant)
 			if selectedModel == nil { selectedModel = variant }
 		} catch {
@@ -324,6 +362,47 @@ class AudioModelManager: ObservableObject {
 			return
 		}
 		await downloadCtcEngineIfNeeded()
+	}
+
+	/// Repo totals from the HuggingFace API (July 2026). Only scale the
+	/// progress bar; the poll clamps at 99% until the download returns.
+	private nonisolated static func parakeetExpectedBytes(
+		for version: AsrModelVersion
+	) -> Int64 {
+		switch version {
+		case .v2: return 2_575_000_000
+		case .v3: return 2_991_000_000
+		default: return 2_800_000_000
+		}
+	}
+
+	private nonisolated static func directoryBytes(at url: URL) -> Int64 {
+		guard
+			let enumerator = FileManager.default.enumerator(
+				at: url, includingPropertiesForKeys: [.fileSizeKey])
+		else { return 0 }
+		var total: Int64 = 0
+		for case let file as URL in enumerator {
+			total += Int64(
+				(try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+		}
+		return total
+	}
+
+	private nonisolated static func inflightDownloadBytes() -> Int64 {
+		let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+		guard
+			let items = try? FileManager.default.contentsOfDirectory(
+				at: tmp, includingPropertiesForKeys: [.fileSizeKey])
+		else { return 0 }
+		return
+			items
+			.filter { $0.lastPathComponent.hasPrefix("CFNetworkDownload") }
+			.compactMap {
+				(try? $0.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+			}
+			.map(Int64.init)
+			.reduce(0, +)
 	}
 
 	private func uninstallParakeet(_ variant: String) {

@@ -6,6 +6,7 @@
 import AppKit
 import Combine
 import Foundation
+import KeyframelessAI
 import UniformTypeIdentifiers
 
 class AudioModel: ObservableObject {
@@ -234,10 +235,15 @@ class AudioModel: ObservableObject {
 		paramsModalTemplate = added
 	}
 
+	/// Unactivated Steno exports the first few captions/titles so the full flow
+	/// stays testable. Every export path (pasteboard, FCPXML, SRT) funnels
+	/// through buildCaptionSegments, so the cap lives there.
+	static let unactivatedSegmentLimit = 5
+
 	func buildCaptionSegments(from rows: [AudioEditRow]) -> [CaptionSegment] {
 		let selected = editSelectedClips ?? Set(audioClips.indices)
 		let (filtered, clipsForBuild) = preparePWForCaptions(rows: rows, selected: selected)
-		return CaptionBuilder.build(
+		let segments = CaptionBuilder.build(
 			rows: filtered,
 			clips: clipsForBuild,
 			style: captionStyle,
@@ -246,6 +252,10 @@ class AudioModel: ObservableObject {
 			exportHeight: Int(exportHeight) ?? projectFormat?.height ?? 1080,
 			language: AudioSetupSettings.shared.selectedLanguage
 		)
+		guard LicenseManager.isActivated(LicenseProduct.steno) else {
+			return Array(segments.prefix(AudioModel.unactivatedSegmentLimit))
+		}
+		return segments
 	}
 
 	/// Retags project-wide rows so CaptionBuilder can render them against a synthetic clip

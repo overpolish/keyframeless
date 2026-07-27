@@ -282,6 +282,10 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
   return nil;
 }
 
+- (nullable NSView *)licenseAccessoryView {
+  return nil;
+}
+
 - (KKClipWrappingMode)clipWrappingMode {
   return KKClipWrappingModeNone;
 }

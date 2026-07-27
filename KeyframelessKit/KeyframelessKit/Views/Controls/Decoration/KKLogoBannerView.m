@@ -25,6 +25,7 @@ static const BOOL kKKForceUpdateBanner = NO;
   NSButton *_changelogButton;
   NSButton *_feedbackButton;
   NSView *_leadingAccessory;
+  NSView *_licenseAccessory;
   NSStackView *_leftStack;
 }
 
@@ -192,6 +193,18 @@ static const BOOL kKKForceUpdateBanner = NO;
   if (view) {
     view.translatesAutoresizingMaskIntoConstraints = NO;
     [_leftStack insertArrangedSubview:view atIndex:0];
+  }
+}
+
+- (void)setLicenseAccessoryView:(NSView *)view {
+  if (_licenseAccessory == view)
+    return;
+  if (_licenseAccessory)
+    [_leftStack removeArrangedSubview:_licenseAccessory];
+  _licenseAccessory = view;
+  if (view) {
+    view.translatesAutoresizingMaskIntoConstraints = NO;
+    [_leftStack addArrangedSubview:view];
   }
 }
 

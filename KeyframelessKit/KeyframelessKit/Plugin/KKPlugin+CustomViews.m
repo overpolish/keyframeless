@@ -46,6 +46,9 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     NSView *aiAccessory = [self aiAccessoryView];
     if (aiAccessory)
       [banner setLeadingAccessoryView:aiAccessory];
+    NSView *licenseAccessory = [self licenseAccessoryView];
+    if (licenseAccessory)
+      [banner setLicenseAccessoryView:licenseAccessory];
     return banner;
   }
 

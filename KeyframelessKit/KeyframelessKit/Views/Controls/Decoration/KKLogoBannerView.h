@@ -25,6 +25,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// need to depend on SwiftUI.
 - (void)setLeadingAccessoryView:(nullable NSView *)view;
 
+/// View appended after the built-in buttons in the leading stack. Used to
+/// host the license key button, built in `KeyframelessAI` as an
+/// `NSHostingView` (same reason as the leading accessory).
+- (void)setLicenseAccessoryView:(nullable NSView *)view;
+
 - (instancetype)init;
 
 /// Best-effort screen rect of FCP's effect header row for *this* banner's

@@ -417,6 +417,11 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// (no AI button).
 - (nullable NSView *)aiAccessoryView;
 
+/// Override to attach a license-activation accessory (built via
+/// `KeyframelessAI`'s `KKLicenseBannerHost`) after the banner's built-in
+/// buttons. Default: nil (no license button).
+- (nullable NSView *)licenseAccessoryView;
+
 /// Generic host remote-window presenter. Runs the required action scope,
 /// resolves FxRemoteWindowAPI, attaches to the correctly-sized superview,
 /// clears any prior remote content, and wraps `contentProvider()`'s view in a

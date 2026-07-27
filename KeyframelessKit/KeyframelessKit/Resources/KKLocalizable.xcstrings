@@ -14654,7 +14654,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "表达式用一个小公式来驱动属性，而不是固定值或关键帧。它每帧都会求值，因此可以让属性随时间运动、对另一个片段作出反应，或重塑属性自身的动画——这类运动手动制作需要数十个关键帧。"
+            "value": "表达式用一个小公式来驱动属性，而不是固定值或关键帧。它每帧都会求值，因此可以让属性随时间运动、对另一个片段作出反应，或重塑属性自身的动画--这类运动手动制作需要数十个关键帧。"
           }
         }
       }
@@ -14738,7 +14738,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<kbd>value</kbd> 是属性此刻自身的值——它的关键帧或常量。在它的基础上构建：<kbd>value + 10</kbd> 进行偏移，<kbd>value * 2</kbd> 加倍。单独的 <kbd>value</kbd> 不会改变任何东西，所以除非你想完全替换该值，否则请把它保留在公式里。"
+            "value": "<kbd>value</kbd> 是属性此刻自身的值--它的关键帧或常量。在它的基础上构建：<kbd>value + 10</kbd> 进行偏移，<kbd>value * 2</kbd> 加倍。单独的 <kbd>value</kbd> 不会改变任何东西，所以除非你想完全替换该值，否则请把它保留在公式里。"
           }
         }
       }
@@ -14780,7 +14780,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "用以秒为单位的时间 <kbd>t</kbd> 让物体随时间运动。<kbd>value + sin(t * tau) * 20</kbd> 会让它左右各摆动 20；<kbd>tau</kbd> 是一整圈，所以 <kbd>sin(t * tau)</kbd> 每秒重复一次——把 <kbd>t</kbd> 除小可放慢，乘大可加快。"
+            "value": "用以秒为单位的时间 <kbd>t</kbd> 让物体随时间运动。<kbd>value + sin(t * tau) * 20</kbd> 会让它左右各摆动 20；<kbd>tau</kbd> 是一整圈，所以 <kbd>sin(t * tau)</kbd> 每秒重复一次--把 <kbd>t</kbd> 除小可放慢，乘大可加快。"
           }
         }
       }
@@ -14864,7 +14864,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<kbd>t</kbd> 是整个项目的时钟，不是片段的。要让运动随片段开始，请用 <kbd>progress</kbd>（在片段中从 0 到 1）或 <kbd>ct</kbd>（自片段开始以来的秒数）——用 <kbd>easeOut(clamp(ct, 0, 1))</kbd> 让某物在片段的第一秒内淡入。"
+            "value": "<kbd>t</kbd> 是整个项目的时钟，不是片段的。要让运动随片段开始，请用 <kbd>progress</kbd>（在片段中从 0 到 1）或 <kbd>ct</kbd>（自片段开始以来的秒数）--用 <kbd>easeOut(clamp(ct, 0, 1))</kbd> 让某物在片段的第一秒内淡入。"
           }
         }
       }
@@ -14948,7 +14948,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "对于有多个部分的属性——尺寸的宽和高、位置的 X 和 Y——<kbd>value</kbd> 表示整体。用 <kbd>value.x</kbd> 或 <kbd>value.y</kbd> 读取某一部分，再用 <kbd>vec2(...)</kbd> 重新组合，即可独立驱动各部分。"
+            "value": "对于有多个部分的属性--尺寸的宽和高、位置的 X 和 Y--<kbd>value</kbd> 表示整体。用 <kbd>value.x</kbd> 或 <kbd>value.y</kbd> 读取某一部分，再用 <kbd>vec2(...)</kbd> 重新组合，即可独立驱动各部分。"
           }
         }
       }

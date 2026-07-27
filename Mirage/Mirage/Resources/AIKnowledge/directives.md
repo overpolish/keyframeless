@@ -36,7 +36,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 | `#gradient` | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count               |
 | `#float`    | `float n;`         | slider                                           | the raw value                                                                 |
 | `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                         |
-| `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** — transition progress; see below                                     |
+| `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** - transition progress; see below                                     |
 | `#int`      | `float n;`         | integer slider                                   | `int`                                                                         |
 | `#random`   | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                         |
 | `#angle`    | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)                                        |

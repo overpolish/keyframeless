@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+import KeyframelessAI
 import KeyframelessKit
 import SwiftUI
 
@@ -84,6 +85,7 @@ struct AudioExportOptionsSidebar: View {
 
 	@State private var hasAccessibility = AXIsProcessTrusted()
 	@State private var accessibilityTimer: Timer?
+	@StateObject private var license = LicenseState.shared(for: LicenseProduct.steno)
 
 	private var hasTranscribedSelection: Bool {
 		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
@@ -105,6 +107,15 @@ struct AudioExportOptionsSidebar: View {
 			Text("Export Settings")
 				.font(.title3)
 				.foregroundStyle(.secondary)
+			if !license.isActivated {
+				HelperText(
+					String(
+						localized:
+							"Without a license only the first 5 captions or titles export"
+					),
+					systemImage: "key.horizontal"
+				)
+			}
 			VStack(spacing: KKSpacingLG) {
 				AudioExportOptionsView(model: model)
 				Spacer()
