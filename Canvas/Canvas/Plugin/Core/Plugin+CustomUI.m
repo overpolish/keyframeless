@@ -1326,7 +1326,7 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
                   productName:@"Canvas"
                 productSecret:
                     @"PAYHIP_SECRET_REDACTED"
-                  purchaseURL:@"https://store.overpolish.co/b/aWpXq"
+                  purchaseURL:@"https://keyframeless.com"
                     tintColor:[NSColor accentMatchingHost]
                   onActivated:^{
                     // FCP keeps serving the cached (watermarked) frame at a

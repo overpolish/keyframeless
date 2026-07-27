@@ -6,7 +6,7 @@
 import Foundation
 
 extension AIPluginAgent {
-	/// Pass for "code" prompts (Shader only): turn a request about the shader's
+	/// Pass for "code" prompts (Mirage only): turn a request about the shader's
 	/// look/effect into a complete GLSL source. The host writes it into its code
 	/// lane, which re-transpiles and rebuilds the controls.
 	///

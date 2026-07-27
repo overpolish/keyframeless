@@ -8,7 +8,7 @@ import Foundation
 import KeyframelessKit
 import SwiftUI
 
-/// Sonar: analyzes the project's audio into a timeline spectrogram that Shader
+/// Sonar: analyzes the project's audio into a timeline spectrogram that Mirage
 /// (and future visual plugins) sample by render time. Shows the whole project's
 /// audio (all roles) on the reusable timeline; drop loads the shared model so
 /// Steno and Sonar stay on the same project. Selection picks what gets

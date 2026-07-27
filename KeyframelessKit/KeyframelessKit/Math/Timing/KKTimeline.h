@@ -540,7 +540,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// lane is visible only if the primary rule (or the primary-OR pair, if that is
 /// used) holds AND this named lane's component-0 value (rounded) is in
 /// `visibleWhenAndValues`. An absent controller counts as this side being false
-/// (the lane hides). Used for Mesh's dynamic colour swatches, which show only
+/// (the lane hides). Used for Mirage's dynamic colour swatches, which show only
 /// when both the Type supports swatch N AND the colour-count lane is >= N.
 /// Serialized.
 @property(nonatomic, copy, nullable) NSString *visibleWhenAndKey;
@@ -550,7 +550,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// (componentMax[0]) is looked up from `componentMaxByControllerValue` using
 /// the rounded component-0 value of the lane named `maxControllerKey` as the
 /// index
-/// - so the slider's range reacts to another lane (e.g. Mesh's Type caps the
+/// - so the slider's range reacts to another lane (e.g. Mirage's Type caps the
 /// colour count, keeping one easy slider whose max tracks the Type). Falls back
 /// to the static `componentMax` when unset / out of range. Serialized.
 @property(nonatomic, copy, nullable) NSString *maxControllerKey;

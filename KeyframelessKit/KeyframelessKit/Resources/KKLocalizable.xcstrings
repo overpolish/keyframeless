@@ -44,7 +44,7 @@
       }
     },
     "Ember": {
-      "comment": "Built-in Mesh preset name: smouldering ember palette.",
+      "comment": "Built-in Mirage preset name: smouldering ember palette.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -86,7 +86,7 @@
       }
     },
     "Meadow": {
-      "comment": "Built-in Mesh preset name: green meadow palette.",
+      "comment": "Built-in Mirage preset name: green meadow palette.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -128,7 +128,7 @@
       }
     },
     "Porcelain": {
-      "comment": "Built-in Mesh preset name: charcoal-to-porcelain palette.",
+      "comment": "Built-in Mirage preset name: charcoal-to-porcelain palette.",
       "extractionState": "manual",
       "localizations": {
         "de": {

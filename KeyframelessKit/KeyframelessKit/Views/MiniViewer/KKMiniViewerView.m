@@ -81,7 +81,7 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   // A generator is any delegate that implements -generateIntoTexture:. Do NOT
   // also require !processSourceTexture: - the base KKMiniViewerRenderer
   // provides processSourceTexture: as a passthrough default, so EVERY renderer
-  // responds to it; only a real source-less generator (Mesh) implements
+  // responds to it; only a real source-less generator (Mirage) implements
   // generateIntoTexture: (the base does not).
   id<KKMiniViewerDelegate> del = self.canvasDelegate;
   return del &&

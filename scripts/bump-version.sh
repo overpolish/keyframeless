@@ -11,7 +11,7 @@
 #
 # Components:
 #   keyframelessx  Keyframeless X app
-#   shader         Shader plugin
+#   mirage         Mirage plugin
 #   canvas         Canvas plugin
 #   ai             Keyframeless AI (standalone local helper)
 
@@ -24,7 +24,7 @@ usage() {
   echo ""
   echo "Components:"
   echo "  keyframelessx  Keyframeless X app"
-  echo "  shader         Shader plugin"
+  echo "  mirage         Mirage plugin"
   echo "  canvas         Canvas plugin"
   echo "  ai             Keyframeless AI (standalone local helper)"
   echo ""
@@ -47,7 +47,7 @@ COMPONENT="$1"
 BUMP="$2"
 
 case "$COMPONENT" in
-  canvas | shader | keyframelessx | ai) ;;
+  canvas | mirage | keyframelessx | ai) ;;
   *)
     echo "Unknown component: $COMPONENT"
     usage
@@ -59,9 +59,20 @@ esac
 plist_for_component() {
   case "$1" in
     canvas)        echo "Canvas/Canvas/Plugin/Info.plist" ;;
-    shader)        echo "Shader/Shader/Plugin/Info.plist" ;;
+    mirage)        echo "Mirage/Mirage/Plugin/Info.plist" ;;
     ai) echo "Distribution/helper/kk-ai-helper.plist" ;;
     keyframelessx) echo "" ;;
+  esac
+}
+
+# The site folder a component's release notes live in. This is the SITE slug,
+# which is not always the component name: the update check derives its own slug
+# from the bundle id (keyframelessx, ai) while the site uses the product names.
+# The generated alias pages keep those paths resolving.
+changelog_slug_for_component() {
+  case "$1" in
+    ai) echo "keyframeless-ai" ;;
+    *)  echo "$1" ;;
   esac
 }
 
@@ -149,6 +160,13 @@ bump_pkgproj() {
   local identifier="$1"
   local pkgproj="Distribution/Keyframeless.pkgproj"
   echo "  $pkgproj ($identifier)"
+  # Fail loudly on an identifier the pkgproj doesn't contain. The perl below
+  # silently does nothing on no match, which is how the Shader -> Mirage rename
+  # left the installer pinned to a stale version without anyone noticing.
+  if ! grep -q "<string>$identifier</string>" "$ROOT/$pkgproj"; then
+    echo "Error: $identifier not found in $pkgproj" >&2
+    exit 1
+  fi
   perl -i -0pe \
     "s|(<key>IDENTIFIER</key>\s*<string>\Q$identifier\E</string>.*?<key>VERSION</key>\s*<string>)[^<]*(</string>)|\${1}$VERSION\${2}|s" \
     "$ROOT/$pkgproj"
@@ -157,10 +175,12 @@ bump_pkgproj() {
 # Create a prefilled release-notes .md for this version (the changelog site + the
 # kk-version meta tag both derive from this file). Never clobbers an existing one.
 create_changelog_md() {
-  local dir="$ROOT/docs/changelog/$COMPONENT"
+  local slug
+  slug="$(changelog_slug_for_component "$COMPONENT")"
+  local dir="$ROOT/docs/changelog/$slug"
   local md="$dir/$VERSION.md"
   if [[ -f "$md" ]]; then
-    echo "  changelog: docs/changelog/$COMPONENT/$VERSION.md already exists (left as-is)"
+    echo "  changelog: docs/changelog/$slug/$VERSION.md already exists (left as-is)"
     return
   fi
   mkdir -p "$dir"
@@ -173,7 +193,7 @@ create_changelog_md() {
 
 ### Fixed
 EOF
-  echo "  changelog: created docs/changelog/$COMPONENT/$VERSION.md"
+  echo "  changelog: created docs/changelog/$slug/$VERSION.md"
 }
 
 echo "Bumping $COMPONENT: $CURRENT -> $VERSION"
@@ -187,11 +207,11 @@ case "$COMPONENT" in
     ;;
 
 
-  shader)
-    bump_plist "Shader/Shader/Wrapper Application/Info.plist"
-    bump_plist "Shader/Shader/Plugin/Info.plist"
-    bump_fxplug "Shader/Shader/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Shader"
+  mirage)
+    bump_plist "Mirage/Mirage/Wrapper Application/Info.plist"
+    bump_plist "Mirage/Mirage/Plugin/Info.plist"
+    bump_fxplug "Mirage/Mirage/Plugin/Info.plist"
+    bump_pkgproj "co.overpolish.keyframeless.Mirage"
     ;;
 
   ai)

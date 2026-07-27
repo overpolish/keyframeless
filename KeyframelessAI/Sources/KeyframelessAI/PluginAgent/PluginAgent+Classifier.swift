@@ -70,7 +70,7 @@ extension AIPluginAgent {
 			supportsCreate
 			? "  \"create\"   - user wants to ADD a NEW shape / drawing / layer that doesn't exist yet (\"draw a line\", \"add a circle\", \"put an arrow in the corner\", \"create a box\"). Even when they also describe animating or styling it, choose \"create\" - the new shape must be made first.\n"
 			: ""
-		// Code authoring (Shader): the LOOK is defined by GLSL source, so a request
+		// Code authoring (Mirage): the LOOK is defined by GLSL source, so a request
 		// to change what the shader draws is a code edit, not a lane mutation.
 		let codeKindLine =
 			supportsCode

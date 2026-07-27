@@ -5,7 +5,7 @@
 
 import Foundation
 
-/// ObjC-facing view of a `CommunityEntry`. The Shader plugin is Objective-C, so
+/// ObjC-facing view of a `CommunityEntry`. The Mirage plugin is Objective-C, so
 /// the Swift core is surfaced through NSObject facades with completion handlers
 /// (mirrors how the plugin already consumes KeyframelessAI).
 @objc(KKCommunityEntry)

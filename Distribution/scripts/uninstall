@@ -10,7 +10,7 @@ MOTION_BASE="$HOME/Movies/Motion Templates.localized"
 APP_DIR="/Applications/Keyframeless"
 
 # The Keyframeless folder under each template type a plugin might install (matches
-# the set the postinstall copies). A plugin can ship more than one - Shader ships
+# the set the postinstall copies). A plugin can ship more than one - Mirage ships
 # both an effect and a transition - so remove them all.
 TEMPLATES=()
 for TYPE in Effects.localized Generators.localized Titles.localized Transitions.localized; do

@@ -119,7 +119,7 @@
   [self applyTimeline:result];
   // onTimelineMutated wrote the new blob, but FCP serves a CACHED frame for a
   // static playhead (a one-shot preset click isn't an ongoing interaction like
-  // an OSC drag). So a generator (e.g. Mesh) - or any plugin whose playhead
+  // an OSC drag). So a generator (e.g. Mirage) - or any plugin whose playhead
   // isn't moving - keeps showing the old frame and the preset appears to do
   // nothing. Bump the render-nudge nonce (the same forced-re-render the
   // boundary preview uses) so FCP treats it as a real change and re-renders.

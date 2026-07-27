@@ -6,7 +6,7 @@
 import KeyframelessKit
 import SwiftUI
 
-/// What Sonar has published, and what Shader's audio dropdown will offer.
+/// What Sonar has published, and what Mirage's audio dropdown will offer.
 ///
 /// Publishing writes a file and nothing else moves, so without this the button
 /// is the only evidence anything happened - and there'd be no way to see what
@@ -29,7 +29,7 @@ struct SonarSourcesList: View {
 					HelperText(
 						String(
 							localized:
-								"Nothing published yet - Publish makes the selected audio available to Shader"
+								"Nothing published yet - Publish makes the selected audio available to Keyframeless plugins"
 						),
 						systemImage: "waveform"
 					)

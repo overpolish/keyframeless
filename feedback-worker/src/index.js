@@ -3,14 +3,35 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-// Feedback intake. The form (public/index.html) is served by Cloudflare's
-// static assets; only POST /submit reaches this Worker. We verify the Turnstile
+// Feedback intake. The form is a static page on the site
+// (docs/feedback/index.html, served by GitHub Pages at keyframeless.com/feedback)
+// and this Worker is only the API behind it, mounted on the SAME origin via
+// Cloudflare routes: keyframeless.com/feedback/submit and .../github-webhook.
+// Everything else on the domain falls through to Pages. Verify the Turnstile
 // token, then open a GitHub issue using GITHUB_TOKEN - which never leaves here.
 
 const PLUGIN_NAMES = {
   canvas: "Canvas",
+  mirage: "Mirage",
   keyframelessx: "Keyframeless X",
 };
+
+// In production the form and this Worker share an origin, so CORS is not
+// involved. Locally they do not: the form is served from :8000 and `wrangler
+// dev` answers on :8787, so allow localhost for that case only.
+function corsHeaders(request) {
+  const origin = request.headers.get("Origin") || "";
+  const ok = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return ok
+    ? {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Max-Age": "86400",
+        Vary: "Origin",
+      }
+    : {};
+}
 
 const MAX_TITLE = 120;
 const MAX_BODY = 8000;
@@ -26,10 +47,19 @@ const ALLOWED_IMAGE_TYPES = {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method === "POST" && url.pathname === "/submit") {
-      return handleSubmit(request, env);
+    if (request.method === "OPTIONS" && url.pathname === "/feedback/submit") {
+      return new Response(null, { status: 204, headers: corsHeaders(request) });
     }
-    if (request.method === "POST" && url.pathname === "/github-webhook") {
+    if (request.method === "POST" && url.pathname === "/feedback/submit") {
+      const response = await handleSubmit(request, env);
+      // handleSubmit builds its own responses; add CORS on the way out so the
+      // form (a different origin) can read the result.
+      const headers = new Headers(response.headers);
+      for (const [k, v] of Object.entries(corsHeaders(request)))
+        headers.set(k, v);
+      return new Response(response.body, { status: response.status, headers });
+    }
+    if (request.method === "POST" && url.pathname === "/feedback/github-webhook") {
       return handleWebhook(request, env);
     }
     return new Response("Not found", { status: 404 });

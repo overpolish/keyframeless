@@ -5632,42 +5632,42 @@
         }
       }
     },
-    "Nothing published yet - Publish makes the selected audio available to Shader": {
+    "Nothing published yet - Publish makes the selected audio available to Keyframeless plugins": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch nichts veröffentlicht - mit „Veröffentlichen“ wird das ausgewählte Audio für Shader verfügbar"
+            "value": "Noch nichts veröffentlicht - mit „Veröffentlichen“ wird das ausgewählte Audio für Keyframeless-Plugins verfügbar"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no hay nada publicado - Publicar hace que el audio seleccionado esté disponible para Shader"
+            "value": "Aún no hay nada publicado - Publicar hace que el audio seleccionado esté disponible para los plugins de Keyframeless"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rien de publié pour l'instant - Publier rend l'audio sélectionné disponible pour Shader"
+            "value": "Rien de publié pour l'instant - Publier rend l'audio sélectionné disponible pour les plugins Keyframeless"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "まだ公開されていません - 「公開」すると、選択したオーディオを Shader で使用できます"
+            "value": "まだ公開されていません - 「公開」すると、選択したオーディオを Keyframeless プラグインで使用できます"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "아직 게시된 항목이 없습니다 - 게시하면 선택한 오디오를 Shader에서 사용할 수 있습니다"
+            "value": "아직 게시된 항목이 없습니다 - 게시하면 선택한 오디오를 Keyframeless 플러그인에서 사용할 수 있습니다"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "尚未发布任何内容 - 发布后所选音频即可供 Shader 使用"
+            "value": "尚未发布任何内容 - 发布后所选音频即可供 Keyframeless 插件使用"
           }
         }
       }

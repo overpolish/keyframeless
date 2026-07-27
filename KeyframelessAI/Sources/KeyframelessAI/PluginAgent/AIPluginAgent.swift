@@ -18,7 +18,7 @@ public enum AIPluginResultKind: Int {
 	/// The user asked to WRITE or EDIT the shader's GLSL source. `shaderSource`
 	/// holds the complete shader the host writes into its code lane (which
 	/// re-transpiles and re-derives its controls). Only produced when the caller
-	/// used the code-authoring entry point (Shader); other plugins never see it.
+	/// used the code-authoring entry point (Mirage); other plugins never see it.
 	case authorCode = 3
 	/// The user asked to drive one or more properties from a FORMULA. `expressionOps`
 	/// is JSON `{ "operations": [{ "lane": "...", "expression": "..." }] }`; the host
@@ -182,7 +182,7 @@ public final class AIPluginAgent: NSObject {
 		}
 	}
 
-	/// Code-authoring variant of `run` (Shader): the host also passes the shader's
+	/// Code-authoring variant of `run` (Mirage): the host also passes the shader's
 	/// current GLSL source, which enables the `code` route - "write a shader for a
 	/// wavy look", "add a glow to this". The agent returns a `.authorCode` result
 	/// whose `shaderSource` the host writes into its code lane. Q&A, animation

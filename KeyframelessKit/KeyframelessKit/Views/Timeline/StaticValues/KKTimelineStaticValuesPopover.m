@@ -989,7 +989,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 }
 
 // Rows built once at open keep the slider max they were built with; a lane
-// whose max tracks another lane (maxControllerKey, e.g. Mesh's colour count
+// whose max tracks another lane (maxControllerKey, e.g. Mirage's colour count
 // vs Type) needs its slider re-bounded whenever the controller changes. Runs on
 // every visibility pass (which re-fires on any gating edit), so the max stays
 // live.
@@ -1128,7 +1128,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 
 // A lane whose slider max reacts to another lane (maxControllerKey): returns
 // a copy with componentMax[0] swapped for the value looked up from the
-// controller lane's current value, so the range tracks e.g. Mesh's Type.
+// controller lane's current value, so the range tracks e.g. Mirage's Type.
 // Unchanged lanes are returned as-is. Rebuilt whenever rows rebuild (Type
 // change re-runs the visibility cascade), so the max stays reactive.
 - (KKLane *)_laneWithDynamicMaxApplied:(KKLane *)lane {

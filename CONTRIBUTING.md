@@ -4,12 +4,12 @@
 
 - Install [workflow extension SDK](https://developer.apple.com/download/all/?q=WorkflowExtensions)
 
-### Mesh custom-shader transpiler (git submodules)
+### Mirage custom-shader transpiler (git submodules)
 
-The Mesh generator's **Custom** shader type transpiles Shadertoy GLSL to Metal at
+Mirage's **Custom** shader type transpiles Shadertoy GLSL to Metal at
 runtime via vendored **glslang + SPIRV-Cross** (git submodules under
-`ThirdParty/`). They build into one static library the Mesh XPC service links.
-On a fresh clone, before building Mesh, run once:
+`ThirdParty/`). They build into one static library the Mirage XPC service links.
+On a fresh clone, before building Mirage, run once:
 
 ```sh
 git submodule update --init --recursive
@@ -17,7 +17,7 @@ ThirdParty/build-transpiler.sh universal      # -> ThirdParty/build/lib/libkktra
 ```
 
 `ThirdParty/build/` is git-ignored; re-run the script only after the pinned
-submodule tags change (or a clean). CI that builds Mesh must run both steps.
+submodule tags change (or a clean). CI that builds Mirage must run both steps.
 Details in `ThirdParty/README.md`.
 
 ...
@@ -139,8 +139,8 @@ Two related-but-separate systems share the docs site and the in-plugin banner.
 ```mermaid
 flowchart LR
   MD["changelog .md<br/>(one per release)"] -->|"build-changelog.py"| HTML["generated HTML<br/>+ kk-version meta"]
-  HTML -->|"commit + push"| Pages["GitHub Pages<br/>update.keyframeless.overpolish.co"]
-  Media["images / video"] -->|"manual upload"| R2m[("R2<br/>media.keyframeless.overpolish.co")]
+  HTML -->|"commit + push"| Pages["GitHub Pages<br/>keyframeless.com"]
+  Media["images / video"] -->|"manual upload"| R2m[("R2<br/>media.keyframeless.com")]
   R2m -.->|"embedded in pages"| Pages
   Plugin["Plugin · KKUpdateChecker"] -->|"GET notes page"| Pages
   Pages -.->|"kk-version"| Plugin
@@ -151,12 +151,12 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  Btn["Plugin · Send feedback button"] -->|"opens feedbackURL<br/>(plugin + version)"| Form["Feedback form<br/>(static asset)"]
-  Form -->|"POST /submit (multipart)"| Submit
+  Btn["Plugin · Send feedback button"] -->|"opens feedbackURL<br/>(plugin + version)"| Form["Feedback form<br/>keyframeless.com/feedback<br/>(static, on the site)"]
+  Form -->|"POST /feedback/submit (multipart)"| Submit
 
-  subgraph Worker["Cloudflare Worker · feedback.keyframeless.overpolish.co"]
-    Submit["/submit"]
-    Hook["/github-webhook"]
+  subgraph Worker["Cloudflare Worker · keyframeless.com/feedback/*"]
+    Submit["/feedback/submit"]
+    Hook["/feedback/github-webhook"]
   end
 
   Submit -->|"verify token"| TS["Turnstile"]
@@ -171,7 +171,7 @@ flowchart TD
 ## Previewing the changelog site (and the update banner)
 
 The changelog/update site under `docs/` is generated from Markdown - one file per
-release at `docs/changelog/<component>/<version>.md`. Edit a `.md` (or
+release at `docs/changelog/<product>/<version>.md`. Edit a `.md` (or
 `docs/assets/style.css`), then rebuild and serve:
 
 ```sh
@@ -179,8 +179,8 @@ python3 scripts/build-changelog.py
 cd docs && python3 -m http.server 8000
 ```
 
-Open http://localhost:8000/ for the suite index, or http://localhost:8000/rounded/
-for a plugin page. The generated `index.html` files are build output - edit the `.md`
+Open http://localhost:8000/ for the landing page, or http://localhost:8000/mirage/
+for a product page. The generated `index.html` files are build output - edit the `.md`
 and rerun the script, never the HTML.
 
 Debug builds point `KKUpdateChecker` at `http://localhost:8000` (release builds use the
@@ -222,7 +222,7 @@ npm run dev                      # serves form + /submit at http://localhost:878
 
 Debug plugin builds point `KKUpdateChecker` at `http://localhost:8787/`, so a running debug plugin's feedback button opens the local form. Open it directly with prefilled context at http://localhost:8787/?plugin=rounded&version=1.2.3.
 
-The form's CSS/icons are copied from `docs/assets` by `npm run sync-assets` (run automatically by `dev`/`deploy`) - edit the originals in `docs/assets`, never the copies under `feedback-worker/public/assets`.
+The form is `docs/feedback/index.html`, a normal page on the site, so it uses `docs/assets` directly - there is no asset copy step. Serve `docs/` (port 8000) and run `wrangler dev` alongside it; the form posts to :8787 automatically when opened on localhost.
 
 Screenshot uploads go to R2. Under local `wrangler dev` they land in a local R2 simulation, so the embedded image URLs (which point at the public `r2.dev` base) won't resolve - use `wrangler dev --remote` to exercise real uploads, or just verify image handling in production.
 

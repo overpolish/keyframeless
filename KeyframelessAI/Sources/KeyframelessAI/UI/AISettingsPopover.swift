@@ -68,7 +68,7 @@ public struct AISettingsPopover: View {
 				AIUpdateBanner(
 					version: updateState.availableVersion ?? "1.0.2",
 					url: updateState.notesURL
-						?? URL(string: "https://update.keyframeless.overpolish.co/ai/"),
+						?? URL(string: "https://keyframeless.com/keyframeless-ai/"),
 					onDismiss: { updateState.dismissed = true }
 				)
 			}

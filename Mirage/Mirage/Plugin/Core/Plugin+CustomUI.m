@@ -602,7 +602,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
                   productName:@"Mirage"
                 productSecret:
                     @"PAYHIP_SECRET_REDACTED"
-                  purchaseURL:@"https://store.overpolish.co/b/wGE3c"
+                  purchaseURL:@"https://keyframeless.com"
                     tintColor:[NSColor accentMatchingHost]
                   onActivated:^{
                     // FCP keeps serving the cached (watermarked) frame at a

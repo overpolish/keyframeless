@@ -1,42 +1,33 @@
 {
-  "siteTitle": "Keyframeless",
-  "payhip": "https://store.overpolish.co/b/QG73g",
-  "releases": "https://github.com/overpolish/keyframeless/releases",
+  "download": "https://dl.keyframeless.com/Keyframeless.pkg",
   "plugins": {
     "canvas": {
       "name": "Canvas",
-      "kind": "FxPlug effect",
-      "payhip": "https://store.overpolish.co/b/aWpXq"
+      "kind": "FxPlug effect"
     },
     "mirage": {
       "name": "Mirage",
-      "kind": "FxPlug effect",
-      "payhip": "https://store.overpolish.co/b/wGE3c"
+      "kind": "FxPlug effect"
     },
     "keyframelessx": {
       "name": "Keyframeless X",
-      "kind": "workflow extension",
-      "payhip": "https://store.overpolish.co/b/pDFf6"
+      "kind": "workflow extension"
     },
-    "ai": {
+    "keyframeless-ai": {
       "name": "Keyframeless AI",
-      "kind": "local AI helper",
-      "payhip": "https://store.overpolish.co/b/ESy4d"
+      "kind": "local AI helper, bundled in the installer"
     },
     "magicmove": {
       "name": "MagicMove",
-      "kind": "FxPlug effect, now a Mirage template",
-      "payhip": "https://store.overpolish.co/b/80FRU"
+      "kind": "FxPlug effect, now a Mirage template"
     },
     "rounded": {
       "name": "Rounded",
-      "kind": "FxPlug effect, now a Mirage template",
-      "payhip": "https://store.overpolish.co/b/H5SUW"
+      "kind": "FxPlug effect, now a Mirage template"
     },
     "glow": {
       "name": "Glow",
-      "kind": "FxPlug effect, now a Mirage template",
-      "payhip": "https://store.overpolish.co/b/MfWRG"
+      "kind": "FxPlug effect, now a Mirage template"
     }
   }
 }

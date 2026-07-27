@@ -45,7 +45,7 @@
 Grab the installer from Payhip. One payment supports continued development, and every future update is included.
 
 <div align="center">
-	<a href="https://store.overpolish.co"><b>Buy on Payhip →</b></a>
+	<a href="https://keyframeless.com"><b>keyframeless.com →</b></a>
 </div>
 
 <br />

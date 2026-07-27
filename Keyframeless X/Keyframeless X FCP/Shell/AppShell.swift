@@ -38,7 +38,7 @@ struct AppShell: View {
 			)
 		)
 		// Sonar's doc lives in KeyframelessKit, not here: Sonar publishes the data
-		// and Shader consumes it, so neither owns the explanation. Registering the
+		// and Mirage consumes it, so neither owns the explanation. Registering the
 		// shared copy keeps one source rather than a duplicate that drifts.
 		AIKnowledgeRegistry.shared.register(
 			BundleMarkdownKnowledgeProvider(
@@ -244,7 +244,7 @@ struct AppShell: View {
 					productID: LicenseProduct.steno,
 					productName: "Steno",
 					productSecret: "PAYHIP_SECRET_REDACTED",
-					purchaseURL: URL(string: "https://store.overpolish.co/b/pDFf6")
+					purchaseURL: URL(string: "https://keyframeless.com")
 				)
 			}
 			Spacer()

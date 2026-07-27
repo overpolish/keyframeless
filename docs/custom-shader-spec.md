@@ -1,6 +1,6 @@
-# Mesh Custom Shader - mini spec
+# Mirage Custom Shader - mini spec
 
-The **Custom** type turns Mesh into an empty, animation-aware shader vessel. The
+The **Custom** type turns Mirage into an empty, animation-aware shader vessel. The
 user pastes a Shadertoy shader (or writes their own), and any value they _mark_
 becomes a keyframeless lane: a slider, colour, point, or dial that animates on
 the timeline. The shader is the commodity. The value is that every marked
@@ -56,7 +56,7 @@ Shadertoy's set, so pasted shaders find what they expect:
 | `iMouse`      | `vec4`  | Shadertoy mouse; mapped to the shared Origin lane  |
 | `iDate`       | `vec4`  | year, month, day, seconds-in-day                   |
 
-Plus Mesh extras (this is the value-add over a bare Shadertoy runner):
+Plus Mirage extras (this is the value-add over a bare Shadertoy runner):
 
 | name          | type   | meaning                                     |
 | ------------- | ------ | ------------------------------------------- |
@@ -179,7 +179,7 @@ palette generator via `iColor[]`.
 
 ## Implementation notes (contained, not research)
 
-- **Render fork.** Types 0..11 stay statically compiled from `Mesh.metal`.
+- **Render fork.** Types 0..11 stay statically compiled from `Mirage.metal`.
   `Custom` branches to a runtime pipeline: `KKGLSLTranspiler` transpiles the
   wrapped GLSL to MSL (glslang + SPIRV-Cross, memoised by source hash), and the
   `newLibraryWithSource:` pipeline is cached per device on the emitted MSL hash.

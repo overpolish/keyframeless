@@ -5809,48 +5809,6 @@
         }
       }
     },
-    "Mesh": {
-      "comment": "Property/category name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mesh"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Malla"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maille"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メッシュ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "메시"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "网格"
-          }
-        }
-      }
-    },
     "Dithering": {
       "comment": "Property/category name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
       "extractionState": "manual",

@@ -4,11 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Keyframeless - Send feedback</title>
-    <!-- Bundled from docs/assets by `npm run sync-assets` (single source). -->
-    <link rel="stylesheet" href="assets/style.css" />
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png" />
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="stylesheet" href="../assets/style.css" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png" />
+    <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
     <!-- Cloudflare Turnstile (anti-spam). Validated server-side by the Worker. -->
     <script
       src="https://challenges.cloudflare.com/turnstile/v0/api.js"
@@ -233,14 +232,14 @@
     <main class="wrap">
       <header class="topbar">
         <div class="brand">
-          <img class="logo" src="assets/apple-touch-icon.png" alt="" />
+          <img class="logo" src="../assets/apple-touch-icon.png" alt="" />
           <div class="title">
             <h1>Send feedback</h1>
             <span class="sub">Keyframeless</span>
           </div>
         </div>
-        <a class="cta" href="https://update.keyframeless.overpolish.co/"
-          >Release notes →</a
+        <a class="cta" href="https://keyframeless.com/"
+          >keyframeless.com →</a
         >
       </header>
 
@@ -381,12 +380,18 @@
     </div>
 
     <script>
-      // Same-origin: the Worker that holds the GitHub token + Turnstile secret
-      // serves this page and answers /submit, so a relative path needs no CORS.
-      const ENDPOINT = "/submit";
+      // Same origin in production: this page is served by Pages and a
+      // Cloudflare route hands /feedback/submit to the Worker (which holds the
+      // GitHub token + Turnstile secret), so no CORS is involved. Locally the
+      // two are split, with `wrangler dev` on :8787.
+      const ENDPOINT =
+        location.hostname === "localhost" || location.hostname === "127.0.0.1"
+          ? "http://localhost:8787/feedback/submit"
+          : "/feedback/submit";
 
       const PLUGIN_NAMES = {
         canvas: "Canvas",
+        mirage: "Mirage",
         keyframelessx: "Keyframeless X",
       };
 

@@ -11,16 +11,17 @@ static NSString *KKUpdateBaseURL(void) {
 #if DEBUG
   return @"http://localhost:8000";
 #else
-  return @"https://update.keyframeless.overpolish.co";
+  return @"https://keyframeless.com";
 #endif
 }
 
 static NSString *KKFeedbackBaseURL(void) {
 #if DEBUG
-  // `wrangler dev` in feedback-worker/ serves the form + /submit here.
-  return @"http://localhost:8787/";
+  // The form is a page on the site, so serve docs/ locally (see CONTRIBUTING);
+  // it posts to `wrangler dev` on :8787 by itself.
+  return @"http://localhost:8000/feedback/";
 #else
-  return @"https://feedback.keyframeless.overpolish.co/";
+  return @"https://keyframeless.com/feedback/";
 #endif
 }
 
@@ -266,8 +267,9 @@ static NSString *const kAIHelperVersionPlist =
 - (void)checkAIUpdateWithCompletion:(void (^)(BOOL))completion {
   NSString *installed = [self readInstalledAIVersion];
   self->_aiCurrentVersion = installed;
-  self->_aiNotesURL = [NSURL
-      URLWithString:[NSString stringWithFormat:@"%@/ai/", KKUpdateBaseURL()]];
+  self->_aiNotesURL =
+      [NSURL URLWithString:[NSString stringWithFormat:@"%@/keyframeless-ai/",
+                                                      KKUpdateBaseURL()]];
 
   // No manifest = the Keyframeless AI helper isn't installed, so there's
   // nothing to update. (Cloud-only / BYOK users never install it.)
