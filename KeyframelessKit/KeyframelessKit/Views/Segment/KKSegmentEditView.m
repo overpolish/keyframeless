@@ -7,54 +7,52 @@
 #import "KKSegmentEditView_Private.h"
 #import <KeyframelessKit/KKSegmentEditView.h>
 
-#import "KKCheckboxRowView.h"
-#import "KKCheckboxView.h"
 #import "KKCurveDefaults.h"
 #import "KKCurvePillView.h"
-#import "KKCurveTicks.h"
 #import "KKEasing.h"
 #import "KKLaneModulationChecklistView.h"
 #import "KKLaneParticipationChecklistView.h"
 #import "KKPopoverBackground.h"
-#import "KKSeedView.h"
-#import "KKSliderView.h"
-#import "KKTimeline.h" // KKLane
+#import "KKTimeline.h"                  // KKLane
+#import "KKTimelineLanesView_Private.h" // _KKStaticValueRow
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 
 static const CGFloat kWidth = 370.0;
-static const CGFloat kHPadding = 10.0;
-static const CGFloat kVPadding = 10.0;
-static const CGFloat kPillHeight = 28.0;
-static const CGFloat kSliderHeight = 20.0;
-static const CGFloat kTickHeight = 10.0;
-static const CGFloat kSeedHeight = 26.0;
-static const CGFloat kLinkedHeight = 22.0; // matches KKLaneRowView's row height
-static const CGFloat kRowGap = 8.0;
-static const NSInteger kIntensityTickCount = 3;
-static const NSInteger kFrequencyTickCount = 3;
-
+// Pills carry a caption line (at low intensity several curves plot alike).
+static const CGFloat kPillHeight = 36.0;
 static const CGFloat kBulkHeaderHeight = 18.0;
+// Air above the "Applies to" section - inside a group the rows butt at 0.
+static const CGFloat kSectionGap = KKPaddingLG;
+// The "Applies to" caption hugs its text: the checklist below is part of the
+// same field, so it butts straight under it.
+static const CGFloat kSectionCaptionH = 16.0;
+
+// Intensity / Frequency / Linked / Seed are all _KKStaticValueRow rows fed a
+// synthetic single-keypose lane, stacked at spacing 0 exactly like the
+// constants + keypose popovers: the row's own kFloatRowH carries the rhythm,
+// and the label column, gutter insets and value column line up with every
+// other popover in the kit. Nothing here hand-rolls a row.
+static NSString *const kKKSegmentIntensityKey = @"Intensity";
+static NSString *const kKKSegmentFrequencyKey = @"Frequency";
+static NSString *const kKKSegmentLinkedKey = @"Linked";
+static NSString *const kKKSegmentSeedKey = @"Seed";
 
 @interface KKSegmentEditView ()
 - (void)_layoutParticipationCaption:(NSTextField *)cap
-                          checklist:(NSView *)checklist
-                              below:(NSView *)bottom;
+                          checklist:(NSView *)checklist;
 @end
 
 @implementation KKSegmentEditView {
   KKCurvePillView *_pills;
-  KKSliderView *_intensitySlider;
-  KKSliderView *_frequencySlider;
-  NSImageView *_intensityTicks;
-  NSImageView *_frequencyTicks;
-  KKSeedView *_seedView;
+  NSStackView *_rowStack;
+  _KKStaticValueRow *_intensityRow;
+  _KKStaticValueRow *_frequencyRow;
+  _KKStaticValueRow *_linkedRow;
+  _KKStaticValueRow *_seedRow;
   NSView *_defaultsAccessory;
   NSButton *_makeDefaultButton;
   NSButton *_resetDefaultButton;
-  KKCheckboxRowView *_linkedRow;
-  NSLayoutConstraint *_intensityTrailingHalf;
-  NSLayoutConstraint *_intensityTrailingFull;
   KKLaneParticipationChecklistView *_partChecklist;
   KKLaneModulationChecklistView *_partCompoundChecklist;
   NSArray<KKLane *> *_partLanes;
@@ -65,12 +63,13 @@ static const CGFloat kBulkHeaderHeight = 18.0;
   NSArray<NSArray<NSNumber *> *> *_partCompoundStates;
 }
 
-static const CGFloat kPartBarH = 22.0; // matches kGroupPillHeight for compounds
-static const CGFloat kPartRowH = kPartBarH; // caption + bar share one line
-// Checklist "Applies to" section: caption line above, the embedded checklist
-// (capped + internally scrolling) below.
-static const CGFloat kPartCaptionH = 16.0;
+// "Applies to": a section caption with the embedded checklist - capped,
+// internally scrolling - directly below it.
 static const CGFloat kPartChecklistMaxBody = 168.0; // ~6 rows before scrolling
+
+// What the pill preview plots a value AS: the shapes are authored over 0..1,
+// so anything past that is drawn at its end of the range.
+static double KKPreviewClamped(double v) { return MIN(MAX(v, 0.0), 1.0); }
 
 static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   if (kind == KKSegmentEditKindHold)
@@ -202,66 +201,67 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
                       participation:NO];
 }
 
+// Everything above the rows: top pad, the optional bulk header, the pills, and
+// the pad below them. The rows themselves are whole kFloatRowH slots.
++ (CGFloat)_chromeHeightForBulkHeader:(BOOL)bulkHeader {
+  CGFloat h = KKPaddingMD;
+  if (bulkHeader)
+    h += kBulkHeaderHeight + KKPaddingMD;
+  return h + kPillHeight + KKPaddingMD;
+}
+
 + (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
                     showsLinked:(BOOL)showsLinked
                      bulkHeader:(BOOL)bulkHeader
                   participation:(BOOL)participation {
-  CGFloat h =
-      2 * kVPadding + kPillHeight + kRowGap + kSliderHeight + kTickHeight;
+  // Intensity + Frequency; the Frequency row only applies to the curves that
+  // use it, and the instance method below subtracts it when collapsed.
+  NSInteger rows = 2;
+  CGFloat h = [self _chromeHeightForBulkHeader:bulkHeader];
   if (kind == KKSegmentEditKindHold) {
     if (showsLinked)
-      h += kRowGap + kLinkedHeight;
-    h += kRowGap + kSeedHeight;
+      rows++;
+    rows++; // Seed
   }
-  if (bulkHeader)
-    h += kBulkHeaderHeight + kRowGap;
   if (participation)
-    h += kRowGap + kPartRowH;
-  return h;
+    h += kSectionGap + kSectionCaptionH;
+  return h + rows * kFloatRowH + KKPaddingMD;
 }
 
 - (CGFloat)contentHeight {
+  CGFloat h = [KKSegmentEditView _chromeHeightForBulkHeader:_bulkHeader];
+  for (NSView *row in _rowStack.arrangedSubviews)
+    if (!row.hidden)
+      h += kFloatRowH;
   _KKLaneChecklistView *checklist = _partChecklist ?: _partCompoundChecklist;
-  if (checklist) {
-    // base includes its own bottom kVPadding; the checklist section provides
-    // the real bottom padding, so drop the base's to avoid a double gap below
-    // it.
-    CGFloat base = [KKSegmentEditView contentHeightForKind:_kind
-                                               showsLinked:_showsLinked
-                                                bulkHeader:_bulkHeader
-                                             participation:NO];
-    return base - kVPadding + kRowGap + kPartCaptionH + KKSpacingSM +
-           [checklist fittingHeight];
-  }
-  return
-      [KKSegmentEditView contentHeightForKind:_kind
-                                  showsLinked:_showsLinked
-                                   bulkHeader:_bulkHeader
-                                participation:(_partLabels.count > 0 ||
-                                               _partCompoundLabels.count > 0)];
+  if (checklist)
+    // Caption + checklist are ONE field: the list butts straight under its
+    // caption (its own top pad is the only air), and its scroll fade marks the
+    // bottom edge, so no bottom pad below it either.
+    return h + kSectionGap + kSectionCaptionH + [checklist fittingHeight];
+  return h + KKPaddingMD;
 }
 
 - (BOOL)hasChecklistParticipation {
   return _partChecklist != nil || _partCompoundChecklist != nil;
 }
 
-// Stack the "Applies to" checklist (full width) below its caption, which sits a
-// row-gap under `bottom`. Shared by the lane (transition) and compound (hold)
-// checklist branches - only the toggle wiring differs.
+// Stack the "Applies to" checklist (full width) directly under its caption -
+// caption and list are ONE field, so nothing sits between them; the section's
+// air goes ABOVE the caption instead. Shared by the lane (transition) and
+// compound (hold) checklist branches - only the toggle wiring differs.
 - (void)_layoutParticipationCaption:(NSTextField *)cap
-                          checklist:(NSView *)checklist
-                              below:(NSView *)bottom {
+                          checklist:(NSView *)checklist {
   [self addSubview:checklist];
   [NSLayoutConstraint activateConstraints:@[
     [cap.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                      constant:kHPadding],
-    [cap.topAnchor constraintEqualToAnchor:bottom.bottomAnchor
-                                  constant:kRowGap],
-    [cap.heightAnchor constraintEqualToConstant:kPartCaptionH],
+                                      constant:KKPaddingLG],
+    [cap.topAnchor constraintEqualToAnchor:_rowStack.bottomAnchor
+                                  constant:kSectionGap],
+    [cap.heightAnchor constraintEqualToConstant:kSectionCaptionH],
     [checklist.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [checklist.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-    [checklist.topAnchor constraintEqualToAnchor:cap.bottomAnchor
-                                        constant:KKSpacingSM],
+    [checklist.topAnchor constraintEqualToAnchor:cap.bottomAnchor],
   ]];
 }
 
@@ -292,9 +292,9 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 
   [NSLayoutConstraint activateConstraints:@[
     [icon.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                       constant:kHPadding],
+                                       constant:KKPaddingLG],
     [icon.topAnchor constraintEqualToAnchor:self.topAnchor
-                                   constant:kVPadding / 2.0],
+                                   constant:KKPaddingMD],
     [icon.widthAnchor constraintEqualToConstant:14.0],
     [icon.heightAnchor constraintEqualToConstant:kBulkHeaderHeight],
     [label.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor
@@ -302,39 +302,6 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
     [label.centerYAnchor constraintEqualToAnchor:icon.centerYAnchor],
   ]];
   return icon;
-}
-
-- (NSView *)_buildLinkedRowBelow:(NSView *)anchorView {
-  __weak typeof(self) weakSelf = self;
-  _linkedRow = [[KKCheckboxRowView alloc]
-      initWithTitle:KKLoc(@"Linked", @"Label: components linked toggle.")
-      tooltip:KKLoc(@"Maintain proportions across components (e.g. "
-                    @"keep Radius X/Y aspect-locked through wobble)",
-                    @"Tooltip for the Linked toggle.")
-      binding:^BOOL {
-        __strong typeof(weakSelf) s = weakSelf;
-        return s ? s->_linked : NO;
-      }
-      disabledBinding:nil
-      onToggle:^(BOOL isOn) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self)
-          return;
-        self->_linked = isOn;
-        if (self.onLinkedChanged)
-          self.onLinkedChanged(isOn);
-      }];
-  _linkedRow.translatesAutoresizingMaskIntoConstraints = NO;
-  [self addSubview:_linkedRow];
-  [NSLayoutConstraint activateConstraints:@[
-    [_linkedRow.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                             constant:kHPadding],
-    [_linkedRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                              constant:-kHPadding],
-    [_linkedRow.topAnchor constraintEqualToAnchor:anchorView.bottomAnchor
-                                         constant:kRowGap],
-  ]];
-  return _linkedRow;
 }
 
 // One flat text-and-glyph action for the popover's title bar: no bezel, no
@@ -409,11 +376,10 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
                    @"Tooltip for the Reset button.");
   [_defaultsAccessory addSubview:_resetDefaultButton];
 
-  _makeDefaultButton =
-      KKDefaultsButton(KKLoc(@"Make Default",
-                             @"Button: save these curve settings as default."),
-                       @"star", [NSColor accentMatchingHost], self,
-                       @selector(_makeDefaultTapped:));
+  _makeDefaultButton = KKDefaultsButton(
+      KKLoc(@"Make Default", @"Button: save these curve settings as default."),
+      @"star", [NSColor accentMatchingHost], self,
+      @selector(_makeDefaultTapped:));
   _makeDefaultButton.toolTip =
       hold ? KKLoc(@"Start every new segment in this plugin with this "
                    @"modulation, intensity and frequency",
@@ -451,9 +417,8 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
 }
 
 - (void)_makeDefaultTapped:(id)sender {
-  KKCurveDefault d = {.curve = _curveType,
-                      .intensity = _intensity,
-                      .frequency = _frequency};
+  KKCurveDefault d = {
+      .curve = _curveType, .intensity = _intensity, .frequency = _frequency};
   if (_kind == KKSegmentEditKindHold) {
     d.curve = KKPillToModulation(_curveType);
     KKModulationDefaultsWrite(d, nil);
@@ -483,57 +448,28 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
   [self _updateDefaultsRow];
 }
 
-- (void)_buildSeedRowBelow:(NSView *)anchorView {
-  __weak typeof(self) weakSelf = self;
-  NSTextField *seedLabel = [NSTextField
-      labelWithString:KKLoc(@"Seed", @"Label: random seed field.")];
-  seedLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
-  seedLabel.textColor = [NSColor inspectorLabel];
-  seedLabel.translatesAutoresizingMaskIntoConstraints = NO;
-  [self addSubview:seedLabel];
-
-  _seedView = [[KKSeedView alloc] initWithFrame:NSZeroRect];
-  _seedView.translatesAutoresizingMaskIntoConstraints = NO;
-  _seedView.onSeedChanged = ^(uint32_t newSeed) {
-    __strong typeof(weakSelf) self = weakSelf;
-    if (!self)
-      return;
-    self->_seed = newSeed;
-    if (self.onSeedChanged)
-      self.onSeedChanged(newSeed);
-  };
-  _seedView.onReroll = ^{
-    __strong typeof(weakSelf) self = weakSelf;
-    if (!self)
-      return;
-    if (self.onSeedReroll)
-      self.onSeedReroll();
-  };
-  [self addSubview:_seedView];
-
-  [NSLayoutConstraint activateConstraints:@[
-    [seedLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                            constant:kHPadding],
-    [seedLabel.centerYAnchor constraintEqualToAnchor:_seedView.centerYAnchor],
-
-    [_seedView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                             constant:-kHPadding],
-    [_seedView.topAnchor constraintEqualToAnchor:anchorView.bottomAnchor
-                                        constant:kRowGap],
-    [_seedView.heightAnchor constraintEqualToConstant:kSeedHeight],
-    [_seedView.widthAnchor constraintEqualToConstant:120.0],
-  ]];
+// One stacked row, built the way every constants / keypose row is built: the
+// lane describes the control (slider, checkbox, seed dice) and the row owns the
+// geometry.
+- (_KKStaticValueRow *)_addRowForLane:(KKLane *)lane
+                          labelColumn:(CGFloat)labelColumn {
+  _KKStaticValueRow *row = [[_KKStaticValueRow alloc] initWithLane:lane
+                                                       showsRemove:NO
+                                                showsAddToAnimated:NO
+                                                       showsSmooth:NO
+                                                    reservesGutter:NO
+                                                  labelColumnWidth:labelColumn
+                                                      contentWidth:kWidth];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+  [_rowStack addArrangedSubview:row];
+  [row.widthAnchor constraintEqualToAnchor:_rowStack.widthAnchor].active = YES;
+  return row;
 }
 
 - (void)buildUI {
   __weak typeof(self) weakSelf = self;
 
-  NSView *pillTopReference = self;
-  CGFloat pillTopConstant = kVPadding;
-  if (_bulkHeader) {
-    pillTopReference = [self _buildBulkHeaderRow];
-    pillTopConstant = kRowGap;
-  }
+  NSView *pillTopReference = _bulkHeader ? [self _buildBulkHeaderRow] : nil;
 
   _pills = [[KKCurvePillView alloc] initWithFrame:NSZeroRect];
   _pills.translatesAutoresizingMaskIntoConstraints = NO;
@@ -549,6 +485,9 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
       for (NSInteger i = 0; i < KKEasingCurveCount; i++)
         [names addObject:KKEasingCurveDisplayName((KKEasingCurve)i)];
     _pills.pillTooltips = names;
+    // Same names under each glyph: at low intensity Linear / Ease In / Ease Out
+    // all plot as near-straight lines, so the shape alone can't identify them.
+    _pills.pillCaptions = names;
   }
   // Transition pills (curve picker) read in the warn tint that matches the
   // transition curve drawn in the lane graph; Hold (modulation) keeps the
@@ -561,22 +500,26 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
     // band (≈ max deviation across the effects) so intensity is visible in
     // the preview instead of being auto-normalised away.
     _pills.usesFixedRange = YES;
-    _pills.fixedMin = 0.4;
-    _pills.fixedMax = 1.6;
+    [self _applyHoldPreviewBand];
   }
   _pills.valueBlock = ^CGFloat(NSInteger pillIndex, CGFloat t) {
     __strong typeof(weakSelf) self = weakSelf;
     if (!self)
       return 0;
+    // The preview plots the 0..1 shape even when the value is pushed past it
+    // (modulation leaves intensity + frequency uncapped): beyond 1 the curve
+    // math runs away and the auto-fitted glyph collapses into a spike, so the
+    // pill would stop reading as the shape it names.
+    double intensity = KKPreviewClamped(self.intensity);
+    double frequency = KKPreviewClamped(self.frequency);
     if (self.kind == KKSegmentEditKindHold) {
-      return KKApplyHoldEffect(t, (KKHoldEffect)pillIndex, self.intensity,
-                               self.frequency, (int)self.seed);
+      return KKApplyHoldEffect(t, (KKHoldEffect)pillIndex, intensity, frequency,
+                               (int)self.seed);
     }
     // For animate-out, show the curve with time mirrored so the pill reads
     // as the value descending over time - matches the lane graph.
     double ti = self.animateOut ? (1.0 - t) : t;
-    return KKApplyEasing(ti, (KKEasingCurve)pillIndex, self.intensity,
-                         self.frequency);
+    return KKApplyEasing(ti, (KKEasingCurve)pillIndex, intensity, frequency);
   };
   _pills.onSelectionChanged = ^(NSInteger index) {
     __strong typeof(weakSelf) self = weakSelf;
@@ -590,135 +533,121 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
   };
   [self addSubview:_pills];
 
-  _intensitySlider = [KKSliderView styledSlider];
-  _intensitySlider.translatesAutoresizingMaskIntoConstraints = NO;
-  _intensitySlider.minValue = 0.0;
-  _intensitySlider.maxValue = 1.0;
-  _intensitySlider.doubleValue = _intensity;
-  _intensitySlider.continuous = YES;
-  _intensitySlider.trackFillColor = [NSColor accentMatchingHost];
-  _intensitySlider.target = self;
-  _intensitySlider.action = @selector(intensityChanged:);
-  __weak typeof(self) weakSelfDragI = self;
-  _intensitySlider.onDragBegin = ^{
-    if (weakSelfDragI.onSliderDragBegin)
-      weakSelfDragI.onSliderDragBegin();
-  };
-  _intensitySlider.onDragEnd = ^{
-    if (weakSelfDragI.onSliderDragEnd)
-      weakSelfDragI.onSliderDragEnd();
-  };
-  [self addSubview:_intensitySlider];
+  // Every row below the pills is the SAME value row the constants + keypose
+  // popovers use (_KKStaticValueRow), stacked at spacing 0: label column,
+  // value control, scrub, reset-to-default, one shared rhythm. Each is fed a
+  // synthetic single-keypose lane - these values live on the interval, not the
+  // timeline - so the row code stays the one implementation everywhere.
+  _rowStack = [NSStackView stackViewWithViews:@[]];
+  _rowStack.translatesAutoresizingMaskIntoConstraints = NO;
+  _rowStack.orientation = NSUserInterfaceLayoutOrientationVertical;
+  _rowStack.spacing = 0;
+  [self addSubview:_rowStack];
 
-  _frequencySlider = [KKSliderView styledSlider];
-  _frequencySlider.translatesAutoresizingMaskIntoConstraints = NO;
-  _frequencySlider.minValue = 0.0;
-  _frequencySlider.maxValue = 1.0;
-  _frequencySlider.doubleValue = _frequency;
-  _frequencySlider.continuous = YES;
-  _frequencySlider.trackFillColor = [NSColor warning];
-  _frequencySlider.target = self;
-  _frequencySlider.action = @selector(frequencyChanged:);
-  __weak typeof(self) weakSelfDragF = self;
-  _frequencySlider.onDragBegin = ^{
-    if (weakSelfDragF.onSliderDragBegin)
-      weakSelfDragF.onSliderDragBegin();
+  CGFloat labelCol = [self _valueRowLabelColumnWidth];
+  void (^dragBegin)(void) = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s.onSliderDragBegin)
+      s.onSliderDragBegin();
   };
-  _frequencySlider.onDragEnd = ^{
-    if (weakSelfDragF.onSliderDragEnd)
-      weakSelfDragF.onSliderDragEnd();
+  void (^dragEnd)(void) = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s.onSliderDragEnd)
+      s.onSliderDragEnd();
   };
-  [self addSubview:_frequencySlider];
 
-  _intensityTicks = [[NSImageView alloc] initWithFrame:NSZeroRect];
-  _intensityTicks.imageScaling = NSImageScaleNone;
-  _intensityTicks.translatesAutoresizingMaskIntoConstraints = NO;
-  [_intensityTicks
-      setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
-                               forOrientation:
-                                   NSLayoutConstraintOrientationHorizontal];
-  [self addSubview:_intensityTicks];
+  _intensityRow = [self _addRowForLane:[self _intensityLane]
+                           labelColumn:labelCol];
+  _intensityRow.defaultValues = @[ @(KKCurveDefaultBuiltIn.intensity) ];
+  _intensityRow.onValue = ^(NSArray<NSNumber *> *values) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s || !values.count)
+      return;
+    s->_intensity = values[0].doubleValue;
+    [s _applyHoldPreviewBand];
+    [s->_pills redraw];
+    [s _updateDefaultsRow];
+    if (s.onIntensityChanged)
+      s.onIntensityChanged(s->_intensity);
+  };
+  _intensityRow.onDragBegin = dragBegin;
+  _intensityRow.onDragEnd = dragEnd;
 
-  _frequencyTicks = [[NSImageView alloc] initWithFrame:NSZeroRect];
-  _frequencyTicks.imageScaling = NSImageScaleNone;
-  _frequencyTicks.translatesAutoresizingMaskIntoConstraints = NO;
-  [_frequencyTicks
-      setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
-                               forOrientation:
-                                   NSLayoutConstraintOrientationHorizontal];
-  [self addSubview:_frequencyTicks];
+  _frequencyRow = [self _addRowForLane:[self _frequencyLane]
+                           labelColumn:labelCol];
+  _frequencyRow.defaultValues = @[ @(KKCurveDefaultBuiltIn.frequency) ];
+  _frequencyRow.onValue = ^(NSArray<NSNumber *> *values) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s || !values.count)
+      return;
+    s->_frequency = values[0].doubleValue;
+    [s->_pills redraw];
+    [s _updateDefaultsRow];
+    if (s.onFrequencyChanged)
+      s.onFrequencyChanged(s->_frequency);
+  };
+  _frequencyRow.onDragBegin = dragBegin;
+  _frequencyRow.onDragEnd = dragEnd;
 
-  _intensityTrailingHalf = [_intensitySlider.trailingAnchor
-      constraintEqualToAnchor:self.centerXAnchor
-                     constant:-kRowGap / 2.0];
-  _intensityTrailingFull = [_intensitySlider.trailingAnchor
-      constraintEqualToAnchor:self.trailingAnchor
-                     constant:-kHPadding];
-  _intensityTrailingHalf.active = YES;
+  if (_showsLinked) {
+    _linkedRow = [self _addRowForLane:[self _linkedLane] labelColumn:labelCol];
+    _linkedRow.toolTip = KKLoc(@"Maintain proportions across components (e.g. "
+                               @"keep Radius X/Y aspect-locked through wobble)",
+                               @"Tooltip for the Linked toggle.");
+    _linkedRow.onValue = ^(NSArray<NSNumber *> *values) {
+      __strong typeof(weakSelf) s = weakSelf;
+      if (!s || !values.count)
+        return;
+      s->_linked = values[0].doubleValue >= 0.5;
+      if (s.onLinkedChanged)
+        s.onLinkedChanged(s->_linked);
+    };
+  }
+
+  if (_kind == KKSegmentEditKindHold) {
+    // The row's own dice button re-rolls within the lane's range and emits the
+    // new value through onValue, so a re-roll and a typed seed take one path.
+    _seedRow = [self _addRowForLane:[self _seedLane] labelColumn:labelCol];
+    _seedRow.onValue = ^(NSArray<NSNumber *> *values) {
+      __strong typeof(weakSelf) s = weakSelf;
+      if (!s || !values.count)
+        return;
+      s->_seed = (uint32_t)values[0].doubleValue;
+      [s->_pills redraw];
+      if (s.onSeedChanged)
+        s.onSeedChanged(s->_seed);
+    };
+  }
 
   [NSLayoutConstraint activateConstraints:@[
     [_pills.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                         constant:kHPadding],
+                                         constant:KKPaddingLG],
     [_pills.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                          constant:-kHPadding],
+                                          constant:-KKPaddingLG],
     [_pills.topAnchor
-        constraintEqualToAnchor:(_bulkHeader ? pillTopReference.bottomAnchor
-                                             : self.topAnchor)
-                       constant:pillTopConstant],
+        constraintEqualToAnchor:(pillTopReference
+                                     ? pillTopReference.bottomAnchor
+                                     : self.topAnchor)
+                       constant:KKPaddingMD],
     [_pills.heightAnchor constraintEqualToConstant:kPillHeight],
 
-    [_intensitySlider.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                                   constant:kHPadding],
-    [_intensitySlider.topAnchor constraintEqualToAnchor:_pills.bottomAnchor
-                                               constant:kRowGap],
-    [_intensitySlider.heightAnchor constraintEqualToConstant:kSliderHeight],
-
-    [_frequencySlider.leadingAnchor constraintEqualToAnchor:self.centerXAnchor
-                                                   constant:kRowGap / 2.0],
-    [_frequencySlider.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                                    constant:-kHPadding],
-    [_frequencySlider.topAnchor
-        constraintEqualToAnchor:_intensitySlider.topAnchor],
-    [_frequencySlider.heightAnchor
-        constraintEqualToAnchor:_intensitySlider.heightAnchor],
-
-    [_intensityTicks.leadingAnchor
-        constraintEqualToAnchor:_intensitySlider.leadingAnchor],
-    [_intensityTicks.trailingAnchor
-        constraintEqualToAnchor:_intensitySlider.trailingAnchor],
-    [_intensityTicks.topAnchor
-        constraintEqualToAnchor:_intensitySlider.bottomAnchor],
-    [_intensityTicks.heightAnchor constraintEqualToConstant:kTickHeight],
-
-    [_frequencyTicks.leadingAnchor
-        constraintEqualToAnchor:_frequencySlider.leadingAnchor],
-    [_frequencyTicks.trailingAnchor
-        constraintEqualToAnchor:_frequencySlider.trailingAnchor],
-    [_frequencyTicks.topAnchor
-        constraintEqualToAnchor:_frequencySlider.bottomAnchor],
-    [_frequencyTicks.heightAnchor constraintEqualToConstant:kTickHeight],
+    [_rowStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [_rowStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    [_rowStack.topAnchor constraintEqualToAnchor:_pills.bottomAnchor
+                                        constant:KKPaddingMD],
   ]];
 
-  if (_kind == KKSegmentEditKindHold) {
-    NSView *seedTopAnchor = _showsLinked
-                                ? [self _buildLinkedRowBelow:_intensityTicks]
-                                : (NSView *)_intensityTicks;
-    [self _buildSeedRowBelow:seedTopAnchor];
-  }
+  [self _updateFrequencyVisibility];
 
   if (_partLabels.count > 0 || _partCompoundLabels.count > 0) {
-    NSView *bottom = (_kind == KKSegmentEditKindHold)
-                         ? (NSView *)_seedView
-                         : (NSView *)_intensityTicks;
     NSTextField *cap =
         [NSTextField labelWithString:KKLoc(@"Applies to",
                                            @"Label: where a setting applies.")];
-    cap.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+    cap.font = [NSFont systemFontOfSize:KKFontSizeSM
+                                 weight:NSFontWeightRegular];
     cap.textColor = [NSColor inspectorLabel];
     cap.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:cap];
-
-    __weak typeof(self) weakSelf = self;
 
     // Checklist "Applies to": the Animated dropdown's content stacked BELOW the
     // caption (vertical), so many grouped properties scroll instead of forcing
@@ -748,9 +677,7 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
         if (idx != NSNotFound && s.onParticipationToggled)
           s.onParticipationToggled(idx, on);
       };
-      [self _layoutParticipationCaption:cap
-                              checklist:_partChecklist
-                                  below:bottom];
+      [self _layoutParticipationCaption:cap checklist:_partChecklist];
       return;
     }
 
@@ -779,9 +706,7 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
             if (s.onParticipationToggled)
               s.onParticipationToggled(flat, on);
           };
-      [self _layoutParticipationCaption:cap
-                              checklist:_partCompoundChecklist
-                                  below:bottom];
+      [self _layoutParticipationCaption:cap checklist:_partCompoundChecklist];
       return;
     }
   }
@@ -789,7 +714,7 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
 
 - (void)setLinked:(BOOL)linked {
   _linked = linked;
-  [_linkedRow popoverDidRefresh];
+  [_linkedRow applyLane:[self _linkedLane]];
 }
 
 - (void)applyParticipationCompoundStates:
@@ -853,171 +778,134 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
 - (void)setAnimateOut:(BOOL)animateOut {
   _animateOut = animateOut;
   [_pills redraw];
-  [self _renderTicks];
 }
 
-- (void)layout {
-  [super layout];
-  [self _renderTicks];
+// The rows are backed by throwaway single-keypose lanes: the row renders any
+// KKLane, and the interval - not the timeline - owns these numbers.
+- (KKLane *)_laneForKey:(NSString *)key value:(double)value {
+  KKLane *lane = [KKLane laneWithKey:key label:KKLocalizedParamName(key)];
+  lane.valueType = KKLaneValueTypeFloat;
+  lane.animatable = NO; // there is nothing here to keyframe
+  lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(value) ]] ];
+  return lane;
 }
 
+// Float, one component, slider 0..1. `capped` also clamps the FIELD to 1 (an
+// empty componentMax leaves it free to be typed past the slider's end).
+- (KKLane *)_sliderLaneForKey:(NSString *)key
+                        value:(double)value
+                       capped:(BOOL)capped {
+  KKLane *lane = [self _laneForKey:key value:value];
+  lane.componentMin = @[ @0.0 ];
+  lane.componentMax = capped ? @[ @1.0 ] : @[];
+  lane.sliderMin = @0.0;
+  lane.sliderMax = @1.0;
+  return lane;
+}
+
+// A transition's curve SHAPE is a 0..100% dial: every easing reads intensity as
+// a blend or a decay exponent, and past 1 they stop being stronger versions of
+// themselves (ease overshoots extrapolate between two curves, elastic's
+// envelope stops converging, bounce's restitution exceeds 1 and the ball gains
+// energy). A modulation's intensity is an AMPLITUDE - `scale = intensity * 3`
+// - so past 1 is just a bigger wobble, and the pill's preview band grows with
+// it.
+- (KKLane *)_intensityLane {
+  return [self _sliderLaneForKey:kKKSegmentIntensityKey
+                           value:_intensity
+                          capped:(_kind == KKSegmentEditKindTransition)];
+}
+
+// Capped for a transition: the Bounce curve derives its bounce COUNT from
+// frequency into a fixed-size array (KKEaseOutBounce), so >1 indexes past its
+// end. A modulation's frequency is a plain rate multiplier on a sine, so it
+// keeps going - a faster shake than the slider reaches.
+- (KKLane *)_frequencyLane {
+  return [self _sliderLaneForKey:kKKSegmentFrequencyKey
+                           value:_frequency
+                          capped:(_kind == KKSegmentEditKindTransition)];
+}
+
+// Structural on/off - the row's shared checkbox, right-aligned in the value
+// column like every other toggle lane in the kit.
+- (KKLane *)_linkedLane {
+  KKLane *lane = [self _laneForKey:kKKSegmentLinkedKey
+                             value:(_linked ? 1.0 : 0.0)];
+  lane.integerValued = YES;
+  lane.isToggle = YES;
+  lane.componentMin = @[ @0.0 ];
+  lane.componentMax = @[ @1.0 ];
+  return lane;
+}
+
+// A random integer, not a range: the row builds the seed control (value +
+// re-roll) instead of a slider, and re-rolls within componentMax.
+- (KKLane *)_seedLane {
+  KKLane *lane = [self _laneForKey:kKKSegmentSeedKey value:(double)_seed];
+  lane.integerValued = YES;
+  lane.seedField = YES;
+  lane.componentMin = @[ @0.0 ];
+  lane.componentMax = @[ @99999.0 ];
+  return lane;
+}
+
+// One column across every row, so the value controls line up with each other
+// and with the constants popover's rows.
+- (CGFloat)_valueRowLabelColumnWidth {
+  NSMutableArray<KKLane *> *lanes = [NSMutableArray
+      arrayWithObjects:[self _intensityLane], [self _frequencyLane], nil];
+  if (_showsLinked)
+    [lanes addObject:[self _linkedLane]];
+  if (_kind == KKSegmentEditKindHold)
+    [lanes addObject:[self _seedLane]];
+  return [_KKStaticValueRow labelColumnWidthForLanes:lanes];
+}
+
+// Hold pills plot against a FIXED band (auto-fit would normalise the amplitude
+// straight back out). The band spans the intensity the preview DRAWS - clamped
+// to 1 like the waveform itself - so the two grow together instead of the band
+// outrunning a curve that has stopped growing.
+- (void)_applyHoldPreviewBand {
+  if (_kind != KKSegmentEditKindHold)
+    return;
+  double span = MAX(0.6, KKPreviewClamped(_intensity));
+  _pills.fixedMin = 1.0 - span;
+  _pills.fixedMax = 1.0 + span;
+}
+
+// Elastic / Bounce (and the hold effects) are the only shapes Frequency means
+// anything for; elsewhere the row collapses away (the stack drops a hidden
+// arranged row) rather than sitting inert, so the popover shrinks to what it
+// actually offers.
 - (void)_updateFrequencyVisibility {
   BOOL showFreq = _curveUsesFrequency(_kind, _curveType);
-  _frequencySlider.hidden = !showFreq;
-  _frequencyTicks.hidden = !showFreq;
-  // Deactivate the outgoing constraint before activating the incoming one - the
-  // two are mutually exclusive, so flipping in the other order leaves both
-  // active for an instant and Auto Layout logs a conflict.
-  if (showFreq) {
-    _intensityTrailingFull.active = NO;
-    _intensityTrailingHalf.active = YES;
-  } else {
-    _intensityTrailingHalf.active = NO;
-    _intensityTrailingFull.active = YES;
-  }
-  [self _renderTicks];
-}
-
-- (CGFloat)_curveValueAtTickIndex:(NSInteger)idx
-                                t:(CGFloat)t
-                intensityOverride:(double)intensity
-                frequencyOverride:(double)frequency {
-  if (_kind == KKSegmentEditKindHold) {
-    return KKApplyHoldEffect(t, (KKHoldEffect)_curveType, intensity, frequency,
-                             (int)_seed);
-  }
-  double ti = _animateOut ? (1.0 - t) : t;
-  return KKApplyEasing(ti, (KKEasingCurve)_curveType, intensity, frequency);
-}
-
-- (void)_renderTicks {
-  if (NSWidth(_intensityTicks.bounds) < 1)
+  if (_frequencyRow.hidden == !showFreq)
     return;
-
-  NSInteger intensityActive = KKExactTickIndex(_intensity, kIntensityTickCount);
-  __weak typeof(self) weakSelf = self;
-  KKRenderHalfWidthTicks(
-      _intensityTicks, kIntensityTickCount, intensityActive,
-      [NSColor accentMatchingHost], ^CGFloat(NSInteger idx, CGFloat t) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self)
-          return 0;
-        double inten = (double)idx / (double)(kIntensityTickCount - 1);
-        return [self _curveValueAtTickIndex:idx
-                                          t:t
-                          intensityOverride:inten
-                          frequencyOverride:self->_frequency];
-      });
-
-  if (!_frequencyTicks.hidden) {
-    NSInteger frequencyActive =
-        KKExactTickIndex(_frequency, kFrequencyTickCount);
-    KKRenderHalfWidthTicks(
-        _frequencyTicks, kFrequencyTickCount, frequencyActive,
-        [NSColor warning], ^CGFloat(NSInteger idx, CGFloat t) {
-          __strong typeof(weakSelf) self = weakSelf;
-          if (!self)
-            return 0;
-          double freq = (double)idx / (double)(kFrequencyTickCount - 1);
-          return [self _curveValueAtTickIndex:idx
-                                            t:t
-                            intensityOverride:self->_intensity
-                            frequencyOverride:freq];
-        });
-  }
-}
-
-- (NSRect)_tickHitRectForIndex:(NSInteger)idx
-                     imageView:(NSImageView *)imageView
-                     tickCount:(NSInteger)tickCount {
-  CGFloat w = NSWidth(imageView.bounds);
-  static const CGFloat kHalfTickWidth = 18.0;
-  CGFloat tickPad = kHalfTickWidth / 2.0;
-  CGFloat usable = w - 2 * tickPad;
-  CGFloat frac =
-      (tickCount > 1) ? (CGFloat)idx / (CGFloat)(tickCount - 1) : 0.5;
-  CGFloat centerX = tickPad + frac * usable;
-  NSRect local = NSMakeRect(centerX - kHalfTickWidth / 2.0, 0, kHalfTickWidth,
-                            KKCurveTickHeight);
-  return [self convertRect:local fromView:imageView];
-}
-
-- (void)mouseDown:(NSEvent *)event {
-  NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
-  for (NSInteger i = 0; i < kIntensityTickCount; i++) {
-    NSRect r = [self _tickHitRectForIndex:i
-                                imageView:_intensityTicks
-                                tickCount:kIntensityTickCount];
-    if (NSPointInRect(loc, r)) {
-      double v = (double)i / (double)(kIntensityTickCount - 1);
-      _intensity = v;
-      _intensitySlider.doubleValue = v;
-      [_pills redraw];
-      [self _renderTicks];
-      if (_onIntensityChanged)
-        _onIntensityChanged(v);
-      return;
-    }
-  }
-  if (!_frequencyTicks.hidden) {
-    for (NSInteger i = 0; i < kFrequencyTickCount; i++) {
-      NSRect r = [self _tickHitRectForIndex:i
-                                  imageView:_frequencyTicks
-                                  tickCount:kFrequencyTickCount];
-      if (NSPointInRect(loc, r)) {
-        double v = (double)i / (double)(kFrequencyTickCount - 1);
-        _frequency = v;
-        _frequencySlider.doubleValue = v;
-        [_pills redraw];
-        [self _renderTicks];
-        if (_onFrequencyChanged)
-          _onFrequencyChanged(v);
-        return;
-      }
-    }
-  }
-  [super mouseDown:event];
+  _frequencyRow.hidden = !showFreq;
+  // The host owns the popover's size, so tell it the content height moved.
+  if (self.onContentHeightChanged)
+    self.onContentHeightChanged();
 }
 
 - (void)setIntensity:(double)intensity {
   _intensity = intensity;
-  _intensitySlider.doubleValue = intensity;
+  [self _applyHoldPreviewBand];
+  [_intensityRow applyLane:[self _intensityLane]];
   [_pills redraw];
-  [self _renderTicks];
   [self _updateDefaultsRow];
 }
 
 - (void)setFrequency:(double)frequency {
   _frequency = frequency;
-  _frequencySlider.doubleValue = frequency;
+  [_frequencyRow applyLane:[self _frequencyLane]];
   [_pills redraw];
-  [self _renderTicks];
   [self _updateDefaultsRow];
 }
 
 - (void)setSeed:(uint32_t)seed {
   _seed = seed;
-  _seedView.seed = seed;
+  [_seedRow applyLane:[self _seedLane]];
   [_pills redraw];
-  [self _renderTicks];
-}
-
-- (void)intensityChanged:(id)sender {
-  _intensity = _intensitySlider.doubleValue;
-  [_pills redraw];
-  [self _renderTicks];
-  [self _updateDefaultsRow];
-  if (_onIntensityChanged)
-    _onIntensityChanged(_intensity);
-}
-
-- (void)frequencyChanged:(id)sender {
-  _frequency = _frequencySlider.doubleValue;
-  [_pills redraw];
-  [self _renderTicks];
-  [self _updateDefaultsRow];
-  if (_onFrequencyChanged)
-    _onFrequencyChanged(_frequency);
 }
 
 - (void)viewDidMoveToWindow {

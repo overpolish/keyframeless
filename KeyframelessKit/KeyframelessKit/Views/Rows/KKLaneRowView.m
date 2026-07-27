@@ -4,6 +4,8 @@
  */
 
 #import "KKLaneRowView.h"
+
+#import "KKTokens.h"
 #import "NSColor+KKColors.h"
 
 // Shared token-style constants. Change here, every subclass updates.
@@ -34,7 +36,10 @@ static const CGFloat kStripeToLabelGap = 8.0;
   }
 
   _titleLabel = [NSTextField labelWithString:title];
-  _titleLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+  // Same as the constants / keypose rows' captions (_KKMakeCaption): regular,
+  // not medium - a bolder label here read as a heading beside them.
+  _titleLabel.font = [NSFont systemFontOfSize:KKFontSizeSM
+                                       weight:NSFontWeightRegular];
   _titleLabel.textColor = [NSColor inspectorLabel];
   _titleLabel.toolTip = tooltip;
   _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -67,8 +72,15 @@ static const CGFloat kStripeToLabelGap = 8.0;
     [_controlContainer.leadingAnchor
         constraintGreaterThanOrEqualToAnchor:_titleLabel.trailingAnchor
                                     constant:8.0],
-    [self.heightAnchor constraintEqualToConstant:kRowHeight],
   ]];
+  // Just below required, so a host that collapses the row (the segment
+  // popover hides Frequency on curves that have none) can pin it to zero
+  // without Auto Layout having to break one of two required constraints. On
+  // its own it still fixes the row at kRowHeight.
+  NSLayoutConstraint *rowHeight =
+      [self.heightAnchor constraintEqualToConstant:kRowHeight];
+  rowHeight.priority = NSLayoutPriorityDefaultHigh;
+  [cs addObject:rowHeight];
   [NSLayoutConstraint activateConstraints:cs];
   return self;
 }

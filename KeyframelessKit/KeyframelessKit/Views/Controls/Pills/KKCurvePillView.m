@@ -12,6 +12,9 @@ static const CGFloat kPillHeight = 24.0;
 static const CGFloat kPillSpacing = 2.0;
 static const CGFloat kCurvePad = 4.0;
 static const NSInteger kSegments = 60;
+// Caption line under the glyph: font size + the band it needs.
+static const CGFloat kCaptionFontSize = 8.0;
+static const CGFloat kCaptionHeight = 12.0;
 
 @implementation KKCurvePillView
 
@@ -33,8 +36,14 @@ static const NSInteger kSegments = 60;
   [self _installTooltips];
 }
 
+- (void)setPillCaptions:(NSArray<NSString *> *)pillCaptions {
+  _pillCaptions = [pillCaptions copy];
+  [self setNeedsDisplay:YES];
+}
+
 - (void)setPillTooltips:(NSArray<NSString *> *)pillTooltips {
   _pillTooltips = [pillTooltips copy];
+  [self setNeedsDisplay:YES];
   [self _installTooltips];
 }
 
@@ -55,13 +64,24 @@ static const NSInteger kSegments = 60;
   }
 }
 
++ (CGFloat)heightWithCaptions:(BOOL)captions {
+  return captions ? kPillHeight + kCaptionHeight : kPillHeight;
+}
+
+- (NSArray<NSString *> *)_captions {
+  return _pillCaptions.count ? _pillCaptions : _pillTooltips;
+}
+
 - (NSRect)pillRectForIndex:(NSInteger)index {
   if (_pillCount <= 0)
     return NSZeroRect;
   CGFloat totalSpacing = kPillSpacing * (_pillCount - 1);
   CGFloat pillWidth = (NSWidth(self.bounds) - totalSpacing) / _pillCount;
   CGFloat x = index * (pillWidth + kPillSpacing);
-  return NSMakeRect(x, 0, pillWidth, kPillHeight);
+  // Fill the view's height so a taller frame (captions shown) grows the pill
+  // rather than leaving it stranded at the bottom.
+  CGFloat h = MAX(kPillHeight, NSHeight(self.bounds));
+  return NSMakeRect(x, 0, pillWidth, h);
 }
 
 - (void)redraw {
@@ -91,9 +111,41 @@ static const NSInteger kSegments = 60;
       [bg fill];
     }
 
+    NSArray<NSString *> *captions = [self _captions];
+    NSString *caption = (i < (NSInteger)captions.count) ? captions[i] : nil;
     NSRect curveRect = NSInsetRect(pillRect, kCurvePad, kCurvePad);
+    if (caption.length) {
+      // Caption sits in the top band (this view is not flipped, so the top of
+      // the pill is its max-Y edge); the glyph keeps what's left.
+      NSRect captionRect =
+          NSMakeRect(NSMinX(pillRect) + 2.0, NSMaxY(pillRect) - kCaptionHeight,
+                     NSWidth(pillRect) - 4.0, kCaptionHeight);
+      curveRect.size.height = MAX(0.0, NSHeight(curveRect) - kCaptionHeight);
+      [self _drawCaption:caption inRect:captionRect active:active];
+    }
     [self drawCurveInRect:curveRect pillIndex:i active:active];
   }
+}
+
+// Small centred pill name, tail-truncated - the pills are narrow, and a
+// half-shown word still identifies the curve better than no word.
+- (void)_drawCaption:(NSString *)caption
+              inRect:(NSRect)rect
+              active:(BOOL)active {
+  NSColor *accent = _accentColor ?: [NSColor accentMatchingHost];
+  NSMutableParagraphStyle *style =
+      [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
+  style.alignment = NSTextAlignmentCenter;
+  style.lineBreakMode = NSLineBreakByTruncatingTail;
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:kCaptionFontSize
+                                            weight:NSFontWeightMedium],
+    NSForegroundColorAttributeName : active
+        ? accent
+        : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55],
+    NSParagraphStyleAttributeName : style,
+  };
+  [caption drawInRect:rect withAttributes:attrs];
 }
 
 - (void)drawCurveInRect:(NSRect)rect

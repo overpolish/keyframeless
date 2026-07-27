@@ -203,6 +203,17 @@
   [container addSubview:header];
   // Trailing end of the title row, where the keypose / constants popovers put
   // their size pill: the segment's own [Reset][Make Default] actions.
+  // The editor can shrink itself (the Frequency row collapses on a curve that
+  // has none) - resize the open popover to match, same path a layer re-scope
+  // takes.
+  __weak typeof(self) weakHeight = self;
+  __weak KKSegmentEditView *weakEditH = edit;
+  edit.onContentHeightChanged = ^{
+    __strong typeof(weakHeight) sh = weakHeight;
+    __strong KKSegmentEditView *eh = weakEditH;
+    if (sh && eh)
+      [sh _resizeOpenSegmentPopoverToEditor:eh];
+  };
   NSView *defaults = [edit defaultsAccessoryView];
   [container addSubview:defaults];
   [container addSubview:edit];
@@ -502,7 +513,6 @@
   edit.frequency = frequency;
   edit.seed = seed;
   edit.linked = linked;
-  __weak KKSegmentEditView *weakEdit = edit;
   edit.onCurveTypeChanged = ^(NSInteger ct) {
     if (onModulation)
       onModulation(KKPillToModulation(ct));
@@ -516,12 +526,6 @@
       onFrequency(v);
   };
   edit.onSeedChanged = ^(uint32_t s) {
-    if (onSeed)
-      onSeed(s);
-  };
-  edit.onSeedReroll = ^{
-    uint32_t s = arc4random();
-    weakEdit.seed = s;
     if (onSeed)
       onSeed(s);
   };

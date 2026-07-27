@@ -12,7 +12,7 @@ Beyond easing, intervals can have modulation that adds movement on top of the un
 
 Modulation is most useful on intervals with linked endpoints (a held value) where it provides the only motion, but it works on transitioning intervals too and gets layered on top of the curve.
 
-Each modulation type has Intensity and Frequency knobs in the interval editor popover. Intensity controls how far the value moves; Frequency controls how often. Both start at 0.5.
+Each modulation type has Intensity and Frequency rows in the interval editor popover - a slider with a number field beside it, so you can drag for feel or type an exact value. Intensity controls how far the value moves; Frequency controls how often. Both start at 0.5.
 
 **Make Default** in the popover's title bar saves the modulation, intensity and frequency you are looking at, so every new segment starts there; **Reset** beside it puts the segment back to that saved shape. See the easing page for how the defaults are scoped.
 

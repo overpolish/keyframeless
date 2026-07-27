@@ -17,7 +17,8 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 };
 
 /// Content view for the segment-edit popover. Shows curve/hold-effect pills,
-/// intensity + frequency sliders, and (for holds) a seed field.
+/// Intensity + Frequency value rows (slider + number field), and (for holds) a
+/// seed field.
 @interface KKSegmentEditView : NSView
 
 @property(nonatomic, readonly) KKSegmentEditKind kind;
@@ -45,8 +46,9 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 /// cmd-Z reverts the drag as a single step rather than per-tick.
 @property(nonatomic, copy, nullable) void (^onSliderDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onSliderDragEnd)(void);
+/// Fires for a typed seed AND for the row's re-roll button - the row rolls the
+/// new value itself, so both arrive here.
 @property(nonatomic, copy, nullable) void (^onSeedChanged)(uint32_t newSeed);
-@property(nonatomic, copy, nullable) void (^onSeedReroll)(void);
 @property(nonatomic, copy, nullable) void (^onLinkedChanged)(BOOL linked);
 /// Per-property participation pills (which animatable properties this phase
 /// applies to). Multi-select with click-drag sweep; drag-begin/end bracket
@@ -117,6 +119,11 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
                                     (NSArray<NSArray<NSString *> *> *)compounds
                                    states:
                                        (NSArray<NSArray<NSNumber *> *> *)states;
+
+/// The content height changed on its own (the Frequency row collapsing when
+/// the picked curve has no frequency). The host re-sizes the popover; without
+/// it the row's space would be left blank. Fires only on a real change.
+@property(nonatomic, copy, nullable) void (^onContentHeightChanged)(void);
 
 /// Buttons for the popover's title bar - [Reset][Make Default], sitting where
 /// the keypose / constants popovers put their size pill. They save this

@@ -11,7 +11,9 @@ summary: Easing curves on intervals (Linear, Ease, Elastic, Bounce)
   - **Elastic** - overshoots and wobbles before settling.
   - **Bounce** - lands with a few smaller and smaller bounces.
 
-Elastic and Bounce add Intensity and Frequency controls to dial in the wobble.
+Each pill draws the curve it applies and is named underneath, so a shape you can barely see at low intensity is still identifiable.
+
+Elastic and Bounce add Intensity and Frequency rows to dial in the wobble - each a slider with a number field beside it, so you can drag for feel or type an exact value. Frequency only appears on the curves that use it.
 
 ## Your own default
 
