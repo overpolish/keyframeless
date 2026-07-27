@@ -28,6 +28,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKCropModel.h>
 #import <KeyframelessKit/KKCropOSC.h>
+#import <KeyframelessKit/KKCurveDefaults.h>
 #import <KeyframelessKit/KKCustomGroupHeaderView.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKEasing.h>
@@ -74,6 +75,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKOSCGuideStrategy.h>
 #import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKOSCShaderTypes.h>
+#import <KeyframelessKit/KKOSCVisibilityDefaults.h>
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKPaddedScrollView.h>
 #import <KeyframelessKit/KKPaletteGenerator.h>
@@ -113,6 +115,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKScaleGizmo.h>
 #import <KeyframelessKit/KKScaleMiniController.h>
 #import <KeyframelessKit/KKScaleOSC.h>
+#import <KeyframelessKit/KKScopedDefaults.h>
 #import <KeyframelessKit/KKSeedView.h>
 #import <KeyframelessKit/KKSegmentEditView+Guide.h>
 #import <KeyframelessKit/KKSegmentEditView.h>

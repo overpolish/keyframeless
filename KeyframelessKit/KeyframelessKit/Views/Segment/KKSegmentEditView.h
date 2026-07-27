@@ -118,6 +118,13 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
                                    states:
                                        (NSArray<NSArray<NSNumber *> *> *)states;
 
+/// Buttons for the popover's title bar - [Reset][Make Default], sitting where
+/// the keypose / constants popovers put their size pill. They save this
+/// segment's shape as the plugin's default for new segments, and put the
+/// segment back to it; both hide while the segment already matches the saved
+/// default. Built on first call, then cached.
+- (NSView *)defaultsAccessoryView;
+
 /// The view's required content height for the current configuration. Unlike the
 /// class method this accounts for the checklist participation section, whose
 /// height depends on the (filtered) row count. Falls back to the class-method

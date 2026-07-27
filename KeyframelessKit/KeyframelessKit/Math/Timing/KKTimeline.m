@@ -6,6 +6,7 @@
 #import "KKTimeline.h"
 
 #import "KKBezierPath.h"
+#import "KKCurveDefaults.h"
 #import "KKEasing.h"
 #import "KKLog.h"
 #import "KKPathMorph.h"
@@ -61,16 +62,21 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
 - (instancetype)init {
   self = [super init];
   if (self) {
-    _curve = KKIntervalCurveEaseInOut;
-    // Midpoint defaults (the documented neutral per KKEasing.h) - not max, so a
-    // freshly-picked easing / hold effect starts gentle and is dialed UP,
-    // rather than maxed out and needing to be dialed down. Saved animations are
-    // unaffected: the JSON always carries explicit values that override these.
-    _intensity = 0.5;
-    _frequency = 0.5;
-    _modulation = KKIntervalModulationNone;
-    _modulationIntensity = 0.5;
-    _modulationFrequency = 0.5;
+    // The user's saved curve default for this plugin, falling back to
+    // EaseInOut + midpoint intensity / frequency (the documented neutral per
+    // KKEasing.h - not max, so a freshly-picked easing starts gentle and is
+    // dialed UP rather than maxed out and needing to be dialed down). Saved
+    // animations are unaffected: -fromDictionary pins every field explicitly.
+    KKCurveDefault d = KKCurveDefaultsRead(nil);
+    _curve = d.curve;
+    _intensity = d.intensity;
+    _frequency = d.frequency;
+    // Same story for the modulate popover's saved default (None until the user
+    // saves one), stored under its own key.
+    KKCurveDefault m = KKModulationDefaultsRead(nil);
+    _modulation = m.curve;
+    _modulationIntensity = m.intensity;
+    _modulationFrequency = m.frequency;
     _modulationLinked = YES;
     // Default unlinked: an interval freshly created in Advanced (new keypose /
     // property) starts unlinked. Basic explicitly links its Hold pair when it
@@ -166,18 +172,23 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   if (![d isKindOfClass:[NSDictionary class]])
     return nil;
   KKInterval *i = [[KKInterval alloc] init];
-  if (d[@"curve"])
-    i.curve = [d[@"curve"] integerValue];
-  if (d[@"intensity"])
-    i.intensity = [d[@"intensity"] doubleValue];
-  if (d[@"frequency"])
-    i.frequency = [d[@"frequency"] doubleValue];
-  if (d[@"modulation"])
-    i.modulation = [d[@"modulation"] integerValue];
-  if (d[@"modulation_intensity"])
-    i.modulationIntensity = [d[@"modulation_intensity"] doubleValue];
-  if (d[@"modulation_frequency"])
-    i.modulationFrequency = [d[@"modulation_frequency"] doubleValue];
+  // Pinned, not `if (present)`: -init seeds the user's saved curve default, and
+  // a stored animation must decode to the shape it was saved with - including
+  // legacy blobs predating these fields.
+  i.curve =
+      d[@"curve"] ? [d[@"curve"] integerValue] : KKCurveDefaultBuiltIn.curve;
+  i.intensity = d[@"intensity"] ? [d[@"intensity"] doubleValue]
+                                : KKCurveDefaultBuiltIn.intensity;
+  i.frequency = d[@"frequency"] ? [d[@"frequency"] doubleValue]
+                                : KKCurveDefaultBuiltIn.frequency;
+  i.modulation = d[@"modulation"] ? [d[@"modulation"] integerValue]
+                                  : KKModulationDefaultBuiltIn.curve;
+  i.modulationIntensity = d[@"modulation_intensity"]
+                              ? [d[@"modulation_intensity"] doubleValue]
+                              : KKModulationDefaultBuiltIn.intensity;
+  i.modulationFrequency = d[@"modulation_frequency"]
+                              ? [d[@"modulation_frequency"] doubleValue]
+                              : KKModulationDefaultBuiltIn.frequency;
   if (d[@"modulation_seed"])
     i.modulationSeed = [d[@"modulation_seed"] unsignedIntValue];
   if (d[@"modulation_linked"])
@@ -360,6 +371,8 @@ static const KKLaneField kKKLaneFields[] = {
     {@"codeString", @"code_string", nil, KKLaneFieldString,
      KKLaneFieldSerialized},
     {@"codeSaveName", @"code_save_name", nil, KKLaneFieldString,
+     KKLaneFieldSerialized},
+    {@"codeSaveID", @"code_save_id", nil, KKLaneFieldString,
      KKLaneFieldSerialized},
     {@"codeTabs", @"code_tabs", nil, KKLaneFieldArray, KKLaneFieldSerialized},
     {@"codeTabCatalog", nil, nil, KKLaneFieldObject,

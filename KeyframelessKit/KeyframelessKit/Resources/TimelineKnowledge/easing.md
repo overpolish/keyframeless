@@ -7,11 +7,19 @@ summary: Easing curves on intervals (Linear, Ease, Elastic, Bounce)
   - **Linear** - steady speed the whole way.
   - **Ease In** - starts slow, then speeds up.
   - **Ease Out** - starts fast, then slows down.
-  - **Ease In/Out** - eases at both ends (the default).
+  - **Ease In/Out** - eases at both ends (the default until you save your own).
   - **Elastic** - overshoots and wobbles before settling.
   - **Bounce** - lands with a few smaller and smaller bounces.
 
 Elastic and Bounce add Intensity and Frequency controls to dial in the wobble.
+
+## Your own default
+
+The curve popover's title bar carries **Make Default**. It saves the curve, intensity and frequency you are looking at, and every transition you create from then on starts there instead of at Ease In/Out. Existing animations are untouched.
+
+**Reset** sits beside it and puts the segment back to the saved default in one undo step. Both buttons disappear while the segment already is the default, since there is nothing to save and nothing to go back to.
+
+Defaults are per plugin, so Canvas and Mirage keep their own, and in Mirage they are per shader template as well. The modulate popover has the same pair, saving its own modulation, intensity and frequency.
 
 ## In Basic mode
 

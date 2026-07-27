@@ -13,6 +13,12 @@ Every plugin that draws on-screen controls lets you hide the ones you aren't usi
 - **Per-control pills** - the settings cog beside that tick opens a popover with a pill for each control (compound controls like a rotation gizmo split into one pill per ring). Toggle a pill to hide just that one.
 - **Option-click to hide** - hold Option and click a control directly (a handle, a rotation ring, a crop border or corner) on either the viewer OR the mini-viewer. That control hides and its pill flips off. This is the quick way to dismiss a control without opening the popover.
 
+## Saving the set you like
+
+The settings popover has **Make Default** under its search field. It saves which controls are hidden right now, and every new clip starts with that same set instead of showing everything. **Reset** beside it puts the current clip back to the saved set; both buttons disappear while the clip already matches it.
+
+Defaults are per plugin, so Canvas and Mirage keep their own, and Mirage keeps one per shader template. Canvas goes one step further and keeps a set per layer kind - a vector path and an image expose different controls, so a default learned from a path can never leave an image layer with nothing to grab. Controls the saved set has never seen (a shader that gained one, a new release) start visible.
+
 ## Option-hold to reveal hidden controls
 
 Hold **Option** over the viewer or the mini-viewer and any hidden controls reappear as dimmed "ghosts" wherever they would normally sit. Option-click a ghost to bring it back at full strength. Release Option and the ghosts fade away again, leaving the hidden ones hidden.

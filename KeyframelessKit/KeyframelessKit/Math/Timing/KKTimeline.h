@@ -274,6 +274,12 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// it back to label the instance (Mirage names its link-bus source with it).
 /// Set on save and on loading a named entry; nil / empty = unnamed.
 @property(nonatomic, copy, nullable) NSString *codeSaveName;
+/// For a `codeSavable` lane: the id of the catalog entry this code came from,
+/// stamped on save and on loading an entry. Unlike `codeSaveName` it survives a
+/// rename and never changes as the code is edited, so it is the stable identity
+/// of "which template is this instance running" - Mirage scopes its saved curve
+/// defaults by it. nil = code that was never saved or loaded from an entry.
+@property(nonatomic, copy, nullable) NSString *codeSaveID;
 /// For a `KKLaneValueTypeCode` lane: drop the row's title, giving the editor
 /// the full row. For a lane that sits alone in its own category the heading
 /// only repeats the group header above it. The lane KEEPS its label (the lane

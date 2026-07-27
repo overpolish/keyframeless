@@ -323,8 +323,6 @@ NS_ASSUME_NONNULL_BEGIN
                                 (KKGapIntervalMutator)intervalMutator;
 @end
 
-FOUNDATION_EXPORT NSInteger KKModulationToPill(KKIntervalModulation m);
-
 // Boundary-request statics (defined in +Popovers.m) + the per-frame boundary
 // navigation methods (defined in +BoundaryNav.m), shared across both.
 @class KKMiniViewerView;

@@ -43,6 +43,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Set so the view can re-fit the popover as the search filter hides rows.
 @property(nonatomic, weak, nullable) NSPopover *popover;
 
+/// Scope the "Make Default" / "Reset" pair reads and writes (see
+/// KKOSCVisibilityDefaults). nil = the process-wide active scope, which is the
+/// plugin (plus the shader template in Mirage); Canvas passes a kind-suffixed
+/// scope so a vector layer's default can't leave an image layer with no
+/// visible control. Set before the view is shown.
+@property(nonatomic, copy, nullable) NSString *defaultsScope;
+
 /// Replace the checkbox states (parallel to the init `compounds`), e.g. when
 /// the host swaps to a different owner's set while the popover stays open.
 /// No-op if the shape doesn't match.

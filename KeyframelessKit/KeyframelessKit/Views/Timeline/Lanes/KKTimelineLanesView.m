@@ -5,6 +5,7 @@
 
 #import "KKTimelineLanesView.h"
 #import "KKCheckboxRowView.h"
+#import "KKCurveDefaults.h"
 #import "KKLaneCategoryNav.h"
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"

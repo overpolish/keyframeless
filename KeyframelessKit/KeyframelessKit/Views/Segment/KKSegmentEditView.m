@@ -9,6 +9,7 @@
 
 #import "KKCheckboxRowView.h"
 #import "KKCheckboxView.h"
+#import "KKCurveDefaults.h"
 #import "KKCurvePillView.h"
 #import "KKCurveTicks.h"
 #import "KKEasing.h"
@@ -21,7 +22,7 @@
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 
-static const CGFloat kWidth = 280.0;
+static const CGFloat kWidth = 370.0;
 static const CGFloat kHPadding = 10.0;
 static const CGFloat kVPadding = 10.0;
 static const CGFloat kPillHeight = 28.0;
@@ -48,6 +49,9 @@ static const CGFloat kBulkHeaderHeight = 18.0;
   NSImageView *_intensityTicks;
   NSImageView *_frequencyTicks;
   KKSeedView *_seedView;
+  NSView *_defaultsAccessory;
+  NSButton *_makeDefaultButton;
+  NSButton *_resetDefaultButton;
   KKCheckboxRowView *_linkedRow;
   NSLayoutConstraint *_intensityTrailingHalf;
   NSLayoutConstraint *_intensityTrailingFull;
@@ -333,6 +337,152 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   return _linkedRow;
 }
 
+// One flat text-and-glyph action for the popover's title bar: no bezel, no
+// background - just a tinted glyph + label, matching the caption-style bar in
+// Steno.
+static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
+                                  NSColor *tint, id target, SEL action) {
+  NSButton *b = [NSButton buttonWithTitle:title target:target action:action];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.controlSize = NSControlSizeSmall;
+  b.font = [NSFont systemFontOfSize:10.0 weight:NSFontWeightMedium];
+  b.image = [NSImage imageWithSystemSymbolName:symbol
+                      accessibilityDescription:title];
+  b.imagePosition = b.image ? NSImageLeading : NSNoImage;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  b.contentTintColor = tint;
+  b.imageHugsTitle = YES;
+  // Act on press, not on a matched press+release: when this popover opens over
+  // another one (constants, keypose), the release can land in the OTHER
+  // popover's window, so a release-driven NSButton highlights and never fires.
+  [b sendActionOn:NSEventMaskLeftMouseDown];
+  return b;
+}
+
+// The saved default for this popover's kind: the easing shape for a transition,
+// the modulation shape for a hold. Modulation crosses the pill/enum boundary,
+// so it is converted on the way in and out.
+- (KKCurveDefault)_savedDefault {
+  if (_kind == KKSegmentEditKindHold) {
+    KKCurveDefault d = KKModulationDefaultsRead(nil);
+    d.curve = KKModulationToPill(d.curve);
+    return d;
+  }
+  return KKCurveDefaultsRead(nil);
+}
+
+- (BOOL)_matchesSavedDefault {
+  KKCurveDefault d = [self _savedDefault];
+  if (d.curve != _curveType)
+    return NO;
+  if (fabs(d.intensity - _intensity) > 1e-6)
+    return NO;
+  // Frequency only reads on the curves that expose it; ignore it elsewhere so a
+  // stale slider value doesn't keep the buttons up on an otherwise-default
+  // segment.
+  if (_curveUsesFrequency(_kind, _curveType) &&
+      fabs(d.frequency - _frequency) > 1e-6)
+    return NO;
+  return YES;
+}
+
+// Title-bar actions: [Reset][Make Default]. Both stay hidden while the segment
+// already IS the saved default - there is nothing to save and nothing to go
+// back to.
+- (NSView *)defaultsAccessoryView {
+  if (_defaultsAccessory)
+    return _defaultsAccessory;
+
+  BOOL hold = (_kind == KKSegmentEditKindHold);
+  _defaultsAccessory = [[NSView alloc] initWithFrame:NSZeroRect];
+  _defaultsAccessory.translatesAutoresizingMaskIntoConstraints = NO;
+
+  _resetDefaultButton = KKDefaultsButton(
+      KKLoc(@"Reset", @"Button: restore the saved default curve."),
+      @"arrow.uturn.backward", [NSColor secondaryLabelColor], self,
+      @selector(_resetToDefaultTapped:));
+  _resetDefaultButton.toolTip =
+      hold ? KKLoc(@"Put this modulation back to the saved default",
+                   @"Tooltip for the modulate Reset button.")
+           : KKLoc(@"Put this transition back to the saved default",
+                   @"Tooltip for the Reset button.");
+  [_defaultsAccessory addSubview:_resetDefaultButton];
+
+  _makeDefaultButton =
+      KKDefaultsButton(KKLoc(@"Make Default",
+                             @"Button: save these curve settings as default."),
+                       @"star", [NSColor accentMatchingHost], self,
+                       @selector(_makeDefaultTapped:));
+  _makeDefaultButton.toolTip =
+      hold ? KKLoc(@"Start every new segment in this plugin with this "
+                   @"modulation, intensity and frequency",
+                   @"Tooltip for the modulate Make Default button.")
+           : KKLoc(@"Start every new transition in this plugin with this "
+                   @"curve, intensity and frequency",
+                   @"Tooltip for the Make Default button.");
+  [_defaultsAccessory addSubview:_makeDefaultButton];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [_resetDefaultButton.leadingAnchor
+        constraintEqualToAnchor:_defaultsAccessory.leadingAnchor],
+    [_resetDefaultButton.centerYAnchor
+        constraintEqualToAnchor:_defaultsAccessory.centerYAnchor],
+    [_makeDefaultButton.leadingAnchor
+        constraintEqualToAnchor:_resetDefaultButton.trailingAnchor
+                       constant:KKSpacingSM],
+    [_makeDefaultButton.trailingAnchor
+        constraintEqualToAnchor:_defaultsAccessory.trailingAnchor],
+    [_makeDefaultButton.centerYAnchor
+        constraintEqualToAnchor:_defaultsAccessory.centerYAnchor],
+    [_defaultsAccessory.heightAnchor
+        constraintEqualToAnchor:_makeDefaultButton.heightAnchor],
+  ]];
+  [self _updateDefaultsRow];
+  return _defaultsAccessory;
+}
+
+- (void)_updateDefaultsRow {
+  if (!_makeDefaultButton)
+    return;
+  BOOL matches = [self _matchesSavedDefault];
+  _makeDefaultButton.hidden = matches;
+  _resetDefaultButton.hidden = matches;
+}
+
+- (void)_makeDefaultTapped:(id)sender {
+  KKCurveDefault d = {.curve = _curveType,
+                      .intensity = _intensity,
+                      .frequency = _frequency};
+  if (_kind == KKSegmentEditKindHold) {
+    d.curve = KKPillToModulation(_curveType);
+    KKModulationDefaultsWrite(d, nil);
+  } else {
+    KKCurveDefaultsWrite(d, nil);
+  }
+  [self _updateDefaultsRow];
+}
+
+- (void)_resetToDefaultTapped:(id)sender {
+  KKCurveDefault d = [self _savedDefault];
+  // Three writes, one gesture: bracket them in the host's undo group so cmd-Z
+  // takes the whole reset back rather than the frequency alone.
+  if (self.onSliderDragBegin)
+    self.onSliderDragBegin();
+  self.curveType = d.curve;
+  if (self.onCurveTypeChanged)
+    self.onCurveTypeChanged(d.curve);
+  self.intensity = d.intensity;
+  if (self.onIntensityChanged)
+    self.onIntensityChanged(d.intensity);
+  self.frequency = d.frequency;
+  if (self.onFrequencyChanged)
+    self.onFrequencyChanged(d.frequency);
+  if (self.onSliderDragEnd)
+    self.onSliderDragEnd();
+  [self _updateDefaultsRow];
+}
+
 - (void)_buildSeedRowBelow:(NSView *)anchorView {
   __weak typeof(self) weakSelf = self;
   NSTextField *seedLabel = [NSTextField
@@ -434,6 +584,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
       return;
     self->_curveType = index;
     [self _updateFrequencyVisibility];
+    [self _updateDefaultsRow];
     if (self.onCurveTypeChanged)
       self.onCurveTypeChanged(index);
   };
@@ -696,6 +847,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _pills.selectedIndex = curveType;
   [_pills redraw];
   [self _updateFrequencyVisibility];
+  [self _updateDefaultsRow];
 }
 
 - (void)setAnimateOut:(BOOL)animateOut {
@@ -832,6 +984,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _intensitySlider.doubleValue = intensity;
   [_pills redraw];
   [self _renderTicks];
+  [self _updateDefaultsRow];
 }
 
 - (void)setFrequency:(double)frequency {
@@ -839,6 +992,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _frequencySlider.doubleValue = frequency;
   [_pills redraw];
   [self _renderTicks];
+  [self _updateDefaultsRow];
 }
 
 - (void)setSeed:(uint32_t)seed {
@@ -852,6 +1006,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _intensity = _intensitySlider.doubleValue;
   [_pills redraw];
   [self _renderTicks];
+  [self _updateDefaultsRow];
   if (_onIntensityChanged)
     _onIntensityChanged(_intensity);
 }
@@ -860,6 +1015,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _frequency = _frequencySlider.doubleValue;
   [_pills redraw];
   [self _renderTicks];
+  [self _updateDefaultsRow];
   if (_onFrequencyChanged)
     _onFrequencyChanged(_frequency);
 }

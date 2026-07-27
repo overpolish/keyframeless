@@ -6,6 +6,7 @@
 #import "KKPlugin+InspectorCallbacks.h"
 
 #import "KKConstants.h"
+#import "KKCurveDefaults.h"
 #import "KKDataBlob.h"
 #import "KKDragUndoSession.h"
 #import "KKHostInfo.h"
@@ -205,6 +206,10 @@
   // Namespace the Presets row to this plugin so its saved/built-in presets
   // never bleed across plugins (their lane sets differ).
   view.presetPluginKey = [self presetPluginKey];
+  // Same key scopes the curve popover's saved default. Re-asserted per wire, so
+  // in a ViewBridge process shared across plugins the active scope always
+  // belongs to the inspector whose popover is open.
+  KKDefaultsSetActiveScope([self presetPluginKey]);
 
   view.onLoopToggled = ^(BOOL enabled) {
     __strong typeof(weak) strong = weak;

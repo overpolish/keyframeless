@@ -89,6 +89,12 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 @property(nonatomic, copy, nullable)
     NSArray<NSArray<NSNumber *> *> *_Nonnull (^oscVisibilityElementStates)(void)
         ;
+/// Scope for the OSC popover's "Make Default" / "Reset" pair. nil = the
+/// process-wide active scope (this plugin, plus the shader template in Mirage).
+/// A plugin whose owners differ in which controls apply - Canvas's vector paths
+/// vs images - sets a suffixed scope per kind so one kind's default can't leave
+/// another with nothing visible.
+@property(nonatomic, copy, nullable) NSString *oscDefaultsScope;
 /// A pill was toggled: compound + segment index into `oscVisibilityCompounds`
 /// and its new state. The host updates its per-instance cache + persists.
 @property(nonatomic, copy, nullable) void (^oscVisibilityElementToggled)

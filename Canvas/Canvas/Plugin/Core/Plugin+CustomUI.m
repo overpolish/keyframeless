@@ -18,6 +18,7 @@
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKOSCVisibilityDefaults.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKPluginHost.h> // KKSetProcessTimelineSnapshot
@@ -378,10 +379,30 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   BOOL vector = layer && !layer.isImage && !layer.isGroup &&
                 (layer.strokeEnabled || layer.fillEnabled);
 
+  // A vector path and an image expose different controls, so their saved
+  // defaults live under separate scopes - one set of hidden keys learned from a
+  // path would otherwise leave an image layer with no visible control at all.
+  NSString *defaultsScope = [KKDefaultsActiveScope()
+      stringByAppendingString:(vector ? @".vector" : @".raster")];
+  ((KKTimelineInspectorView *)self.inspectorView).oscDefaultsScope =
+      defaultsScope;
+
   NSDictionary *els = ist.oscElementsByOwner[layerID ?: @""];
-  if (![els isKindOfClass:[NSDictionary class]])
-    els = [CanvasPlugin
-        defaultOSCElementsForVector:vector]; // new / unseen layer -> default
+  if (![els isKindOfClass:[NSDictionary class]]) {
+    // New / unseen layer: the user's saved set for this layer kind, else the
+    // built-in seed.
+    NSSet<NSString *> *savedHidden =
+        KKOSCVisibilityDefaultsRead(defaultsScope);
+    if (savedHidden) {
+      NSMutableDictionary<NSString *, NSNumber *> *seeded =
+          [NSMutableDictionary dictionaryWithCapacity:keys.count];
+      for (NSString *k in keys)
+        seeded[k] = @(![savedHidden containsObject:k]);
+      els = seeded;
+    } else {
+      els = [CanvasPlugin defaultOSCElementsForVector:vector];
+    }
+  }
   // Refresh through the kit from a synthesized state (global master + THIS
   // layer's element map); this sets the active hiddenOSCElements + view + mini.
   NSDictionary *state =

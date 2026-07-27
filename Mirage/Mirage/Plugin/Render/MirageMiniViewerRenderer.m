@@ -182,11 +182,23 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
     // keyed on their LANE label like the viewer gizmo. The two standard
     // `center =` shapes map onto the spec: a bare uniform name is a live link,
     // anything else evaluates once to a constant centre.
+    __weak typeof(self) weakRenderer = self;
     for (MirageOSCBlockRuntime *b in
          [MirageOSCBlockRuntime runtimesForSource:src
                                             lanes:self.laneTemplates ?: @[]]) {
       if (![b.primitive isEqualToString:@"rotate"])
         continue;
+      // Every uniform the centre expression REFERENCES resolves through this
+      // provider; without it they all read 0, so Magic Move's
+      // `uPosition + uAnchor - vec2(0.5)` collapsed to a constant -0.5,-0.5 and
+      // put the rings half a frame off the top-left corner. The point + expr
+      // sets already wire the same pair - this path was the one that didn't.
+      b.laneValueProvider = ^NSArray<NSNumber *> *(NSString *label) {
+        return [weakRenderer rootValuesForLabel:label];
+      };
+      b.mediaSizeProvider = ^CGSize(void) {
+        return weakRenderer.canvas.sourceMediaSize;
+      };
       NSString *centerSrc = [b.centerSource
           stringByTrimmingCharactersInSet:NSCharacterSet
                                               .whitespaceCharacterSet];
@@ -209,6 +221,27 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
         @"centerY" : @(c.y),
         @"linkLabel" : isLink ? centerSrc : @"",
       } mutableCopy];
+      // An expression centre (anything but a bare uniform name) depends on the
+      // lane's CURRENT value, so the constant baked above - evaluated against a
+      // zero bound, since the spec is built once per source change - is only a
+      // fallback. Resolve it per draw against the live root value, the same way
+      // the ring blocks do, or the gizmo lands wherever a zero value maps to
+      // (Magic Move put it half a canvas off the top-left corner).
+      if (centerSrc.length && !isLink) {
+        __weak typeof(self) weakSelf = self;
+        MirageOSCBlockRuntime *rt = b;
+        spec[@"centerFractionBlock"] = ^CGPoint(CGRect cr) {
+          __strong typeof(weakSelf) self = weakSelf;
+          if (!self)
+            return CGPointMake(0.5, 0.5);
+          double aspect =
+              cr.size.height > 0 ? cr.size.width / cr.size.height : 1.0;
+          KKExprVal bound = [rt
+              boundValueFromLaneValues:[self rootValuesForLabel:rt.binds]];
+          simd_float2 oc = [rt centerObjectForBound:bound aspect:aspect];
+          return CGPointMake(oc.x, oc.y);
+        };
+      }
       [rots addObject:spec];
     }
   }

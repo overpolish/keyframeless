@@ -17,6 +17,8 @@
 #import "MirageMiniViewerRenderer.h"
 #import "MirageThumbnailRenderer.h"
 #import "Plugin_Private.h" // +availableLanesForShaderSource:
+#import <KeyframelessKit/KKCurveDefaults.h>
+#import <KeyframelessKit/KKScopedDefaults.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimingGuide.h>
 @import KKCommunity;
@@ -274,15 +276,57 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   NSData *preview = MirageRenderThumbnailJPEG(_miniViewerRenderer, 320, 180);
   // No author by default - never derive it from the account name (privacy). The
   // user can add an author when publishing.
-  [[MirageLocalCatalog shared]
+  MirageCatalogEntry *saved = [[MirageLocalCatalog shared]
       saveShaderNamed:name
                author:@""
              category:MirageCategoryAtIndex(
                           note.userInfo[KKCodeEditorSaveCategoryIndexKey])
              sections:dict
           previewJPEG:preview];
+  // Adopt the new entry's id so this instance is now "running that template" -
+  // the same identity a browser load stamps, and what its saved curve defaults
+  // are keyed by.
+  [self _stampCodeSaveID:saved.entryID];
   [_browserController
       refreshLocal]; // local save; show the new card, no re-fetch
+}
+
+// Write `entryID` onto the code lane and publish, so the identity survives the
+// round-trip. A no-op when the lane already carries it.
+- (void)_stampCodeSaveID:(NSString *)entryID {
+  KKTimeline *current = _miniViewerRenderer.timeline;
+  if (!current || !entryID.length)
+    return;
+  // Saving forks a template: the catalog mints a FRESH id per save, so the new
+  // one starts with no defaults of its own. Carry over whatever was tuned on
+  // the template this was saved FROM - a variant of Magic Move should keep
+  // Magic Move's curve / OSC defaults until it is given its own.
+  // `current` still carries the id this was saved FROM, so syncing against it
+  // gives the source scope; the stamp + applyTimeline below move the active
+  // scope onto the new id.
+  [self _syncCurveDefaultsScope:current];
+  KKScopedDefaultsCopyScope(KKDefaultsActiveScope(),
+                            [[self _curveDefaultsBaseScope]
+                                stringByAppendingFormat:@"/%@", entryID]);
+  NSMutableArray<KKLane *> *lanes = [current.lanes mutableCopy];
+  BOOL changed = NO;
+  for (NSUInteger i = 0; i < lanes.count; i++) {
+    if (![lanes[i].key isEqualToString:kMirageCodeLaneLabel])
+      continue;
+    if ([(lanes[i].codeSaveID ?: @"") isEqualToString:entryID])
+      continue;
+    KKLane *lane = [lanes[i] copy];
+    lane.codeSaveID = entryID;
+    lanes[i] = lane;
+    changed = YES;
+  }
+  if (!changed)
+    return;
+  KKTimeline *updated = [current copy];
+  updated.lanes = lanes;
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(updated);
+  [self applyTimeline:updated];
 }
 
 // Publish a saved entry to the community repo as a PR (after a confirm).
@@ -385,6 +429,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     // Loading a named shader names the instance: the save bar shows it, and
     // the link-bus source is labelled with it instead of a bare "Mirage".
     lane.codeSaveName = entry.name.length ? entry.name : nil;
+    // The entry's UUID, not its name: it survives renames and code edits, so
+    // it is what scopes this template's saved curve / modulate defaults.
+    lane.codeSaveID = entry.entryID.length ? entry.entryID : nil;
     lanes[i] = lane;
     found = YES;
   }
@@ -465,6 +512,33 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
                   userInfo:@{KKCodeEditorSaveSectionsKey : sections}];
 }
 
+// Mirage keeps its curve / modulate defaults per TEMPLATE, not just per plugin:
+// a bounce that suits Magic Move is wrong for a plasma. The code lane's
+// `codeSaveID` is the template identity (stable across renames and edits);
+// without one - code the user never saved or loaded - the plugin-wide scope
+// stands, which is also what the plugin process itself uses.
+// The plugin-wide part of the defaults scope: the preset key, falling back to
+// the bundle id when the host hasn't handed it over yet (the same string
+// presetPluginKey resolves to, so the scope never splits on timing).
+- (NSString *)_curveDefaultsBaseScope {
+  return self.presetPluginKey.length
+             ? self.presetPluginKey
+             : ([NSBundle bundleForClass:[self class]].bundleIdentifier
+                    ?: @"Mirage");
+}
+
+- (void)_syncCurveDefaultsScope:(KKTimeline *)timeline {
+  NSString *base = [self _curveDefaultsBaseScope];
+  NSString *entryID = nil;
+  for (KKLane *l in timeline.lanes)
+    if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeSaveID.length) {
+      entryID = l.codeSaveID;
+      break;
+    }
+  KKDefaultsSetActiveScope(
+      entryID.length ? [base stringByAppendingFormat:@"/%@", entryID] : base);
+}
+
 - (BOOL)showsOSCVisibilityRow {
   return YES;
 }
@@ -472,6 +546,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
   _miniViewerRenderer.timeline = timeline;
+  [self _syncCurveDefaultsScope:timeline];
   // Refresh this clip's reference-menu thumbnail when its look changes.
   [self _scheduleThumbnailBake];
   // Re-wire the source-derived OSC set (the cog checklist) whenever the

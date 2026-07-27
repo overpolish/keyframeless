@@ -13,6 +13,7 @@
 #import "KKLabelView.h"
 #import "KKLaneCategoryNav.h"
 #import "KKMiniViewerView.h"
+#import "KKLog.h"
 #import "KKOSCChecklistView.h"
 #import "KKPaddedScrollView.h"
 #import "KKParameterRowView.h"
@@ -481,6 +482,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
             return nil;
           }];
   list.translatesAutoresizingMaskIntoConstraints = NO;
+  list.defaultsScope = self.oscDefaultsScope;
   _oscPillBar = list; // guide spotlight anchor (weak; lives in the popover)
   __weak typeof(self) weak = self;
   list.onToggled = ^(NSInteger compoundIdx, NSInteger segIdx, BOOL isOn) {

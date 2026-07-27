@@ -104,7 +104,16 @@
              contentRect:(CGRect)cr {
   NSString *link = s[@"linkLabel"];
   double cx, cy;
-  if ([link isKindOfClass:NSString.class] && link.length) {
+  // A centre that depends on the lane's CURRENT value (a plugin's expression,
+  // not a bare uniform reference) can't be baked into the spec - the spec is
+  // built once per source change, when the value isn't known. Such a spec
+  // carries a block that resolves the fraction per draw instead.
+  CGPoint (^liveCenter)(CGRect) = s[@"centerFractionBlock"];
+  if (liveCenter) {
+    CGPoint f = liveCenter(cr);
+    cx = f.x;
+    cy = f.y;
+  } else if ([link isKindOfClass:NSString.class] && link.length) {
     // Root value of the linked centre point: keep the ring anchored to that
     // point's OSC handle (also root), consistent across handles.
     NSArray<NSNumber *> *pv = [_renderer rootValuesForLabel:link];

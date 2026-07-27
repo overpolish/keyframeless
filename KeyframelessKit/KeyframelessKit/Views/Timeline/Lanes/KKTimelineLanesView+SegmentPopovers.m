@@ -11,6 +11,7 @@
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
+#import <KeyframelessKit/KKCurveDefaults.h>
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
@@ -200,6 +201,10 @@
   NSButton *closeButton = [self _makePopoverCloseButton];
   [container addSubview:closeButton];
   [container addSubview:header];
+  // Trailing end of the title row, where the keypose / constants popovers put
+  // their size pill: the segment's own [Reset][Make Default] actions.
+  NSView *defaults = [edit defaultsAccessoryView];
+  [container addSubview:defaults];
   [container addSubview:edit];
   _openSegEditHeightConstraint =
       [edit.heightAnchor constraintEqualToConstant:editH];
@@ -214,6 +219,12 @@
                                          constant:KKSpacingMD],
     [header.topAnchor constraintEqualToAnchor:container.topAnchor
                                      constant:KKPaddingMD],
+    [header.trailingAnchor
+        constraintLessThanOrEqualToAnchor:defaults.leadingAnchor
+                                 constant:-KKSpacingSM],
+    [defaults.trailingAnchor constraintEqualToAnchor:container.trailingAnchor
+                                            constant:-KKPaddingMD],
+    [defaults.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
     [edit.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
     [edit.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
     [edit.topAnchor constraintEqualToAnchor:header.bottomAnchor
@@ -411,35 +422,6 @@
           if (s && e && s.onGapPopoverWillOpen)
             s.onGapPopoverWillOpen(e, e);
         });
-  }
-}
-
-// KKSegmentEditView (Hold kind) pills are indexed by KKHoldEffect
-// (0 None, 1 Bounce, 2 Wiggle); the model stores KKIntervalModulation. The
-// evaluator maps Wiggle→Wiggle, Oscillate→Bounce (KKTimingEvaluation.m), so
-// the pill index and the stored enum are NOT interchangeable.
-NSInteger KKModulationToPill(KKIntervalModulation m) {
-  switch (m) {
-  case KKIntervalModulationWiggle:
-    return KKHoldEffectWiggle;
-  case KKIntervalModulationOscillate:
-    return KKHoldEffectBounce;
-  case KKIntervalModulationHandheld:
-    return KKHoldEffectHandheld;
-  default:
-    return KKHoldEffectNone;
-  }
-}
-static KKIntervalModulation KKPillToModulation(NSInteger pill) {
-  switch (pill) {
-  case KKHoldEffectWiggle:
-    return KKIntervalModulationWiggle;
-  case KKHoldEffectBounce:
-    return KKIntervalModulationOscillate;
-  case KKHoldEffectHandheld:
-    return KKIntervalModulationHandheld;
-  default:
-    return KKIntervalModulationNone;
   }
 }
 

@@ -4,6 +4,7 @@
  */
 
 #import "KKConstants.h"
+#import "KKCurveDefaults.h"
 #import "KKDataBlob.h"
 #import "KKHostInfo.h"
 #import "KKLinkBus.h"
@@ -107,6 +108,10 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
     // cold container lookup mid-frame. One call covers every plugin (each
     // FxPlug instance is its own XPC process); a no-op when nothing links.
     [KKLinkBus warmUp];
+    // Scope the saved curve default to this plugin (Canvas and Mirage keep
+    // their own), so intervals created in this process start at the user's
+    // shape rather than the built-in EaseInOut.
+    KKDefaultsSetActiveScope([self presetPluginKey]);
   }
   return self;
 }

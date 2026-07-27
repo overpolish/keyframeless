@@ -15876,6 +15876,342 @@
           }
         }
       }
+    },
+    "Make Default": {
+      "comment": "Button: save these curve settings as the plugin's default.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als Standard festlegen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Establecer como predeterminado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Définir par défaut"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デフォルトにする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본값으로 설정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设为默认"
+          }
+        }
+      }
+    },
+    "Reset": {
+      "comment": "Button: restore the saved default curve on this segment.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurücksetzen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リセット"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재설정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置"
+          }
+        }
+      }
+    },
+    "Start every new transition in this plugin with this curve, intensity and frequency": {
+      "comment": "Tooltip for the Make Default button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeden neuen Übergang in diesem Plug-in mit dieser Kurve, Intensität und Frequenz beginnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar cada nueva transición de este plug-in con esta curva, intensidad y frecuencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer chaque nouvelle transition de ce module avec cette courbe, cette intensité et cette fréquence"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このプラグインの新しいトランジションを、このカーブ・強さ・周波数で開始します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 플러그인의 모든 새 전환을 이 커브, 강도, 빈도로 시작합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此插件中的每个新过渡都以此曲线、强度和频率开始"
+          }
+        }
+      }
+    },
+    "Put this transition back to the saved default": {
+      "comment": "Tooltip for the Reset button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Übergang auf den gespeicherten Standard zurücksetzen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devolver esta transición al valor predeterminado guardado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rétablir la valeur par défaut enregistrée pour cette transition"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このトランジションを保存されたデフォルトに戻します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 전환을 저장된 기본값으로 되돌립니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将此过渡恢复为已保存的默认值"
+          }
+        }
+      }
+    },
+    "Put this modulation back to the saved default": {
+      "comment": "Tooltip for the modulate Reset button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Modulation auf den gespeicherten Standard zurücksetzen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devolver esta modulación al valor predeterminado guardado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rétablir la valeur par défaut enregistrée pour cette modulation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このモジュレーションを保存されたデフォルトに戻します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 모듈레이션을 저장된 기본값으로 되돌립니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将此调制恢复为已保存的默认值"
+          }
+        }
+      }
+    },
+    "Start every new segment in this plugin with this modulation, intensity and frequency": {
+      "comment": "Tooltip for the modulate Make Default button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes neue Segment in diesem Plug-in mit dieser Modulation, Intensität und Frequenz beginnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar cada nuevo segmento de este plug-in con esta modulación, intensidad y frecuencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer chaque nouveau segment de ce module avec cette modulation, cette intensité et cette fréquence"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このプラグインの新しいセグメントを、このモジュレーション・強さ・周波数で開始します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 플러그인의 모든 새 세그먼트를 이 모듈레이션, 강도, 빈도로 시작합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此插件中的每个新片段都以此调制、强度和频率开始"
+          }
+        }
+      }
+    },
+    "Put these controls back to the saved default": {
+      "comment": "Tooltip for the OSC Reset button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Steuerelemente auf den gespeicherten Standard zurücksetzen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devolver estos controles al valor predeterminado guardado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rétablir la valeur par défaut enregistrée pour ces commandes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これらのコントロールを保存されたデフォルトに戻します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 제어기를 저장된 기본값으로 되돌립니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将这些控件恢复为已保存的默认值"
+          }
+        }
+      }
+    },
+    "Show this set of on-screen controls on every new clip": {
+      "comment": "Tooltip for the OSC Make Default button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Auswahl an Bildschirmsteuerelementen bei jedem neuen Clip zeigen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar este conjunto de controles en pantalla en cada clip nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher cet ensemble de commandes à l'écran sur chaque nouveau plan"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいクリップではこの画面上コントロールのセットを表示します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 새 클립에 이 화면 제어기 세트를 표시합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在每个新片段上显示这组屏幕控件"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
