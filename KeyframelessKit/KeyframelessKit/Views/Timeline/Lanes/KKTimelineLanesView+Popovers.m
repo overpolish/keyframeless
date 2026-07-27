@@ -455,6 +455,23 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
       return YES; // couldn't resolve host - keep the old close-on-scroll
     return KKWindowOwnerPIDAtScreenPoint(NSEvent.mouseLocation) == hostPID;
   };
+  // A scroll only dismisses when it is a FRESH gesture the user made with the
+  // popover already up. Two cases are not:
+  //  - momentum (inertia) events, which keep arriving up to ~1.5s after the
+  //    fingers lift: scrolling the inspector to reach a row and clicking it
+  //    immediately meant the tail of that scroll dismissed the popover on its
+  //    first open.
+  //  - anything inside the same warm-up window the mouseDown monitor uses, for
+  //    the pre-momentum tail of the same gesture.
+  // Both read as "intermittent dismiss right after opening".
+  BOOL (^scrollIsFreshGesture)(NSEvent *) = ^BOOL(NSEvent *e) {
+    if (e.momentumPhase != NSEventPhaseNone)
+      return NO;
+    __strong typeof(navWeakSelf) s = navWeakSelf;
+    if (s && CACurrentMediaTime() - s->_openPopoverShownAt < 0.2)
+      return NO;
+    return YES;
+  };
   localMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                    handler:^NSEvent *(NSEvent *e) {
@@ -470,6 +487,8 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                              NSEvent.mouseLocation))
                                        return e;
                                      if (contentSuppressesDismiss())
+                                       return e;
+                                     if (!scrollIsFreshGesture(e))
                                        return e;
                                      if (!scrollInHostApp())
                                        return e;
@@ -491,6 +510,8 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                               NSEvent.mouseLocation))
                                         return;
                                       if (contentSuppressesDismiss())
+                                        return;
+                                      if (!scrollIsFreshGesture(e))
                                         return;
                                       if (!scrollInHostApp())
                                         return;
