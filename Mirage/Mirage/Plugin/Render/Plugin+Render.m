@@ -365,8 +365,10 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
                                    pluginState:pluginState
                                         atTime:renderTime
                                          error:outError];
-  if (ok)
-    KKWatermarkApplyIfUnlicensed(KKLicenseProductMirage, destinationImage);
+  // Unconditional: a render that reports failure still leaves pixels in the
+  // destination surface, and "make the shader fail" must not be a way to get a
+  // clean frame out of the trial.
+  KKWatermarkApplyIfUnlicensed(KKLicenseProductMirage, destinationImage);
   return ok;
 }
 

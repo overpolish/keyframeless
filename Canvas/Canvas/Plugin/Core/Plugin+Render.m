@@ -300,8 +300,10 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                    pluginState:pluginState
                                         atTime:renderTime
                                          error:outError];
-  if (ok)
-    KKWatermarkApplyIfUnlicensed(KKLicenseProductCanvas, destinationImage);
+  // Unconditional: a render that reports failure still leaves pixels in the
+  // destination surface, and "make the render fail" must not be a way to get a
+  // clean frame out of the trial.
+  KKWatermarkApplyIfUnlicensed(KKLicenseProductCanvas, destinationImage);
   return ok;
 }
 

@@ -32,6 +32,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// The persisted timeline (constants live here as disabled single-keypose
 /// lanes). The host keeps this in sync.
 @property(nonatomic, copy, nullable) KKTimeline *timeline;
+/// KKLicense product this preview belongs to. Set it and the trial watermark
+/// is composited over the finished preview - after the effect, so no shader or
+/// draw path can alter or suppress it. nil (the default) = no watermark.
+@property(nonatomic, copy, nullable) NSString *watermarkProductID;
 /// Weak ref to the canvas this renderer is currently delegating for. Set by
 /// the base on every delegate call, so subclasses can read the canvas's
 /// frame size (e.g. to scale overlay glyphs with popover size) without

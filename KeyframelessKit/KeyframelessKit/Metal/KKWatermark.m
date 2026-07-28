@@ -109,9 +109,14 @@ static id<MTLTexture> KKWatermarkCachedTexture(id<MTLDevice> device,
   return texture;
 }
 
-void KKWatermarkEncodeIfUnlicensed(NSString *productID,
-                                   id<MTLCommandBuffer> commandBuffer,
-                                   id<MTLTexture> destTexture) {
+/// `patternW/H` is the size the pattern is authored at (the full image), and
+/// `uv*` the sub-rect of it this texture covers. Passing the texture's own size
+/// with the unit rect draws the whole pattern.
+static void KKWatermarkEncode(NSString *productID,
+                              id<MTLCommandBuffer> commandBuffer,
+                              id<MTLTexture> destTexture, NSUInteger patternW,
+                              NSUInteger patternH, float uvL, float uvR,
+                              float uvB, float uvT) {
   if (KKLicenseIsActivated(productID))
     return;
   if (!commandBuffer || !destTexture)
@@ -119,7 +124,7 @@ void KKWatermarkEncodeIfUnlicensed(NSString *productID,
 
   id<MTLDevice> device = commandBuffer.device;
   id<MTLTexture> watermark =
-      KKWatermarkCachedTexture(device, destTexture.width, destTexture.height);
+      KKWatermarkCachedTexture(device, patternW, patternH);
   if (!watermark)
     return;
 
@@ -153,12 +158,13 @@ void KKWatermarkEncodeIfUnlicensed(NSString *productID,
   float halfW = destTexture.width / 2.0f;
   float halfH = destTexture.height / 2.0f;
   // FCP's destination surface is bottom-up, so v is NOT flipped here (the
-  // usual CG-top-to-v0 flip would render the text upside down).
+  // usual CG-top-to-v0 flip would render the text upside down) and uvB is the
+  // pattern row at the tile's BOTTOM edge.
   KKVertex2D vertices[4] = {
-      {{-halfW, -halfH}, {0.0f, 0.0f}},
-      {{halfW, -halfH}, {1.0f, 0.0f}},
-      {{-halfW, halfH}, {0.0f, 1.0f}},
-      {{halfW, halfH}, {1.0f, 1.0f}},
+      {{-halfW, -halfH}, {uvL, uvB}},
+      {{halfW, -halfH}, {uvR, uvB}},
+      {{-halfW, halfH}, {uvL, uvT}},
+      {{halfW, halfH}, {uvR, uvT}},
   };
   vector_uint2 viewport = {(uint)destTexture.width, (uint)destTexture.height};
   float opacity = kKKWatermarkOpacity;
@@ -178,6 +184,43 @@ void KKWatermarkEncodeIfUnlicensed(NSString *productID,
   [encoder endEncoding];
 }
 
+void KKWatermarkEncodeIfUnlicensed(NSString *productID,
+                                   id<MTLCommandBuffer> commandBuffer,
+                                   id<MTLTexture> destTexture, BOOL topDown) {
+  if (!destTexture)
+    return;
+  KKWatermarkEncode(productID, commandBuffer, destTexture, destTexture.width,
+                    destTexture.height, 0.0f, 1.0f, topDown ? 1.0f : 0.0f,
+                    topDown ? 0.0f : 1.0f);
+}
+
+void KKWatermarkEncodeIfUnlicensedForTile(NSString *productID,
+                                          id<MTLCommandBuffer> commandBuffer,
+                                          id<MTLTexture> destTexture,
+                                          FxImageTile *destinationImage) {
+  if (!destinationImage) {
+    KKWatermarkEncodeIfUnlicensed(productID, commandBuffer, destTexture, NO);
+    return;
+  }
+  // FCP splits a frame into tiles for expensive renders (and hands a sub-tile
+  // when parent Scale > 100%). Sizing the pattern to the TILE stamped a
+  // complete watermark into each one - two tiles read as two watermarks. Author
+  // it against the full image and let each tile draw its own slice.
+  FxRect tile = destinationImage.tilePixelBounds;
+  FxRect img = destinationImage.imagePixelBounds;
+  float imgW = (float)(img.right - img.left);
+  float imgH = (float)(img.top - img.bottom);
+  if (imgW <= 0.0f || imgH <= 0.0f) {
+    KKWatermarkEncodeIfUnlicensed(productID, commandBuffer, destTexture, NO);
+    return;
+  }
+  KKWatermarkEncode(productID, commandBuffer, destTexture, (NSUInteger)imgW,
+                    (NSUInteger)imgH, (float)(tile.left - img.left) / imgW,
+                    (float)(tile.right - img.left) / imgW,
+                    (float)(tile.bottom - img.bottom) / imgH,
+                    (float)(tile.top - img.bottom) / imgH);
+}
+
 void KKWatermarkApplyIfUnlicensed(NSString *productID,
                                   FxImageTile *destinationImage) {
   if (KKLicenseIsActivated(productID))
@@ -195,7 +238,8 @@ void KKWatermarkApplyIfUnlicensed(NSString *productID,
   if (!queue)
     return;
   id<MTLCommandBuffer> commandBuffer = [queue commandBuffer];
-  KKWatermarkEncodeIfUnlicensed(productID, commandBuffer, destTex);
+  KKWatermarkEncodeIfUnlicensedForTile(productID, commandBuffer, destTex,
+                                       destinationImage);
   [commandBuffer commit];
   [commandBuffer waitUntilCompleted];
   [cache returnCommandQueueToCache:queue];

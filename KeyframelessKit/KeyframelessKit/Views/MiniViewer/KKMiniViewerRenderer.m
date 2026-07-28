@@ -16,6 +16,7 @@
 #import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKWatermark.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 // Map a KKMiniViewerCropEditor handle index (0-7: TL, TC, TR, RC, BR, BC, BL,
@@ -80,6 +81,18 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   double _rotLastWrittenRx; // anchor for decompose-near (prev tick)
   double _rotLastWrittenRy;
   double _rotLastWrittenRz;
+}
+
+// The canvas is a PAUSED MTKView driven by setNeedsDisplay, so a swapped-in
+// timeline (browser template load, preset apply, undo, the host's
+// parameterChanged pump) leaves the last render on screen until something else
+// happens to dirty the view. The main viewer has the render nudge for exactly
+// this; marking the canvas here is the mini's equivalent, so every path that
+// replaces the timeline re-renders instead of only the ones that remembered to.
+- (void)setTimeline:(KKTimeline *)timeline {
+  _timeline = [timeline copy];
+  [self.canvas setNeedsDisplay:YES];
+  [self.canvas setHandlesNeedDisplay];
 }
 
 - (instancetype)init {
@@ -758,6 +771,12 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   self.canvas = canvas;
   if (!source || !dest || !cb)
     return NO;
+  return [self _encodeProcessedSource:source into:dest commandBuffer:cb];
+}
+
+- (BOOL)_encodeProcessedSource:(id<MTLTexture>)source
+                          into:(id<MTLTexture>)dest
+                 commandBuffer:(id<MTLCommandBuffer>)cb {
   if ([self _motionBlurSampleCount] >= 2) {
     // Fast first when the subclass can do it: fixed cost instead of N renders.
     // It declines (returns NO) if unsupported or setup fails, and accumulate is

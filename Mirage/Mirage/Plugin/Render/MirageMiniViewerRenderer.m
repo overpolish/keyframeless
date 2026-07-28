@@ -53,6 +53,12 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
   MirageExprMiniSet *_exprSet;
 }
 
+- (instancetype)init {
+  if ((self = [super init]))
+    self.watermarkProductID = KKLicenseProductMirage;
+  return self;
+}
+
 // All point OSCs draw + drag uniformly through the KKPointOSCSet (via the
 // Interaction category's extra-handle / extra-path forwards), so the base
 // renderer has no single "primary" handle of its own.
@@ -313,14 +319,21 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
       return @[ @(sp[i].isChoice ? (double)sp[i].cdefault : sp[i].fdefault) ];
     }
 
+  // Colour props resolve their default exactly the way -fillColorPool: does
+  // when handed no value: the shader's AUTHORED `default=` colours first, the
+  // generic palette only for a prop that declared none. The render reaches that
+  // fallback by passing nil (no lane => no value), but the mini answers every
+  // lookup from here, so returning the palette unconditionally OVERRODE the
+  // template's own colours - the preview showed purple/pink for any prop whose
+  // lane the timeline hadn't been seeded with yet, i.e. every prop right after
+  // a template switch.
   const MirageColorProp *cp = model.colorProps;
   for (int i = 0; i < model.colorCount; i++) {
     NSString *lbl = @(cp[i].name); // uniform name = identity
     if (!cp[i].isArray) {
       if ([label isEqualToString:lbl]) {
-        // Per-index palette colour (matches the catalog + render fallback), not
-        // pal[0] for every single colour.
-        const float *d = kMirageDefaultPalette[i % 10];
+        const float *d = cp[i].hasDefColors ? cp[i].defColors[0]
+                                            : kMirageDefaultPalette[i % 10];
         return @[ @(d[0]), @(d[1]), @(d[2]), @(d[3]) ];
       }
       continue;
@@ -330,7 +343,9 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
     for (int n = 1; n <= cp[i].maxCount; n++)
       if ([label
               isEqualToString:[NSString stringWithFormat:@"%@ %d", lbl, n]]) {
-        const float *d = kMirageDefaultPalette[(n - 1) % 10];
+        const float *d = (cp[i].hasDefColors && n - 1 < cp[i].defColorCount)
+                             ? cp[i].defColors[n - 1]
+                             : kMirageDefaultPalette[(n - 1) % 10];
         return @[ @(d[0]), @(d[1]), @(d[2]), @(d[3]) ];
       }
   }
@@ -644,7 +659,6 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
                                    self.audioTimelineTimeSec, values);
   // `// #gradient` ramps last, so the three pools above keep their offsets.
   colorPoolN = [poolModel fillGradientPool:colorPool valuesForLabel:values];
-
   id<MTLTexture> srcLin = [self _linearSourceView:source];
   // srcLin is linear (FCP's float source, or the sRGB view that linearises the
   // mini's gamma surface). Shadertoy wants gamma-space input and the output

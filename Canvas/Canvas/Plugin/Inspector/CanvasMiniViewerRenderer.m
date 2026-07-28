@@ -10,6 +10,7 @@
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasPathOps.h" // shared boolean / outline op cores
 #import "CanvasToolbar.h"
+#import <KeyframelessKit/KKLicense.h>
 #import <KeyframelessKit/KKLinkBus.h> // own-manifest link timing
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
@@ -98,6 +99,7 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
 
 - (instancetype)init {
   if ((self = [super init])) {
+    self.watermarkProductID = KKLicenseProductCanvas;
     _positionMini =
         [[KKPositionMiniController alloc] initWithRenderer:self
                                                  laneLabel:@"Position"

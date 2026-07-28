@@ -13,6 +13,7 @@
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKWatermark.h>
 #import <simd/simd.h>
 
 // The per-frame render path: composes the active slot (plus any onion-skin /
@@ -494,6 +495,20 @@
   } // end live-playback overlay gate
 
   [enc endEncoding];
+
+  // Trial mark goes on the COMPOSITED drawable, not on a slot's processed
+  // texture: the template-save preview and the browser card thumbnails capture
+  // that texture, and a watermark baked in there would ship with every template
+  // a trial user authors. Stamping here keeps it on what's displayed and off
+  // everything downstream, and being the last encode of the frame no effect
+  // path can suppress it.
+  if ([self.canvasDelegate isKindOfClass:[KKMiniViewerRenderer class]]) {
+    NSString *wmProduct =
+        ((KKMiniViewerRenderer *)self.canvasDelegate).watermarkProductID;
+    if (wmProduct.length)
+      KKWatermarkEncodeIfUnlicensed(wmProduct, cb, drawable.texture, NO);
+  }
+
   [cb presentDrawable:drawable];
   [cb commit];
 
