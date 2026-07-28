@@ -600,8 +600,6 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
   return [KKLicenseBannerHost
       makeButtonWithProductID:KKLicenseProductMirage
                   productName:@"Mirage"
-                productSecret:
-                    @"PAYHIP_SECRET_REDACTED"
                   purchaseURL:@"https://keyframeless.com"
                     tintColor:[NSColor accentMatchingHost]
                   onActivated:^{

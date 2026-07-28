@@ -20,7 +20,6 @@ public final class LicenseBannerHost: NSObject {
 	@objc public static func makeButton(
 		productID: String,
 		productName: String,
-		productSecret: String,
 		purchaseURL: String?,
 		tintColor: NSColor?,
 		onActivated: (() -> Void)?
@@ -29,7 +28,6 @@ public final class LicenseBannerHost: NSObject {
 		let button = LicenseButton(
 			productID: productID,
 			productName: productName,
-			productSecret: productSecret,
 			purchaseURL: purchaseURL.flatMap(URL.init(string:)),
 			tint: tintColor.map(Color.init(nsColor:)) ?? .accentColor,
 			onActivated: onActivated)

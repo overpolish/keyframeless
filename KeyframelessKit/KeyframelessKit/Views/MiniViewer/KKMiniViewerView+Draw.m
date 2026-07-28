@@ -85,6 +85,10 @@
     } @catch (...) {
     }
   }
+  NSString *wmProduct =
+      [del isKindOfClass:[KKMiniViewerRenderer class]]
+          ? ((KKMiniViewerRenderer *)del).watermarkProductID
+          : nil;
   if (canProcess || canGenerate) {
     for (NSUInteger i = 0; i < n; i++) {
       _KKMiniFilmSlot *slot = _filmstripSlots[i];
@@ -147,6 +151,13 @@
                      intoTexture:slot.processedTexture
                    commandBuffer:cb];
       }
+      // Baked into the slot's own pixels, exactly like the render's
+      // KKWatermarkApplyIfUnlicensed on the destination tile: it IS the frame
+      // now, so anything that reads this texture (compose, capture, thumbnail)
+      // carries it. Encoded after the effect, so no effect path can suppress
+      // it, and the texture is bottom-up like FCP's surface (topDown NO).
+      if (wmProduct.length)
+        KKWatermarkEncodeIfUnlicensed(wmProduct, cb, slot.processedTexture, NO);
     }
     if (savedFrac) {
       @try {
@@ -495,19 +506,6 @@
   } // end live-playback overlay gate
 
   [enc endEncoding];
-
-  // Trial mark goes on the COMPOSITED drawable, not on a slot's processed
-  // texture: the template-save preview and the browser card thumbnails capture
-  // that texture, and a watermark baked in there would ship with every template
-  // a trial user authors. Stamping here keeps it on what's displayed and off
-  // everything downstream, and being the last encode of the frame no effect
-  // path can suppress it.
-  if ([self.canvasDelegate isKindOfClass:[KKMiniViewerRenderer class]]) {
-    NSString *wmProduct =
-        ((KKMiniViewerRenderer *)self.canvasDelegate).watermarkProductID;
-    if (wmProduct.length)
-      KKWatermarkEncodeIfUnlicensed(wmProduct, cb, drawable.texture, NO);
-  }
 
   [cb presentDrawable:drawable];
   [cb commit];

@@ -521,8 +521,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// is currently displaying (BGRA8). Exposed so the thumbnail bake can capture
 /// the real composited result directly (transitions, picture-in-picture,
 /// audio visualisers) instead of re-running the shader on a stand-in source.
-/// nil before the first draw / when no slot is loaded.
+/// nil before the first draw / when no slot is loaded. Carries the trial
+/// watermark when the host set `watermarkProductID` - a bake that wants clean
+/// pixels re-renders from `sourceTexture` instead.
 @property(nonatomic, readonly, nullable) id<MTLTexture> processedTexture;
+
+/// The active slot's RAW input frame (this clip's real footage, as delivered
+/// by the feed). The effect has not run on it and the watermark never touches
+/// it, so a bake can re-render clean output from here.
+@property(nonatomic, readonly, nullable) id<MTLTexture> sourceTexture;
 
 /// Fired when `sourceMediaSize` first resolves (or changes) - lets a host
 /// re-render any pixel-scaled UI that depends on it.

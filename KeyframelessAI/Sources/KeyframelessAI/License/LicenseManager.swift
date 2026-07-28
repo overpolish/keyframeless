@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+import CryptoKit
 import Foundation
 
 public struct LicenseRecord: Equatable {
@@ -16,6 +17,7 @@ public enum LicenseError: LocalizedError {
 	case disabled
 	case network(String)
 	case unexpected(Int)
+	case untrustedResponse
 
 	public var errorDescription: String? {
 		switch self {
@@ -27,6 +29,8 @@ public enum LicenseError: LocalizedError {
 			return String(format: AILoc("Network error: %@"), msg)
 		case .unexpected(let code):
 			return String(format: AILoc("Unexpected response (HTTP %d)"), code)
+		case .untrustedResponse:
+			return AILoc("Activation response could not be verified.")
 		}
 	}
 }
@@ -38,33 +42,83 @@ public enum LicenseProduct {
 	public static let steno = "steno"
 }
 
-/// One-time Payhip license activation. A key is verified once against the
-/// Payhip v2 license API and the result is persisted to the shared app-group
-/// defaults suite, where every Keyframeless process (inspector ViewBridge,
-/// plugin XPC, workflow extension) can read it. There is no re-verification
-/// and no phone-home after activation.
+/// One-time license activation. A key is verified once - by the activation
+/// Worker, which holds the Payhip product secret so it never ships to users -
+/// and the Worker returns a SIGNED record that is persisted to the shared
+/// app-group defaults suite. There is no re-verification and no phone-home
+/// after that: every later check is a local signature verification against a
+/// public key compiled into the binary, so activation survives indefinitely
+/// offline while a hand-written defaults entry fails.
 ///
-/// KeyframelessKit reads the same suite key from ObjC via
-/// `KKLicenseIsActivated()` to gate render watermarks; keep the storage
-/// format in sync with KKLicense.m.
+/// KeyframelessKit verifies the same record from ObjC in `KKLicenseIsActivated()`
+/// to gate render watermarks; keep this format in sync with KKLicense.m.
 public enum LicenseManager {
 	static let suiteName = "group.com.keyframeless"
+
+	/// Stateless activation endpoint: verifies the key against Payhip, then
+	/// signs. Holds the only copy of the private key.
+	static let activationURL = URL(string: "https://license.keyframeless.com/activate")!
+
+	/// P-256 public key (X9.63 uncompressed point). Must be byte-identical to
+	/// `kKKLicensePublicKey` in KKLicense.m, or the UI and the render disagree
+	/// about whether the product is activated.
+	static let publicKeyX963 = Data([
+		0x04, 0x07, 0x0a, 0x25, 0x33, 0xf2, 0xb5, 0x7d, 0x76, 0x5f, 0x99,
+		0xae, 0x0a, 0xa7, 0x0a, 0xa6, 0x16, 0x51, 0x21, 0xf0, 0x3c, 0xc0,
+		0x3b, 0x5d, 0x6a, 0x93, 0x85, 0x14, 0x8b, 0x57, 0x5e, 0x3b, 0xe0,
+		0x55, 0x30, 0x23, 0x29, 0x17, 0x3f, 0xbd, 0xcd, 0x38, 0x7f, 0xf8,
+		0x61, 0xa3, 0x5e, 0x83, 0x30, 0x0d, 0x10, 0xd6, 0xe5, 0x6d, 0xb5,
+		0xd1, 0xce, 0x30, 0x2c, 0x8b, 0x14, 0xea, 0xfb, 0x34, 0x95,
+	])
 
 	static func defaultsKey(for productID: String) -> String {
 		"com.keyframeless.license.\(productID)"
 	}
 
+	/// This machine as the Worker sees it. Only used when machine binding is
+	/// switched on server-side; `gethostuuid` matches what KKLicense.m checks.
+	static func machineID() -> String? {
+		var uuid = uuid_t(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+		var wait = timespec(tv_sec: 0, tv_nsec: 0)
+		guard gethostuuid(&uuid.0, &wait) == 0 else { return nil }
+		return UUID(uuid: uuid).uuidString
+	}
+
+	/// The stored record, or nil when there is none or its signature does not
+	/// check out. Mirrors `KKLicenseIsActivated()` exactly.
 	public static func record(for productID: String) -> LicenseRecord? {
 		guard let defaults = UserDefaults(suiteName: suiteName),
 			let dict = defaults.dictionary(forKey: defaultsKey(for: productID)),
-			let key = dict["key"] as? String, !key.isEmpty
+			let payloadB64 = dict["payload"] as? String,
+			let signatureB64 = dict["sig"] as? String,
+			let payload = Data(base64Encoded: payloadB64),
+			let signature = Data(base64Encoded: signatureB64),
+			verify(payload: payload, signature: signature, productID: productID)
 		else { return nil }
-		let date = (dict["date"] as? TimeInterval).map(
+		let claims = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any]
+		let issued = (claims?["issuedAt"] as? TimeInterval).map(
 			Date.init(timeIntervalSince1970:))
 		return LicenseRecord(
-			licenseKey: key,
-			buyerEmail: dict["email"] as? String,
-			activatedAt: date ?? Date())
+			licenseKey: dict["key"] as? String ?? "",
+			buyerEmail: claims?["email"] as? String ?? dict["email"] as? String,
+			activatedAt: issued ?? Date())
+	}
+
+	/// Signature + claims check, matching KKLicense.m. Kept here (rather than
+	/// trusting the ObjC side) so the trial banner can never show "activated"
+	/// while the renders still watermark.
+	static func verify(payload: Data, signature: Data, productID: String) -> Bool {
+		guard let key = try? P256.Signing.PublicKey(x963Representation: publicKeyX963),
+			let sig = try? P256.Signing.ECDSASignature(derRepresentation: signature),
+			key.isValidSignature(sig, for: payload),
+			let claims = (try? JSONSerialization.jsonObject(with: payload))
+				as? [String: Any],
+			claims["product"] as? String == productID
+		else { return false }
+		if let bound = claims["machineID"] as? String, !bound.isEmpty {
+			guard let here = machineID(), bound == here else { return false }
+		}
+		return true
 	}
 
 	public static func isActivated(_ productID: String) -> Bool {
@@ -73,19 +127,18 @@ public enum LicenseManager {
 
 	@discardableResult
 	public static func activate(
-		licenseKey: String, productID: String, productSecret: String
+		licenseKey: String, productID: String
 	) async throws -> LicenseRecord {
 		let trimmed = licenseKey.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !trimmed.isEmpty else { throw LicenseError.invalidKey }
 
-		var components = URLComponents(
-			string: "https://payhip.com/api/v2/license/verify")!
-		components.queryItems = [
-			URLQueryItem(name: "license_key", value: trimmed)
-		]
-		var request = URLRequest(url: components.url!)
-		request.setValue(productSecret, forHTTPHeaderField: "product-secret-key")
+		var request = URLRequest(url: activationURL)
+		request.httpMethod = "POST"
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 		request.timeoutInterval = 15
+		var body: [String: String] = ["licenseKey": trimmed, "product": productID]
+		if let machine = machineID() { body["machineID"] = machine }
+		request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
 		let data: Data
 		let response: URLResponse
@@ -99,38 +152,42 @@ public enum LicenseManager {
 		}
 		switch http.statusCode {
 		case 200..<300: break
+		case 403: throw LicenseError.disabled
 		case 400..<500: throw LicenseError.invalidKey
 		default: throw LicenseError.unexpected(http.statusCode)
 		}
 
-		// Payhip wraps the license object in "data" in some responses; accept
-		// either shape and any of Bool/number/string for "enabled".
-		let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-		let payload = (root?["data"] as? [String: Any]) ?? root
-		guard let payload else { throw LicenseError.invalidKey }
-		let enabledRaw = payload["enabled"]
-		let enabled =
-			(enabledRaw as? Bool)
-			?? (enabledRaw as? NSNumber)?.boolValue
-			?? ((enabledRaw as? String).map { $0 == "true" || $0 == "1" })
-			?? false
-		guard enabled else { throw LicenseError.disabled }
+		// The Worker returns the exact signed bytes plus the signature over
+		// them. Both are stored verbatim: re-encoding the payload here would
+		// change the bytes and invalidate the signature.
+		guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+			let payloadB64 = root["payload"] as? String,
+			let signatureB64 = root["signature"] as? String,
+			let payload = Data(base64Encoded: payloadB64),
+			let signature = Data(base64Encoded: signatureB64),
+			verify(payload: payload, signature: signature, productID: productID)
+		else { throw LicenseError.untrustedResponse }
 
-		let record = LicenseRecord(
-			licenseKey: trimmed,
-			buyerEmail: payload["buyer_email"] as? String,
-			activatedAt: Date())
-		store(record, for: productID)
-		return record
+		store(
+			payloadB64: payloadB64, signatureB64: signatureB64,
+			licenseKey: trimmed, for: productID)
+		return record(for: productID)
+			?? LicenseRecord(licenseKey: trimmed, buyerEmail: nil, activatedAt: Date())
 	}
 
-	static func store(_ record: LicenseRecord, for productID: String) {
+	static func store(
+		payloadB64: String, signatureB64: String, licenseKey: String,
+		for productID: String
+	) {
 		guard let defaults = UserDefaults(suiteName: suiteName) else { return }
-		var dict: [String: Any] = [
-			"key": record.licenseKey,
-			"date": record.activatedAt.timeIntervalSince1970,
-		]
-		if let email = record.buyerEmail { dict["email"] = email }
-		defaults.set(dict, forKey: defaultsKey(for: productID))
+		// `key` is kept for display and for re-activation on another machine;
+		// it is NOT what grants activation - only the signature does.
+		defaults.set(
+			[
+				"payload": payloadB64,
+				"sig": signatureB64,
+				"key": licenseKey,
+				"date": Date().timeIntervalSince1970,
+			], forKey: defaultsKey(for: productID))
 	}
 }

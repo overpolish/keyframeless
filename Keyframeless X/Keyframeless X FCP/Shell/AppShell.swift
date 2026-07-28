@@ -243,7 +243,6 @@ struct AppShell: View {
 				LicenseButton(
 					productID: LicenseProduct.steno,
 					productName: "Steno",
-					productSecret: "PAYHIP_SECRET_REDACTED",
 					purchaseURL: URL(string: "https://keyframeless.com")
 				)
 			}

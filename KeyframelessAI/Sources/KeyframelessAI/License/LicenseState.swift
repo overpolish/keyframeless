@@ -34,10 +34,8 @@ public final class LicenseState: ObservableObject {
 		record = LicenseManager.record(for: productID)
 	}
 
-	public func activate(licenseKey: String, productSecret: String) async throws {
+	public func activate(licenseKey: String) async throws {
 		record = try await LicenseManager.activate(
-			licenseKey: licenseKey,
-			productID: productID,
-			productSecret: productSecret)
+			licenseKey: licenseKey, productID: productID)
 	}
 }

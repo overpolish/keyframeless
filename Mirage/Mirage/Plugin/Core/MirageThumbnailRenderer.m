@@ -200,6 +200,13 @@ NSData *MirageRenderThumbnailJPEG(KKMiniViewerRenderer *renderer, NSUInteger w,
   // composited result on real footage / audio / "To" well, so transitions,
   // picture-in-picture layouts and audio visualisers thumbnail correctly.
   // Blit-scale it (keeping its aspect) into a shared target we can read back.
+  // ...except on a trial, where that frame carries the baked watermark. A
+  // template a trial user authors must not ship a watermarked card, so re-run
+  // the effect on the SAME real footage instead - the watermark lives above
+  // -encodeEffectFromSource:, so this comes out clean.
+  if (!KKLicenseIsActivated(KKLicenseProductMirage))
+    return MirageThumbReRender(renderer, w, h, renderer.canvas.sourceTexture);
+
   id<MTLTexture> finalFrame = renderer.canvas.processedTexture;
   if (finalFrame && [renderer isKindOfClass:[MirageMiniViewerRenderer class]]) {
     id<MTLDevice> cd = finalFrame.device;

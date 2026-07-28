@@ -1324,8 +1324,6 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   return [KKLicenseBannerHost
       makeButtonWithProductID:KKLicenseProductCanvas
                   productName:@"Canvas"
-                productSecret:
-                    @"PAYHIP_SECRET_REDACTED"
                   purchaseURL:@"https://keyframeless.com"
                     tintColor:[NSColor accentMatchingHost]
                   onActivated:^{

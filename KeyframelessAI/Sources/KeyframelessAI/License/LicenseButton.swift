@@ -10,7 +10,6 @@ public struct LicenseButton: View {
 	@StateObject private var state: LicenseState
 
 	let productName: String
-	let productSecret: String
 	let purchaseURL: URL?
 	let tint: Color
 	let onActivated: (() -> Void)?
@@ -21,14 +20,12 @@ public struct LicenseButton: View {
 	public init(
 		productID: String,
 		productName: String,
-		productSecret: String,
 		purchaseURL: URL? = nil,
 		tint: Color = .accentColor,
 		onActivated: (() -> Void)? = nil
 	) {
 		_state = StateObject(wrappedValue: LicenseState.shared(for: productID))
 		self.productName = productName
-		self.productSecret = productSecret
 		self.purchaseURL = purchaseURL
 		self.tint = tint
 		self.onActivated = onActivated
@@ -54,7 +51,6 @@ public struct LicenseButton: View {
 				LicenseActivationPopover(
 					state: state,
 					productName: productName,
-					productSecret: productSecret,
 					purchaseURL: purchaseURL,
 					onActivated: onActivated)
 			}
@@ -65,7 +61,6 @@ public struct LicenseButton: View {
 struct LicenseActivationPopover: View {
 	@ObservedObject var state: LicenseState
 	let productName: String
-	let productSecret: String
 	let purchaseURL: URL?
 	var onActivated: (() -> Void)?
 
@@ -82,14 +77,23 @@ struct LicenseActivationPopover: View {
 			}
 		}
 		.padding(14)
-		.frame(width: 300)
+		// A VStack sizes to its widest child, so without an explicit alignment
+		// the whole block gets CENTERED in the 300pt popover - and the activated
+		// state's two lines have very different widths, so the short one visibly
+		// hung off-centre against the long one. The activation form never showed
+		// it (its text field already fills the width).
+		.frame(width: 300, alignment: .leading)
 		.fixedSize(horizontal: false, vertical: true)
 		.animation(.easeInOut(duration: 0.18), value: state.isActivated)
 		.popoverGlassFix()
 	}
 
 	private var activatedContent: some View {
-		VStack(alignment: .leading, spacing: 6) {
+		// Centred as a block: it's a two-line confirmation, not a form, and the
+		// lines' very different widths read as misaligned when leading. The
+		// maxWidth is what makes it centre on the POPOVER rather than on the
+		// widest line (a VStack otherwise shrinks to fit its content).
+		VStack(alignment: .center, spacing: 6) {
 			HStack(spacing: 6) {
 				Image(systemName: "checkmark.seal.fill")
 					.foregroundStyle(Color(red: 0.30, green: 0.85, blue: 0.45))
@@ -100,8 +104,10 @@ struct LicenseActivationPopover: View {
 				Text(String(format: AILoc("Licensed to %@"), email))
 					.font(.system(size: 11))
 					.foregroundStyle(Color.aiSecondaryText)
+					.multilineTextAlignment(.center)
 			}
 		}
+		.frame(maxWidth: .infinity)
 	}
 
 	private var activationForm: some View {
@@ -146,10 +152,9 @@ struct LicenseActivationPopover: View {
 		errorText = nil
 		isActivating = true
 		let key = licenseKey
-		let secret = productSecret
 		Task { @MainActor in
 			do {
-				try await state.activate(licenseKey: key, productSecret: secret)
+				try await state.activate(licenseKey: key)
 				onActivated?()
 			} catch {
 				errorText = error.localizedDescription
