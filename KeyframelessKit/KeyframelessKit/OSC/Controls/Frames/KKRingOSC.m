@@ -33,7 +33,7 @@
 }
 
 - (NSString *)pipelinePluginID {
-  return @"co.overpolish.keyframelesskit.RingOSC";
+  return @"com.keyframeless.kit.RingOSC";
 }
 
 - (NSString *)fragmentFunctionName {

@@ -16,7 +16,7 @@
 #import <KeyframelessKit/NSColor+KKColors.h>
 
 NSPasteboardType const kCanvasLayerRowDragType =
-    @"co.overpolish.keyframeless.canvas.layerrows";
+    @"com.keyframeless.canvas.layerrows";
 
 #pragma mark - Draggable row
 

@@ -524,6 +524,22 @@
 						<key>UID</key>
 						<integer>0</integer>
 					</dict>
+					<dict>
+						<key>CHILDREN</key>
+						<array/>
+						<key>GID</key>
+						<integer>0</integer>
+						<key>PATH</key>
+						<string>scripts/migrate-identifiers</string>
+						<key>PATH_TYPE</key>
+						<integer>1</integer>
+						<key>PERMISSIONS</key>
+						<integer>493</integer>
+						<key>TYPE</key>
+						<integer>3</integer>
+						<key>UID</key>
+						<integer>0</integer>
+					</dict>
 				</array>
 			</dict>
 			<key>PACKAGE_SETTINGS</key>
@@ -535,7 +551,7 @@
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
 				<false/>
 				<key>IDENTIFIER</key>
-				<string>co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP</string>
+				<string>com.keyframeless.Keyframeless-X.Keyframeless-X-FCP</string>
 				<key>LOCATION</key>
 				<integer>0</integer>
 				<key>NAME</key>
@@ -1094,6 +1110,22 @@
 						<key>UID</key>
 						<integer>0</integer>
 					</dict>
+					<dict>
+						<key>CHILDREN</key>
+						<array/>
+						<key>GID</key>
+						<integer>0</integer>
+						<key>PATH</key>
+						<string>scripts/migrate-identifiers</string>
+						<key>PATH_TYPE</key>
+						<integer>1</integer>
+						<key>PERMISSIONS</key>
+						<integer>493</integer>
+						<key>TYPE</key>
+						<integer>3</integer>
+						<key>UID</key>
+						<integer>0</integer>
+					</dict>
 				</array>
 			</dict>
 			<key>PACKAGE_SETTINGS</key>
@@ -1105,7 +1137,7 @@
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
 				<false/>
 				<key>IDENTIFIER</key>
-				<string>co.overpolish.keyframeless.Canvas</string>
+				<string>com.keyframeless.Canvas</string>
 				<key>LOCATION</key>
 				<integer>0</integer>
 				<key>NAME</key>
@@ -1461,7 +1493,7 @@
 											<key>GID</key>
 											<integer>0</integer>
 											<key>PATH</key>
-											<string>helper/co.overpolish.keyframeless.aihelper.plist</string>
+											<string>helper/com.keyframeless.aihelper.plist</string>
 											<key>PATH_TYPE</key>
 											<integer>1</integer>
 											<key>PERMISSIONS</key>
@@ -1767,6 +1799,22 @@
 						<key>UID</key>
 						<integer>0</integer>
 					</dict>
+					<dict>
+						<key>CHILDREN</key>
+						<array/>
+						<key>GID</key>
+						<integer>0</integer>
+						<key>PATH</key>
+						<string>scripts/migrate-identifiers</string>
+						<key>PATH_TYPE</key>
+						<integer>1</integer>
+						<key>PERMISSIONS</key>
+						<integer>493</integer>
+						<key>TYPE</key>
+						<integer>3</integer>
+						<key>UID</key>
+						<integer>0</integer>
+					</dict>
 				</array>
 			</dict>
 			<key>PACKAGE_SETTINGS</key>
@@ -1778,7 +1826,7 @@
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
 				<false/>
 				<key>IDENTIFIER</key>
-				<string>co.overpolish.keyframeless.KeyframelessAI</string>
+				<string>com.keyframeless.KeyframelessAI</string>
 				<key>LOCATION</key>
 				<integer>0</integer>
 				<key>NAME</key>
@@ -2359,6 +2407,22 @@
 						<key>GID</key>
 						<integer>0</integer>
 						<key>PATH</key>
+						<string>scripts/migrate-identifiers</string>
+						<key>PATH_TYPE</key>
+						<integer>1</integer>
+						<key>PERMISSIONS</key>
+						<integer>493</integer>
+						<key>TYPE</key>
+						<integer>3</integer>
+						<key>UID</key>
+						<integer>0</integer>
+					</dict>
+					<dict>
+						<key>CHILDREN</key>
+						<array/>
+						<key>GID</key>
+						<integer>0</integer>
+						<key>PATH</key>
 						<string>scripts/uninstall-legacy-plugins</string>
 						<key>PATH_TYPE</key>
 						<integer>1</integer>
@@ -2380,7 +2444,7 @@
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
 				<false/>
 				<key>IDENTIFIER</key>
-				<string>co.overpolish.keyframeless.Mirage</string>
+				<string>com.keyframeless.Mirage</string>
 				<key>LOCATION</key>
 				<integer>0</integer>
 				<key>NAME</key>

@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-static NSString *const kPluginID = @"co.overpolish.keyframeless.Mirage";
+static NSString *const kPluginID = @"com.keyframeless.Mirage";
 
 /// Label of the code lane carrying the shader source (KKLaneValueTypeCode).
 /// The label is the lane's PERSISTED identity - shipped timelines contain it,

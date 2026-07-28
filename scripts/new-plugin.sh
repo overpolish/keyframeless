@@ -20,7 +20,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --type <type>           Plugin type: effect (default), title, generator"
-    echo "  --bundle-prefix <str>   Bundle ID prefix (default: co.overpolish.keyframeless)"
+    echo "  --bundle-prefix <str>   Bundle ID prefix (default: com.keyframeless)"
     echo "  --add-to-workspace      Add new project to Keyframeless.xcworkspace"
     echo "  -h, --help              Show this message"
     echo ""
@@ -41,7 +41,7 @@ to_lower() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
 [[ $# -lt 1 ]] && usage
 
 PLUGIN_NAME="$1"; shift
-BUNDLE_PREFIX="co.overpolish.keyframeless"
+BUNDLE_PREFIX="com.keyframeless"
 PLUGIN_TYPE="effect"
 ADD_TO_WORKSPACE=false
 
@@ -200,9 +200,9 @@ ok "Added '$PLUGIN_KEY' to bump-version.sh"
 log "Registering in KKUpdateChecker.m..."
 
 # Add to KKBundleIDToComponent (host + .PlugIn extension, the standard scheme)
-sed -i '' "s|@\"co.overpolish.keyframeless.Canvas.PlugIn\" : @\"canvas\"|@\"co.overpolish.keyframeless.Canvas.PlugIn\" : @\"canvas\",\\
-    @\"co.overpolish.keyframeless.$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
-    @\"co.overpolish.keyframeless.$PLUGIN_NAME.PlugIn\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
+sed -i '' "s|@\"com.keyframeless.Canvas.PlugIn\" : @\"canvas\"|@\"com.keyframeless.Canvas.PlugIn\" : @\"canvas\",\\
+    @\"com.keyframeless.$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
+    @\"com.keyframeless.$PLUGIN_NAME.PlugIn\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
 
 ok "Added '$PLUGIN_NAME' to KKUpdateChecker.m"
 

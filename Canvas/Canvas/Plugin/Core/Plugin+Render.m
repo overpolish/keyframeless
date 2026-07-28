@@ -355,7 +355,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // premultiplied-alpha "over". Both the source frame AND the layers go through
   // it so they tile identically in FCP's sub-tiled / reverse-Y library preview.
   id<MTLRenderPipelineState> imagePS = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+      buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.image"
                                     registryID:regID
                                    pixelFormat:pf
@@ -375,7 +375,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // (lerp the sampled image toward the fill colour by the amount). Used for a
   // fill-enabled image layer; nil-tolerant (the image just renders plain).
   id<MTLRenderPipelineState> imageTintPS = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+      buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.imageTint"
                                     registryID:regID
                                    pixelFormat:pf
@@ -385,7 +385,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                      blendMode:KKBlendModePremultipliedAlpha];
   // Gradient-tint variant: tint the image toward the gradient (UV space).
   id<MTLRenderPipelineState> imageGradTintPS = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+      buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.imageGradTint"
                                     registryID:regID
                                    pixelFormat:pf
@@ -400,7 +400,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // tessellator packs into textureCoordinate.y. One pipeline serves normal AND
   // (later) sketch strokes - sketch is a path pre-jitter, not a second pipeline.
   id<MTLRenderPipelineState> strokePS = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+      buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.stroke"
                                     registryID:regID
                                    pixelFormat:pf
@@ -410,7 +410,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                      blendMode:KKBlendModePremultipliedAlpha];
   // Gradient-stroke variant: same vertex pipeline, gradient-LUT fragment.
   id<MTLRenderPipelineState> strokeGradientPS = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+      buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.strokeGradient"
                                     registryID:regID
                                    pixelFormat:pf
@@ -422,7 +422,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // length, + a fragment that masks the dash pattern by arc (solid OR gradient).
   // Same solid stroke geometry, so dash corners == solid corners.
   id<MTLRenderPipelineState> strokeDashPS = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+      buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.strokeDash"
                                     registryID:regID
                                    pixelFormat:pf
@@ -726,7 +726,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
       return NO;
 
     id<MTLRenderPipelineState> velPS = [cache
-        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+        buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                  @".Canvas.velocity"
                                       registryID:regID
                                      pixelFormat:MTLPixelFormatRG16Float
@@ -735,7 +735,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                   fragmentShader:@"KKVelocityFragment"
                                        blendMode:KKBlendModeNone];
     id<MTLRenderPipelineState> morphVelPS = [cache
-        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+        buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                  @".Canvas.velocity.morph"
                                       registryID:regID
                                      pixelFormat:MTLPixelFormatRG16Float
@@ -748,7 +748,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
     // Draw-on is "appearing" content on a possibly-curved path, which velocity
     // reconstruction can't smear cleanly.
     id<MTLRenderPipelineState> compositePS = [cache
-        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+        buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                  @".Canvas.mbcomposite"
                                       registryID:regID
                                      pixelFormat:pf

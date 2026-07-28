@@ -25,7 +25,7 @@ flowchart TB
         PARSE --> SEL --> PROC --> ANA --> PUB
     end
 
-    subgraph group ["App Group: group.co.overpolish.keyframeless"]
+    subgraph group ["App Group: group.com.keyframeless"]
         MAN[("manifest.json<br/>id, name, roles, clipCount, project,<br/>publishedAt, contentHash, clipKeys")]
         KKSG[("&lt;project&gt;_&lt;name&gt;.kksg<br/>KKSG header + float32 grid")]
         REQ[("Requests/&lt;key&gt;.json<br/>a ticket: 'this project wants X'")]
@@ -57,7 +57,7 @@ The dotted path is the republish handshake, and it only exists because **nothing
 
 It is one-way and nothing waits: the plugin drops a note and carries on rendering silence, and the note may never be read.
 
-The app group is the whole point of the middle. A workflow extension's `temporaryDirectory` is private to its sandbox, so a plugin in a different sandbox can never see it. Both sides already carry `group.co.overpolish.keyframeless` (the AI helper socket uses it too), which makes that container the one place the writer and the reader can both reach.
+The app group is the whole point of the middle. A workflow extension's `temporaryDirectory` is private to its sandbox, so a plugin in a different sandbox can never see it. Both sides already carry `group.com.keyframeless` (the AI helper socket uses it too), which makes that container the one place the writer and the reader can both reach.
 
 Analysis is fast enough to have no Analyse button: the spectrogram follows the selection. Publish is the only explicit action.
 
@@ -152,10 +152,10 @@ Both sides register both topics via `onlyTopicIDs`, so Mirage's AI can tell a us
 
 ## Logs
 
-Subsystem `co.overpolish.keyframeless`. Use `os_log`, never `print`: **`print` does not reach Console from an FCP-hosted extension**, and plugin-side code follows the usual `KKLog*` rule.
+Subsystem `com.keyframeless`. Use `os_log`, never `print`: **`print` does not reach Console from an FCP-hosted extension**, and plugin-side code follows the usual `KKLog*` rule.
 
 ```sh
-log show --last 5m --predicate 'subsystem == "co.overpolish.keyframeless"' --info
+log show --last 5m --predicate 'subsystem == "com.keyframeless"' --info
 ```
 
 A shader rendering static is almost always the clock, not the data. Check the sampled timeline time against `tcStart + clip start` before suspecting the spectrogram.

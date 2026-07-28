@@ -59,7 +59,7 @@ static id<MTLTexture> CanvasMiniScratchTex(id<MTLTexture> existing,
       [NSBundle bundleForClass:[KKMotionBlurReconstruct class]].bundleIdentifier;
 
   id<MTLRenderPipelineState> velPS = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+      buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.mini.velocity"
                                     registryID:regID
                                    pixelFormat:MTLPixelFormatRG16Float
@@ -68,7 +68,7 @@ static id<MTLTexture> CanvasMiniScratchTex(id<MTLTexture> existing,
                                 fragmentShader:@"KKVelocityFragment"
                                      blendMode:KKBlendModeNone];
   id<MTLRenderPipelineState> morphVelPS = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+      buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.mini.velocity.morph"
                                     registryID:regID
                                    pixelFormat:MTLPixelFormatRG16Float

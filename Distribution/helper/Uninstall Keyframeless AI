@@ -5,12 +5,12 @@
 #
 # Removes the shared local-AI engine. Downloaded models are left in place (user data
 # in the app-group container); delete that folder by hand if you want the space back:
-#   ~/Library/Group Containers/group.co.overpolish.keyframeless/huggingface
+#   ~/Library/Group Containers/group.com.keyframeless/huggingface
 #
 # Installed at /Applications/Keyframeless/Uninstall Keyframeless AI (alongside the
 # plugins) so it's easy to find.
 
-LABEL="co.overpolish.keyframeless.aihelper"
+LABEL="com.keyframeless.aihelper"
 UID_NUM="$(id -u)"
 ENGINE="/Library/Application Support/Keyframeless"
 PLIST="/Library/LaunchAgents/$LABEL.plist"

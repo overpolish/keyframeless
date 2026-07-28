@@ -14,12 +14,12 @@ import Foundation
 /// everyone.
 ///
 /// The socket lives in the app-group container so all sandboxed clients can reach
-/// it; that requires the `group.co.overpolish.keyframeless` app-group
+/// it; that requires the `group.com.keyframeless` app-group
 /// entitlement on every client AND on the helper. Without the entitlement
 /// `sharedSocketPath()` returns nil and local inference is unavailable (the caller
 /// returns a nil runner).
 public enum LocalAIHelperSocket {
-	static let appGroupID = "group.co.overpolish.keyframeless"
+	static let appGroupID = "group.com.keyframeless"
 	/// Short name to stay well under the 104-byte sun_path limit.
 	static let socketName = "kkai.sock"
 
@@ -27,7 +27,7 @@ public enum LocalAIHelperSocket {
 	/// LaunchAgent). A sandboxed plugin can't exec the helper, but it CAN look up
 	/// this name; the lookup makes launchd launch it. Must be prefixed by the app
 	/// group id so the sandbox permits the lookup.
-	public static let machServiceName = "group.co.overpolish.keyframeless.aihelper"
+	public static let machServiceName = "group.com.keyframeless.aihelper"
 
 	/// Shared HuggingFace model cache ("hub") directory in the app-group
 	/// container, so EVERY client downloads to - and every spawned helper loads

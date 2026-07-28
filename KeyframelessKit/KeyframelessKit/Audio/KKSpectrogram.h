@@ -123,7 +123,7 @@ BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
                         NSError **error);
 
 /// The shared app-group directory Sonar publishes into, or nil without the
-/// `group.co.overpolish.keyframeless` entitlement. A workflow extension's own
+/// `group.com.keyframeless` entitlement. A workflow extension's own
 /// container is private to it, so this directory is the only place the writer
 /// and a plugin's sandbox can both reach.
 NSURL *_Nullable KKSpectrogramSourcesDirectory(void);

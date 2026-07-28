@@ -20,7 +20,7 @@ public final class AIKeyState: ObservableObject {
 	public var hasAnyKey: Bool { !configuredProviders.isEmpty }
 	public var activeIsConfigured: Bool { configuredProviders.contains(activeProvider) }
 
-	private static let activeKey = "co.overpolish.ai.activeProvider"
+	private static let activeKey = "com.keyframeless.ai.activeProvider"
 
 	private init() {
 		let saved = UserDefaults.standard.string(forKey: Self.activeKey)

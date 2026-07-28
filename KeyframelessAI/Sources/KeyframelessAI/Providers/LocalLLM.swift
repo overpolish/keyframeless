@@ -6,7 +6,7 @@
 import Foundation
 import os
 
-private let llmLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.helper")
+private let llmLog = Logger(subsystem: "com.keyframeless", category: "ai.helper")
 
 /// Local inference, behind a protocol so the engine is swappable. Two concrete
 /// runners ship: `SharedHelperRunner` (talks to one shared out-of-process helper
@@ -91,7 +91,7 @@ public enum LocalLLM {
 	/// The runner is ALWAYS the shared out-of-process helper (installed once by the
 	/// "Keyframeless AI" package, launched on demand by launchd). MLX is never linked
 	/// in-process here - this is the thin client every plugin/extension links.
-	/// `SharedHelperRunner` init returns nil without the `group.co.overpolish.keyframeless`
+	/// `SharedHelperRunner` init returns nil without the `group.com.keyframeless`
 	/// entitlement (no app-group socket path); local inference is then unavailable and
 	/// the `.local` dispatch throws rather than runs.
 	@MainActor static func defaultRunner() -> LocalLLMRunner? {

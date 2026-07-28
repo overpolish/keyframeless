@@ -127,7 +127,7 @@ if not os.path.isfile(ent_abs):
         '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
         '<plist version="1.0">\n<dict>\n'
         '\t<key>com.apple.security.application-groups</key>\n'
-        '\t<array>\n\t\t<string>group.co.overpolish.keyframeless</string>\n\t</array>\n'
+        '\t<array>\n\t\t<string>group.com.keyframeless</string>\n\t</array>\n'
         '</dict>\n</plist>\n')
     print(f"[{PLUG}] created {ent_rel}")
 else:

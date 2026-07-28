@@ -42,13 +42,13 @@ UNINSTALL_TEMPLATE = ROOT / "scripts" / "uninstall.template"
 
 # component key -> package IDENTIFIER as it appears in the combined project
 COMPONENT_ID = {
-    "keyframelessx": "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP",
-    "canvas": "co.overpolish.keyframeless.Canvas",
-    "shader": "co.overpolish.keyframeless.Shader",
+    "keyframelessx": "com.keyframeless.Keyframeless-X.Keyframeless-X-FCP",
+    "canvas": "com.keyframeless.Canvas",
+    "shader": "com.keyframeless.Shader",
     # The shared local-AI engine (helper + LaunchAgent to /Library). Not a plugin
     # (no .app / Motion Template), so `--components` (which drives `all`) excludes it;
     # build it explicitly. build-and-sign.sh stages the helper before packaging.
-    "keyframelessai": "co.overpolish.keyframeless.KeyframelessAI",
+    "keyframelessai": "com.keyframeless.KeyframelessAI",
 }
 
 # The FxPlug plugins + the workflow extension (everything `all` builds). The AI engine

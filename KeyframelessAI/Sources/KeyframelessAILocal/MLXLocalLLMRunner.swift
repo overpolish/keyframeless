@@ -15,9 +15,9 @@ import Tokenizers
 import os
 
 /// Timing log for local inference. Lands in the unified log; view in Console.app
-/// by filtering subsystem `co.overpolish.keyframeless` category `ai.local`
+/// by filtering subsystem `com.keyframeless` category `ai.local`
 /// (the plugin runs as an XPC process, so also filter by that process name).
-private let localLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.local")
+private let localLog = Logger(subsystem: "com.keyframeless", category: "ai.local")
 
 /// In-process local inference via Apple's MLX. Loads the model once (cached
 /// across calls) and runs entirely inside the calling process - no helper, no

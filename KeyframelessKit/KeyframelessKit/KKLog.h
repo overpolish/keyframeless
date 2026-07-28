@@ -8,18 +8,18 @@
 #import <Foundation/Foundation.h>
 
 /// Per-plugin logger. Each instance routes to the OS log and to a dedicated
-/// log file under ~/Library/Logs/co.overpolish.keyframeless/.
+/// log file under ~/Library/Logs/com.keyframeless/.
 ///
 /// Prefer the macros below over the instance API:
 ///   KKLogInfo(@"Plugin ready, count=%d", n);
 ///
 /// The legacy instance API is retained for existing call sites:
-///   _log = [KKLog loggerForPlugin:@"co.overpolish.myPlugin"];
+///   _log = [KKLog loggerForPlugin:@"com.keyframeless.myPlugin"];
 ///   [_log info:@"Plugin ready"];
 @interface KKLog : NSObject
 
 /// Process-wide shared logger. Writes to the unified
-/// ~/Library/Logs/co.overpolish.keyframeless/ folder; per-process file
+/// ~/Library/Logs/com.keyframeless/ folder; per-process file
 /// separation comes from DDFileLogger's process-name-based filenames.
 + (instancetype)shared;
 

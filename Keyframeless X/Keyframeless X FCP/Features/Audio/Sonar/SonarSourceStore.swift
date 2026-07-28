@@ -46,10 +46,10 @@ struct SonarSource: Codable, Identifiable, Equatable {
 /// The container is the whole point: a workflow extension's own
 /// `temporaryDirectory` is private to its sandbox, so a plugin in a different
 /// sandbox can never see it. Both Keyframeless X and the plugins carry the
-/// `group.co.overpolish.keyframeless` entitlement, which makes this directory
+/// `group.com.keyframeless` entitlement, which makes this directory
 /// the one place both sides can reach.
 enum SonarSourceStore {
-	static let appGroupID = "group.co.overpolish.keyframeless"
+	static let appGroupID = "group.com.keyframeless"
 
 	/// Nil without the app-group entitlement, in which case publishing is
 	/// unavailable rather than silently writing somewhere unreadable.

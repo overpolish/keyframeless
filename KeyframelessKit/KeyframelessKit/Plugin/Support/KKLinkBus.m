@@ -19,7 +19,7 @@
 // Same shared container the Sonar spectrograms use, so the bus works from the
 // plugin sandbox and is visible across every plugin that ships the entitlement.
 static NSString *const kKKLinkBusAppGroupID =
-    @"group.co.overpolish.keyframeless";
+    @"group.com.keyframeless";
 
 @implementation KKLinkedCurve
 

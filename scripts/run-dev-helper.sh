@@ -19,7 +19,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${1:-release}"
-GROUP="group.co.overpolish.keyframeless"
+GROUP="group.com.keyframeless"
 GC="$HOME/Library/Group Containers/$GROUP"
 SOCK="$GC/kkai.sock"
 CACHE="$GC/huggingface/hub"

@@ -62,10 +62,10 @@
   MTLPixelFormat fmt = [KKMetalDeviceCache pixelFormatForImageTile:dest];
   id<MTLRenderPipelineState> ps = [cache
       buildAndRegisterPipelineStateForPluginID:
-          @"co.overpolish.keyframeless.Canvas.OpFill"
+          @"com.keyframeless.Canvas.OpFill"
                                     registryID:reg
                                    pixelFormat:fmt
-                                      bundleID:@"co.overpolish.keyframeless."
+                                      bundleID:@"com.keyframeless."
                                                @"KeyframelessKit"
                                   vertexShader:@"KKVertexShader"
                                 fragmentShader:@"KKLabelFragment"

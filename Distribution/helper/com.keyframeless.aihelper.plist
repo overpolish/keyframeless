@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>co.overpolish.keyframeless.aihelper</string>
+	<string>com.keyframeless.aihelper</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/Library/Application Support/Keyframeless/kk-ai-helper</string>
@@ -14,7 +14,7 @@
 	     the next lookup. -->
 	<key>MachServices</key>
 	<dict>
-		<key>group.co.overpolish.keyframeless.aihelper</key>
+		<key>group.com.keyframeless.aihelper</key>
 		<true/>
 	</dict>
 	<!-- Interactive so launchd doesn't energy-throttle GPU inference (the helper also

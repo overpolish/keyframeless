@@ -12,7 +12,7 @@ public final class AIRecentPrompts: ObservableObject {
 
 	@Published public private(set) var prompts: [String] = []
 
-	private static let key = "co.overpolish.ai.recentPrompts"
+	private static let key = "com.keyframeless.ai.recentPrompts"
 	private static let maxCount = 5
 
 	private init() {

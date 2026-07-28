@@ -39,7 +39,7 @@ static NSColor *arcStrokeColor(void) {
 }
 
 - (NSString *)pipelinePluginID {
-  return @"co.overpolish.keyframelesskit.ArcOSC";
+  return @"com.keyframeless.kit.ArcOSC";
 }
 - (NSString *)fragmentFunctionName {
   return @"KKArcOSCFragment";

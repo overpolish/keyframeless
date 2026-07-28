@@ -495,7 +495,7 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   if (!sourceImages[0].ioSurface || !destinationImage.ioSurface) {
     if (outError) {
       *outError =
-          [NSError errorWithDomain:@"co.overpolish.keyframeless"
+          [NSError errorWithDomain:@"com.keyframeless"
                               code:-1
                           userInfo:@{
                             NSLocalizedDescriptionKey :

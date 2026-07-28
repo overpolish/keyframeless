@@ -48,10 +48,10 @@ public enum LicenseProduct {
 /// `KKLicenseIsActivated()` to gate render watermarks; keep the storage
 /// format in sync with KKLicense.m.
 public enum LicenseManager {
-	static let suiteName = "group.co.overpolish.keyframeless"
+	static let suiteName = "group.com.keyframeless"
 
 	static func defaultsKey(for productID: String) -> String {
-		"co.overpolish.license.\(productID)"
+		"com.keyframeless.license.\(productID)"
 	}
 
 	public static func record(for productID: String) -> LicenseRecord? {

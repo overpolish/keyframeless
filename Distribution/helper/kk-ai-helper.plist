@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>co.overpolish.keyframeless.aihelper</string>
+	<string>com.keyframeless.aihelper</string>
 	<key>CFBundleName</key>
 	<string>Keyframeless AI</string>
 	<key>CFBundleShortVersionString</key>

@@ -14,7 +14,7 @@
 const uint32_t KKSpectrogramFormatVersion = 2;
 
 static NSString *const kKKSpectrogramAppGroupID =
-    @"group.co.overpolish.keyframeless";
+    @"group.com.keyframeless";
 // v1: magic, version, numFrames, numBands, hopSeconds, timelineStart.
 // v2 appends the dB window. The grid starts after whichever header the file
 // declares, so the two sizes are what locate it - not one constant.

@@ -14,7 +14,7 @@ static BOOL KKAddParam(BOOL ok, NSError **err, NSString *desc) {
   if (ok)
     return YES;
   if (err)
-    *err = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+    *err = [NSError errorWithDomain:@"com.keyframeless.error"
                                code:1
                            userInfo:@{NSLocalizedDescriptionKey : desc}];
   return NO;
@@ -47,7 +47,7 @@ static const FxParameterFlags kHiddenNotAnim =
     if (error != NULL) {
       // The kit's own domain: FxPlugErrorDomain is a data symbol in
       // FxPlug.framework, which the kit doesn't link (plugin targets do).
-      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+      *error = [NSError errorWithDomain:@"com.keyframeless.error"
                                    code:kFxError_APIUnavailable
                                userInfo:@{
                                  NSLocalizedDescriptionKey :

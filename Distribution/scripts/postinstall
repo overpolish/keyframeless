@@ -42,4 +42,13 @@ if [ -f "$LEGACY" ] && [ -d "$2" ]; then
     chmod +x "$2/Uninstall Legacy Plugins"
 fi
 
+# One-time migration for the co.overpolish.* -> com.keyframeless.* rename:
+# moves the app group + transcription models onto the new identifiers and
+# clears the superseded LaunchAgents and retired plugins. Self-guarding (marker
+# file), non-fatal, and a no-op once it has run.
+MIGRATE="$SCRIPT_DIR/migrate-identifiers"
+if [ -f "$MIGRATE" ]; then
+    bash "$MIGRATE" || true
+fi
+
 exit 0

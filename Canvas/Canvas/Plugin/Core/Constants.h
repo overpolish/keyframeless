@@ -9,7 +9,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-static NSString *const kPluginID = @"co.overpolish.keyframeless.Canvas";
+static NSString *const kPluginID = @"com.keyframeless.Canvas";
 
 // v3 custom-UI / persistence params. The shared
 // timeline blob uses the kit-owned ID (kKKParamTimelineData); motion blur,

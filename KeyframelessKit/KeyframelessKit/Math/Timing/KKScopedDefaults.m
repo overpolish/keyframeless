@@ -5,7 +5,7 @@
 
 #import "KKScopedDefaults.h"
 
-static NSString *const kSuiteName = @"group.co.overpolish.keyframeless";
+static NSString *const kSuiteName = @"group.com.keyframeless";
 static NSString *const kKeyPrefix = @"KKScopedDefault.";
 static NSString *const kFallbackScope = @"shared";
 

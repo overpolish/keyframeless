@@ -13,7 +13,7 @@ static const DDLogLevel ddLogLevel = DDLogLevelDebug;
 static const DDLogLevel ddLogLevel = DDLogLevelWarning;
 #endif
 
-static NSString *const KKLogFolderName = @"co.overpolish.keyframeless";
+static NSString *const KKLogFolderName = @"com.keyframeless";
 
 @interface KKLog ()
 @property(nonatomic, strong) DDLog *ddLog;

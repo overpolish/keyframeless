@@ -16,10 +16,10 @@ BOOL KKLicenseIsActivated(NSString *productID) {
   // domains via cfprefsd, so this stays cheap while still observing an
   // activation written from another process (the inspector ViewBridge).
   NSUserDefaults *suite = [[NSUserDefaults alloc]
-      initWithSuiteName:@"group.co.overpolish.keyframeless"];
+      initWithSuiteName:@"group.com.keyframeless"];
   NSDictionary *record = [suite
       dictionaryForKey:[NSString
-                           stringWithFormat:@"co.overpolish.license.%@",
+                           stringWithFormat:@"com.keyframeless.license.%@",
                                             productID]];
   NSString *key = record[@"key"];
   return [key isKindOfClass:[NSString class]] && key.length > 0;

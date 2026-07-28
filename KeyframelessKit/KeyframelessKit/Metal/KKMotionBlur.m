@@ -14,7 +14,7 @@
 #import <KeyframelessKit/KKTimeline.h>
 
 static NSString *const KKMotionBlurPipelineID =
-    @"co.overpolish.keyframeless.kit.motionblur";
+    @"com.keyframeless.kit.motionblur";
 
 /// Reusable sample-texture pool. Keyed by (registryID, width, height,
 /// pixelFormat). FCP renders the same effect at many tile sizes
@@ -37,7 +37,7 @@ static dispatch_semaphore_t sKKMotionBlurScratchPoolLock;
 
 static const NSUInteger kKKMotionBlurPoolMaxKeys = 4;
 static NSString *const kKKMotionBlurScratchContextThreadKey =
-    @"co.overpolish.keyframeless.kit.motionblur.scratchContext";
+    @"com.keyframeless.kit.motionblur.scratchContext";
 
 /// Caps concurrent in-flight `applyToDestinationImage:` calls to one.
 /// FCP look-ahead can otherwise queue 3-5 frames in parallel, multiplying

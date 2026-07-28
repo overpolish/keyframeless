@@ -203,7 +203,7 @@ case "$COMPONENT" in
     bump_plist "Canvas/Canvas/Wrapper Application/Info.plist"
     bump_plist "Canvas/Canvas/Plugin/Info.plist"
     bump_fxplug "Canvas/Canvas/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Canvas"
+    bump_pkgproj "com.keyframeless.Canvas"
     ;;
 
 
@@ -211,14 +211,14 @@ case "$COMPONENT" in
     bump_plist "Mirage/Mirage/Wrapper Application/Info.plist"
     bump_plist "Mirage/Mirage/Plugin/Info.plist"
     bump_fxplug "Mirage/Mirage/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Mirage"
+    bump_pkgproj "com.keyframeless.Mirage"
     ;;
 
   ai)
     # Standalone "Keyframeless AI" helper: the version manifest (staged beside
     # the helper, read by KKUpdateChecker) + the pkg component version.
     bump_plist "Distribution/helper/kk-ai-helper.plist"
-    bump_pkgproj "co.overpolish.keyframeless.KeyframelessAI"
+    bump_pkgproj "com.keyframeless.KeyframelessAI"
     ;;
   keyframelessx)
     proj="Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"
@@ -228,7 +228,7 @@ case "$COMPONENT" in
     sed -i '' \
       "s/MARKETING_VERSION = $current;/MARKETING_VERSION = $VERSION;/g" \
       "$ROOT/$proj"
-    bump_pkgproj "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP"
+    bump_pkgproj "com.keyframeless.Keyframeless-X.Keyframeless-X-FCP"
     ;;
 esac
 

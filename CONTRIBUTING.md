@@ -58,7 +58,7 @@ Notes:
 > KEEP="$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app"
 >
 > # unregister every copy except the debug build
-> $LS -dump | grep -B20 'identifier:.*co.overpolish.keyframeless.Keyframeless-X$' \
+> $LS -dump | grep -B20 'identifier:.*com.keyframeless.Keyframeless-X$' \
 >   | grep "path:" | sed 's/.*path: *//; s/ (0x.*//' \
 >   | while read -r p; do
 >       [ "$p" != "$KEEP" ] && $LS -u "$p" && echo "Unregistered: $p"
@@ -67,7 +67,7 @@ Notes:
 > # re-register the debug build
 > $LS -f -R -trusted "$KEEP"
 > pluginkit -a "$KEEP/Contents/PlugIns/Keyframeless X FCP.appex"
-> pluginkit -e use -i co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP
+> pluginkit -e use -i com.keyframeless.Keyframeless-X.Keyframeless-X-FCP
 > ```
 >
 > Restart FCP after fixing.
@@ -85,7 +85,7 @@ Quick sanity check that points at this cause: add `+ (void)load` and an `initWit
 Debug XPC service builds are non-sandboxed, so `NSUserDefaults` writes to `~/Library/Preferences/<BundleID>.plist` instead of the sandbox container. The `defaults` CLI looks in the container and won't find or delete the key. To reset the intro-seen state:
 
 ```sh
-plutil -remove introSeen ~/Library/Preferences/co.overpolish.keyframeless.Canvas.PlugIn.plist
+plutil -remove introSeen ~/Library/Preferences/com.keyframeless.Canvas.PlugIn.plist
 killall cfprefsd
 ```
 

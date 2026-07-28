@@ -82,7 +82,7 @@ static NSArray<NSString *> *MirageExprRotateElementKeys(NSString *binds,
 // Mirrors KKOSCGuideBridge's position-notification name (the bridge posts it);
 // the plugin returns this as its help-guide refresh notification.
 NSNotificationName const kMirageOSCPositionNotification =
-    @"co.overpolish.kk.oscGuidePosition";
+    @"com.keyframeless.kk.oscGuidePosition";
 
 // All OSC-guide affine / staleness / velocity-gate state now lives in the
 // generic KKOSCGuideBridge (KeyframelessKit). One process-lifetime instance

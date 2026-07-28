@@ -70,7 +70,7 @@ stage_ai_helper() {
   lipo "$prod/kk-ai-helper" -thin arm64 -output "$AI_STAGE/kk-ai-helper" 2>/dev/null \
     || cp "$prod/kk-ai-helper" "$AI_STAGE/kk-ai-helper"
   codesign --force --options runtime --timestamp \
-    --identifier co.overpolish.keyframeless.aihelper \
+    --identifier com.keyframeless.aihelper \
     --entitlements "$ROOT/Distribution/helper/kk-ai-helper.entitlements" \
     --sign "Developer ID Application" "$AI_STAGE/kk-ai-helper"
   chmod 0755 "$AI_STAGE/kk-ai-helper"

@@ -128,7 +128,7 @@ static const float kHitThresholdPixels = 10.0f;
 }
 
 - (NSString *)pipelinePluginID {
-  return @"co.overpolish.keyframelesskit.RotationOSC";
+  return @"com.keyframeless.kit.RotationOSC";
 }
 - (NSString *)fragmentFunctionName {
   return @"KKRotationOSCFragment";

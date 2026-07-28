@@ -26,12 +26,12 @@ static NSString *KKFeedbackBaseURL(void) {
 }
 
 static NSString *const kCachedVersionKey =
-    @"co.overpolish.keyframeless.cachedAvailableVersion";
+    @"com.keyframeless.cachedAvailableVersion";
 
 // Derives the changelog/update component slug from the running bundle's
 // identity instead of a hand-maintained roster, so a NEW plugin gets update
 // checks without editing kit source:
-//  - "co.overpolish.keyframeless.<Name>[.PlugIn|.<sub>]" -> <Name> lowercased
+//  - "com.keyframeless.<Name>[.PlugIn|.<sub>]" -> <Name> lowercased
 //    with non-alphanumerics stripped ("Keyframeless-X" -> "keyframelessx").
 //  - Pre-standardization installs whose id is a bare product name ("Canvas",
 //    "Canvas-XPC-Service") -> the same slug, minus the XPC suffix - kept so
@@ -41,7 +41,7 @@ static NSString *KKComponentForBundleID(NSString *bundleID) {
   if (!bundleID.length)
     return nil;
   NSString *name = bundleID;
-  NSString *prefix = @"co.overpolish.keyframeless.";
+  NSString *prefix = @"com.keyframeless.";
   if ([name hasPrefix:prefix]) {
     name = [name substringFromIndex:prefix.length];
     NSRange dot = [name rangeOfString:@"."];

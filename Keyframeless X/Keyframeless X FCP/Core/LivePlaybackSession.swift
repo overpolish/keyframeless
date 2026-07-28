@@ -43,7 +43,7 @@ final class LivePlaybackSession: @unchecked Sendable {
 	private let mix: ClipMixState
 	private let resolvedURL: FCPXMLParser.AudioClip.ResolvedURL
 	private let producerQueue = DispatchQueue(
-		label: "co.overpolish.keyframeless.audioplayer.producer", qos: .userInteractive)
+		label: "com.keyframeless.audioplayer.producer", qos: .userInteractive)
 
 	private let stateLock = NSLock()
 	private var _stopped = false

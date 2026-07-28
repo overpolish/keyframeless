@@ -42,7 +42,7 @@ static NSColor *squarePointShadowColor(void) {
 }
 
 - (NSString *)pipelinePluginID {
-  return @"co.overpolish.keyframelesskit.SquarePointOSC";
+  return @"com.keyframeless.kit.SquarePointOSC";
 }
 - (NSString *)fragmentFunctionName {
   return @"KKSquarePointOSCFragment";

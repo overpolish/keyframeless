@@ -11,7 +11,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
-static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
+static NSString *kPointOSCPluginID = @"com.keyframeless.kit.PointOSC";
 
 // Fill/stroke come from the SHARED glyph style (KKOSCGlyphStyle.h) so the
 // mini-viewer's dot encode and this viewer OSC can never drift apart.
@@ -37,7 +37,7 @@ static NSColor *pointStrokeColor(void) {
 }
 
 - (NSString *)pipelinePluginID {
-  return @"co.overpolish.keyframelesskit.PointOSC";
+  return @"com.keyframeless.kit.PointOSC";
 }
 - (NSString *)fragmentFunctionName {
   return @"KKPointOSCFragment";

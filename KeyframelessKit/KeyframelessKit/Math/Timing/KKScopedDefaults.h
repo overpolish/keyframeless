@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// user saves from a popover and every new segment / clip then starts at (see
 /// KKCurveDefaults, KKOSCVisibilityDefaults).
 ///
-/// Values live in the `group.co.overpolish.keyframeless` defaults suite, NOT in
+/// Values live in the `group.com.keyframeless` defaults suite, NOT in
 /// standardUserDefaults - the latter resolves to a per-PROCESS domain inside
 /// FxPlug, so a default saved from the inspector's ViewBridge would be
 /// invisible to the plugin process that acts on it.

@@ -116,7 +116,7 @@ static simd_uint2 sOSCBatchViewport = {0, 0};
 
   id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
   NSBundle *bundle = [NSBundle
-      bundleWithIdentifier:@"co.overpolish.keyframeless.KeyframelessKit"];
+      bundleWithIdentifier:@"com.keyframeless.KeyframelessKit"];
   NSError *error = nil;
 
   id<MTLLibrary> lib = [device newDefaultLibraryWithBundle:bundle error:&error];
@@ -167,12 +167,10 @@ static simd_uint2 sOSCBatchViewport = {0, 0};
       [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
   return [cache
       buildAndRegisterPipelineStateForPluginID:
-          @"co.overpolish.keyframelesskit.Line"
+          @"com.keyframeless.kit.Line"
                                     registryID:registryID
                                    pixelFormat:pixelFormat
-                                      bundleID:@"co.overpolish"
-                                                ".keyframeless"
-                                                ".KeyframelessKit"
+                                      bundleID:@"com.keyframeless.KeyframelessKit"
                                   vertexShader:@"KKVertexShader"
                                 fragmentShader:@"KKLineFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
