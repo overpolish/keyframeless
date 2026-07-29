@@ -92,6 +92,11 @@ BOOL KKLooksLikeTransitionShader(NSString *src) {
   return MirageTemplateTypeForSource(src, NULL) == MirageTemplateTypeTransition;
 }
 
+BOOL KKLooksLikeColorTransformShader(NSString *src) {
+  return MirageTemplateTypeForSource(src, NULL) ==
+         MirageTemplateTypeColorTransform;
+}
+
 MirageMotionBlurMode MirageMotionBlurModeForSource(NSString *src) {
   if (!src.length)
     return MirageMotionBlurModeAccumulate;

@@ -27,6 +27,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// assumption - one path per plugin.
 - (instancetype)initWithDescriptorPath:(NSString *)descriptorPath;
 
+/// Preserve the source as linear RGBA16F instead of the default display-coded
+/// BGRA8 feed. Use for technical color processing that must retain HDR values
+/// and wide-gamut components. Changing it recreates surfaces lazily.
+@property(nonatomic) BOOL linearFloat;
+
 /// Downscale the full source frame into the persistent surface and publish
 /// the descriptor. Safe to call every full-frame render tick - it
 /// self-throttles and skips when nothing changed. Caller must pass a

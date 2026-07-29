@@ -1043,16 +1043,16 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
           MirageTemplateDirectiveErrorNone;
       MirageTemplateTypeForSource(activeTemplateSource, &templateError);
       if (templateError == MirageTemplateDirectiveErrorMissing)
-        return RLoc(@"Add `// #template generator`, `filter`, `layout`, or "
-                    @"`transition` to the Image shader",
+        return RLoc(@"Add `// #template generator`, `filter`, `layout`, "
+                    @"`transition`, or `color-transform` to the Image shader",
                     @"Mirage missing template-type directive error.");
       if (templateError == MirageTemplateDirectiveErrorMultiple)
         return RLoc(
             @"Use exactly one `#template` directive in the Image shader",
             @"Mirage duplicate template-type directive error.");
       if (templateError == MirageTemplateDirectiveErrorValue)
-        return RLoc(@"`#template` must be generator, filter, layout, or "
-                    @"transition",
+        return RLoc(@"`#template` must be generator, filter, layout, "
+                    @"transition, or color-transform",
                     @"Mirage invalid template-type directive error.");
     }
     // Duplicate directive LABELS are allowed - the lane identity is the

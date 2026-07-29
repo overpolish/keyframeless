@@ -88,7 +88,10 @@ typedef struct MirageScalarProp {
     double visibleByValues[KK_SHADER_MAX_VISIBILITY_VALUES];
     int visibleByValueCount;
     double pdefx, pdefy; // point default (normalized 0..1)
-    char options[256];   // choice: comma-separated pill labels
+    // Searchable technical menus (camera transforms, codecs, devices) need
+    // substantially more room than a short pill row. This is parser metadata,
+    // not GPU state, so favour complete stable labels over silent truncation.
+    char options[1024];  // choice: comma-separated pill labels
     int choiceCount;     // number of options
     int cdefault;        // choice default index
     // On-screen control opt-in (`osc` attribute) - PARSE-SIDE ONLY. These raw

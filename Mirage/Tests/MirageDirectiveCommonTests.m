@@ -6,6 +6,8 @@
 #import <Foundation/Foundation.h>
 
 #import "MirageDirectiveCommon.h"
+#import "MirageScalarParse.h"
+#import "MirageTemplateType.h"
 
 static void KKRequire(BOOL condition, NSString *message) {
   if (condition)
@@ -27,6 +29,30 @@ int main(void) {
               @"ignores quoted and prefixed flow words");
     KKRequire(MirageAttrHasBareFlag(@" flow flowgate=-30", @"flow"),
               @"recognises flow alongside prefixed attributes");
+
+    MirageTemplateDirectiveError templateError =
+        MirageTemplateDirectiveErrorNone;
+    KKRequire(MirageTemplateTypeForSource(
+                  @"// #template color-transform\nvoid mainImage() {}",
+                  &templateError) == MirageTemplateTypeColorTransform &&
+                  templateError == MirageTemplateDirectiveErrorNone,
+              @"recognises the color-transform template");
+
+    NSMutableArray<NSString *> *longLabels = [NSMutableArray array];
+    for (NSInteger i = 0; i < 40; i++)
+      [longLabels addObject:[NSString stringWithFormat:@"Camera Profile %02ld",
+                                                       (long)i]];
+    NSString *longChoice = [NSString
+        stringWithFormat:@"// #choice dropdown options=\"%@\" default=39\n"
+                         @"uniform int uInput;\n",
+                         [longLabels componentsJoinedByString:@","]];
+    MirageScalarProp prop = {0};
+    int used = 0, truncated = 0;
+    KKRequire(MirageParseScalarProps(longChoice, &prop, 1, 0, &used,
+                                     &truncated) == 1,
+              @"parses a long searchable choice");
+    KKRequire(prop.choiceCount == 40 && prop.cdefault == 39,
+              @"preserves every long-choice label and its default");
   }
   return 0;
 }

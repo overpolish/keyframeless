@@ -10,7 +10,7 @@ A Custom shader can expose its own **inspector controls** and **on-screen contro
 - **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu, pill, or multi-select checklist), `#angle` (a dial), `#color` (a colour well), `#gradient` (a colour ramp), `#multi` (2-4 numbers), `#random` (a dice field).
 - **Spatial controls:** `#point` (a draggable position handle). Add `osc` to a value control for an on-screen ring, box, or rotation ring that edits the same lane.
 - **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep.
-- **Template type:** every Image shader requires exactly one `#template generator|filter|layout|transition` directive.
+- **Template type:** every Image shader requires exactly one `#template generator|filter|layout|transition|color-transform` directive.
 - **Built-ins:** `#speed`, `#seed`, `#grain` opt into engine controls and stand alone (no uniform).
 - Attributes tune each one: `label=`, `min=` / `max=`, `default=`, `group=` (which inspector group it lands in), and `osc=` place the on-screen control. The rest of this doc details every kind.
 
@@ -23,7 +23,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 
 **Rules that always hold:**
 
-- The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, or `transition`. This drives browser classification and runtime input behavior.
+- The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, `transition`, or `color-transform`. This drives browser classification and runtime input behavior.
 - The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The built-ins (`#speed` / `#seed` / `#grain` / `#template`) are the exception: they annotate nothing and stand on their own line.
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
@@ -212,6 +212,10 @@ Every Image shader declares what it is:
 - **Transition** binds the outgoing clip to `iChannel0` and incoming clip to `iChannel1`.
 - **In** binds transparent black to `iChannel0`, allowing the incoming clip to appear over the timeline beneath it.
 - **Out** binds transparent black to `iChannel1`, allowing the outgoing clip to disappear into the timeline beneath it.
+
+- **color-transform** converts a declared camera or display encoding into a practical output space. The shipped **Color Transform** is standalone and shader-backed, so its transformed pixels flow normally into effects stacked after it. A `color-transform` shader consumes and produces the host's LINEAR values on a float destination: the ordinary Shadertoy gamma round-trip is skipped on both the source and the output so log curves and wide-gamut linear values survive. Both of its menus therefore name a real space rather than offering an "unknown" entry, because a transform cannot start from an undeclared origin. An ordinary colour-managed SDR clip arrives as `Linear Rec.709`, which is the default on both sides and an exact identity. To bypass the transform, set Mix to 0.
+
+  Its input menu covers the three linear host spaces (Rec.709, Display P3, Rec.2020), the encoded display spaces (sRGB, Rec.709, Display P3, Rec.2020 HLG, Rec.2020 PQ), the ACES spaces (ACES2065-1, ACEScg, ACEScct) and sixteen camera log spaces (Apple, ARRI LogC3/LogC4, Blackmagic Film Gen 5, Canon C-Log2/C-Log3, DaVinci Intermediate, DJI D-Log, Fujifilm F-Log/F-Log2, Nikon N-Log, Panasonic V-Log, RED Log3G10, Sony S-Log2 and S-Log3 in both S-Gamut3 and S-Gamut3.Cine). Every **output** is a linear space (Linear Rec.709, Linear Display P3, Linear Rec.2020, ACEScg, ACES2065-1) because Final Cut owns the display encode: emitting HLG or PQ code values from a shader would encode twice, so HDR delivery is a transform to Linear Rec.2020 and then the project's own output. The HDR inputs place BT.2408 diffuse white (PQ 203 nits, HLG signal 0.75) at 1.0 so an HDR and an SDR clip agree on where white is, with specular highlights above 1.0. HLG receives its inverse OETF only, since the OOTF is display rendering rather than a technical transform.
 
 FxPlug does not report whether a transition side is genuinely absent, so the coverage choice is intentionally explicit. The empty side is a real transparent texture, not an unbound channel (whose normal Mirage fallback is procedural noise).
 

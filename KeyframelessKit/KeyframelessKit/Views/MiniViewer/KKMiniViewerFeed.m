@@ -6,13 +6,14 @@
 #import "KKMiniViewerFeed.h"
 
 #import "KKLog.h"
+#import <CoreVideo/CoreVideo.h>
 #import <IOSurface/IOSurface.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 // Long-edge cap for the preview surface. _computeDst never upscales, so a
 // ≤2048 source is cached at native res (crisp when zoomed); larger sources
-// (4K+) are bounded here to keep each persistent IOSurface ~9MB and the
-// throttled (≤10fps) MPS pass cheap.
+// (4K+) are bounded here to keep each persistent IOSurface bounded (~9MB for
+// BGRA8 or ~18MB for RGBA16F) and the throttled MPS pass cheap.
 static const NSUInteger kTargetLongEdge = 2048;
 
 // Minimum wall-clock gap between surface updates per slot. The mini viewer
@@ -43,6 +44,12 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     CFRelease(_surface);
 }
 @end
+
+static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
+  return slot.surfaceTexture.pixelFormat == MTLPixelFormatRGBA16Float
+             ? @"rgba16Float"
+             : @"bgra8";
+}
 
 @implementation KKMiniViewerFeed {
   NSString *_descriptorPath;
@@ -104,7 +111,11 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
                        device:(id<MTLDevice>)device
                          srcW:(NSUInteger)sw
                          srcH:(NSUInteger)sh {
-  if (slot.surfaceTexture && sw == slot.srcW && sh == slot.srcH)
+  MTLPixelFormat expectedFormat =
+      self.linearFloat ? MTLPixelFormatRGBA16Float
+                       : MTLPixelFormatBGRA8Unorm_sRGB;
+  if (slot.surfaceTexture && slot.surfaceTexture.pixelFormat == expectedFormat &&
+      sw == slot.srcW && sh == slot.srcH)
     return YES;
 
   [self _computeDstForSrcW:sw h:sh slot:slot];
@@ -115,13 +126,17 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     slot.surface = NULL;
   }
 
-  size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, slot.dstW * 4);
+  size_t bytesPerElement = self.linearFloat ? 8 : 4;
+  OSType surfaceFormat =
+      self.linearFloat ? kCVPixelFormatType_64RGBAHalf : (OSType)'BGRA';
+  size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow,
+                                      slot.dstW * bytesPerElement);
   NSDictionary *props = @{
     (id)kIOSurfaceWidth : @(slot.dstW),
     (id)kIOSurfaceHeight : @(slot.dstH),
-    (id)kIOSurfaceBytesPerElement : @4,
+    (id)kIOSurfaceBytesPerElement : @(bytesPerElement),
     (id)kIOSurfaceBytesPerRow : @(bpr),
-    (id)kIOSurfacePixelFormat : @((uint32_t)'BGRA'),
+    (id)kIOSurfacePixelFormat : @((uint32_t)surfaceFormat),
   };
   slot.surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
   if (!slot.surface) {
@@ -130,12 +145,11 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     return NO;
   }
 
-  // FCP hands us a linear-light source. Writing through an _sRGB-typed
-  // texture makes MPS gamma-encode on store, so the 8-bit surface holds
-  // display-encoded values - KKMiniViewerView reads them as plain BGRA8 and
-  // shows them straight, matching the brightness FCP displays.
+  // The default feed display-encodes FCP's linear source through an sRGB-typed
+  // BGRA8 target. Technical color transforms instead retain the linear float
+  // values, including HDR values above one and wide-gamut negative components.
   MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm_sRGB
+      texture2DDescriptorWithPixelFormat:expectedFormat
                                    width:slot.dstW
                                   height:slot.dstH
                                mipmapped:NO];
@@ -167,6 +181,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     @"width" : @(_channel1.dstW),
     @"height" : @(_channel1.dstH),
     @"generation" : @(_channel1.generation),
+    @"pixelFormat" : KKMiniFeedFormatName(_channel1),
   };
 }
 
@@ -181,6 +196,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
       @"height" : @(s.dstH),
       @"generation" : @(s.generation),
       @"tag" : @(s.tag),
+      @"pixelFormat" : KKMiniFeedFormatName(s),
     }];
   }
   if (slotEntries.count == 0) {
@@ -218,6 +234,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     @"srcWidth" : @(first.srcW),
     @"srcHeight" : @(first.srcH),
     @"generation" : @(first.generation),
+    @"pixelFormat" : KKMiniFeedFormatName(first),
     @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
     @"playheadFrac" : @(_playheadFrac),
     @"slots" : slotEntries,
@@ -348,18 +365,26 @@ id<MTLTexture> KKMiniViewerFeedLoadPrimarySource(NSString *descriptorPath,
   // and the caller re-renders on its own reference source instead.
   uint32_t sid = 0;
   NSArray *slots = desc[@"slots"];
+  NSString *format = nil;
   if ([slots isKindOfClass:NSArray.class] && slots.count > 0 &&
-      [slots[0] isKindOfClass:NSDictionary.class])
+      [slots[0] isKindOfClass:NSDictionary.class]) {
     sid = (uint32_t)[slots[0][@"ioSurfaceID"] unsignedIntValue];
-  if (sid == 0)
+    format = slots[0][@"pixelFormat"];
+  }
+  if (sid == 0) {
     sid = (uint32_t)[desc[@"ioSurfaceID"] unsignedIntValue];
+    format = desc[@"pixelFormat"];
+  }
   if (sid == 0)
     return nil;
   IOSurfaceRef surf = IOSurfaceLookup((IOSurfaceID)sid);
   if (!surf)
     return nil;
+  MTLPixelFormat pixelFormat = [format isEqualToString:@"rgba16Float"]
+                                   ? MTLPixelFormatRGBA16Float
+                                   : MTLPixelFormatBGRA8Unorm;
   MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+      texture2DDescriptorWithPixelFormat:pixelFormat
                                    width:IOSurfaceGetWidth(surf)
                                   height:IOSurfaceGetHeight(surf)
                                mipmapped:NO];

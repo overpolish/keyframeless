@@ -72,6 +72,9 @@ extern NSString *MirageCustomDefaultShaderSource(void);
 /// shadows and (with an audio source) pulses it. Masks with `#alpha` so the
 /// corners are genuinely transparent.
 extern NSString *MirageMagicMoveShaderSource(void);
+/// The shipped camera/display color transform. Its matrices and transfer
+/// curves are sourced from the ASWF OpenColorIO ACES configuration v4.0.
+extern NSString *MirageColorTransformShaderSource(void);
 extern NSString *MirageMagicMoveBufferBSource(void);
 extern NSString *MirageFrameShaderSource(void);
 /// Frame's other sections: shared blur helper, then the two halves of the

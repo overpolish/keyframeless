@@ -57,8 +57,8 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
             @"transition.",
             @"#progress "),
           E(@"#template", @"#template",
-            @"Required template type: generator, filter, layout, or "
-            @"transition.",
+            @"Required template type: generator, filter, layout, transition, "
+            @"or color-transform.",
             @"#template "),
           E(@"#motionblur", @"#motionblur",
             @"Who renders motion blur: accumulate, native, or off.",
@@ -230,7 +230,8 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"skipsnapping", @"lockaspect", @"dropdown", @"multiple", // bare flags
       @"percent",      @"int",        @"px", // #multi units/modifiers
       @"accumulate",   @"native",     @"off",      @"on", // #motionblur modes
-      @"generator",    @"filter",     @"layout",   @"transition" // templates
+      @"generator",    @"filter",     @"layout",   @"transition",
+      @"color-transform" // templates
     ]];
   });
   return v;
@@ -391,6 +392,10 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageTemplateTypes(void) {
             @"Receives outgoing and incoming clips and adds Transition / In / "
             @"Out coverage.",
             @"transition"),
+          E(@"color-transform", @"color-transform",
+            @"Converts a camera or display encoding into a practical output "
+            @"space.",
+            @"color-transform"),
         ],
         kKW);
   });

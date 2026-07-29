@@ -729,13 +729,19 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
           ? (int)MAX(0, MIN(2, lround(transitionModeV[0].doubleValue)))
           : 0;
   base.transition.w = (float)transitionMode;
+  BOOL technicalTransform = KKLooksLikeColorTransformShader(image);
+  // The cross-process feed is always sRGB-encoded BGRA8, even for a technical
+  // transform. Recover the same linear values the main FxPlug render receives;
+  // the distinction is only that an ordinary Shadertoy shader is encoded back
+  // to gamma below, while color-transform consumes those host values directly.
   id<MTLTexture> srcLin = [self _linearSourceView:source];
   // srcLin is linear (FCP's float source, or the sRGB view that linearises the
   // mini's gamma surface). Shadertoy wants gamma-space input and the output
   // wrapper re-decodes for a float dest, so encode to gamma here to match the
   // main render - otherwise the source double-decodes and the preview darkens.
   // Encodes onto the shared command buffer, ahead of the buffer/image passes.
-  srcLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, srcLin);
+  if (!technicalTransform)
+    srcLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, srcLin);
   id<MTLSamplerState> srcSampler = KKCustomSourceSampler(device);
   id<MTLTexture> noiseTex = KKCustomChannelNoiseTexture(device);
   id<MTLTexture> transparentTex =

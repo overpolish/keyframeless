@@ -156,11 +156,13 @@ static id<MTLSamplerState> KKGammaEncodeSampler(id<MTLDevice> device) {
 }
 
 // Cached render pipeline (fullscreen quad, vertex + fragment) that samples a
-// linear source and writes its sRGB/gamma encode. Sampling (not compute .read)
-// matches exactly how the shader reads the source, so any texture the shader
-// can sample this pass can sample too.
-static id<MTLRenderPipelineState> KKGammaEncodePipeline(id<MTLDevice> device) {
-  return [[KKDeviceObjectCache cacheNamed:@"gammaPipeline"]
+// linear source and writes its sRGB/gamma encode, or with `decode` the exact
+// inverse. Sampling (not compute .read) matches exactly how the shader reads
+// the source, so any texture the shader can sample this pass can sample too.
+static id<MTLRenderPipelineState> KKGammaPipeline(id<MTLDevice> device,
+                                                  BOOL decode) {
+  return [[KKDeviceObjectCache
+      cacheNamed:(decode ? @"gammaDecodePipeline" : @"gammaPipeline")]
       objectForDevice:device
                 build:^id(id<MTLDevice> dev) {
                   NSString *src =
@@ -183,6 +185,12 @@ static id<MTLRenderPipelineState> KKGammaEncodePipeline(id<MTLDevice> device) {
                       @"  float3 hi = 1.055 * pow(c, 1.0 / 2.4) - 0.055;\n"
                       @"  return select(hi, lo, c <= 0.0031308);\n"
                       @"}\n"
+                      @"static inline float3 kk_srgb2lin(float3 c) {\n"
+                      @"  c = clamp(c, 0.0, 1.0);\n"
+                      @"  float3 lo = c / 12.92;\n"
+                      @"  float3 hi = pow((c + 0.055) / 1.055, 2.4);\n"
+                      @"  return select(hi, lo, c <= 0.04045);\n"
+                      @"}\n"
                       @"fragment float4 kkGammaFS(KKGEOut in [[stage_in]],\n"
                       @"                          texture2d<float> tex "
                       @"[[texture(0)]],\n"
@@ -190,15 +198,26 @@ static id<MTLRenderPipelineState> KKGammaEncodePipeline(id<MTLDevice> device) {
                       @"{\n"
                       @"  float4 c = tex.sample(smp, in.uv);\n"
                       @"  return float4(kk_lin2srgb(c.rgb), c.a);\n"
+                      @"}\n"
+                      @"fragment float4 kkGammaDecodeFS(KKGEOut in "
+                      @"[[stage_in]],\n"
+                      @"                                texture2d<float> tex "
+                      @"[[texture(0)]],\n"
+                      @"                                sampler smp "
+                      @"[[sampler(0)]]) {\n"
+                      @"  float4 c = tex.sample(smp, in.uv);\n"
+                      @"  return float4(kk_srgb2lin(c.rgb), c.a);\n"
                       @"}\n";
                   NSError *err = nil;
                   id<MTLLibrary> lib = [dev newLibraryWithSource:src
                                                          options:nil
                                                            error:&err];
                   id<MTLFunction> vfn = [lib newFunctionWithName:@"kkGammaVS"];
-                  id<MTLFunction> ffn = [lib newFunctionWithName:@"kkGammaFS"];
+                  id<MTLFunction> ffn =
+                      [lib newFunctionWithName:(decode ? @"kkGammaDecodeFS"
+                                                       : @"kkGammaFS")];
                   if (!vfn || !ffn) {
-                    KKLogError(@"[Custom] gamma-encode shader build failed: %@",
+                    KKLogError(@"[Custom] gamma-convert shader build failed: %@",
                                err);
                     return nil;
                   }
@@ -212,20 +231,19 @@ static id<MTLRenderPipelineState> KKGammaEncodePipeline(id<MTLDevice> device) {
                       [dev newRenderPipelineStateWithDescriptor:desc
                                                           error:&err];
                   if (!ps)
-                    KKLogError(@"[Custom] gamma-encode pipeline build failed: "
+                    KKLogError(@"[Custom] gamma-convert pipeline build failed: "
                                @"%@",
                                err);
                   return ps;
                 }];
 }
 
-id<MTLTexture>
-KKGammaEncodeSourceTextureOnBuffer(id<MTLCommandBuffer> commandBuffer,
-                                   id<MTLTexture> src) {
+static id<MTLTexture> KKGammaConvertOnBuffer(id<MTLCommandBuffer> commandBuffer,
+                                             id<MTLTexture> src, BOOL decode) {
   if (!commandBuffer || !src)
     return src;
   id<MTLDevice> device = commandBuffer.device;
-  id<MTLRenderPipelineState> ps = KKGammaEncodePipeline(device);
+  id<MTLRenderPipelineState> ps = KKGammaPipeline(device, decode);
   if (!ps)
     return src;
   MTLTextureDescriptor *td = [MTLTextureDescriptor
@@ -254,17 +272,39 @@ KKGammaEncodeSourceTextureOnBuffer(id<MTLCommandBuffer> commandBuffer,
   return dst;
 }
 
-id<MTLTexture> KKGammaEncodeSourceTexture(id<MTLCommandQueue> queue,
-                                          id<MTLTexture> src) {
+static id<MTLTexture> KKGammaConvert(id<MTLCommandQueue> queue,
+                                     id<MTLTexture> src, BOOL decode) {
   if (!queue || !src)
     return src;
   id<MTLCommandBuffer> cb = [queue commandBuffer];
-  id<MTLTexture> dst = KKGammaEncodeSourceTextureOnBuffer(cb, src);
+  id<MTLTexture> dst = KKGammaConvertOnBuffer(cb, src, decode);
   if (dst == src)
     return src;
   [cb commit];
   [cb waitUntilCompleted];
   return dst;
+}
+
+id<MTLTexture>
+KKGammaEncodeSourceTextureOnBuffer(id<MTLCommandBuffer> commandBuffer,
+                                   id<MTLTexture> src) {
+  return KKGammaConvertOnBuffer(commandBuffer, src, NO);
+}
+
+id<MTLTexture> KKGammaEncodeSourceTexture(id<MTLCommandQueue> queue,
+                                          id<MTLTexture> src) {
+  return KKGammaConvert(queue, src, NO);
+}
+
+id<MTLTexture>
+KKGammaDecodeSourceTextureOnBuffer(id<MTLCommandBuffer> commandBuffer,
+                                   id<MTLTexture> src) {
+  return KKGammaConvertOnBuffer(commandBuffer, src, YES);
+}
+
+id<MTLTexture> KKGammaDecodeSourceTexture(id<MTLCommandQueue> queue,
+                                          id<MTLTexture> src) {
+  return KKGammaConvert(queue, src, YES);
 }
 
 void KKBindGLSLUniforms(id<MTLRenderCommandEncoder> encoder,

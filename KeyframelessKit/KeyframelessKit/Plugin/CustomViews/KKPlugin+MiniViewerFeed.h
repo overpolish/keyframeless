@@ -43,6 +43,7 @@ NS_ASSUME_NONNULL_BEGIN
                              (nullable NSArray<NSNumber *> *)boundaryReqFracs
                           multiSlotActive:(BOOL)multiSlotActive
                         changesOutputSize:(BOOL)changesOutputSize
+                             linearFloat:(BOOL)linearFloat
                                defaultTag:(double)defaultTag
                               renderCache:(nullable KKRenderCache *)renderCache;
 

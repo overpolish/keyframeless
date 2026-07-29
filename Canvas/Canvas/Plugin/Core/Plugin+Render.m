@@ -335,6 +335,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                              boundaryReqFracs:self.renderCache.boundaryReqFracs
                               multiSlotActive:YES
                             changesOutputSize:NO
+                                 linearFloat:NO
                                    defaultTag:[self.renderCache
                                                   clipFractionAtSeconds:
                                                       CMTimeGetSeconds(

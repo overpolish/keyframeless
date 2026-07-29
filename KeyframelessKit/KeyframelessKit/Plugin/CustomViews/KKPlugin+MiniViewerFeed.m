@@ -23,6 +23,7 @@
                              (NSArray<NSNumber *> *)boundaryReqFracs
                           multiSlotActive:(BOOL)multiSlotActive
                         changesOutputSize:(BOOL)changesOutputSize
+                             linearFloat:(BOOL)linearFloat
                                defaultTag:(double)defaultTag
                               renderCache:(KKRenderCache *)renderCache {
   if (sourceImages.count == 0 || !destinationImage.ioSurface)
@@ -37,6 +38,7 @@
         [[KKMiniViewerFeed alloc] initWithDescriptorPath:descriptorPath];
     self.miniViewerFeedPath = descriptorPath;
   }
+  self.miniViewerFeed.linearFloat = linearFloat;
 
   // Build (slot index, tile) pairs to publish this tick.
   NSMutableArray *pairs = [NSMutableArray array];

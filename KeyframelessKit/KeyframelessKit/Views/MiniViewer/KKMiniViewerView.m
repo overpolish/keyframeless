@@ -402,7 +402,8 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
 - (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot
                  sid:(uint32_t)sid
                  gen:(uint64_t)gen
-                 tag:(double)tag {
+                 tag:(double)tag
+         pixelFormat:(NSString *)format {
   if (sid == 0)
     return NO;
   if (sid == slot.sid && gen == slot.generation && slot.sourceTexture) {
@@ -418,8 +419,11 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
     }
     NSUInteger w = IOSurfaceGetWidth(surf);
     NSUInteger h = IOSurfaceGetHeight(surf);
+    MTLPixelFormat pixelFormat = [format isEqualToString:@"rgba16Float"]
+                                     ? MTLPixelFormatRGBA16Float
+                                     : MTLPixelFormatBGRA8Unorm;
     MTLTextureDescriptor *td = [MTLTextureDescriptor
-        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+        texture2DDescriptorWithPixelFormat:pixelFormat
                                      width:w
                                     height:h
                                  mipmapped:NO];
@@ -528,7 +532,11 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
     uint32_t sid = (uint32_t)[ch1[@"ioSurfaceID"] unsignedIntValue];
     uint64_t gen = (uint64_t)[ch1[@"generation"] unsignedLongLongValue];
     if (sid != _channel1Slot.sid || gen != _channel1Slot.generation)
-      [self _resolveSlot:_channel1Slot sid:sid gen:gen tag:0.0];
+      [self _resolveSlot:_channel1Slot
+                     sid:sid
+                     gen:gen
+                     tag:0.0
+             pixelFormat:ch1[@"pixelFormat"]];
   } else if (_channel1Slot) {
     _channel1Slot = nil; // feed stopped publishing it
   }
@@ -553,6 +561,7 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
       @"ioSurfaceID" : desc[@"ioSurfaceID"] ?: @0,
       @"generation" : desc[@"generation"] ?: @0,
       @"tag" : @0,
+      @"pixelFormat" : desc[@"pixelFormat"] ?: @"bgra8",
     };
     slotEntries = @[ one ];
   }
@@ -571,7 +580,11 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
     double tag = [e[@"tag"] doubleValue];
     _KKMiniFilmSlot *slot = _filmstripSlots[i];
     if (sid != slot.sid || gen != slot.generation || tag != slot.tag) {
-      if ([self _resolveSlot:slot sid:sid gen:gen tag:tag])
+      if ([self _resolveSlot:slot
+                         sid:sid
+                         gen:gen
+                         tag:tag
+                 pixelFormat:e[@"pixelFormat"]])
         anyChange = YES;
     }
   }

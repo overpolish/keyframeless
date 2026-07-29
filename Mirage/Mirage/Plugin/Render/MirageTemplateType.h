@@ -13,6 +13,7 @@ typedef NS_ENUM(NSInteger, MirageTemplateType) {
   MirageTemplateTypeFilter,
   MirageTemplateTypeLayout,
   MirageTemplateTypeTransition,
+  MirageTemplateTypeColorTransform,
 };
 
 typedef NS_ENUM(NSInteger, MirageTemplateDirectiveError) {
@@ -30,6 +31,8 @@ static inline NSString *MirageTemplateTypeID(MirageTemplateType type) {
     return @"layout";
   case MirageTemplateTypeTransition:
     return @"transition";
+  case MirageTemplateTypeColorTransform:
+    return @"color-transform";
   case MirageTemplateTypeGenerator:
     return @"generator";
   default:
@@ -81,6 +84,8 @@ MirageTemplateTypeForSource(NSString *source,
     return MirageTemplateTypeLayout;
   if ([value isEqualToString:@"transition"])
     return MirageTemplateTypeTransition;
+  if ([value isEqualToString:@"color-transform"])
+    return MirageTemplateTypeColorTransform;
 
   if (outError)
     *outError = MirageTemplateDirectiveErrorValue;

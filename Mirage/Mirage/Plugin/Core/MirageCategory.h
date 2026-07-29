@@ -35,6 +35,10 @@ static NSString *const kMirageCategoryTransition = @"transition";
 /// quarters) and stays transparent elsewhere (`// #alpha`), so stacked
 /// instances composite on Final Cut's lanes.
 static NSString *const kMirageCategoryLayout = @"layout";
+/// Converts a declared camera/display encoding into a practical output space.
+/// The shipped Color Transform is the reference implementation; keeping it a
+/// template type lets the browser and saved metadata preserve its identity.
+static NSString *const kMirageCategoryColorTransform = @"color-transform";
 
 /// Absent or unknown resolves here.
 #define kMirageCategoryDefault kMirageCategoryGenerator
@@ -44,7 +48,7 @@ static NSString *const kMirageCategoryLayout = @"layout";
 static inline NSArray<NSString *> *MirageCategoryIDs(void) {
   return @[
     kMirageCategoryGenerator, kMirageCategoryFilter, kMirageCategoryTransition,
-    kMirageCategoryLayout
+    kMirageCategoryLayout, kMirageCategoryColorTransform
   ];
 }
 
@@ -75,6 +79,8 @@ static inline NSString *MirageCategorySymbol(NSString *_Nullable categoryID) {
     return @"rectangle.2.swap";
   if ([c isEqualToString:kMirageCategoryLayout])
     return @"rectangle.grid.2x2";
+  if ([c isEqualToString:kMirageCategoryColorTransform])
+    return @"arrow.trianglehead.2.clockwise.rotate.90";
   return @"sparkles"; // generator
 }
 
@@ -88,6 +94,9 @@ MirageCategoryDisplayName(NSString *_Nullable categoryID) {
     return RLoc(@"Transition", @"Mirage category: blends two clips.");
   if ([c isEqualToString:kMirageCategoryLayout])
     return RLoc(@"Layout", @"Mirage category: places a clip in a region.");
+  if ([c isEqualToString:kMirageCategoryColorTransform])
+    return RLoc(@"Color Transform",
+                @"Mirage category: converts between color spaces.");
   return RLoc(@"Generator", @"Mirage category: draws its own look.");
 }
 

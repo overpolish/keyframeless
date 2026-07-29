@@ -92,6 +92,11 @@ static NSRegularExpression *KKDirectiveHeaderRE(void) {
 // The colourable pieces after a directive header (and on each `key = value`
 // block-continuation line): group 1 an attribute/field KEY (a word right before
 // `=`), 2 a quoted string, 3 a number.
+//
+// Group 4 spans internal hyphens (`color-transform`), so a hyphenated enum value
+// is ONE token and can match the keyword set. Splitting it left both halves
+// unknown and painted the value flat. The hyphen must be followed by a letter,
+// so a number's leading `-` still belongs to group 3.
 static NSRegularExpression *KKDirectiveBodyRE(void) {
   static NSRegularExpression *re;
   static dispatch_once_t once;
@@ -100,7 +105,7 @@ static NSRegularExpression *KKDirectiveBodyRE(void) {
         regularExpressionWithPattern:@"([A-Za-z_]\\w*)(?=\\s*=(?!=))" // 1 key
                                      @"|(\"(?:[^\"\\\\]|\\\\.)*\")"   // 2 str
                                      @"|(?<![\\w.])(-?\\d+\\.?\\d*)"  // 3 num
-                                     @"|([A-Za-z_]\\w*)"              // 4 ident
+                                     @"|([A-Za-z_]\\w*(?:-[A-Za-z]\\w*)*)" // 4
                              options:0
                                error:nil];
   });

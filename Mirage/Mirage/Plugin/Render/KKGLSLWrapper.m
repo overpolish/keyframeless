@@ -337,6 +337,18 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
     [s appendString:@"  kk_outColor = kkColor;\n}\n"];
     return;
   }
+  if (KKLooksLikeColorTransformShader(userSource)) {
+    // FxPlug float surfaces carry linear host values. A technical transform
+    // deliberately consumes and produces those values directly; applying the
+    // ordinary Shadertoy sRGB compatibility decode here would corrupt log
+    // curves and wide-gamut linear outputs. Encode only for an 8-bit target.
+    [s appendString:
+           @"  vec3 rgb = max(kkColor.rgb, vec3(0.0));\n"
+           @"  rgb = (kkExtra.w == 0.0) ? rgb : kkLinearToSrgb(rgb);\n"
+           @"  float kka = clamp(kkColor.a, 0.0, 1.0);\n"
+           @"  kk_outColor = vec4(rgb * kka, kka);\n}\n"];
+    return;
+  }
   // Grain in gamma/display space (screen-fixed, raw gl_FragCoord) before the
   // sRGB encode, on every display path.
   [s appendString:@"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "

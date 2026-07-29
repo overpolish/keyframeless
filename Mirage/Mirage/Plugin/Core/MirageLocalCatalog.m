@@ -268,6 +268,18 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
     @"uBloom" : @[ @25 ],
   };
 
+  MirageCatalogEntry *colorTransform = [MirageCatalogEntry new];
+  colorTransform.entryID = @"builtin.color-transform";
+  colorTransform.name = @"Color Transform";
+  colorTransform.author = @"";
+  colorTransform.category = kMirageCategoryColorTransform;
+  colorTransform.version = 1;
+  colorTransform.folderPath = @"";
+  colorTransform.builtin = YES;
+  colorTransform.sections =
+      @{@"Image" : MirageColorTransformShaderSource()};
+  colorTransform.thumbnail = sBuiltinThumbnails[@"Color Transform"];
+
   // The former standalone MagicMove plugin. `layout` like Frame: it reads the
   // clip but what it IS is an `#alpha`-masked placement of one region of the
   // frame, and stacking instances on Final Cut's lanes is the point.
@@ -293,7 +305,7 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
     // the card shows the 3D transform rather than a flat rotation.
     @"uRotation" : @[ @14, @-22, @-9 ],
   };
-  return @[ plasma, frame, magicMove ];
+  return @[ plasma, frame, magicMove, colorTransform ];
 }
 
 - (void)deleteEntryID:(NSString *)entryID {

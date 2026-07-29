@@ -9,7 +9,7 @@ Mirage is a blank shader canvas: paste a Shadertoy "Image" shader (or write your
 
 - The editor is the **Mirage** lane in its own **Shader** group: a syntax-highlighted code pane with live error reporting, with the shader's name field above it.
 - Your entry point is Shadertoy's `void mainImage(out vec4 fragColor, in vec2 fragCoord)`, and the built-in inputs (`iTime`, `iChannel0`, `iResolution`, ...) all work.
-- Every Image shader declares its browser/runtime type with exactly one `// #template generator`, `filter`, `layout`, or `transition` line.
+- Every Image shader declares its browser/runtime type with exactly one `// #template generator`, `filter`, `layout`, `transition`, or `color-transform` line.
 - Add your own sliders, colours, and on-screen handles by annotating uniforms with `// #` directives (see the directives help).
 
 ## Built-in inputs (no declaration needed)

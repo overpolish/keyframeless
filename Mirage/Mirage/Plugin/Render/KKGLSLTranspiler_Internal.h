@@ -37,6 +37,7 @@ BOOL KKWantsAlphaOutput(NSString *src);
 // Besides the GL-Transitions signature, Mirage-native transitions are
 // identified by using iProgress together with both image channels.
 BOOL KKLooksLikeTransitionShader(NSString *src);
+BOOL KKLooksLikeColorTransformShader(NSString *src);
 
 // Fold a gl-transitions.com shader into the image-shader convention.
 NSString *KKShimGLTransition(NSString *src);

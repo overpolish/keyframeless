@@ -140,6 +140,10 @@ KKGLSLTranspileResult *KKTranspileGLSLBuffer(NSString *userGLSL);
 // inspector (to add its Transition/In/Out control) and render wrapper
 // (two-input binding + authoritative alpha).
 BOOL KKLooksLikeTransitionShader(NSString *src);
+/// YES only for `// #template color-transform`. Technical transforms consume
+/// the host/source code values directly instead of the Shadertoy compatibility
+/// gamma round-trip used by ordinary authored filters.
+BOOL KKLooksLikeColorTransformShader(NSString *src);
 
 // A repeating value-noise texture / repeat-linear sampler for the iChannelN a
 // shader samples (the common "iChannel = noise" default). Both cached per
@@ -166,6 +170,16 @@ id<MTLSamplerState> KKCustomSourceSampler(id<MTLDevice> device);
 id<MTLTexture> _Nullable KKGammaEncodeSourceTextureOnBuffer(
     id<MTLCommandBuffer> commandBuffer, id<MTLTexture> _Nullable src);
 id<MTLTexture> _Nullable KKGammaEncodeSourceTexture(
+    id<MTLCommandQueue> queue, id<MTLTexture> _Nullable src);
+// The exact inverse (sRGB->linear), for the one shader kind that wants the
+// opposite of the Shadertoy contract: a `#template color-transform` consumes
+// and produces LINEAR host values, so an 8-bit destination - whose source
+// arrives gamma-encoded, and whose output the wrapper encodes on the way out -
+// must have that source decoded first or the transform matrices operate on
+// display-encoded numbers.
+id<MTLTexture> _Nullable KKGammaDecodeSourceTextureOnBuffer(
+    id<MTLCommandBuffer> commandBuffer, id<MTLTexture> _Nullable src);
+id<MTLTexture> _Nullable KKGammaDecodeSourceTexture(
     id<MTLCommandQueue> queue, id<MTLTexture> _Nullable src);
 // Bind textures to every channel `tr` uses, at the MSL indices SPIRV-Cross
 // assigned. iChannel0 gets `source` (the effect's clip) when non-nil, falling

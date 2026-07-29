@@ -80,14 +80,18 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
 // gamma-space iChannel input, and whose output wrapper re-decodes it for a
 // float dest) round-trips it instead of double-decoding + darkening.
 // u.extra.w==0 marks the float/linear dest; an 8-bit dest already carries gamma
-// source.
-- (id<MTLTexture>)gammaEncodedSource:(id<MTLTexture>)srcTex
-                          registryID:(uint64_t)registryID
-                         pixelFormat:(MTLPixelFormat)pf {
+// source. `decode` runs the inverse, for a `#template color-transform` whose
+// contract is linear in and linear out, so it is the 8-bit dest that hands it
+// the wrong encoding.
+- (id<MTLTexture>)gammaConvertedSource:(id<MTLTexture>)srcTex
+                            registryID:(uint64_t)registryID
+                           pixelFormat:(MTLPixelFormat)pf
+                                decode:(BOOL)decode {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   id<MTLCommandQueue> gq = [cache commandQueueWithRegistryID:registryID
                                                  pixelFormat:pf];
-  id<MTLTexture> g = KKGammaEncodeSourceTexture(gq, srcTex);
+  id<MTLTexture> g = decode ? KKGammaDecodeSourceTexture(gq, srcTex)
+                            : KKGammaEncodeSourceTexture(gq, srcTex);
   if (gq)
     [cache returnCommandQueueToCache:gq];
   return g ?: srcTex;
@@ -150,14 +154,20 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   if (W == 0 || H == 0)
     return NO;
 
-  if (srcTex && u.extra.w == 0.0f)
-    srcTex = [self gammaEncodedSource:srcTex
-                           registryID:registryID
-                          pixelFormat:pf];
-  if (toTex && transitionMode != 2 && u.extra.w == 0.0f)
-    toTex = [self gammaEncodedSource:toTex
-                          registryID:registryID
-                         pixelFormat:pf];
+  BOOL colorTransform = KKLooksLikeColorTransformShader(imageSource);
+  BOOL floatDst = u.extra.w == 0.0f;
+  BOOL decodeSources = !floatDst && colorTransform;
+  if (srcTex && (decodeSources || (floatDst && !colorTransform)))
+    srcTex = [self gammaConvertedSource:srcTex
+                             registryID:registryID
+                            pixelFormat:pf
+                                 decode:decodeSources];
+  if (toTex && transitionMode != 2 &&
+      (decodeSources || (floatDst && !colorTransform)))
+    toTex = [self gammaConvertedSource:toTex
+                            registryID:registryID
+                           pixelFormat:pf
+                                decode:decodeSources];
 
   BOOL present[4];
   for (int c = 0; c < 4; c++)

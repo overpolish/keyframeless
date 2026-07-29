@@ -153,15 +153,24 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
   // Capture the selected source here because a transition's explicit From well
   // is not the encoder's first effect-clip texture.
   id<MTLTexture> gammaSrc = rawSrc, gammaTo = rawTo;
-  if (linearDst && (rawSrc || rawTo)) {
+  // A color transform inverts the contract: it consumes and produces LINEAR, so
+  // it is the float dest that needs no conversion and the 8-bit dest whose
+  // gamma source must be decoded - the mirror of the encode its output branch
+  // already applies for that same 8-bit target.
+  BOOL colorTransform = KKLooksLikeColorTransformShader(effectiveSource);
+  BOOL decodeSources = !linearDst && colorTransform;
+  if ((decodeSources || (linearDst && !colorTransform)) && (rawSrc || rawTo)) {
     id<MTLCommandQueue> gq = [dc
         commandQueueWithRegistryID:registryID
                        pixelFormat:[KKMetalDeviceCache pixelFormatForImageTile:
                                                            destinationImage]];
     if (rawSrc)
-      gammaSrc = KKGammaEncodeSourceTexture(gq, rawSrc);
+      gammaSrc = decodeSources ? KKGammaDecodeSourceTexture(gq, rawSrc)
+                               : KKGammaEncodeSourceTexture(gq, rawSrc);
     if (rawTo)
-      gammaTo = KKGammaEncodeSourceTexture(gq, rawTo) ?: rawTo;
+      gammaTo = (decodeSources ? KKGammaDecodeSourceTexture(gq, rawTo)
+                               : KKGammaEncodeSourceTexture(gq, rawTo))
+                    ?: rawTo;
     if (gq)
       [dc returnCommandQueueToCache:gq];
   }
@@ -296,7 +305,8 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
 - (void)_publishMiniViewerFeeds:(FxImageTile *)destinationImage
                    sourceImages:(NSArray<FxImageTile *> *)sourceImages
                      renderTime:(CMTime)renderTime
-               transitionShader:(BOOL)transitionShader {
+               transitionShader:(BOOL)transitionShader
+             technicalTransform:(BOOL)technicalTransform {
   // Per slot: single-slot = playhead, multi-slot = boundary preview / filmstrip
   // / onion. Shared glue in KKPlugin (MiniViewerFeed). The single-slot tag is
   // this frame's clip fraction (not a hard 0), so during playback/scrub the
@@ -320,6 +330,7 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive
                           changesOutputSize:NO
+                                linearFloat:technicalTransform
                                  defaultTag:
                                      [self.renderCache
                                          clipFractionAtSeconds:CMTimeGetSeconds(
@@ -447,7 +458,8 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
   [self _publishMiniViewerFeeds:destinationImage
                    sourceImages:sourceImages
                      renderTime:renderTime
-               transitionShader:transitionShader];
+               transitionShader:transitionShader
+             technicalTransform:KKLooksLikeColorTransformShader(imageSrc)];
   NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
     return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
   };
