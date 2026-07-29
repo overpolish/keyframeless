@@ -658,16 +658,14 @@ static const CGFloat kHeaderH = 22.0;
                  if (section && code)
                    sections[section] = code;
                }
-               // Raw, not normalised: a shader published by a newer build keeps
-               // the category it was published with (see -installCommunityID:).
-               [[MirageLocalCatalog shared]
-                   installCommunityID:e.entryID
-                                 name:e.name
-                               author:e.author
-                             category:e.metadata[@"category"]
-                              version:e.version
-                             sections:sections
-                          previewJPEG:preview];
+               // Installation verifies the downloaded Image shader's mandatory
+               // #template directive and derives its local category from it.
+               [[MirageLocalCatalog shared] installCommunityID:e.entryID
+                                                          name:e.name
+                                                        author:e.author
+                                                       version:e.version
+                                                      sections:sections
+                                                   previewJPEG:preview];
                [weak _rebuildAll];
              }];
 }

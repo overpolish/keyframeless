@@ -198,6 +198,18 @@ static void KKEmitAudioProps(NSString *userSource, NSMutableString *body,
       [members appendFormat:@"  vec4 %@;\n", fm];
       [defines appendFormat:@"#define %@Flow (%@.x)\n", nm, fm];
     }
+    // `waveform=N`: a centred time-domain window, packed just like the
+    // spectrum but signed. The helper hides the storage and keeps N available
+    // as a compile-time constant for bounded GLSL loops.
+    if (audios[i].wantsWaveform) {
+      NSString *wm = [nm stringByAppendingString:@"_wave"];
+      [members
+          appendFormat:@"  vec4 %@[%d];\n", wm, audios[i].waveformVecCount];
+      [defines appendFormat:@"#define %@WaveSamples %d\n", nm,
+                            audios[i].waveformSamples];
+      [defines
+          appendFormat:@"#define %@Wave(i) (%@[(i) >> 2][(i) & 3])\n", nm, wm];
+    }
     NSString *pat = [NSString
         stringWithFormat:
             @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*\\[[^\\]]*\\]\\s*;%@", nm,
@@ -313,8 +325,9 @@ static void KKAppendColorHelpers(NSMutableString *s) {
 }
 
 // The tail of main(): turn mainImage's output into what this pass must store.
-// The three display branches differ only in how alpha is treated; see
-// KKWantsAlphaOutput for why `// #alpha` is a third mode rather than a default.
+// The three display branches differ only in how alpha is treated. `// #alpha`
+// and two-input transition shaders both own their output coverage; forcing
+// either opaque would turn an unpaired transition side into a black frame.
 static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
                                  KKGLSLPassKind pass, BOOL honorAlpha) {
   if (pass == KKGLSLPassBuffer) {
@@ -328,7 +341,8 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
   // sRGB encode, on every display path.
   [s appendString:@"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "
                   @"gl_FragCoord.xy);\n"];
-  if (KKWantsAlphaOutput(userSource)) {
+  if (KKWantsAlphaOutput(userSource) ||
+      KKLooksLikeTransitionShader(userSource)) {
     // `// #alpha`: premultiplied passthrough of the shader's own alpha. No
     // composite over the source (the shader is masking that source), no forced
     // opaque.
@@ -399,7 +413,11 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                   // Motion blur exposed to `// #motionblur native` shaders: y =
                   // shutter 0..1 (0 when off / not native), z = sample count.
                   @"#define iMotionBlur (kkTransition.y)\n"
-                  @"#define iMotionBlurSamples (int(kkTransition.z))\n"];
+                  @"#define iMotionBlurSamples (int(kkTransition.z))\n"
+                  // 0 = Transition, 1 = In (transparent From), 2 = Out
+                  // (transparent To). Useful when a transition has an
+                  // intentional backdrop or source-specific embellishment.
+                  @"#define iTransitionMode (int(kkTransition.w))\n"];
   [s appendString:colorDefines];
   // Alpha is honoured by DEFAULT for a shader that does NOT sample the source
   // itself: its transparent areas composite over iChannel0 (the footage) so a

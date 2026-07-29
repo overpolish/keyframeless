@@ -27,8 +27,10 @@
 #import <Foundation/Foundation.h>
 #import <ctype.h>
 
-#define KK_SHADER_MAX_OSC_BLOCKS 8
-#define KK_SHADER_MAX_OSC_LOCALS 12
+#define KK_SHADER_MAX_OSC_BLOCKS 16
+#define KK_SHADER_MAX_OSC_LOCALS 32
+#define KK_SHADER_MAX_OSC_EXPRESSION_BYTES 2048
+#define KK_SHADER_MAX_OSC_LOCAL_NAME_BYTES 64
 
 typedef struct MirageOSCBlock {
   char name[64];      // OSC display name
@@ -36,16 +38,18 @@ typedef struct MirageOSCBlock {
   char binds[64];     // the bound uniform (lane) name
   char style[16];     // point glyph: "dot" / "square" / "hollow" ("" = default)
   char cursor[16];    // hover cursor: "move" / "crosshair" / "resize-h/v/diag"…
-  char forward[256];  // value -> geometry (toPos / toRect / toR)
+  char forward[KK_SHADER_MAX_OSC_EXPRESSION_BYTES];
+  // value -> geometry (toPos / toRect / toR)
   // Optional. When empty, a scalar handle's drag NUMERICALLY inverts `forward`
   // (searches the value whose forward-position is nearest the cursor, via a
   // binary search), so a non-linear forward needs no explicit
   // inverse. A ring/box REQUIRES its explicit inverse (fromR / fromRect).
-  char inverse[256]; // geometry -> value (fromPos / fromRect / fromR)
+  char inverse[KK_SHADER_MAX_OSC_EXPRESSION_BYTES];
+  // geometry -> value (fromPos / fromRect / fromR)
   // Optional placement expression for a centred primitive (ring / rotate):
   // evaluates to an object-space point. Empty = the frame centre. May
   // reference another uniform (`center = uOrigin`) to follow a point lane.
-  char center[256];
+  char center[KK_SHADER_MAX_OSC_EXPRESSION_BYTES];
   // Rotate only: the enabled axis set, e.g. "x y z" / "z". Empty = z.
   char axes[16];
   // Ring/box ellipse fields: aspect-link the two components by default
@@ -64,8 +68,8 @@ typedef struct MirageOSCBlock {
   // declaration order; a local may reference earlier locals (+ the bound value
   // + OSC builtins), so a complex forward reads as a few named steps instead of
   // one duplicated line.
-  char localNames[KK_SHADER_MAX_OSC_LOCALS][32];
-  char localExprs[KK_SHADER_MAX_OSC_LOCALS][256];
+  char localNames[KK_SHADER_MAX_OSC_LOCALS][KK_SHADER_MAX_OSC_LOCAL_NAME_BYTES];
+  char localExprs[KK_SHADER_MAX_OSC_LOCALS][KK_SHADER_MAX_OSC_EXPRESSION_BYTES];
   int localCount;
 } MirageOSCBlock;
 

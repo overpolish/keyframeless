@@ -553,15 +553,22 @@ MirageDirectiveCompletions(NSString *text, NSUInteger caret,
   BOOL valuePos =
       inBlock ? (firstEq.location != NSNotFound) : [bwTrim hasSuffix:@"="];
 
-  // `#motionblur` takes a BARE mode word, not `key=value`, so the generic
-  // value rule below (which keys off a trailing `=`) never fires for it. Its
-  // modes would otherwise be undiscoverable in the editor entirely.
-  if (!inBlock && firstEq.location == NSNotFound &&
-      [bwTrim hasPrefix:@"#motionblur"]) {
-    NSArray *modes = FilterByPrefix(MirageMotionBlurModes(), word);
-    if (modes.count)
+  // Some standalone directives take a BARE value rather than `key=value`.
+  // Route them explicitly because the generic value rule below keys off a
+  // trailing `=`.
+  if (!inBlock && firstEq.location == NSNotFound) {
+    NSString *directive =
+        [bwTrim componentsSeparatedByCharactersInSet:wsp].firstObject;
+    NSArray *bareValues = nil;
+    if ([directive isEqualToString:@"#motionblur"])
+      bareValues = MirageMotionBlurModes();
+    else if ([directive isEqualToString:@"#template"])
+      bareValues = MirageTemplateTypes();
+    NSArray *items = FilterByPrefix(bareValues ?: @[], word);
+    if (items.count)
       *outReplaceRange = NSMakeRange(wordStart, caret - wordStart);
-    return modes;
+    if (bareValues)
+      return items;
   }
 
   // `group=` takes a QUOTED name, optionally braced with an icon after it. The

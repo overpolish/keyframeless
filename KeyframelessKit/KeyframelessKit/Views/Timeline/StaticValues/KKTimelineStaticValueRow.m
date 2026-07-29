@@ -254,6 +254,12 @@ NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
     return NO;
   if (![(_choiceLabels ?: @[]) isEqualToArray:(lane.choiceLabels ?: @[])])
     return NO;
+  if (_choiceUsesDropdown !=
+      (lane.choiceUsesDropdown && lane.choiceLabels.count >= 1))
+    return NO;
+  if (_choiceAllowsMultiple !=
+      (lane.choiceAllowsMultiple && lane.choiceLabels.count >= 1))
+    return NO;
   if (![(_cunits ?: @[]) isEqualToArray:(lane.componentUnits ?: @[])])
     return NO;
   if (_cmax.count != (lane.componentMax ?: @[]).count)
@@ -677,6 +683,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // the stored key: on a Mac where nothing is published, a lane bound to a
   // source rendered as a slider reading "16483925".
   _choiceUsesDropdown = lane.choiceUsesDropdown && lane.choiceLabels.count >= 1;
+  _choiceAllowsMultiple =
+      lane.choiceAllowsMultiple && lane.choiceLabels.count >= 1;
   _laneLabel = [lane.key copy];
   _linkExpression = [lane.linkExpression copy];
   _valueType = lane.valueType;
@@ -1519,7 +1527,10 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     [self _syncChoiceFieldTitle];
     // An outside change (undo, a keypose swap) has to move the mark in an open
     // list too, or it keeps showing the pick the user just undid.
-    [_choiceList setSelectedIndex:[self _selectedChoiceIndex]];
+    if (_choiceAllowsMultiple)
+      [_choiceList setSelectedIndexes:[self _selectedChoiceIndexes]];
+    else
+      [_choiceList setSelectedIndex:[self _selectedChoiceIndex]];
   }
   if (_toggleCheckbox && _values.count)
     _toggleCheckbox.isChecked = llround(_values[0].doubleValue) != 0;

@@ -10,7 +10,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ARCH="${1:-arm64}"
 LIB="$HERE/build/lib/libkktranspiler.a"
-FMT_DIR="$HERE/../Shader/Shader/Plugin/Render"
+FMT_DIR="$HERE/../Mirage/Mirage/Plugin/Render"
 
 if [ ! -f "$LIB" ]; then
   echo "error: $LIB not found - run ./build-transpiler.sh first" >&2

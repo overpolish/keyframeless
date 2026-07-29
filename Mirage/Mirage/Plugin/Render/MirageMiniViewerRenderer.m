@@ -20,6 +20,7 @@
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <Metal/Metal.h>
+#import <math.h>
 #import <simd/simd.h>
 
 NSString *const MirageMiniViewerDescriptorPath = @"/tmp/mesh-miniviewer.json";
@@ -33,6 +34,33 @@ NSString *MirageMiniViewerDescriptorPathForUUID(NSString *uuid) {
 
 NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
   return KKMiniViewerFeedRequestPath(@"mesh", uuid);
+}
+
+// Single-value `units="px"` lanes are authored in source-media pixels. The
+// main renderer converts them to the active tile scale; do the same for the
+// mini's render target so changing preview zoom cannot change their apparent
+// size relative to the frame. Points and #multi pixel fields are normalized in
+// lane storage and already scale themselves.
+static void MirageScaleMiniPixelProps(MirageShaderModel *model,
+                                      vector_float4 *pool, int poolCount,
+                                      float renderW, float renderH,
+                                      CGSize mediaSize) {
+  if (!model || !pool || mediaSize.width <= 0.0 || mediaSize.height <= 0.0)
+    return;
+  float scaleX = renderW / (float)mediaSize.width;
+  float scaleY = renderH / (float)mediaSize.height;
+  float scale = fminf(scaleX, scaleY);
+  if (!isfinite(scale) || scale <= 0.0f || scale == 1.0f)
+    return;
+  const MirageScalarProp *props = model.scalarProps;
+  for (int i = 0; i < model.scalarCount; i++) {
+    const MirageScalarProp *p = &props[i];
+    if (p->isPoint || p->isMulti || p->fieldUnit[0] != 'p')
+      continue;
+    if (p->poolOffset < 0 || p->poolOffset >= poolCount)
+      continue;
+    pool[p->poolOffset].x *= scale;
+  }
 }
 
 @implementation MirageMiniViewerRenderer {
@@ -64,6 +92,16 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
 // renderer has no single "primary" handle of its own.
 - (NSString *)pointLabel {
   return nil;
+}
+
+// The generic mini-viewer should size `dest` to the pixels the preview
+// actually occupies. Our normal single-sample path still renders through the
+// 1080-tall fidelity intermediate in -hiResTargetForDest:, but motion-blur
+// sampling deliberately skips that intermediate and renders N times straight
+// into `dest`. Without this opt-in, `dest` stays at the source size (typically
+// 1920x1080), turning a small inspector preview into N full-HD shader passes.
+- (BOOL)prefersDisplayResolutionProcessing {
+  return YES;
 }
 
 - (KKPointOSCSet *)pointSet {
@@ -123,22 +161,25 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
       c.objectToLaneWarp = nil;
       continue;
     }
-    // aspect 1.0, as elsewhere in this renderer: the mini evaluates blocks
-    // without a content rect in hand. Only a warp that itself references
-    // `aspect` would notice.
     c.laneToObjectWarp = ^simd_float2(simd_float2 lane, double fraction) {
+      CGSize mediaSize = weakRenderer.canvas.sourceMediaSize;
+      double aspect =
+          mediaSize.height > 0.0 ? mediaSize.width / mediaSize.height : 1.0;
       KKExprVal bound = {{lane.x, lane.y, 0, 0}, 2};
       return [b objectPointForBound:bound
-                             aspect:1.0
+                             aspect:aspect
                               mouse:(simd_float2){0, 0}
                           haveMouse:NO
                            fraction:fraction];
     };
     c.objectToLaneWarp = ^simd_float2(simd_float2 obj, double fraction) {
+      CGSize mediaSize = weakRenderer.canvas.sourceMediaSize;
+      double aspect =
+          mediaSize.height > 0.0 ? mediaSize.width / mediaSize.height : 1.0;
       KKExprVal now = {{obj.x, obj.y, 0, 0}, 2};
       KKExprVal v = [b inverseBoundForObjectMouse:obj
                                          boundNow:now
-                                           aspect:1.0
+                                           aspect:aspect
                                          fraction:fraction];
       return (simd_float2){(float)v.v[0], (float)v.v[1]};
     };
@@ -208,7 +249,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
       NSString *centerSrc = [b.centerSource
           stringByTrimmingCharactersInSet:NSCharacterSet
                                               .whitespaceCharacterSet];
-      BOOL isLink =
+      BOOL isBareIdentifier =
           centerSrc.length &&
           [centerSrc
               rangeOfCharacterFromSet:
@@ -217,6 +258,17 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
                           @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
                           @"YZ0123456789_"] invertedSet]]
                   .location == NSNotFound;
+      // A bare LOCAL (`center = cardCenter`) looks syntactically identical to
+      // a bare uniform. Only classify it as the cheap live-link form when it
+      // is actually a lane; otherwise evaluate the complete block per draw so
+      // its locals and referenced lanes remain live.
+      BOOL isLink = NO;
+      if (isBareIdentifier)
+        for (KKLane *lane in self.laneTemplates)
+          if ([lane.key isEqualToString:centerSrc]) {
+            isLink = YES;
+            break;
+          }
       simd_float2 c = {0.5f, 0.5f};
       if (centerSrc.length && !isLink)
         c = [b centerObjectForBound:KKExprScalar(0) aspect:1.0];
@@ -242,8 +294,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
             return CGPointMake(0.5, 0.5);
           double aspect =
               cr.size.height > 0 ? cr.size.width / cr.size.height : 1.0;
-          KKExprVal bound = [rt
-              boundValueFromLaneValues:[self rootValuesForLabel:rt.binds]];
+          KKExprVal bound =
+              [rt boundValueFromLaneValues:[self rootValuesForLabel:rt.binds]];
           simd_float2 oc = [rt centerObjectForBound:bound aspect:aspect];
           return CGPointMake(oc.x, oc.y);
         };
@@ -621,17 +673,22 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
       grSzV.count ? grSzV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
 
   // Shares the uniform-struct layout with the FCP render (MirageMakeUniforms)
-  // so the CPU<->shader contract can't drift. The mini differs on one field,
-  // passed here: iProgress is the PLAYHEAD's fraction, matching the source
-  // frame the feed publishes (which is also the playhead's) so the preview
-  // agrees with the viewer - not editFraction, the keypose being edited and 0
-  // outside a boundary popover, which would pin every transition to its
-  // outgoing clip. chanRes[0] = the render resolution {W,H}, matching the main
-  // render (its iChannelResolution[0] equals iResolution) so aspect-reading
-  // shaders preview the same as they output.
-  KKGLSLUniforms base = MirageMakeUniforms(
-      W, H, iTime, grain, grainSize, (float)self.playheadFraction,
-      (float)encodeSRGB, (simd_float4){W, H, 1.0f, 0.0f});
+  // so the CPU<->shader contract can't drift. chanRes[0] = the render
+  // resolution {W,H}, matching the main render (its iChannelResolution[0]
+  // equals iResolution) so aspect-reading shaders preview the same as output.
+  // FCP's polled playhead advances in coarse ~4-frame steps during playback
+  // (~14Hz). The mini-viewer draw path already derives a smooth, lead-corrected
+  // 60fps fraction from the published feed and places it in `editFraction`.
+  // Use that same clock for every live shader input; otherwise iTime moves
+  // smoothly while iProgress and #audio visibly stair-step at ~14-20fps.
+  // Outside live playback, playheadFraction remains the correct scrub/static
+  // value (editFraction may instead be the keypose whose popover is open).
+  BOOL livePlayback = self.canvas.livePlaybackActive;
+  double previewFraction =
+      livePlayback ? self.editFraction : self.playheadFraction;
+  KKGLSLUniforms base =
+      MirageMakeUniforms(W, H, iTime, grain, grainSize, (float)previewFraction,
+                         (float)encodeSRGB, (simd_float4){W, H, 1.0f, 0.0f});
   // `// #motionblur native`: the shader does its own blur, so hand it the same
   // shutter the viewer does or the preview shows a different image (a trail
   // pinned to its floor decay). Gated on the mode exactly as the FCP render is,
@@ -650,15 +707,28 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   MirageShaderModel *poolModel = [MirageShaderModel modelForSource:image];
   int colorPoolN = [poolModel fillColorPool:colorPool valuesForLabel:values];
   colorPoolN = [poolModel fillScalarPool:colorPool valuesForLabel:values];
+  MirageScaleMiniPixelProps(poolModel, colorPool, colorPoolN, W, H,
+                            self.canvas.sourceMediaSize);
   // Sampled at the playhead's PROJECT time, pushed by the inspector - the same
   // instant the viewer is showing, so the preview and the render agree. Still
   // called when that's unknown (a large negative reads as outside the
   // spectrogram = silence): the audio members must be COUNTED either way, or
   // the block's tail goes unwritten and samples whatever the buffer last held.
-  colorPoolN = MirageFillAudioPool(poolModel, colorPool,
-                                   self.audioTimelineTimeSec, values);
+  double audioTimeSec = self.audioTimelineTimeSec;
+  if (livePlayback && self.clipTimelineStartSec >= 0.0 &&
+      self.clipDurationSeconds > 0.0)
+    audioTimeSec =
+        self.clipTimelineStartSec + previewFraction * self.clipDurationSeconds;
+  colorPoolN = MirageFillAudioPool(poolModel, colorPool, audioTimeSec, values);
   // `// #gradient` ramps last, so the three pools above keep their offsets.
   colorPoolN = [poolModel fillGradientPool:colorPool valuesForLabel:values];
+  NSArray<NSNumber *> *transitionModeV =
+      [self valuesForLabel:@"Transition Mode"];
+  int transitionMode =
+      transitionModeV.count
+          ? (int)MAX(0, MIN(2, lround(transitionModeV[0].doubleValue)))
+          : 0;
+  base.transition.w = (float)transitionMode;
   id<MTLTexture> srcLin = [self _linearSourceView:source];
   // srcLin is linear (FCP's float source, or the sRGB view that linearises the
   // mini's gamma surface). Shadertoy wants gamma-space input and the output
@@ -668,6 +738,16 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   srcLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, srcLin);
   id<MTLSamplerState> srcSampler = KKCustomSourceSampler(device);
   id<MTLTexture> noiseTex = KKCustomChannelNoiseTexture(device);
+  id<MTLTexture> transparentTex =
+      transitionMode != 0 ? KKCustomTransparentTexture(device) : nil;
+  if (transitionMode == 1)
+    srcLin = transparentTex;
+  id<MTLTexture> ch1Raw = self.canvas.channel1Texture;
+  id<MTLTexture> toLin = ch1Raw ? [self _linearSourceView:ch1Raw] : nil;
+  if (toLin)
+    toLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, toLin);
+  if (transitionMode == 2)
+    toLin = transparentTex;
   id<MTLSamplerState> noiseSampler = KKCustomChannelSampler(device);
 
   // Precompile buffer pipelines + transpile; detect FEEDBACK (a buffer reading
@@ -748,6 +828,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
             ct = setTex[prevI][c];
         } else if (c == 0) {
           ct = srcLin;
+        } else if (c == 1) {
+          ct = toLin;
         }
         [chArr addObject:ct ?: (id)[NSNull null]];
         if (ct)
@@ -797,11 +879,6 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   // iChannel1 = the feed's second texture (Mirage's "To" image well, i.e. a
   // transition's incoming clip) when one was published. Same colour handling as
   // iChannel0 above, so a two-texture shader previews the way it renders.
-  id<MTLTexture> ch1Raw = self.canvas.channel1Texture;
-  id<MTLTexture> toLin = ch1Raw ? [self _linearSourceView:ch1Raw] : nil;
-  if (toLin)
-    toLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, toLin);
-
   NSMutableArray *imgCh = [NSMutableArray arrayWithCapacity:4];
   KKGLSLUniforms imgU = base;
   for (int c = 0; c < 4; c++) {
@@ -845,6 +922,36 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   return [self _encodeCustomEffectFromSource:source
                                         into:dest
                                commandBuffer:commandBuffer];
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    processSourceTexture:(id<MTLTexture>)source
+             intoTexture:(id<MTLTexture>)dest
+           commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
+  // The generic mini renderer knows only the inspector's blur switch; Mirage's
+  // per-shader mode lives in the Image source. Native shaders render ONCE and
+  // consume iMotionBlur/iMotionBlurSamples themselves, while Off shaders also
+  // render once. Letting either fall through to the generic Accurate path
+  // multiplies the whole custom render by N. For a feedback preview that is
+  // especially pathological: 16 samples x 48 warm-up frames = 768 buffer
+  // passes per displayed frame. Temporarily suppress only the generic wrapper;
+  // Mirage's separate motionBlurShutterFraction/motionBlurSamples properties
+  // still reach a Native shader in -_encodeCustomEffectFromSource:.
+  NSDictionary<NSString *, NSString *> *sections = [self _customSections];
+  NSString *imageSource = sections[@"Image"] ?: @"";
+  MirageMotionBlurMode blurMode = MirageMotionBlurModeForSource(imageSource);
+  BOOL bypassGenericBlur = (blurMode != MirageMotionBlurModeAccumulate);
+  BOOL savedPreviewBlurEnabled = self.previewMotionBlurEnabled;
+  if (bypassGenericBlur)
+    self.previewMotionBlurEnabled = NO;
+
+  BOOL ok = [super miniViewer:canvas
+         processSourceTexture:source
+                  intoTexture:dest
+                commandBuffer:commandBuffer];
+  if (bypassGenericBlur)
+    self.previewMotionBlurEnabled = savedPreviewBlurEnabled;
+  return ok;
 }
 
 @end

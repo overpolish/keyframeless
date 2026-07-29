@@ -11,10 +11,30 @@
 @implementation KKChoiceChecklistView {
   NSArray<NSString *> *_options;
   NSInteger _selectedIndex;
+  NSIndexSet *_selectedIndexes;
+  BOOL _multiple;
 }
 
 - (instancetype)initWithOptions:(NSArray<NSString *> *)options
                   selectedIndex:(NSInteger)selectedIndex
+                  maxBodyHeight:(CGFloat)maxBodyHeight {
+  self =
+      [self initWithOptions:options
+            selectedIndexes:(selectedIndex >= 0
+                                 ? [NSIndexSet indexSetWithIndex:selectedIndex]
+                                 : [NSIndexSet indexSet])
+              maxBodyHeight:maxBodyHeight];
+  if (self) {
+    _multiple = NO;
+    _selectedIndex = selectedIndex;
+    self.allowsMultipleSelection = NO;
+    [self rebuildRows];
+  }
+  return self;
+}
+
+- (instancetype)initWithOptions:(NSArray<NSString *> *)options
+                selectedIndexes:(NSIndexSet *)selectedIndexes
                   maxBodyHeight:(CGFloat)maxBodyHeight {
   // Embedded (capped + internally scrolling) rather than the base's
   // popover-resizing mode. A choice list can be any length a shader author
@@ -30,8 +50,10 @@
   if (!self)
     return nil;
   _options = [options copy];
-  _selectedIndex = selectedIndex;
-  self.allowsMultipleSelection = NO;
+  _selectedIndexes = [selectedIndexes copy] ?: [NSIndexSet indexSet];
+  _multiple = YES;
+  _selectedIndex = -1;
+  self.allowsMultipleSelection = YES;
   [self rebuildRows];
   return self;
 }
@@ -45,13 +67,27 @@
                                      categoryKey:nil
                                      indentLevel:0];
     row.displayOverride = KKLocalizedParamName(_options[i]);
-    row.checked = (i == _selectedIndex);
+    row.checked =
+        _multiple ? [_selectedIndexes containsIndex:i] : (i == _selectedIndex);
     __weak typeof(self) weak = self;
     __weak _KKManageRow *weakRow = row;
     row.onToggle = ^{
       __strong typeof(weak) s = weak;
       if (!s)
         return;
+      if (s->_multiple) {
+        BOOL selected = !weakRow.checked;
+        weakRow.checked = selected;
+        NSMutableIndexSet *next = [s->_selectedIndexes mutableCopy];
+        if (selected)
+          [next addIndex:i];
+        else
+          [next removeIndex:i];
+        s->_selectedIndexes = [next copy];
+        if (s.onToggle)
+          s.onToggle(i, selected);
+        return;
+      }
       // Move the mark here rather than waiting for the host to write the value
       // back through a rebuild: the click should land on the same tick even if
       // the host defers (an action scope, an undo group).
@@ -65,9 +101,23 @@
 }
 
 - (void)setSelectedIndex:(NSInteger)selectedIndex {
+  if (_multiple) {
+    [self setSelectedIndexes:selectedIndex >= 0
+                                 ? [NSIndexSet indexSetWithIndex:selectedIndex]
+                                 : [NSIndexSet indexSet]];
+    return;
+  }
   if (_selectedIndex == selectedIndex)
     return;
   _selectedIndex = selectedIndex;
+  [self rebuildRows];
+}
+
+- (void)setSelectedIndexes:(NSIndexSet *)selectedIndexes {
+  NSIndexSet *next = selectedIndexes ?: [NSIndexSet indexSet];
+  if ([_selectedIndexes isEqualToIndexSet:next])
+    return;
+  _selectedIndexes = [next copy];
   [self rebuildRows];
 }
 

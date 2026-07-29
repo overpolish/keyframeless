@@ -57,10 +57,11 @@ static const UInt32 kParamRenderNudge = 202;
 /// project carried to a Mac that never published can still say what it wants.
 /// A plain string param on purpose - see Plugin+AudioTickets.m.
 static const UInt32 kParamAudioTickets = 203;
-/// Image-well probe: a second texture source, bound to iChannel1 when filled.
-/// In a Motion transition template this is meant to take "Drop Zone Transition
-/// B", giving the shader both clips (effect clip = A, this = B).
+/// Transition B image well, bound to iChannel1 when filled.
 static const UInt32 kParamToImage = 204;
+/// Transition A image well. A `// #template transition` shader uses this for
+/// iChannel0 when filled; ordinary effects continue using the effect clip.
+static const UInt32 kParamFromImage = 205;
 
 /// The baked default Custom shader (animated cosine plasma). Rendered when the
 /// Mirage lane's codeString is empty, and seeds the "Mirage" lane in the

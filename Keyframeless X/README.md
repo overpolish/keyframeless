@@ -68,13 +68,17 @@ Analysis is fast enough to have no Analyse button: the spectrogram follows the s
 ```
 char[4]  "KKSG"      uint32 version   uint32 numFrames   uint32 numBands
 float64  hopSeconds  float64 timelineStart
-float64  floorDB     float64 ceilingDB              <- v2+ only
+float64  floorDB     float64 ceilingDB                    <- v2+
+float64  waveformSampleRate  uint64 numWaveformSamples    <- v2+
 float32  data[numFrames * numBands]    row-major [frame][band], 0...1
+float32  waveform[numWaveformSamples]  continuous processed mono, signed
 ```
 
 Everything is **little-endian**. `CFConvertDoubleHostToSwapped` produces big-endian and is the wrong tool here.
 
 The dB window is in the file because it is the analysis window, and Sonar's config invites you to tune it. `data` is already normalised into `floor...ceiling`, so a consumer that wants real dB back (a noise gate, say) can only get there if the file says what the window was. Hard-code the old -85/-15 in a consumer and every gate silently re-scales the day that config changes. v1 files have no such fields and legacy constants stand in, which is why the data offset branches on version.
+
+The continuous waveform after the spectrum grid is processed mono at 12 kHz: sufficient for scopes and editor overviews without duplicating the full 48 kHz render. Legacy v1 files remain readable and report no waveform, so existing spectrum bindings continue to work while waveform shaders require a republish.
 
 `KKSpectrogramSampleAtTime` is render-path safe by design: no allocation, no locking, no Objective-C messaging, just interpolated reads straight off the mapping. Times outside the published range fill zeroes and return `NO`, so a consumer can tell silence from "nothing published here". Nothing bound, a deleted source, and an out-of-range moment all render silence rather than failing.
 

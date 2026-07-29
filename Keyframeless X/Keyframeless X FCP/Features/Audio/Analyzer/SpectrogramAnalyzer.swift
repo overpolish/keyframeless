@@ -10,8 +10,9 @@ import Foundation
 /// Turns a set of timeline `AudioClip`s into a timeline-indexed spectrogram:
 /// for each clip we reconstruct the *processed* audio (effects + volume +
 /// fades, via `ProcessedAudioRenderer`), run an STFT, and place the resulting
-/// band-over-time frames at the clip's timeline position (`clip.start`).
-/// Overlapping clips are averaged.
+/// band-over-time frames and a compact waveform at the clip's timeline
+/// position (`clip.start`). Overlapping spectrum frames are averaged; waveform
+/// samples are summed, matching the way the selected clips mix.
 ///
 /// The analyzer is deliberately decoupled from how the clips were obtained
 /// (dialogue-only vs all-audio parse) and from any consumer (Mirage et al) -
@@ -27,6 +28,10 @@ enum SpectrogramAnalyzer {
 		var maxHz: Double = 16_000
 		/// Everything is downmixed to mono and resampled to this rate first.
 		var analysisSampleRate: Double = 48_000
+		/// Continuous mono waveform published alongside the spectrum. 12 kHz is
+		/// enough for scopes and editor overviews without turning an hour-long
+		/// analysis into another full-resolution audio file.
+		var waveformSampleRate: Double = 12_000
 		/// dB window mapped onto 0...1, with 0 dB being a full-scale sine.
 		/// At/below `floorDB` reads black, at/above `ceilingDB` reads full
 		/// brightness. Music rarely peaks near 0 dB in any single band once the
@@ -76,9 +81,14 @@ enum SpectrogramAnalyzer {
 		let hop = config.hopSeconds
 		let numFrames = max(1, Int(ceil((timelineEnd - timelineStart) / hop)))
 		let numBands = config.numBands
+		let waveformRate =
+			max(1.0, min(config.waveformSampleRate, config.analysisSampleRate))
+		let numWaveformSamples =
+			max(1, Int(ceil((timelineEnd - timelineStart) * waveformRate)))
 
 		var grid = [Float](repeating: 0, count: numFrames * numBands)
 		var counts = [Float](repeating: 0, count: numFrames)
+		var waveform = [Float](repeating: 0, count: numWaveformSamples)
 
 		let sr = config.analysisSampleRate
 		let bandEdges = logBandEdges(config: config, sampleRate: sr)
@@ -87,7 +97,7 @@ enum SpectrogramAnalyzer {
 		// Decode first, assemble after. Holding an unsafe pointer into `grid`
 		// across an `await` isn't allowed, so the placement pass runs on its own
 		// once every clip's frames are in hand.
-		var decoded: [(startFrame: Int, frames: [[Float]])] = []
+		var decoded: [(startFrame: Int, startSample: Int, analysis: ClipAnalysis)] = []
 		for clip in clips {
 			// Lets a superseded run stop mid-analysis instead of finishing work
 			// whose result is already stale.
@@ -95,27 +105,32 @@ enum SpectrogramAnalyzer {
 			// Per-clip failures are contained here. A clip whose media has moved
 			// throws out of `withRenderedAudio`; letting that escape the loop would
 			// sink the whole analysis for one dead path.
-			let clipFrames: [[Float]]?
+			let clipAnalysis: ClipAnalysis?
 			do {
-				clipFrames = try await frames(for: clip, config: config, bandEdges: bandEdges)
+				clipAnalysis =
+					try await analysis(for: clip, config: config, bandEdges: bandEdges)
 			} catch {
 				skipped.append(clip.name)
 				continue
 			}
-			guard let clipFrames else {
+			guard let clipAnalysis else {
 				skipped.append(clip.name)
 				continue
 			}
 			decoded.append(
-				(Int(((clip.start - timelineStart) / hop).rounded()), clipFrames))
+				(
+					Int(((clip.start - timelineStart) / hop).rounded()),
+					Int(((clip.start - timelineStart) * waveformRate).rounded()),
+					clipAnalysis
+				))
 		}
 
 		grid.withUnsafeMutableBufferPointer { g in
 			counts.withUnsafeMutableBufferPointer { c in
 				guard let gBase = g.baseAddress else { return }
 				let n = vDSP_Length(numBands)
-				for (startFrame, frames) in decoded {
-					for (i, bands) in frames.enumerated() {
+				for (startFrame, _, analysis) in decoded {
+					for (i, bands) in analysis.frames.enumerated() {
 						let f = startFrame + i
 						guard f >= 0, f < numFrames else { continue }
 						let base = f * numBands
@@ -126,6 +141,13 @@ enum SpectrogramAnalyzer {
 						c[f] += 1
 					}
 				}
+			}
+		}
+		for (_, startSample, analysis) in decoded {
+			for (i, sample) in analysis.waveform.enumerated() {
+				let destination = startSample + i
+				guard destination >= 0, destination < waveform.count else { continue }
+				waveform[destination] += sample
 			}
 		}
 		// Every clip failing is a real failure, not a partial one - publishing an
@@ -145,37 +167,68 @@ enum SpectrogramAnalyzer {
 			spectrogram: Spectrogram(
 				numFrames: numFrames, numBands: numBands, hopSeconds: hop,
 				timelineStart: timelineStart, data: grid,
-				floorDB: Double(config.floorDB), ceilingDB: Double(config.ceilingDB)),
+				floorDB: Double(config.floorDB), ceilingDB: Double(config.ceilingDB),
+				waveformSampleRate: waveformRate, waveform: waveform),
 			skipped: skipped)
 	}
 
-	/// Per-clip STFT frames, cached. Reconstructing a clip's processed audio is
-	/// the expensive half (`ProcessedAudioRenderer` caches that too); caching the
-	/// FFT output as well means re-assembling the timeline for a *different
-	/// selection* is just array copying - cheap enough to regenerate the preview
-	/// live rather than making the user press a button again.
-	private static func frames(
+	fileprivate struct ClipAnalysis: Sendable {
+		let frames: [[Float]]
+		let waveform: [Float]
+	}
+
+	/// Per-clip spectrum and waveform, cached. Reconstructing a clip's processed
+	/// audio is the expensive half (`ProcessedAudioRenderer` caches that too);
+	/// caching both products makes a new selection an array assembly.
+	private static func analysis(
 		for clip: FCPXMLParser.AudioClip, config: Config, bandEdges: [Int]
-	) async throws -> [[Float]]? {
+	) async throws -> ClipAnalysis? {
 		let key = [
 			AudioClipFingerprint.of(clip), "\(config.fftSize)", "\(config.hopSeconds)",
 			"\(config.numBands)", "\(config.analysisSampleRate)",
+			"\(config.waveformSampleRate)",
 		].joined(separator: "|")
-		if let cached = await SpectrogramFrameCache.shared.frames(key) { return cached }
+		if let cached = await SpectrogramFrameCache.shared.analysis(key) { return cached }
 
 		let computed = try await ProcessedAudioRenderer.shared.withRenderedAudio(for: clip) {
-			url -> [[Float]]? in
+			url -> ClipAnalysis? in
 			guard
 				let mono = try readMono(url: url, targetSampleRate: config.analysisSampleRate),
 				!mono.isEmpty
 			else { return nil }
-			return stft(
-				samples: mono, config: config, bandEdges: bandEdges,
-				sampleRate: config.analysisSampleRate)
+			return ClipAnalysis(
+				frames: stft(
+					samples: mono, config: config, bandEdges: bandEdges,
+					sampleRate: config.analysisSampleRate),
+				waveform: downsampleWaveform(
+					mono, from: config.analysisSampleRate,
+					to: config.waveformSampleRate))
 		}
 		guard let computed else { return nil }
 		await SpectrogramFrameCache.shared.store(computed, for: key)
 		return computed
+	}
+
+	/// Box-filtered decimation. The waveform is a visual-analysis stream rather
+	/// than playback audio; averaging each source block prevents high-frequency
+	/// aliasing and preserves the signed shape a scope needs.
+	private static func downsampleWaveform(
+		_ samples: [Float], from sourceRate: Double, to targetRate: Double
+	) -> [Float] {
+		guard !samples.isEmpty, sourceRate > 0, targetRate > 0 else { return [] }
+		if targetRate >= sourceRate { return samples }
+		let outputCount = max(1, Int(ceil(Double(samples.count) * targetRate / sourceRate)))
+		var output = [Float](repeating: 0, count: outputCount)
+		for i in 0..<outputCount {
+			let lo = min(samples.count - 1, Int(floor(Double(i) * sourceRate / targetRate)))
+			let hi = min(
+				samples.count,
+				max(lo + 1, Int(floor(Double(i + 1) * sourceRate / targetRate))))
+			var sum: Float = 0
+			for j in lo..<hi { sum += samples[j] }
+			output[i] = sum / Float(hi - lo)
+		}
+		return output
 	}
 
 	private static func readMono(url: URL, targetSampleRate: Double) throws -> [Float]? {
@@ -297,12 +350,17 @@ enum SpectrogramAnalyzer {
 	}
 }
 
-/// Caches per-clip STFT frames, keyed by the clip's fingerprint + analysis
-/// settings, so changing the selection re-assembles instead of re-decoding.
+/// Caches per-clip spectrum + waveform, keyed by the clip's fingerprint and
+/// analysis settings, so changing the selection re-assembles instead of
+/// re-decoding.
 actor SpectrogramFrameCache {
 	static let shared = SpectrogramFrameCache()
-	private var cache: [String: [[Float]]] = [:]
+	private var cache: [String: SpectrogramAnalyzer.ClipAnalysis] = [:]
 
-	func frames(_ key: String) -> [[Float]]? { cache[key] }
-	func store(_ frames: [[Float]], for key: String) { cache[key] = frames }
+	fileprivate func analysis(_ key: String) -> SpectrogramAnalyzer.ClipAnalysis? {
+		cache[key]
+	}
+	fileprivate func store(_ analysis: SpectrogramAnalyzer.ClipAnalysis, for key: String) {
+		cache[key] = analysis
+	}
 }

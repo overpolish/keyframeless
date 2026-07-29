@@ -327,8 +327,12 @@ const CGFloat kMBCheckboxTrailing = 23.0;
       weak.onDragEnd();
   };
   _basicView.onScrub = ^(double frac) {
-    if (weak.onScrub)
-      weak.onScrub(frac);
+    KKTimelineInspectorView *strong = weak;
+    if (!strong)
+      return;
+    [strong setPlayheadFraction:frac];
+    if (strong.onScrub)
+      strong.onScrub(frac);
   };
   _basicView.onZoomChanged = ^(BOOL zoomed) {
     KKTimelineInspectorView *strong = weak;

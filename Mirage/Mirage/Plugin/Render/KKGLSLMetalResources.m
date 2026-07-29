@@ -98,6 +98,29 @@ id<MTLTexture> KKCustomChannelNoiseTexture(id<MTLDevice> device) {
                 }];
 }
 
+id<MTLTexture> KKCustomTransparentTexture(id<MTLDevice> device) {
+  return [[KKDeviceObjectCache cacheNamed:@"transparent"]
+      objectForDevice:device
+                build:^id(id<MTLDevice> dev) {
+                  MTLTextureDescriptor *d = [MTLTextureDescriptor
+                      texture2DDescriptorWithPixelFormat:
+                          MTLPixelFormatRGBA8Unorm
+                                                   width:1
+                                                  height:1
+                                               mipmapped:NO];
+                  d.usage = MTLTextureUsageShaderRead;
+                  id<MTLTexture> tex = [dev newTextureWithDescriptor:d];
+                  if (!tex)
+                    return nil;
+                  const uint8_t clear[4] = {0, 0, 0, 0};
+                  [tex replaceRegion:MTLRegionMake2D(0, 0, 1, 1)
+                         mipmapLevel:0
+                           withBytes:clear
+                         bytesPerRow:4];
+                  return tex;
+                }];
+}
+
 // The three samplers differ only in address mode + filter.
 static id<MTLSamplerState> KKSampler(NSString *name, id<MTLDevice> device,
                                      MTLSamplerAddressMode address,

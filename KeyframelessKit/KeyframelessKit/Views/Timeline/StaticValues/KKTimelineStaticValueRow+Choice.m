@@ -16,10 +16,12 @@
 #import "KKTimelineStaticValueRow_Private.h"
 #import "KKTokens.h" // KKPaddingMD
 #import "NSColor+KKColors.h"
+#import <math.h>
 
 @interface _KKStaticValueRow (ChoicePrivate)
 - (NSInteger)_choiceIndexForStored:(double)stored;
 - (double)_storedChoiceValue;
+- (NSIndexSet *)_selectedChoiceIndexes;
 - (void)_syncChoiceWarning:(BOOL)show;
 @end
 
@@ -48,7 +50,37 @@
   return [self _choiceIndexForStored:_values[0].doubleValue];
 }
 
+- (NSIndexSet *)_selectedChoiceIndexes {
+  uint32_t mask =
+      _values.count ? (uint32_t)llround(fmax(0.0, _values[0].doubleValue)) : 0;
+  NSMutableIndexSet *indexes = [NSMutableIndexSet indexSet];
+  for (NSInteger i = 0; i < (NSInteger)_choiceLabels.count && i < 24; i++)
+    if (mask & (1u << i))
+      [indexes addIndex:i];
+  return indexes;
+}
+
 - (void)_syncChoiceFieldTitle {
+  if (_choiceAllowsMultiple) {
+    NSIndexSet *indexes = [self _selectedChoiceIndexes];
+    NSMutableArray<NSString *> *selected = [NSMutableArray array];
+    [indexes enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+      if (i < self->_choiceLabels.count)
+        [selected addObject:self->_choiceLabels[i]];
+    }];
+    NSMutableArray<NSString *> *localized =
+        [NSMutableArray arrayWithCapacity:selected.count];
+    for (NSString *label in selected)
+      [localized addObject:KKLocalizedParamName(label)];
+    _choiceField.summaryOverride =
+        localized.count ? [localized componentsJoinedByString:@", "]
+                        : KKLocalizedParamName(@"None");
+    _choiceField.selectedLabels = selected.count ? selected : nil;
+    [_choiceField setNeedsDisplay:YES];
+    [self _syncChoiceWarning:NO];
+    return;
+  }
+
   NSInteger sel = [self _selectedChoiceIndex];
   BOOL valid = sel >= 0 && sel < (NSInteger)_choiceLabels.count;
   // A stored value naming no current choice is NOT the same as picking "None",
@@ -120,19 +152,43 @@
     [_choicePopover performClose:nil];
     return;
   }
-  _choiceList =
-      [[KKChoiceChecklistView alloc] initWithOptions:_choiceLabels
-                                       selectedIndex:[self _selectedChoiceIndex]
-                                       maxBodyHeight:kChoiceListMaxBody];
+  if (_choiceAllowsMultiple)
+    _choiceList = [[KKChoiceChecklistView alloc]
+        initWithOptions:_choiceLabels
+        selectedIndexes:[self _selectedChoiceIndexes]
+          maxBodyHeight:kChoiceListMaxBody];
+  else
+    _choiceList = [[KKChoiceChecklistView alloc]
+        initWithOptions:_choiceLabels
+          selectedIndex:[self _selectedChoiceIndex]
+          maxBodyHeight:kChoiceListMaxBody];
   __weak typeof(self) weak = self;
-  _choiceList.onSelect = ^(NSInteger index) {
-    __strong typeof(weak) s = weak;
-    if (!s)
-      return;
-    [s _setValues:@[ @([s _storedForChoiceIndex:index]) ] emit:YES];
-    [s _syncChoiceFieldTitle];
-    [s->_choicePopover performClose:nil]; // a pick ends the interaction
-  };
+  if (_choiceAllowsMultiple) {
+    _choiceList.onToggle = ^(NSInteger index, BOOL selected) {
+      __strong typeof(weak) s = weak;
+      if (!s || index < 0 || index >= 24)
+        return;
+      uint32_t mask =
+          s->_values.count
+              ? (uint32_t)llround(fmax(0.0, s->_values[0].doubleValue))
+              : 0;
+      if (selected)
+        mask |= 1u << index;
+      else
+        mask &= ~(1u << index);
+      [s _setValues:@[ @((double)mask) ] emit:YES];
+      [s _syncChoiceFieldTitle];
+    };
+  } else {
+    _choiceList.onSelect = ^(NSInteger index) {
+      __strong typeof(weak) s = weak;
+      if (!s)
+        return;
+      [s _setValues:@[ @([s _storedForChoiceIndex:index]) ] emit:YES];
+      [s _syncChoiceFieldTitle];
+      [s->_choicePopover performClose:nil]; // a pick ends the interaction
+    };
+  }
 
   // Wrapped, not set as the content view directly: the wrapper is what strips
   // the system popover's own glass + border once it has a window. Without it

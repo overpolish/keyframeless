@@ -49,13 +49,17 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
             @"position.",
             @"#point "),
           E(@"#audio", @"#audio",
-            @"Reacts to sound, binding a clip's frequency "
-            @"spectrum.",
+            @"Reacts to sound, binding a clip's frequency spectrum and "
+            @"optional waveform.",
             @"#audio "),
           E(@"#progress", @"#progress",
             @"A 0-100% sweep that auto-runs across a "
             @"transition.",
             @"#progress "),
+          E(@"#template", @"#template",
+            @"Required template type: generator, filter, layout, or "
+            @"transition.",
+            @"#template "),
           E(@"#motionblur", @"#motionblur",
             @"Who renders motion blur: accumulate, native, or off.",
             @"#motionblur "),
@@ -91,6 +95,21 @@ MirageDirectiveAttributeKeys(void) {
             @"label="),
           E(@"min", @"min=", @"Lowest allowed value.", @"min="),
           E(@"max", @"max=", @"Highest allowed value.", @"max="),
+          E(@"maxby", @"maxby=",
+            @"Make this control's upper bound follow another control.",
+            @"maxby="),
+          E(@"maxvalues", @"maxvalues={}",
+            @"Upper bounds indexed by the control named in maxby=.",
+            @"maxvalues={"),
+          E(@"visibleby", @"visibleby=",
+            @"Show this control only for selected values of another control.",
+            @"visibleby="),
+          E(@"visiblevalues", @"visiblevalues={}",
+            @"Controller values for which this control is visible.",
+            @"visiblevalues={"),
+          E(@"optionsby", @"optionsby=",
+            @"Map a colour array to a multiple-choice control's options.",
+            @"optionsby="),
           E(@"default", @"default=", @"Starting value.", @"default="),
           E(@"osc", @"osc=",
             @"Add an on-screen control: point, position, ring, box or rotate.",
@@ -122,6 +141,12 @@ MirageDirectiveAttributeKeys(void) {
             @"group=\""),
           E(@"size", @"size=", @"#grain: the grain's cell size, in pixels.",
             @"size="),
+          E(@"waveform", @"waveform=",
+            @"#audio: expose this many signed time-domain samples.",
+            @"waveform="),
+          E(@"wavewindow", @"wavewindow=",
+            @"#audio: seconds covered by the generated waveform samples.",
+            @"wavewindow="),
         ],
         kKEY);
     // Bare flags / values - coral (keyword value) so the popup swatch matches
@@ -135,6 +160,10 @@ MirageDirectiveAttributeKeys(void) {
                     @"Opt a point/position handle out of the default "
                     @"Cmd-held snap.",
                     @"skipsnapping"),
+                  E(@"multiple", @"multiple",
+                    @"Make a dropdown #choice a multi-select checklist that "
+                    @"delivers a bitmask.",
+                    @"multiple"),
                   // The glyph words, bare beside `osc=` - the sugar form of an
                   // authored block's `style =`, so the wording matches the
                   // enum offered for that key.
@@ -198,9 +227,10 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"point",        @"position",   @"ring",     @"box",
       @"rotate",                                           // primitives / kinds
       @"dot",          @"square",     @"hollow",   @"arc", // point styles
-      @"skipsnapping", @"lockaspect", @"dropdown",         // bare flags
+      @"skipsnapping", @"lockaspect", @"dropdown", @"multiple", // bare flags
       @"percent",      @"int",        @"px", // #multi units/modifiers
-      @"accumulate",   @"native",     @"off",      @"on" // #motionblur modes
+      @"accumulate",   @"native",     @"off",      @"on", // #motionblur modes
+      @"generator",    @"filter",     @"layout",   @"transition" // templates
     ]];
   });
   return v;
@@ -337,6 +367,30 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageMotionBlurModes(void) {
             @"native"),
           E(@"off", @"off", @"No motion blur, and the control is cleared.",
             @"off"),
+        ],
+        kKW);
+  });
+  return v;
+}
+
+NSArray<NSDictionary<NSString *, NSString *> *> *MirageTemplateTypes(void) {
+  static NSArray *v;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    v = Colored(
+        @[
+          E(@"generator", @"generator",
+            @"Draws its own image. Audio-reactive generators still use this "
+            @"type.",
+            @"generator"),
+          E(@"filter", @"filter", @"Processes the source clip on iChannel0.",
+            @"filter"),
+          E(@"layout", @"layout",
+            @"Places or masks its source, normally with #alpha.", @"layout"),
+          E(@"transition", @"transition",
+            @"Receives outgoing and incoming clips and adds Transition / In / "
+            @"Out coverage.",
+            @"transition"),
         ],
         kKW);
   });

@@ -508,12 +508,40 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   return b.templateLane;
 }
 
+// Apply a lane's controller-driven max without changing its stored value.
+// Rendering performs the same effective clamp in MirageShaderModel; this keeps
+// an OSC handle and its drag range on the value the shader is actually using.
+- (NSArray<NSNumber *> *)_exprEffectiveValues:(NSArray<NSNumber *> *)values
+                                      forLane:(KKLane *)lane
+                                   atFraction:(double)frac {
+  if (!values.count || !lane.maxControllerKey.length ||
+      !lane.componentMaxByControllerValue.count)
+    return values;
+  NSArray<NSNumber *> *controller =
+      [self _exprRawLaneValuesForLabel:lane.maxControllerKey atFraction:frac];
+  if (!controller.count)
+    return values;
+  NSInteger index = (NSInteger)llround(controller[0].doubleValue);
+  if (index < 0 || index >= (NSInteger)lane.componentMaxByControllerValue.count)
+    return values;
+  double cap = lane.componentMaxByControllerValue[index].doubleValue;
+  if (lane.componentMin.count)
+    cap = MAX(cap, lane.componentMin[0].doubleValue);
+  if (values[0].doubleValue <= cap)
+    return values;
+  NSMutableArray<NSNumber *> *effective = [values mutableCopy];
+  effective[0] = @(cap);
+  return effective;
+}
+
 // The bound value in EXPR units (the shader's, post-directive-normalization: a
 // percent lane's 0..100 -> 0..1). One vector, `fieldCount` components.
 - (KKExprVal)_exprValueForBlock:(MirageOSCBlockRuntime *)b
                      atFraction:(double)frac {
-  return [b boundValueFromLaneValues:KKTimelineLaneValueAtFraction(
-                                         [self _exprLaneForBlock:b], frac)];
+  KKLane *lane = [self _exprLaneForBlock:b];
+  NSArray<NSNumber *> *values = KKTimelineLaneValueAtFraction(lane, frac);
+  values = [self _exprEffectiveValues:values forLane:lane atFraction:frac];
+  return [b boundValueFromLaneValues:values];
 }
 
 // The viewer's aspect (canvas width / height), fed to the runtime so its
@@ -706,6 +734,10 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
                  atTime:(CMTime)time
             forceUpdate:(BOOL *)forceUpdate {
   NSArray<NSNumber *> *values = [b laneValuesFromBound:val];
+  double writeFraction = [self fractionAtTime:time];
+  values = [self _exprEffectiveValues:values
+                              forLane:[self _exprLaneForBlock:b]
+                           atFraction:writeFraction];
   _exprActionDepth++;
   if (_exprActionDepth > 1)
     KKLogError(@"[ExprWrite] NESTED action (depth=%d) writing %@ via %@ - "

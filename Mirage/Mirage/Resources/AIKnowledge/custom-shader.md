@@ -9,6 +9,7 @@ Mirage is a blank shader canvas: paste a Shadertoy "Image" shader (or write your
 
 - The editor is the **Mirage** lane in its own **Shader** group: a syntax-highlighted code pane with live error reporting, with the shader's name field above it.
 - Your entry point is Shadertoy's `void mainImage(out vec4 fragColor, in vec2 fragCoord)`, and the built-in inputs (`iTime`, `iChannel0`, `iResolution`, ...) all work.
+- Every Image shader declares its browser/runtime type with exactly one `// #template generator`, `filter`, `layout`, or `transition` line.
 - Add your own sliders, colours, and on-screen handles by annotating uniforms with `// #` directives (see the directives help).
 
 ## Built-in inputs (no declaration needed)
@@ -20,6 +21,7 @@ Use them exactly as on Shadertoy:
 | `iResolution`            | `vec3`      | output size in px (`.xy`), `.z` = 1                                                                                                                                                                                           |
 | `iTime`                  | `float`     | seconds, scaled by **Speed** and offset by **Seed** when the shader declares `// #speed` / `// #seed` (otherwise plain clip time)                                                                                             |
 | `iProgress`              | `float`     | clip fraction, `0` at the first frame to `1` at the last, linear. Deliberately NOT scaled by Speed/Seed. In a transition template this is the GL Transitions `progress`; see the `// #progress` directive to expose the curve |
+| `iTransitionMode`        | `int`       | transition coverage: `0` = Transition, `1` = In (transparent From), `2` = Out (transparent To). Available to transition shaders for mode-specific backdrops or embellishments                                                 |
 | `iTimeDelta`             | `float`     | seconds/frame (approx)                                                                                                                                                                                                        |
 | `iFrame`                 | `int`       | frame index (approx)                                                                                                                                                                                                          |
 | `iMouse`                 | `vec4`      | present but currently always 0 (no mouse input wired yet)                                                                                                                                                                     |
@@ -43,7 +45,7 @@ Under the hood the GLSL is compiled to Metal at runtime with the real glslang + 
 
 **Source footage on `iChannel0`:** Mirage is a Final Cut effect, so the clip it's applied to is bound to `iChannel0`. A pasted shader that samples `iChannel0` (e.g. `texture(iChannel0, uv)`) processes your footage - blur, displace, tint, feed it into a reaction-diffusion, etc. Apply Mirage to an **adjustment layer** to run the shader over everything beneath it. `iChannel1` carries a second clip when the **"To" image well** is filled (see below); `iChannel2`/`iChannel3` read procedural noise.
 
-**Audio works, but not the Shadertoy way.** Shadertoy binds audio to an `iChannel` as a texture (row 0 the spectrum, row 1 the waveform), and that isn't supported - a pasted Shadertoy music visualiser reads noise from its channel and needs an edit. Mirage instead has the `#audio` directive, which binds the audio a user published from Sonar and reads it as `uMusicBand(i)`. The port is usually small: swap the `texture(iChannel0, vec2(x, 0.0)).r` spectrum lookup for `uMusicBand(int(x * float(uMusicBands)))`. Unlike Shadertoy's, it stays in sync on export. See `directives` and `audio-shader-directive`.
+**Audio works, but not through a Shadertoy channel texture.** Mirage's `#audio` directive binds audio published from Sonar. Use `uMusicBand(i)` for the spectrum, or opt into a time-domain window with `waveform=128` and read `uMusicWave(i)`. A Shadertoy music visualiser therefore needs its row-0 lookup replaced with `uMusicBand(...)` and its row-1 lookup with `uMusicWave(...)`. Unlike a live channel texture, both remain deterministic during scrubbing and export. See `directives` and `audio-shader-directive`.
 
 **Not supported yet:** a THIRD image input (`iChannel0` is the clip and `iChannel1` the "To" well, but `iChannel2`/`iChannel3` can't be wired to your own media - they read noise or a buffer), cubemaps, an audio waveform (`#audio` gives the spectrum, not raw samples), and keyboard input.
 
@@ -54,13 +56,22 @@ A shader can read a **second clip** on `iChannel1`, which is what makes real tra
 Fill the **"To"** image well in the inspector and it lands on `iChannel1`. Combined with `iProgress` (0 at the effect's first frame, 1 at its last) that's everything a cross-dissolve needs:
 
 ```glsl
-void mainImage(out vec4 O, in vec2 fc) {
-  vec2 uv = fc / iResolution.xy;
-  O = mix(texture(iChannel0, uv), texture(iChannel1, uv), iProgress);
+vec4 transitionMix(vec4 fromColor, vec4 toColor, float amount)
+{
+    float alpha = mix(fromColor.a, toColor.a, amount);
+    vec3 premultiplied = mix(fromColor.rgb * fromColor.a, toColor.rgb * toColor.a, amount);
+    vec3 color = alpha > 0.0001 ? premultiplied / alpha : vec3(0.0);
+    return vec4(color, alpha);
+}
+
+void mainImage(out vec4 O, in vec2 fc)
+{
+    vec2 uv = fc / iResolution.xy;
+    O = transitionMix(texture(iChannel0, uv), texture(iChannel1, uv), iProgress);
 }
 ```
 
-**As a Final Cut transition** (dropped on a cut, both clips fed automatically): that needs a Motion transition template with the Mirage on the **Transition A layer** and **Drop Zone Transition B** dragged into its "To" well. Put the Mirage on the template's _Group_ instead and Motion flattens A and B into one image before the shader sees them - it silently degrades to a single texture with no error. The well is left unpublished, so the editor never sees it: they drop the transition on a cut and it just works.
+**As a Final Cut transition** (dropped on a cut, both clips fed automatically): the Motion transition template keeps Mirage on its **Group**, wires **Drop Zone Transition A** into the hidden **From** well, and wires **Drop Zone Transition B** into the hidden **To** well. A `// #template transition` shader then receives those clean inputs as `iChannel0` and `iChannel1`; ordinary filters still receive the effect clip as `iChannel0`. Neither well is published, so the editor only sees the shared Transition / In / Out control.
 
 **As a picture-in-picture**, two routes:
 
@@ -69,7 +80,7 @@ void mainImage(out vec4 O, in vec2 fc) {
 
 ## gl-transitions.com shaders
 
-Shaders from the **GL Transitions** catalogue paste in and run unmodified. They use a neighbouring dialect, detected automatically by the `vec4 transition(vec2 uv)` signature and adapted:
+Shaders from the **GL Transitions** catalogue use a neighbouring dialect, detected automatically by the `vec4 transition(vec2 uv)` signature and adapted. Add `// #template transition` to classify the template; the transition body itself otherwise needs no port:
 
 | GL Transitions              | becomes                                              |
 | --------------------------- | ---------------------------------------------------- |
@@ -80,7 +91,11 @@ Shaders from the **GL Transitions** catalogue paste in and run unmodified. They 
 | `ratio`                     | the frame's aspect (`iResolution.x / iResolution.y`) |
 | `uniform float x; // = 1.0` | a constant with that default                         |
 
-So a catalogue shader needs no edits at all - paste it, set up the transition template, and it runs exactly as it does on the web, `progress` sweeping linearly.
+With that one template declaration, the catalogue shader runs as it does on the web, with `progress` sweeping linearly.
+
+Transition output alpha is preserved automatically. This matters for a single-sided transition at the start or end of a connected clip: the missing side remains transparent, allowing the timeline beneath to show through instead of producing an opaque black frame.
+
+Interpolate transition colours in premultiplied space as in `transitionMix` above. A raw `mix(fromColor, toColor, amount)` is only equivalent when both inputs are opaque; with an empty side it darkens RGB while alpha is also fading.
 
 Two caveats. Its custom uniforms currently become **constants** at their authored defaults, so they aren't inspector controls yet - to expose one, rewrite it as a `// #float` directive (see `directives`). And `progress` is only special inside a GL transition; in an ordinary shader `progress` is an ordinary name you can use freely, and the built-in is `iProgress`.
 

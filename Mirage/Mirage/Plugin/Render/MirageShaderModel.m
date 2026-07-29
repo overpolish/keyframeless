@@ -328,10 +328,16 @@ static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
   for (int pi = 0; pi < _colorCount; pi++) {
     const MirageColorProp *p = &_colors[pi];
     if (p->isArray) {
-      // Look up by the uniform NAME (lane identity), not the display label.
+      // An options-linked array has a fixed slot per multiple-choice option;
+      // regular palettes retain their editable count lane.
       NSArray<NSNumber *> *ccV =
-          valuesForLabel([NSString stringWithFormat:@"%s Count", p->name]);
-      int cc = ccV.count ? (int)lround(ccV[0].doubleValue) : p->defaultCount;
+          p->optionsByName[0] ? nil
+                              : valuesForLabel([NSString
+                                    stringWithFormat:@"%s Count", p->name]);
+      int cc =
+          p->optionsByName[0]
+              ? p->count
+              : (ccV.count ? (int)lround(ccV[0].doubleValue) : p->defaultCount);
       if (cc < 0)
         cc = 0;
       if (cc > p->count)
@@ -413,6 +419,18 @@ static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
     case MirageScalarKindChoice: {
       double val = v.count ? v[0].doubleValue
                            : (p->isChoice ? (double)p->cdefault : p->fdefault);
+      if (p->maxByName[0] && p->maxByValueCount > 0) {
+        NSArray<NSNumber *> *controller = valuesForLabel(@(p->maxByName));
+        if (controller.count) {
+          NSInteger index = (NSInteger)llround(controller[0].doubleValue);
+          if (index >= 0 && index < p->maxByValueCount) {
+            double cap = p->maxByValues[index];
+            if (p->hasMin)
+              cap = fmax(cap, p->fmin);
+            val = fmin(val, cap);
+          }
+        }
+      }
       if (p->isPercent)
         val /= 100.0; // lane is 0..100 %, shader wants 0..1
       pool[p->poolOffset] = (vector_float4){(float)val, 0, 0, 0};

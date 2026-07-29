@@ -1,6 +1,6 @@
 ---
 id: audio-shader-directive
-summary: The #audio directive - bind a Sonar-published spectrum to a shader and drive the render from it
+summary: The #audio directive - bind Sonar-published spectrum or waveform data to a shader
 ---
 
 # Making a shader react to audio
@@ -53,12 +53,32 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 }
 ```
 
+## Reading a waveform
+
+Spectrum bands answer “how much low, mid or high frequency energy is present?” A waveform is the signed air-pressure shape through time. Opt into it for a real oscilloscope or waveform ribbon:
+
+```glsl
+// #audio label="Audio" waveform=128 wavewindow=0.04
+uniform vec4 uAudio[16];
+```
+
+This generates:
+
+- **`uAudioWave(i)`** - signed sample `i`, ordered oldest to newest.
+- **`uAudioWaveSamples`** - the compile-time sample count requested by `waveform=`.
+
+It also adds an animatable **Waveform Window** lane. The window is centred on the current timeline time and resampled into the fixed shader array. A shorter window reveals individual cycles; a longer one shows speech and broader movement. `wavewindow=` sets its starting value in seconds (default `0.04`, range `0.005...0.25`).
+
+Waveform data is opt-in because four samples consume one pool `vec4`; request 4...128 samples. A source published by an older Sonar still supplies spectrum but returns a zero waveform until it is republished.
+
 ## Attributes
 
 - **`label="..."`** - the control's name in the inspector.
 - **`smooth=<seconds>`** - the Smoothness lane's starting value. Default `0.08`.
 - **`gate=<dB>`** - the Noise Gate lane's starting value. Default: off.
 - **`release=<seconds>`** - the Release lane's starting value. Default `0.15`.
+- **`waveform=<samples>`** - opt into 4...128 time-domain samples.
+- **`wavewindow=<seconds>`** - seed the Waveform Window lane. Default `0.04`.
 
 The last three only **seed** their lanes. Once a shader is on a clip the user owns those values, and can keyframe them - so don't reach for a directive attribute to dial a look in, set a sensible start and let them take it from there.
 

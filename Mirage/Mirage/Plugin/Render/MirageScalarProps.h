@@ -33,6 +33,9 @@
 // Overshooting used to drop the extra controls SILENTLY - see
 // MirageScalarTruncated.
 #define KK_SHADER_MAX_SCALAR_PROPS 64
+#define KK_SHADER_MAX_DYNAMIC_MAX_VALUES 32
+#define KK_SHADER_MAX_VISIBILITY_VALUES 32
+#define KK_SHADER_MAX_MULTIPLE_CHOICE_OPTIONS 24
 typedef struct MirageScalarProp {
     // Which directive keyword declared this prop (registry row). Behaviour
     // chains switch on this; the is* flags below are the stamped template
@@ -40,6 +43,7 @@ typedef struct MirageScalarProp {
     MirageScalarKind kind;
     int isChoice;       // 0 = float slider, 1 = choice (int pills)
     int choiceDropdown; // `dropdown` on a #choice: searchable list, not pills
+    int choiceMultiple; // `multiple` on a dropdown #choice: bitmask checklist
     int isPercent;      // float shown as % (0..100 lane); pool gets value / 100
     // Transition progress: a percent field whose lane defaults to the identity
     // RAMP (0% at the start, 100% at the end, linear) rather than a constant,
@@ -65,11 +69,24 @@ typedef struct MirageScalarProp {
     char groupSymbol[40];
     int poolOffset; // vec4 index in the pool (value in .x, or xy for a point)
     double fmin, fmax,
-        fdefault;        // float (percent: in 0..100); fmax = nominal when
-                         // !hasMax (slider cap; the field is unbounded)
-    double sliderLo,     // the slider's visible span (its ends). Defaults to the
-        sliderHi;        // field bound (or the nominal 0/cap when unbounded);
-                         // `slidermin=`/`slidermax=` override it independently.
+        fdefault;    // float (percent: in 0..100); fmax = nominal when
+                     // !hasMax (slider cap; the field is unbounded)
+    double sliderLo, // the slider's visible span (its ends). Defaults to the
+        sliderHi;    // field bound (or the nominal 0/cap when unbounded);
+                     // `slidermin=`/`slidermax=` override it independently.
+    // Optional reactive slider/value cap. `maxby=uMode
+    // maxvalues={4,6,9}` indexes the values with the rounded component-0 value
+    // of the named controller lane. The static max remains the storage bound,
+    // so shrinking the reactive cap never destroys a keyframed value.
+    char maxByName[64];
+    double maxByValues[KK_SHADER_MAX_DYNAMIC_MAX_VALUES];
+    int maxByValueCount;
+    // Optional inspector visibility rule. `visibleby=uStyle
+    // visiblevalues={1,2}` shows this lane only while the named controller's
+    // rounded value matches one of the authored values.
+    char visibleByName[64];
+    double visibleByValues[KK_SHADER_MAX_VISIBILITY_VALUES];
+    int visibleByValueCount;
     double pdefx, pdefy; // point default (normalized 0..1)
     char options[256];   // choice: comma-separated pill labels
     int choiceCount;     // number of options

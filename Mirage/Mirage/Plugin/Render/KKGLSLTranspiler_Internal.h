@@ -33,6 +33,11 @@ BOOL KKLooksLikeGLTransition(NSString *src);
 // Does this source carry `// #alpha` (its own alpha is authoritative)?
 BOOL KKWantsAlphaOutput(NSString *src);
 
+// Is this a two-image transition whose output alpha must remain authoritative?
+// Besides the GL-Transitions signature, Mirage-native transitions are
+// identified by using iProgress together with both image channels.
+BOOL KKLooksLikeTransitionShader(NSString *src);
+
 // Fold a gl-transitions.com shader into the image-shader convention.
 NSString *KKShimGLTransition(NSString *src);
 

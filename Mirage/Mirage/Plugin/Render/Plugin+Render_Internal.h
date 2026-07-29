@@ -48,7 +48,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// image convention): iChannelN -> Buffer[N]; a buffer reading an EARLIER
 /// buffer (index < its own) sees this frame, reading ITSELF or a LATER buffer
 /// sees the previous frame (feedback). No buffer on a channel -> source clip
-/// (ch0) / noise. `bufferSources` is 4 entries (A,B,C,D), empty = absent,
+/// (ch0), To image (ch1), then noise. `bufferSources` is 4 entries (A,B,C,D),
+/// empty = absent,
 /// Common already prepended. `frameIndex` (-1 = unknown) + `dtPerFrame` (iTime
 /// step) drive the determinism: a sequential frame advances ONE step (cheap),
 /// the same frame is reused, a seek restores the nearest checkpoint and re-sims
@@ -73,6 +74,7 @@ typedef void (^MirageSampleUniformsBlock)(
                                renderTime:(CMTime)renderTime
                            sampleUniforms:(nullable MirageSampleUniformsBlock)
                                               sampleUniforms
+                           transitionMode:(int)transitionMode
                          destinationImage:(FxImageTile *)destinationImage
                              sourceImages:
                                  (NSArray<FxImageTile *> *)sourceImages;

@@ -16,7 +16,7 @@
 #import "Constants.h"        // MirageCustomDefaultShaderSource
 #import "KKGLSLFormatter.h"  // Format button (XPC-only includers)
 #import "KKGLSLTranspiler.h" // live shader validation (XPC-only includers)
-#import "MirageCategory.h"   // the save bar's category picker options
+#import "MirageCategory.h"   // source-derived template classification
 #import "MirageDirectiveCatalog.h" // directive + GLSL autocomplete
 #import "MirageDirectiveVocab.h" // MirageDirectiveValueKeywords (highlight set)
 #import "MirageDirectives.h"
@@ -101,7 +101,50 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
       [lanes addObject:MirageMakeColorLane(name, label, name, seed)];
       continue;
     }
-    // An array: count lane + N swatches (the shared bar above rerolls them).
+
+    // `optionsby=<multiple choice>` turns a colour array into one stable
+    // swatch per option. There is no count lane: option N always maps to array
+    // slot N, while visibility follows that option's bit.
+    const MirageScalarProp *optionsController = NULL;
+    NSMutableArray<NSString *> *optionLabels = nil;
+    if (p->optionsByName[0]) {
+      const MirageScalarProp *scalarProps = model.scalarProps;
+      for (int si = 0; si < model.scalarCount; si++)
+        if (strcmp(scalarProps[si].name, p->optionsByName) == 0) {
+          optionsController = &scalarProps[si];
+          break;
+        }
+      if (optionsController) {
+        optionLabels = [NSMutableArray array];
+        for (NSString *option in
+             [@(optionsController->options) componentsSeparatedByString:@","]) {
+          NSString *trimmed = [option
+              stringByTrimmingCharactersInSet:NSCharacterSet
+                                                  .whitespaceCharacterSet];
+          if (trimmed.length)
+            [optionLabels addObject:trimmed];
+        }
+      }
+    }
+
+    BOOL optionsMapped = optionsController && optionsController->choiceMultiple;
+    if (optionsMapped) {
+      for (int i = 0; i < p->count && i < (int)optionLabels.count; i++) {
+        const float *seed = (p->hasDefColors && i < p->defColorCount)
+                                ? p->defColors[i]
+                                : pal[i % 10];
+        NSString *optionLabel = optionLabels[i];
+        KKLane *color = MirageMakeColorLane(
+            [NSString stringWithFormat:@"%@ %d", name, i + 1],
+            [NSString stringWithFormat:@"%@ Colour", optionLabel], name, seed);
+        color.visibleWhenKey = @(p->optionsByName);
+        color.visibleWhenBitMask = (NSInteger)1 << i;
+        [lanes addObject:color];
+      }
+      continue;
+    }
+
+    // A regular array: count lane + N swatches.
     NSString *countId = [NSString stringWithFormat:@"%@ Count", name];
     KKLane *count =
         [KKLane laneWithKey:countId
@@ -236,6 +279,14 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
     lane.categorySymbol = (grp.length && p->groupSymbol[0])
                               ? @(p->groupSymbol)
                               : kMirageDefaultGroupSymbol;
+    if (p->visibleByName[0] && p->visibleByValueCount > 0) {
+      lane.visibleWhenKey = @(p->visibleByName);
+      NSMutableArray<NSNumber *> *visibleValues =
+          [NSMutableArray arrayWithCapacity:p->visibleByValueCount];
+      for (int i = 0; i < p->visibleByValueCount; i++)
+        [visibleValues addObject:@(p->visibleByValues[i])];
+      lane.visibleWhenValues = visibleValues;
+    }
     switch (p->kind) {
     case MirageScalarKindChoice: {
       lane.integerValued = YES;
@@ -249,9 +300,17 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
           [opts addObject:t];
       }
       lane.choiceLabels = opts;
-      lane.choiceUsesDropdown = p->choiceDropdown != 0;
+      lane.choiceUsesDropdown =
+          p->choiceDropdown != 0 || p->choiceMultiple != 0;
+      lane.choiceAllowsMultiple = p->choiceMultiple != 0;
       lane.componentMin = @[ @0.0 ];
-      lane.componentMax = @[ @(opts.count ? (NSInteger)opts.count - 1 : 0) ];
+      NSInteger maxValue =
+          p->choiceMultiple
+              ? (opts.count >= KK_SHADER_MAX_MULTIPLE_CHOICE_OPTIONS
+                     ? 0x00FFFFFF
+                     : (opts.count ? (1 << opts.count) - 1 : 0))
+              : (opts.count ? (NSInteger)opts.count - 1 : 0);
+      lane.componentMax = @[ @(maxValue) ];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @(p->cdefault) ]]];
       break;
@@ -417,6 +476,14 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       // slidermin=/slidermax= override.
       lane.sliderMin = @(p->sliderLo);
       lane.sliderMax = @(p->sliderHi);
+      if (p->maxByName[0] && p->maxByValueCount > 0) {
+        lane.maxControllerKey = @(p->maxByName);
+        NSMutableArray<NSNumber *> *reactiveMaxes =
+            [NSMutableArray arrayWithCapacity:p->maxByValueCount];
+        for (int i = 0; i < p->maxByValueCount; i++)
+          [reactiveMaxes addObject:@(p->maxByValues[i])];
+        lane.componentMaxByControllerValue = reactiveMaxes;
+      }
       if (p->isPercent) {
         // Match the canonical percentage lane (opacityLane): whole-number %
         // with a "%" unit, not a raw decimal float.
@@ -671,6 +738,15 @@ MirageAppendAudioLanes(NSMutableArray<KKLane *> *lanes, NSString *source,
                       MirageAudioSmoothLaneLabel(uniform),
                       [prefix stringByAppendingString:@"Smoothness"], @"s", 0.0,
                       kMirageAudioSmoothMaxSec, p->smoothSeconds, uniform)];
+
+    if (p->wantsWaveform) {
+      [lanes addObject:MirageMakeAudioControlLane(
+                           MirageAudioWaveformWindowLaneLabel(uniform),
+                           [prefix stringByAppendingString:@"Waveform Window"],
+                           @"s", kMirageAudioWaveformWindowMinSec,
+                           kMirageAudioWaveformWindowMaxSec,
+                           p->waveformWindowSeconds, uniform)];
+    }
   }
 }
 
@@ -699,6 +775,26 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                                   : kMirageDefaultGroupSymbol;
         return lane;
       };
+
+  // Transition shaders need an explicit coverage choice because FxPlug does
+  // not tell a filter-based Motion template whether either side of a
+  // transition is a real edit or an unpaired gap. The renderer turns the
+  // selected missing side into transparent black before the shader samples it.
+  if (KKLooksLikeTransitionShader(shaderSource)) {
+    KKLane *mode = [KKLane laneWithKey:@"Transition Mode" label:@"Mode"];
+    mode.valueType = KKLaneValueTypeFloat;
+    mode.integerValued = YES;
+    mode.animatable = NO;
+    mode.enabled = NO;
+    mode.choiceLabels = @[ @"Transition", @"In", @"Out" ];
+    mode.componentMin = @[ @0.0 ];
+    mode.componentMax = @[ @2.0 ];
+    mode.groupKey = @"Transition Mode";
+    mode.categoryKey = @"Transition";
+    mode.categorySymbol = @"arrow.triangle.2.circlepath";
+    [mode insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+    [lanes addObject:mode];
+  }
 
   // The plugin is Custom-only (GLSL). The Type pill and the built-in per-type
   // controls (Colors etc.) are removed for now - the built-in types will return
@@ -831,10 +927,9 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   shader.codeHidesTitle = YES;
   shader.codeSaveNamePlaceholder =
       RLoc(@"Shader name", @"Save-shader name field placeholder.");
-  // What the save bar's category picker offers. Display names, in
-  // MirageCategoryIDs() order - the save handler maps the picked index back to
-  // the id it stores, so these two must stay in the same order.
-  shader.codeSaveCategories = MirageCategoryDisplayNames();
+  // Template type is mandatory in the Image source (`// #template ...`), so
+  // the save bar needs only the name and Save button.
+  shader.codeSaveCategories = nil;
   shader.animatable = NO;
   shader.enabled = NO;
   // Its own group. "Core" is gone (its lanes are opt-in built-ins now, each
@@ -858,12 +953,14 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // records what it saw for the validator to read.
   __block BOOL sawFeedbackBuffer = NO;
   __block BOOL activeIsImage = YES;
+  __block NSString *activeTemplateSource = @"";
   shader.codeValidationComposer =
       ^NSString *(NSString *activeName, NSString *activeCode,
                   NSArray<NSDictionary<NSString *, NSString *> *> *sections,
                   NSInteger *outPrependLines) {
         activeIsImage = ![activeName isEqualToString:@"Common"] &&
                         ![activeName hasPrefix:@"Buffer"];
+        activeTemplateSource = activeIsImage ? activeCode : @"";
         NSString *commonCode = nil;
         for (NSDictionary<NSString *, NSString *> *s in sections)
           if ([s[@"name"] isEqualToString:@"Common"]) {
@@ -941,6 +1038,23 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                          range:NSMakeRange(0, code.length)] != nil;
     if (trimmed.length == 0 || !hasEntry)
       return nil;
+    if (activeIsImage) {
+      MirageTemplateDirectiveError templateError =
+          MirageTemplateDirectiveErrorNone;
+      MirageTemplateTypeForSource(activeTemplateSource, &templateError);
+      if (templateError == MirageTemplateDirectiveErrorMissing)
+        return RLoc(@"Add `// #template generator`, `filter`, `layout`, or "
+                    @"`transition` to the Image shader",
+                    @"Mirage missing template-type directive error.");
+      if (templateError == MirageTemplateDirectiveErrorMultiple)
+        return RLoc(
+            @"Use exactly one `#template` directive in the Image shader",
+            @"Mirage duplicate template-type directive error.");
+      if (templateError == MirageTemplateDirectiveErrorValue)
+        return RLoc(@"`#template` must be generator, filter, layout, or "
+                    @"transition",
+                    @"Mirage invalid template-type directive error.");
+    }
     // Duplicate directive LABELS are allowed - the lane identity is the
     // uniform name, so two controls may share a display name (the link-bus
     // manifests disambiguate them as "Name (2)" where it matters). Only a
@@ -954,6 +1068,35 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                                @"a unique uniform name",
                                @"Mirage duplicate-uniform validation error."),
                            dupU];
+    int colorOptionsKind = MirageColorOptionsErrorArray;
+    NSString *badColorOptions =
+        MirageFirstInvalidColorOptions(code, &colorOptionsKind);
+    if (badColorOptions.length) {
+      if (colorOptionsKind == MirageColorOptionsErrorArray)
+        return [NSString
+            stringWithFormat:RLoc(@"Colour \"%@\": optionsby only works with a "
+                                  @"vec4 array",
+                                  @"Mirage color-options array error."),
+                             badColorOptions];
+      if (colorOptionsKind == MirageColorOptionsErrorController)
+        return [NSString
+            stringWithFormat:RLoc(
+                                 @"optionsby references unknown control \"%@\"",
+                                 @"Mirage color-options controller error."),
+                             badColorOptions];
+      if (colorOptionsKind == MirageColorOptionsErrorMultiple)
+        return
+            [NSString stringWithFormat:
+                          RLoc(@"optionsby control \"%@\" must be a multiple "
+                               @"#choice",
+                               @"Mirage color-options multiple-choice error."),
+                          badColorOptions];
+      return [NSString
+          stringWithFormat:RLoc(@"Colour array \"%@\" must have one slot per "
+                                @"optionsby choice",
+                                @"Mirage color-options count error."),
+                           badColorOptions];
+    }
     // `group=` on a directive that already has a group of its own. Colours,
     // audio bindings and gradients are collected into dedicated groups, so a
     // group here would be silently dropped.
@@ -965,6 +1108,32 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                                 @"Mirage group-on-dedicated-directive "
                                 @"validation error."),
                            badGroup];
+    MirageAudioWaveformErrorKind waveformKind = MirageAudioWaveformErrorValue;
+    NSString *badWaveform =
+        MirageFirstInvalidAudioWaveform(code, &waveformKind);
+    if (badWaveform.length) {
+      if (waveformKind == MirageAudioWaveformErrorRange)
+        return [NSString
+            stringWithFormat:RLoc(@"waveform must contain 4 to %d samples",
+                                  @"Mirage audio waveform sample-count error."),
+                             KK_SHADER_MAX_AUDIO_WAVE_SAMPLES];
+      if (waveformKind == MirageAudioWaveformErrorWindowWithoutWaveform)
+        return RLoc(@"wavewindow requires waveform=<samples>",
+                    @"Mirage audio waveform-window dependency error.");
+      if (waveformKind == MirageAudioWaveformErrorWindowValue)
+        return RLoc(@"wavewindow must be a number of seconds",
+                    @"Mirage audio waveform-window value error.");
+      if (waveformKind == MirageAudioWaveformErrorWindowRange)
+        return [NSString
+            stringWithFormat:RLoc(@"wavewindow must be between %.3f and %.2f "
+                                  @"seconds",
+                                  @"Mirage audio waveform-window range error."),
+                             kMirageAudioWaveformWindowMinSec,
+                             kMirageAudioWaveformWindowMaxSec];
+      return RLoc(@"waveform must be an integer sample count, for example "
+                  @"waveform=128",
+                  @"Mirage audio waveform value error.");
+    }
     // A `group=` icon macOS doesn't know. Harmless to the render, but it draws
     // a blank placeholder, so the author sees a group with no icon and no
     // reason why.
@@ -987,6 +1156,90 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
       return RLoc(@"`#multi` takes at most 4 fields - split it into two "
                   @"controls",
                   @"Mirage too-many-multi-fields validation error.");
+    MirageMultipleChoiceErrorKind multipleKind = MirageMultipleChoiceErrorType;
+    NSString *badMultiple =
+        MirageFirstInvalidMultipleChoice(code, &multipleKind);
+    if (badMultiple.length) {
+      if (multipleKind == MirageMultipleChoiceErrorType)
+        return RLoc(@"`multiple` only works on a `#choice` control",
+                    @"Mirage multiple-choice type validation error.");
+      if (multipleKind == MirageMultipleChoiceErrorDropdown)
+        return RLoc(@"A multiple `#choice` must also use `dropdown`",
+                    @"Mirage multiple-choice dropdown validation error.");
+      if (multipleKind == MirageMultipleChoiceErrorOptions)
+        return RLoc(@"A multiple `#choice` needs a non-empty options list",
+                    @"Mirage multiple-choice options validation error.");
+      if (multipleKind == MirageMultipleChoiceErrorTooManyOptions)
+        return [NSString
+            stringWithFormat:RLoc(@"A multiple `#choice` takes at most %d "
+                                  @"options",
+                                  @"Mirage multiple-choice count validation "
+                                  @"error."),
+                             KK_SHADER_MAX_MULTIPLE_CHOICE_OPTIONS];
+      return [NSString
+          stringWithFormat:RLoc(@"Multiple-choice default \"%@\" isn't in its "
+                                @"options list",
+                                @"Mirage multiple-choice default validation "
+                                @"error."),
+                           badMultiple];
+    }
+    int dynamicMaxKind = MirageDynamicMaxErrorPair;
+    NSString *badDynamicMax =
+        MirageFirstInvalidDynamicMax(code, &dynamicMaxKind);
+    if (badDynamicMax.length) {
+      if (dynamicMaxKind == MirageDynamicMaxErrorType)
+        return [NSString
+            stringWithFormat:RLoc(@"Control \"%@\": maxby/maxvalues only work "
+                                  @"on float, percent or int controls",
+                                  @"Mirage reactive-max type error."),
+                             badDynamicMax];
+      if (dynamicMaxKind == MirageDynamicMaxErrorController)
+        return [NSString
+            stringWithFormat:RLoc(@"maxby references unknown control \"%@\"",
+                                  @"Mirage reactive-max controller error."),
+                             badDynamicMax];
+      if (dynamicMaxKind == MirageDynamicMaxErrorTooManyValues)
+        return [NSString
+            stringWithFormat:RLoc(@"maxvalues takes at most %d values",
+                                  @"Mirage reactive-max value-count error."),
+                             KK_SHADER_MAX_DYNAMIC_MAX_VALUES];
+      if (dynamicMaxKind == MirageDynamicMaxErrorValues)
+        return RLoc(@"maxvalues must be a non-empty comma-separated list of "
+                    @"numbers",
+                    @"Mirage reactive-max malformed-values error.");
+      return [NSString
+          stringWithFormat:RLoc(@"Control \"%@\": maxby and maxvalues must be "
+                                @"used together",
+                                @"Mirage reactive-max pair error."),
+                           badDynamicMax];
+    }
+    int visibilityKind = MirageVisibilityErrorPair;
+    NSString *badVisibility =
+        MirageFirstInvalidVisibility(code, &visibilityKind);
+    if (badVisibility.length) {
+      if (visibilityKind == MirageVisibilityErrorController)
+        return [NSString
+            stringWithFormat:RLoc(
+                                 @"visibleby references unknown control \"%@\"",
+                                 @"Mirage conditional-visibility controller "
+                                 @"error."),
+                             badVisibility];
+      if (visibilityKind == MirageVisibilityErrorTooManyValues)
+        return [NSString
+            stringWithFormat:RLoc(@"visiblevalues takes at most %d values",
+                                  @"Mirage conditional-visibility value-count "
+                                  @"error."),
+                             KK_SHADER_MAX_VISIBILITY_VALUES];
+      if (visibilityKind == MirageVisibilityErrorValues)
+        return RLoc(@"visiblevalues must be a non-empty comma-separated list "
+                    @"of numbers",
+                    @"Mirage conditional-visibility malformed-values error.");
+      return [NSString
+          stringWithFormat:RLoc(@"Control \"%@\": visibleby and visiblevalues "
+                                @"must be used together",
+                                @"Mirage conditional-visibility pair error."),
+                           badVisibility];
+    }
     // An OSC opt-in on an incompatible uniform: osc=point needs a vec2, a
     // radial OSC (osc=ring / osc=box) needs a float/int slider or a vec2
     // #multi, a rotate osc={..} needs one distinct x/y/z axis per value

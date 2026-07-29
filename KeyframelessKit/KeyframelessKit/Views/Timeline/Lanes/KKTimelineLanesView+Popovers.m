@@ -1082,6 +1082,8 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     [self _setOpenBoundaryRequestActive:NO];
   else if (_openStaticIsBoundary)
     [self _setOpenBoundaryRequestActive:YES];
+  else
+    [self _previewOpenConstantsAtFraction:[self _activeGraph].playheadFraction];
   [mini setNeedsDisplay:YES];
 }
 

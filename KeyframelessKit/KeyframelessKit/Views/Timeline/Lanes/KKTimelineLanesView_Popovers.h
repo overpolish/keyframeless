@@ -187,6 +187,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_refresh;
 - (KKTimeline *)_graphTimeline;
 - (void)_graphDidMutateTimeline:(KKTimeline *)updated;
+/// Keep an open constants preview at the live playhead. Keypose popovers are
+/// deliberately excluded so they can return to their edited keypose.
+- (void)_previewOpenConstantsAtFraction:(double)fraction;
 @end
 
 /// Lane add/remove/animatable mutations. Declared in a named category so the

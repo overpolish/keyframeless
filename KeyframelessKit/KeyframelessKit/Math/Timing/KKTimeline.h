@@ -454,8 +454,9 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
 @property(nonatomic) BOOL wrapsChoicePills;
 
-/// When YES a choice row is a searchable single-select DROPDOWN instead of a
-/// pill group: the row shows the current pick and expands a list in place.
+/// When YES a choice row is a searchable DROPDOWN instead of a pill group: the
+/// row shows the current pick and expands a list in place. It remains
+/// single-select unless `choiceAllowsMultiple` is also YES.
 ///
 /// Pills are better while they fit - every option visible, one click to switch
 /// - so this is the escape hatch for a set that is long (pills wrap into a
@@ -463,6 +464,13 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// this code has never seen). Build-time metadata; re-asserted via
 /// `kkApplyPickerMetadataFrom:`.
 @property(nonatomic) BOOL choiceUsesDropdown;
+
+/// When YES a dropdown choice is a checklist rather than a pick-one list. The
+/// lane's single value is a bitmask: bit N says whether `choiceLabels[N]` is
+/// selected. Intended for a fixed option set of at most 24 entries, because
+/// lane values travel through an exactly-representable float. Build-time
+/// metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
+@property(nonatomic) BOOL choiceAllowsMultiple;
 
 /// What to SHOW for a stored value that names none of `choiceValues`, keyed by
 /// that stored value.
@@ -526,6 +534,11 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// serialized so a rebuilt display lane keeps the rule.
 @property(nonatomic, copy, nullable) NSString *visibleWhenKey;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenValues;
+/// Optional bitmask form of the primary visibility rule. When non-zero, the
+/// row is visible when `(round(controllerValue) & visibleWhenBitMask) != 0`
+/// instead of comparing against `visibleWhenValues`. Used by controls linked
+/// to a multiple-choice checklist. Serialized.
+@property(nonatomic) NSInteger visibleWhenBitMask;
 
 /// Optional OR alternative to `visibleWhenKey`: when set, the lane is visible
 /// if EITHER the primary rule (visibleWhenKey/Values) OR this one holds (the

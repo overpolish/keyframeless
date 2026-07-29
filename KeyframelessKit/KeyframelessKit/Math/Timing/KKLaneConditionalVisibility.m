@@ -84,12 +84,16 @@ static BOOL _KKLaneCondClause(
     return NO;
   NSArray<NSNumber *> *cv = _KKLaneCondValues(ctrl, valuesByLabel);
   NSInteger idx = cv.count ? (NSInteger)llround(cv[0].doubleValue) : 0;
-  BOOL match = NO;
-  for (NSNumber *n in values)
-    if ((NSInteger)llround(n.doubleValue) == idx) {
-      match = YES;
-      break;
-    }
+  BOOL primary = [ctrlLabel isEqualToString:lane.visibleWhenKey];
+  BOOL match = primary && lane.visibleWhenBitMask != 0
+                   ? (idx & lane.visibleWhenBitMask) != 0
+                   : NO;
+  if (!(primary && lane.visibleWhenBitMask != 0))
+    for (NSNumber *n in values)
+      if ((NSInteger)llround(n.doubleValue) == idx) {
+        match = YES;
+        break;
+      }
   if (!match)
     return NO;
   if (ctrl == lane)
@@ -101,8 +105,7 @@ static BOOL _KKLaneCondVisible(
     KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
     NSMutableDictionary<NSString *, NSNumber *> *memo) {
-  if (lane.visibleWhenKey.length == 0 &&
-      lane.visibleWhenOrKey.length == 0 &&
+  if (lane.visibleWhenKey.length == 0 && lane.visibleWhenOrKey.length == 0 &&
       lane.visibleWhenAndKey.length == 0)
     return YES;
   NSNumber *cached = memo[lane.key];

@@ -7,9 +7,10 @@ summary: Declaring inspector controls and on-screen controls in a Custom shader 
 
 A Custom shader can expose its own **inspector controls** and **on-screen controls (OSCs)** by annotating its uniforms. Put a `// #<kind>` comment on the line **before** a `uniform` declaration, and Mirage builds a matching, fully keyframeable timeline lane for it. The uniform's value then comes from that lane (and its keyposes / OSC) instead of being a fixed constant.
 
-- **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu or pill), `#angle` (a dial), `#color` (a colour well), `#gradient` (a colour ramp), `#multi` (2-4 numbers), `#random` (a dice field).
+- **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu, pill, or multi-select checklist), `#angle` (a dial), `#color` (a colour well), `#gradient` (a colour ramp), `#multi` (2-4 numbers), `#random` (a dice field).
 - **Spatial controls:** `#point` (a draggable position handle). Add `osc` to a value control for an on-screen ring, box, or rotation ring that edits the same lane.
 - **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep.
+- **Template type:** every Image shader requires exactly one `#template generator|filter|layout|transition` directive.
 - **Built-ins:** `#speed`, `#seed`, `#grain` opt into engine controls and stand alone (no uniform).
 - Attributes tune each one: `label=`, `min=` / `max=`, `default=`, `group=` (which inspector group it lands in), and `osc=` place the on-screen control. The rest of this doc details every kind.
 
@@ -22,32 +23,62 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 
 **Rules that always hold:**
 
-- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The three built-ins (`#speed` / `#seed` / `#grain`) are the exception: they annotate nothing and stand on their own line.
+- The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, or `transition`. This drives browser classification and runtime input behavior.
+- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The built-ins (`#speed` / `#seed` / `#grain` / `#template`) are the exception: they annotate nothing and stand on their own line.
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
 
+### Reactive maximums
+
+A single-value numeric lane can make its effective upper bound follow another lane with `maxby=` and `maxvalues={}`:
+
+```glsl
+// #choice label="Grid" options="2 × 2,3 × 2,3 × 3" default=0
+uniform int uGrid;
+
+// #int label="Cell" min=1 max=9 default=1 maxby=uGrid maxvalues={4,6,9}
+uniform float uCell;
+```
+
+The rounded value of `uGrid` indexes `maxvalues`, so Cell is capped at 4, 6 or 9. `max=` remains the stable authored/storage range: lowering the reactive cap clamps the editor, OSC and value sent to the shader; it does not overwrite a larger stored or keyframed value. If the controller is absent or outside the `maxvalues` list, the static `max=` applies. `maxvalues` must be a non-empty comma-separated list of numbers and may contain at most 32 entries.
+
+### Conditional controls
+
+A scalar control can appear only for selected values of another scalar control with `visibleby=` and `visiblevalues={}`:
+
+```glsl
+// #choice label="Style" options="Wave,Bars,Needles" default=0
+uniform int uStyle;
+
+// #percent label="Bar Width" visibleby=uStyle visiblevalues={1,2} default=70
+uniform float uBarWidth;
+```
+
+Values are compared after rounding, matching choice indices and integer controls. Both attributes must be present. The controller is identified by its uniform name, and `visiblevalues` accepts up to 32 comma-separated numbers.
+
 ## Control kinds
 
-| Directive   | Uniform type       | Inspector control                                | What the shader receives                                                      |
-| ----------- | ------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `#color`    | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)                                   |
-| `#color`    | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count                                     |
-| `#gradient` | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count               |
-| `#float`    | `float n;`         | slider                                           | the raw value                                                                 |
-| `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                         |
-| `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** - transition progress; see below                                     |
-| `#int`      | `float n;`         | integer slider                                   | `int`                                                                         |
-| `#random`   | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                         |
-| `#angle`    | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)                                        |
-| `#bool`     | `bool n;`          | checkbox                                         | `bool`                                                                        |
-| `#choice`   | `int n;`           | segmented pills                                  | `int` selected index (0-based)                                                |
-| `#point`    | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)                            |
-| `#multi`    | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                                                |
-| `#audio`    | `vec4 n[N];`       | audio source picker                              | live spectrum `nBand(i)`+`nBands`; `flow` adds cumulative `nFlow` (see below) |
-| `#speed`    | _(none)_           | Speed slider                                     | nothing directly - scales `iTime`                                             |
-| `#seed`     | _(none)_           | Seed field                                       | nothing directly - offsets `iTime`                                            |
-| `#grain`    | _(none)_           | Grain + Grain Size                               | nothing directly - grain is overlaid on the output                            |
+| Directive   | Uniform type       | Inspector control                                | What the shader receives                                                                             |
+| ----------- | ------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `#color`    | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)                                                          |
+| `#color`    | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count                                                            |
+| `#gradient` | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count                                      |
+| `#float`    | `float n;`         | slider                                           | the raw value                                                                                        |
+| `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                                                |
+| `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** - transition progress; see below                                                            |
+| `#int`      | `float n;`         | integer slider                                   | `int`                                                                                                |
+| `#random`   | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                                                |
+| `#angle`    | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)                                                               |
+| `#bool`     | `bool n;`          | checkbox                                         | `bool`                                                                                               |
+| `#choice`   | `int n;`           | pills or dropdown; `multiple` makes a checklist  | selected index, or an option bitmask with `multiple`                                                 |
+| `#point`    | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)                                                   |
+| `#multi`    | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                                                                       |
+| `#audio`    | `vec4 n[N];`       | audio source picker                              | spectrum `nBand(i)`; optional `flow` and `waveform=N` helpers (see below)                            |
+| `#speed`    | _(none)_           | Speed slider                                     | nothing directly - scales `iTime`                                                                    |
+| `#seed`     | _(none)_           | Seed field                                       | nothing directly - offsets `iTime`                                                                   |
+| `#grain`    | _(none)_           | Grain + Grain Size                               | nothing directly - grain is overlaid on the output                                                   |
+| `#template` | _(none)_           | no separate control                              | declares `generator`, `filter`, `layout`, or `transition`; transition adds the shared coverage pills |
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
 
@@ -64,6 +95,29 @@ uniform float uFalloff;
 ```
 
 Both forms are accepted: `group="Name"` on its own, or `group={"Name", "sf.symbol"}` to give the group an icon. The icon only has to be named **once** per group - any other control joining the group inherits it, so the short form is fine everywhere else. The symbol is any SF Symbol name macOS knows (the editor offers a curated list and flags a name that doesn't resolve).
+
+### Multiple-choice dropdowns
+
+`#choice` is pick-one by default. Add both `dropdown` and `multiple` to turn it into a searchable checklist:
+
+```glsl
+// #choice label="Patterns" options="Grid,Dots,Rings,Crosses" dropdown multiple default="Grid,Dots"
+uniform int uPatterns;
+```
+
+The shader receives an integer bitmask: option 0 is bit 0, option 1 is bit 1, and so on. Test a selection with `(uPatterns & (1 << index)) != 0`. `default="..."` names one or more option labels separated by commas; a numeric `default=` may provide the bitmask directly. The checklist stays open while the user toggles options. Multiple choices support at most 24 options because lane values pass through an exactly representable float.
+
+A colour array can map one-to-one onto a multiple-choice checklist with `optionsby=`:
+
+```glsl
+// #choice label="Patterns" options="Grid,Dots,Rings" dropdown multiple default="Grid,Dots"
+uniform int uPatterns;
+
+// #color optionsby=uPatterns default="#333333,#B3523A,#4E7F86"
+uniform vec4 uPatternColours[3];
+```
+
+The Colors group shows “Grid Colour”, “Dots Colour” and “Rings Colour” only while their corresponding options are enabled. Array slot order always matches option order, and no colour-count control is added. `optionsby` requires a `multiple` choice and exactly one array slot per option.
 
 - **Group order** is: `Shader`, `Audio`, `Colors` first (always, in that order), then your own groups in the order the shader first names them. Move a directive above another and its group moves up with it.
 - **`#color`, `#audio` and `#gradient` reject `group=`** - they collect into their own dedicated groups, and a group there would either be ignored or split a colour set away from its swatches. Using it is a compile error in the editor.
@@ -116,9 +170,18 @@ Without it, that shader can't work: the corner instance samples `iChannel0`, get
 Every shader gets a built-in **`iProgress`**: the clip fraction, `0` at the effect's first frame and `1` at its last, rising linearly. In a Motion transition template that window IS the transition, so `iProgress` is the GL Transitions `progress` with nothing to declare:
 
 ```glsl
-void mainImage(out vec4 O, in vec2 fc) {
+vec4 transitionMix(vec4 fromColor, vec4 toColor, float amount)
+{
+    float alpha = mix(fromColor.a, toColor.a, amount);
+    vec3 premultiplied = mix(fromColor.rgb * fromColor.a, toColor.rgb * toColor.a, amount);
+    vec3 color = alpha > 0.0001 ? premultiplied / alpha : vec3(0.0);
+    return vec4(color, alpha);
+}
+
+void mainImage(out vec4 O, in vec2 fc)
+{
     vec2 uv = fc / iResolution.xy;
-    O = mix(texture(iChannel0, uv), texture(iChannel1, uv), iProgress); // cross-dissolve
+    O = transitionMix(texture(iChannel0, uv), texture(iChannel1, uv), iProgress);
 }
 ```
 
@@ -132,6 +195,27 @@ uniform float uProgress;
 Unlike every other directive, its lane defaults to a **ramp** rather than a constant: 0% at the start, 100% at the end, linear. So a `#progress` lane left untouched evaluates to exactly the same thing as `iProgress`, and declaring it never changes what the shader does. What it adds is the timing engine - the user can ease it, move the keyposes, or reshape it entirely, which is something the upstream GL Transitions spec (linear only) can't express.
 
 Use `iProgress` when the shader should always run linearly; use `#progress` when the transition's pacing is worth exposing. Note the uniform receives **0..1** even though the inspector shows 0-100%, matching `#percent`.
+
+### `#template` and shader behavior
+
+Every Image shader declares what it is:
+
+```glsl
+// #template generator
+```
+
+- **generator** draws its own image. It may still use `#audio`.
+- **filter** processes the source clip on `iChannel0`.
+- **layout** places or masks its source, normally with `#alpha`.
+- **transition** receives outgoing/incoming clips on `iChannel0`/`iChannel1` and gets a non-animatable **Transition / In / Out** pill:
+
+- **Transition** binds the outgoing clip to `iChannel0` and incoming clip to `iChannel1`.
+- **In** binds transparent black to `iChannel0`, allowing the incoming clip to appear over the timeline beneath it.
+- **Out** binds transparent black to `iChannel1`, allowing the outgoing clip to disappear into the timeline beneath it.
+
+FxPlug does not report whether a transition side is genuinely absent, so the coverage choice is intentionally explicit. The empty side is a real transparent texture, not an unbound channel (whose normal Mirage fallback is procedural noise).
+
+Transition shaders can read `iTransitionMode` (`0` = Transition, `1` = In, `2` = Out) when an intentional background or source-specific embellishment must behave differently for a transparent endpoint. For ordinary blends, use premultiplied interpolation as in `transitionMix` above; raw `mix` darkens an image twice when its colour and alpha fade together.
 
 ### `#motionblur` (who owns the blur)
 
@@ -180,6 +264,17 @@ uniform vec4 uBeat[16];
 // ... particle radius advances on every beat, never retreats:
 float life = fract(birthPhase + iTime * baseSpeed + uBeatFlow * uPush);
 ```
+
+Add `waveform=<samples>` when the shader needs the actual signed time-domain shape rather than frequency energy. It generates `uAudioWave(i)` and the compile-time constant `uAudioWaveSamples`. `wavewindow=` seeds an animatable **Waveform Window** lane in seconds (default `0.04`, range `0.005...0.25`); Sonar resamples that centred span into the requested number of values. This is the right input for oscilloscopes, waveform ribbons and phase-style displays. It is opt-in because every four samples consume one additional pool `vec4`; the maximum is 128 samples.
+
+```glsl
+// #audio label="Audio" waveform=128 wavewindow=0.04
+uniform vec4 uAudio[16];
+
+float sample = uAudioWave(i); // signed processed mono
+```
+
+Analyses published before waveform support still provide their spectrum, but the waveform reads zero until the source is republished from Sonar.
 
 Nothing picked reads as silence rather than an error, so a shader with an unbound `#audio` still renders.
 

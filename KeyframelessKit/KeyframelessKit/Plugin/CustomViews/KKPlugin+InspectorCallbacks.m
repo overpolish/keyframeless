@@ -345,29 +345,80 @@
           [strong.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
       id<FxCommandAPI_v2> cmd =
           [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
-      CMTime es = kCMTimeZero, ed = kCMTimeZero;
-      [timing startTimeForEffect:&es];
-      [timing durationTimeForEffect:&ed];
-      double dsec = CMTimeGetSeconds(ed);
-      double base;
+      id<FxCustomParameterActionAPI_v4> action = [strong.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!timing || !cmd)
+        return;
+
+      CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+      CMTime inputStart = kCMTimeZero, inputDuration = kCMTimeZero;
+      CMTime timelineStart = kCMTimeZero, timelineEnd = kCMTimeZero;
+      CMTime timelineIn = kCMTimeInvalid, timelineOut = kCMTimeInvalid;
+      [timing startTimeForEffect:&effectStart];
+      [timing durationTimeForEffect:&effectDuration];
+      [timing startTimeOfInputToFilter:&inputStart];
+      [timing durationTimeOfInputToFilter:&inputDuration];
+      [timing inPointTimeOfTimelineForEffect:&timelineIn];
+      [timing outPointTimeOfTimelineForEffect:&timelineOut];
+
+      double startSec, endSec;
       if ([KKHostInfo isRunningInFinalCut]) {
-        CMTime src = kCMTimeZero, tl = kCMTimeZero;
-        [timing startTimeOfInputToFilter:&src];
-        [timing timelineTime:&tl fromInputTime:src];
-        base = CMTimeGetSeconds(tl);
+        [timing timelineTime:&timelineStart fromInputTime:inputStart];
+        [timing timelineTime:&timelineEnd
+               fromInputTime:CMTimeAdd(inputStart, inputDuration)];
+        startSec = CMTimeGetSeconds(timelineStart);
+        endSec = CMTimeGetSeconds(timelineEnd);
       } else {
-        base = CMTimeGetSeconds(es);
+        startSec = CMTimeGetSeconds(effectStart);
+        endSec = startSec + CMTimeGetSeconds(effectDuration);
       }
-      if (dsec > 0.0) {
-        // FCP's movePlayheadToTime: floors a time sitting on a frame seam to
-        // the previous frame, so snapping to a keypose lands one frame short
-        // and the OSC's half-frame visibility window rejects it (handle
-        // vanishes). Nudge half a frame in so it rounds onto the intended frame
-        // - same trick the loop-back path uses.
-        double frameDur = KKProcessFrameDurationSeconds();
-        double target = base + frac * dsec + frameDur * 0.5;
-        [cmd movePlayheadToTime:CMTimeMakeWithSeconds(target, 600) error:nil];
+      if (!(endSec > startSec))
+        return;
+
+      double frameDur = KKProcessFrameDurationSeconds();
+      double targetSec = startSec + frac * (endSec - startSec);
+      double lo = startSec + frameDur * 0.5;
+      double hi = endSec - frameDur * 0.5;
+      if (hi > lo)
+        targetSec = MAX(lo, MIN(hi, targetSec));
+
+      CMTime currentTime = action ? [action currentTime] : kCMTimeInvalid;
+      // A filter on a Motion transition layer reports template-local timeline
+      // values here (e.g. 7s), while FxCommandAPI expects the parent FCP
+      // timeline clock (e.g. 7207s). The render tick publishes that real
+      // parent-project start onto the inspector; use it for the same one-shot
+      // absolute seek ordinary clips use.
+      BOOL localTimelineMapping =
+          [KKHostInfo isRunningInFinalCut] &&
+          startSec + frameDur < CMTimeGetSeconds(inputStart);
+      if (localTimelineMapping) {
+        KKLogWarn(@"[scrub-local-timeline] cannot seek without the outer "
+                  @"project origin: frac=%.6f current=%.6f effectStart=%.6f "
+                  @"inputStart=%.6f localStart=%.6f timelineIn=%.6f "
+                  @"timelineOut=%.6f",
+                  frac, CMTimeGetSeconds(currentTime),
+                  CMTimeGetSeconds(effectStart), CMTimeGetSeconds(inputStart),
+                  startSec, CMTimeGetSeconds(timelineIn),
+                  CMTimeGetSeconds(timelineOut));
+        return;
       }
+
+      CMTime targetTime = CMTimeMakeWithSeconds(targetSec, 600);
+      NSError *seekError = nil;
+      BOOL moved = [cmd movePlayheadToTime:targetTime error:&seekError];
+      KKLogInfo(@"[scrub] frac=%.6f current=%.6f effectStart=%.6f "
+                @"effectDuration=%.6f inputStart=%.6f inputDuration=%.6f "
+                @"timelineStart=%.6f timelineEnd=%.6f timelineIn=%.6f "
+                @"timelineOut=%.6f frame=%.6f "
+                @"target=%.6f fcp=%d timing=%p command=%p action=%p "
+                @"seekScope=inside-action moved=%d error=%@",
+                frac, CMTimeGetSeconds(currentTime),
+                CMTimeGetSeconds(effectStart), CMTimeGetSeconds(effectDuration),
+                CMTimeGetSeconds(inputStart), CMTimeGetSeconds(inputDuration),
+                startSec, endSec, CMTimeGetSeconds(timelineIn),
+                CMTimeGetSeconds(timelineOut), frameDur, targetSec,
+                [KKHostInfo isRunningInFinalCut], timing, cmd, action, moved,
+                seekError);
     }];
   };
 

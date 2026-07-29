@@ -20,6 +20,9 @@
 
 // Validation reads every directive kind back, so it sits on the parsed model
 // rather than beside the parsers.
+#import "MirageAudioDirectiveValidation.h"
+#import "MirageChoiceDirectiveValidation.h"
+#import "MirageDependencyDirectiveValidation.h"
 #import "MirageScalarOSC.h"
 #import "MirageShaderModel.h"
 

@@ -25,6 +25,8 @@ NSString *MirageCustomDefaultShaderSource(void) {
   return @"// SPDX-FileCopyrightText: 2026 overpolish\n"
          @"// SPDX-License-Identifier: MIT\n"
          @"\n"
+         @"// #template generator\n"
+         @"\n"
          @"// The built-in Speed lane, which scales iTime. It annotates no "
          @"uniform because\n"
          @"// it drives one the plugin already gives every shader. Opt-in, as "
@@ -78,6 +80,8 @@ NSString *MirageCustomDefaultShaderSource(void) {
 NSString *MirageMagicMoveShaderSource(void) {
   return @"// SPDX-FileCopyrightText: 2026 overpolish\n"
          @"// SPDX-License-Identifier: MIT\n"
+         @"\n"
+         @"// #template layout\n"
          @"\n"
          @"// Inverse transform: for each output pixel, undo the transform to "
          @"find where it\n"
@@ -567,6 +571,8 @@ NSString *MirageFrameBufferDSource(void) {
 NSString *MirageFrameShaderSource(void) {
   return @"// SPDX-FileCopyrightText: 2026 overpolish\n"
          @"// SPDX-License-Identifier: MIT\n"
+         @"\n"
+         @"// #template layout\n"
          @"\n"
          @"// #alpha\n"
          @"\n"

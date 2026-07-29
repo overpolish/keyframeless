@@ -74,6 +74,30 @@ static inline NSString *MirageAttrString(NSString *s, NSString *key) {
   return [s substringWithRange:[m rangeAtIndex:1]];
 }
 
+/// Whether `word` appears as a bare directive flag. Quoted attribute values are
+/// ignored, so labels and option names cannot accidentally enable behaviour.
+static inline BOOL MirageAttrHasBareFlag(NSString *attrs, NSString *word) {
+  if (!attrs.length || !word.length)
+    return NO;
+  NSString *bare =
+      [[NSRegularExpression regularExpressionWithPattern:@"\"[^\"]*\""
+                                                 options:0
+                                                   error:nil]
+          stringByReplacingMatchesInString:attrs
+                                   options:0
+                                     range:NSMakeRange(0, attrs.length)
+                              withTemplate:@""];
+  NSString *pattern = [NSString
+      stringWithFormat:@"\\b%@\\b",
+                       [NSRegularExpression escapedPatternForString:word]];
+  return [[NSRegularExpression regularExpressionWithPattern:pattern
+                                                    options:0
+                                                      error:nil]
+             firstMatchInString:bare
+                        options:0
+                          range:NSMakeRange(0, bare.length)] != nil;
+}
+
 /// A readable display name for a GLSL uniform: drop a leading u/u_/i/i_ prefix,
 /// split camelCase + underscores into words, capitalise. `uBackground` ->
 /// "Background", `u_foreground_hue` -> "Foreground Hue".

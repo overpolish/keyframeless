@@ -28,7 +28,8 @@ typedef struct KKGLSLUniforms {
   simd_float4 chanRes[4]; // iChannelResolution[0..3]: xyz = px size, z = 1
   // x = iProgress (0..1 over the effect's window); y = iMotionBlur (0..1
   // shutter, non-zero only for a `// #motionblur native` shader); z =
-  // iMotionBlurSamples (as float).
+  // iMotionBlurSamples (as float); w = iTransitionMode (0 Transition, 1 In,
+  // 2 Out).
   simd_float4 transition;
   // A shader's `// #color` properties append their vec4s to this block's std140
   // tail (see KKWrapGLSL); the render supplies those bytes right after this
@@ -135,10 +136,19 @@ void KKBindGLSLUniforms(id<MTLRenderCommandEncoder> encoder,
 // from the display variant.
 KKGLSLTranspileResult *KKTranspileGLSLBuffer(NSString *userGLSL);
 
+// YES only for a shader declaring `// #template transition`. Shared by the
+// inspector (to add its Transition/In/Out control) and render wrapper
+// (two-input binding + authoritative alpha).
+BOOL KKLooksLikeTransitionShader(NSString *src);
+
 // A repeating value-noise texture / repeat-linear sampler for the iChannelN a
 // shader samples (the common "iChannel = noise" default). Both cached per
 // device. Shared by the main render and the mini-viewer.
 id<MTLTexture> KKCustomChannelNoiseTexture(id<MTLDevice> device);
+// A 1x1 transparent-black texture. Transition In/Out modes bind this explicitly
+// for the absent side; leaving a channel unbound would invoke the noise
+// fallback.
+id<MTLTexture> KKCustomTransparentTexture(id<MTLDevice> device);
 id<MTLSamplerState> KKCustomChannelSampler(id<MTLDevice> device);
 // A clamp-to-edge / linear sampler for the source clip bound to iChannel0, so
 // footage doesn't wrap when the shader samples outside [0,1]. Cached per

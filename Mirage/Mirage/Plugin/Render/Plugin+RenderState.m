@@ -69,6 +69,12 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   common.grainSize =
       grainSizeV.count ? grainSizeV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
   outState->common = common;
+  NSArray<NSNumber *> *transitionModeV = MirageLaneValuesAtFraction(
+      timeline, @"Transition Mode", frac, timelineSec, durSec);
+  outState->transitionMode =
+      transitionModeV.count
+          ? (int)MAX(0, MIN(2, lround(transitionModeV[0].doubleValue)))
+          : 0;
 
   // A shader's `// #color` properties -> the colour pool (the transpiled
   // block's std140 tail). Values come from the per-property lanes (fallback:

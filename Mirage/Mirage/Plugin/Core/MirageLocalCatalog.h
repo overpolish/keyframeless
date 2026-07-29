@@ -68,12 +68,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Save the given sections as a new UUID-keyed entry. Never overwrites an
 /// existing entry by name, so duplicate names are fine. `previewJPEG` is
 /// optional (a placeholder is used until a real thumbnail is rendered).
-/// `category` is a MirageCategory.h id (nil = the default). Returns the written
-/// entry.
-- (MirageCatalogEntry *)
+/// The mandatory `// #template ...` directive in the Image section determines
+/// the category. Returns nil when that directive is missing or invalid.
+- (nullable MirageCatalogEntry *)
     saveShaderNamed:(NSString *)name
              author:(NSString *)author
-           category:(nullable NSString *)category
            sections:(NSDictionary<NSString *, NSString *> *)sections
         previewJPEG:(nullable NSData *)previewJPEG;
 
@@ -82,11 +81,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Install (or update) a downloaded community shader for offline use, keyed by
 /// its community id so a re-download replaces it. `version` is the remote
-/// version; `category` is a MirageCategory.h id (nil = the default).
+/// version. The downloaded Image source determines its category.
 - (void)installCommunityID:(NSString *)entryID
                       name:(NSString *)name
                     author:(NSString *)author
-                  category:(nullable NSString *)category
                    version:(NSInteger)version
                   sections:(NSDictionary<NSString *, NSString *> *)sections
                previewJPEG:(nullable NSData *)previewJPEG;

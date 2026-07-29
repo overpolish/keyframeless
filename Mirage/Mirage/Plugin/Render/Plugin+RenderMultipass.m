@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "Constants.h"
 #import "MirageCustomShader.h"
 #import "MirageFeedbackSet.h"
 #import "Plugin+Render_Internal.h"
@@ -52,6 +53,7 @@ typedef struct {
 static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                                         int prevI, const BOOL *present,
                                         BOOL noPrev, id<MTLTexture> srcTex,
+                                        id<MTLTexture> toTex,
                                         KKGLSLUniforms *io) {
   NSMutableArray *chArr = [NSMutableArray arrayWithCapacity:4];
   for (int c = 0; c < 4; c++) {
@@ -63,6 +65,8 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
         ct = fb->tex[prevI][c];
     } else if (c == 0) {
       ct = srcTex; // no buffer on ch0 -> source clip
+    } else if (c == 1) {
+      ct = toTex; // no buffer on ch1 -> transition's incoming clip
     }
     [chArr addObject:ct ?: (id)[NSNull null]];
     if (ct)
@@ -100,6 +104,7 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                               mbState:(KKMotionBlurState)mbState
                            renderTime:(CMTime)renderTime
                        sampleUniforms:(MirageSampleUniformsBlock)sampleUniforms
+                       transitionMode:(int)transitionMode
                      destinationImage:(FxImageTile *)destinationImage
                          sourceImages:(NSArray<FxImageTile *> *)sourceImages {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
@@ -124,8 +129,21 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   id<MTLTexture> noiseTex = KKCustomChannelNoiseTexture(device);
   id<MTLSamplerState> chSampler = KKCustomChannelSampler(device);
   id<MTLSamplerState> srcSampler = KKCustomSourceSampler(device);
-  id<MTLTexture> srcTex =
+  id<MTLTexture> effectTex =
       sourceImages.count ? [sourceImages[0] metalTextureForDevice:device] : nil;
+  id<MTLTexture> fromTex =
+      [KKImageTileForParameterID(sourceImages, kParamFromImage)
+          metalTextureForDevice:device];
+  BOOL transitionShader = KKLooksLikeTransitionShader(imageSource);
+  id<MTLTexture> srcTex = transitionShader && fromTex ? fromTex : effectTex;
+  id<MTLTexture> toTex = [KKImageTileForParameterID(sourceImages, kParamToImage)
+      metalTextureForDevice:device];
+  id<MTLTexture> transparentTex =
+      transitionMode != 0 ? KKCustomTransparentTexture(device) : nil;
+  if (transitionMode == 1)
+    srcTex = transparentTex;
+  if (transitionMode == 2)
+    toTex = transparentTex;
   NSUInteger W = (NSUInteger)u.resTime.x, H = (NSUInteger)u.resTime.y;
   MTLPixelFormat pf =
       [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
@@ -136,6 +154,10 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
     srcTex = [self gammaEncodedSource:srcTex
                            registryID:registryID
                           pixelFormat:pf];
+  if (toTex && transitionMode != 2 && u.extra.w == 0.0f)
+    toTex = [self gammaEncodedSource:toTex
+                          registryID:registryID
+                         pixelFormat:pf];
 
   BOOL present[4];
   for (int c = 0; c < 4; c++)
@@ -232,7 +254,7 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
         continue;
       KKGLSLUniforms bufU = fu;
       NSArray *chArr = MirageChannelsForBuffer(k, fb, curI, prevI, present,
-                                               noPrev, srcTex, &bufU);
+                                               noPrev, srcTex, toTex, &bufU);
       id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:registryID
                                                         pixelFormat:pf];
       if (queue) {
@@ -277,8 +299,8 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   if (F >= 0)
     imgU.extra.y = (float)F; // iFrame
   for (int c = 0; c < 4; c++) {
-    id<MTLTexture> ct =
-        present[c] ? fb->tex[newestI][c] : (c == 0 ? srcTex : nil);
+    id<MTLTexture> ct = present[c] ? fb->tex[newestI][c]
+                                   : (c == 0 ? srcTex : (c == 1 ? toTex : nil));
     [imgCh addObject:ct ?: (id)[NSNull null]];
     if (ct)
       imgU.chanRes[c] =

@@ -83,6 +83,9 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void);
 /// tables rather than from the docs.
 NSArray<NSDictionary<NSString *, NSString *> *> *MirageMotionBlurModes(void);
 
+/// The four valid bare values after `// #template`.
+NSArray<NSDictionary<NSString *, NSString *> *> *MirageTemplateTypes(void);
+
 /// A curated set of SF Symbol names for a `group=`'s icon slot. NOT a
 /// whitelist: any symbol macOS knows resolves at runtime, and the parser takes
 /// whatever is typed. There is no API to enumerate the ~6,900 installed

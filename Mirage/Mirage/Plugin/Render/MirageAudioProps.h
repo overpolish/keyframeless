@@ -30,6 +30,7 @@
 // source the recipient doesn't have.
 #define KK_SHADER_MAX_AUDIO_PROPS 2
 #define KK_SHADER_MAX_AUDIO_VECS 24
+#define KK_SHADER_MAX_AUDIO_WAVE_SAMPLES 128
 
 /// Audio lanes get their own inspector group: they aren't a look the way the
 /// other directive lanes are, and a source + its gate + its smoothing only make
@@ -46,6 +47,8 @@ static const double kMirageAudioSmoothMaxSec = 0.5;
 /// The release lane's cap, in seconds. Also bounds how far back a render looks
 /// to find when a band last cleared the gate.
 static const double kMirageAudioReleaseMaxSec = 2.0;
+static const double kMirageAudioWaveformWindowMinSec = 0.005;
+static const double kMirageAudioWaveformWindowMaxSec = 0.25;
 
 /// The lanes each `#audio` uniform owns, suffixed off the uniform name. A dot
 /// can't occur in a GLSL identifier, so these can never collide with one the
@@ -59,6 +62,10 @@ static inline NSString *MirageAudioSmoothLaneLabel(NSString *uniformName) {
 }
 static inline NSString *MirageAudioReleaseLaneLabel(NSString *uniformName) {
   return [uniformName stringByAppendingString:@".release"];
+}
+static inline NSString *
+MirageAudioWaveformWindowLaneLabel(NSString *uniformName) {
+  return [uniformName stringByAppendingString:@".wavewindow"];
 }
 typedef struct MirageAudioProp {
   char name[64];  // GLSL uniform name
@@ -108,18 +115,15 @@ typedef struct MirageAudioProp {
   /// accumulation floor would make the clock's history depend on the curve. A
   /// quiet noise floor under it never advances the clock.
   double flowGateDB;
+  /// `waveform=N`: expose N time-domain samples as `<name>Wave(i)`. This is
+  /// opt-in because it consumes ceil(N/4) additional pool vec4s.
+  int wantsWaveform;
+  int waveformSamples;
+  int waveformVecCount;
+  int waveformPoolOffset;
+  /// `wavewindow=` seconds: the centred span resampled into those N values.
+  double waveformWindowSeconds;
 } MirageAudioProp;
-
-/// Whether a bare flag word (e.g. `flow`) is present in a directive's attrs.
-/// `\b...\b` so `flow` doesn't match `flowlo`/`flowhi`/`flowgate`.
-static inline BOOL MirageAttrFlag(NSString *attrs, NSString *pattern) {
-  return [[NSRegularExpression regularExpressionWithPattern:pattern
-                                                    options:0
-                                                      error:nil]
-             firstMatchInString:attrs
-                        options:0
-                          range:NSMakeRange(0, attrs.length)] != nil;
-}
 
 /// Parse every `// #audio [label=]` directive + its `uniform vec4 <name>[N];`.
 /// `startOffset` is the first free pool vec4 (audio is appended after the
@@ -163,8 +167,15 @@ static inline int MirageParseAudioProps(NSString *source,
       N = 1;
     if (N > KK_SHADER_MAX_AUDIO_VECS)
       N = KK_SHADER_MAX_AUDIO_VECS;
-    BOOL wantsFlow = MirageAttrFlag(attrs, @"\\bflow\\b");
-    if (pool + N + (wantsFlow ? 1 : 0) > KK_SHADER_COLOR_POOL)
+    BOOL wantsFlow = MirageAttrHasBareFlag(attrs, @"flow");
+    int waveformSamples =
+        (int)MirageAttrDouble(attrs, @"\\bwaveform\\s*=\\s*(\\d+)", 0);
+    if (waveformSamples < 0)
+      waveformSamples = 0;
+    if (waveformSamples > KK_SHADER_MAX_AUDIO_WAVE_SAMPLES)
+      waveformSamples = KK_SHADER_MAX_AUDIO_WAVE_SAMPLES;
+    int waveformVecs = (waveformSamples + 3) / 4;
+    if (pool + N + (wantsFlow ? 1 : 0) + waveformVecs > KK_SHADER_COLOR_POOL)
       break; // pool full - drop the rest
 
     MirageAudioProp p;
@@ -209,6 +220,19 @@ static inline int MirageParseAudioProps(NSString *source,
           MirageAttrDouble(attrs, @"\\bflowgate\\s*=\\s*(-?[0-9.]+)", -45.0);
       p.flowPoolOffset = pool;
       pool += 1;
+    }
+    p.wantsWaveform = waveformSamples > 0 ? 1 : 0;
+    if (p.wantsWaveform) {
+      p.waveformSamples = waveformSamples;
+      p.waveformVecCount = waveformVecs;
+      p.waveformWindowSeconds =
+          MirageAttrDouble(attrs, @"\\bwavewindow\\s*=\\s*([0-9.]+)", 0.04);
+      if (p.waveformWindowSeconds < kMirageAudioWaveformWindowMinSec)
+        p.waveformWindowSeconds = kMirageAudioWaveformWindowMinSec;
+      if (p.waveformWindowSeconds > kMirageAudioWaveformWindowMaxSec)
+        p.waveformWindowSeconds = kMirageAudioWaveformWindowMaxSec;
+      p.waveformPoolOffset = pool;
+      pool += waveformVecs;
     }
     props[n++] = p;
   }

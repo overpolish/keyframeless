@@ -24,6 +24,11 @@ struct Spectrogram: Sendable {
 	/// analyzer's defaults happen to be today.
 	var floorDB: Double = -85
 	var ceilingDB: Double = -15
+	/// Continuous processed mono audio for time-domain consumers. Kept at a
+	/// compact analysis rate; this is for scopes and waveform displays, not
+	/// playback.
+	var waveformSampleRate: Double = 0
+	var waveform: [Float] = []
 
 	/// Seconds of timeline this spectrogram covers.
 	var duration: Double { Double(numFrames) * hopSeconds }
@@ -48,14 +53,19 @@ struct Spectrogram: Sendable {
 	/// `SonarSourceStore` owns where this lands - the shared app-group container,
 	/// the only directory both the extension and a plugin's sandbox can reach.
 	func write(to url: URL, timecodeStart: Double) throws {
-		try data.withUnsafeBufferPointer { buf in
-			guard let base = buf.baseAddress else { throw SonarSourceError.emptySpectrogram }
-			var error: NSError?
-			let ok = KKSpectrogramWrite(
-				url, base, UInt32(numFrames), UInt32(numBands), hopSeconds,
-				timelineStart + timecodeStart, floorDB, ceilingDB, &error)
-			if !ok {
-				throw error ?? SonarSourceError.emptySpectrogram
+		try data.withUnsafeBufferPointer { spectrumBuffer in
+			guard let spectrum = spectrumBuffer.baseAddress
+			else { throw SonarSourceError.emptySpectrogram }
+			try waveform.withUnsafeBufferPointer { waveformBuffer in
+				var error: NSError?
+				let ok = KKSpectrogramWriteWithWaveform(
+					url, spectrum, UInt32(numFrames), UInt32(numBands), hopSeconds,
+					timelineStart + timecodeStart, floorDB, ceilingDB,
+					waveformBuffer.baseAddress, UInt64(waveform.count),
+					waveformSampleRate, &error)
+				if !ok {
+					throw error ?? SonarSourceError.emptySpectrogram
+				}
 			}
 		}
 	}

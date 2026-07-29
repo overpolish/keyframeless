@@ -4,6 +4,7 @@
  */
 
 #import "KKGLSLTranspiler_Internal.h"
+#import "MirageTemplateType.h"
 
 // Source-to-source rewrites that run BEFORE wrapping, folding a neighbouring
 // GLSL dialect into the image-shader convention this engine speaks
@@ -85,6 +86,10 @@ BOOL KKWantsAlphaOutput(NSString *src) {
   return [re firstMatchInString:src
                         options:0
                           range:NSMakeRange(0, src.length)] != nil;
+}
+
+BOOL KKLooksLikeTransitionShader(NSString *src) {
+  return MirageTemplateTypeForSource(src, NULL) == MirageTemplateTypeTransition;
 }
 
 MirageMotionBlurMode MirageMotionBlurModeForSource(NSString *src) {

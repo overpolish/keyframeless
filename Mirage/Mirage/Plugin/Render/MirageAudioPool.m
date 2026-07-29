@@ -265,6 +265,14 @@ static void MirageAudioFoldToPool(const float *bands, uint32_t have,
   }
 }
 
+static void MirageAudioWaveformToPool(const float *samples,
+                                      const MirageAudioProp *p,
+                                      vector_float4 *pool) {
+  for (int i = 0; i < p->waveformSamples; i++) {
+    pool[p->waveformPoolOffset + (i >> 2)][i & 3] = samples[i];
+  }
+}
+
 /// The lane value for `label`, or `fallback` when the lane is absent. The
 /// directive's attributes only seeded these lanes' defaults, so by render time
 /// the lane is the authority.
@@ -297,6 +305,11 @@ int MirageFillAudioPool(
     if (p->wantsFlow) {
       pool[p->flowPoolOffset] = (vector_float4){0, 0, 0, 0};
     }
+    if (p->wantsWaveform) {
+      for (int v = 0; v < p->waveformVecCount; v++) {
+        pool[p->waveformPoolOffset + v] = (vector_float4){0, 0, 0, 0};
+      }
+    }
 
     NSString *uniform = @(p->name);
     long key = lround(MirageAudioLaneValue(valuesForLabel, uniform, 0));
@@ -314,23 +327,23 @@ int MirageFillAudioPool(
       have = 256;
     }
     float bands[256];
-    if (!MirageAudioSampleSmoothed(
-            spectrogram, timelineSeconds,
-            MirageAudioLaneValue(valuesForLabel,
-                                 MirageAudioSmoothLaneLabel(uniform),
-                                 p->smoothSeconds),
-            bands, have)) {
-      continue; // outside the published range - silence
-    }
-    MirageAudioApplyGate(
+    BOOL spectrumHit = MirageAudioSampleSmoothed(
         spectrogram, timelineSeconds,
-        MirageAudioLaneValue(valuesForLabel, MirageAudioGateLaneLabel(uniform),
-                             p->gateDB),
         MirageAudioLaneValue(valuesForLabel,
-                             MirageAudioReleaseLaneLabel(uniform),
-                             p->releaseSeconds),
+                             MirageAudioSmoothLaneLabel(uniform),
+                             p->smoothSeconds),
         bands, have);
-    MirageAudioFoldToPool(bands, have, p, pool);
+    if (spectrumHit) {
+      MirageAudioApplyGate(
+          spectrogram, timelineSeconds,
+          MirageAudioLaneValue(valuesForLabel,
+                               MirageAudioGateLaneLabel(uniform), p->gateDB),
+          MirageAudioLaneValue(valuesForLabel,
+                               MirageAudioReleaseLaneLabel(uniform),
+                               p->releaseSeconds),
+          bands, have);
+      MirageAudioFoldToPool(bands, have, p, pool);
+    }
 
     if (p->wantsFlow) {
       // Map the shader-band range to analysis bands with the same proportional
@@ -350,6 +363,21 @@ int MirageFillAudioPool(
       double flow = KKSpectrogramFlowAtTime(spectrogram, timelineSeconds, aLo,
                                             aHi, gate01);
       pool[p->flowPoolOffset] = (vector_float4){(float)flow, 0, 0, 0};
+    }
+    if (p->wantsWaveform) {
+      float waveform[KK_SHADER_MAX_AUDIO_WAVE_SAMPLES];
+      double window = MirageAudioLaneValue(
+          valuesForLabel, MirageAudioWaveformWindowLaneLabel(uniform),
+          p->waveformWindowSeconds);
+      if (window < kMirageAudioWaveformWindowMinSec)
+        window = kMirageAudioWaveformWindowMinSec;
+      if (window > kMirageAudioWaveformWindowMaxSec)
+        window = kMirageAudioWaveformWindowMaxSec;
+      if (KKSpectrogramWaveformWindowAtTime(spectrogram, timelineSeconds,
+                                            window, waveform,
+                                            (size_t)p->waveformSamples)) {
+        MirageAudioWaveformToPool(waveform, p, pool);
+      }
     }
   }
   return total;

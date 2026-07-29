@@ -21,8 +21,13 @@
   if (!paramAPI)
     return NO;
 
-  // Second texture source, bound to iChannel1 when filled (a Motion
-  // transition template feeds it "Drop Zone Transition B").
+  // Explicit transition inputs. Motion wires these to Drop Zone Transition
+  // A/B; they remain unpublished implementation details.
+  if (![paramAPI addImageReferenceWithName:@"From"
+                               parameterID:kParamFromImage
+                            parameterFlags:kFxParameterFlag_DEFAULT]) {
+    return NO;
+  }
   if (![paramAPI addImageReferenceWithName:@"To"
                                parameterID:kParamToImage
                             parameterFlags:kFxParameterFlag_DEFAULT]) {

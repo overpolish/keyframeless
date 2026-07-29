@@ -27,7 +27,10 @@ NS_ASSUME_NONNULL_BEGIN
 ///   float64  timelineStart
 ///   float64  floorDB     (v2+) the dB mapped to 0.0
 ///   float64  ceilingDB   (v2+) the dB mapped to 1.0
+///   float64  waveformSampleRate (v2+; 0 when no waveform is stored)
+///   uint64   numWaveformSamples (v2+)
 ///   float32  data[numFrames * numBands]   row-major [frame][band], 0...1
+///   float32  waveform[numWaveformSamples] continuous processed mono, signed
 ///
 /// v1 files have no dB window and read back as the -85/-15 they were written
 /// with. The window is IN the file because band values are normalised against
@@ -66,6 +69,8 @@ double KKSpectrogramHopSeconds(KKSpectrogramRef spectrogram);
 double KKSpectrogramTimelineStart(KKSpectrogramRef spectrogram);
 /// Seconds of timeline covered.
 double KKSpectrogramDuration(KKSpectrogramRef spectrogram);
+double KKSpectrogramWaveformSampleRate(KKSpectrogramRef spectrogram);
+uint64_t KKSpectrogramNumWaveformSamples(KKSpectrogramRef spectrogram);
 
 /// The dB window the band values are normalised against: `floorDB` reads 0.0,
 /// `ceilingDB` reads 1.0. Use them to turn a real loudness into a band value -
@@ -89,6 +94,21 @@ double KKSpectrogramNormalizedForDB(KKSpectrogramRef spectrogram, double db);
 BOOL KKSpectrogramSampleAtTime(KKSpectrogramRef spectrogram,
                                double timelineSeconds, float *outBands,
                                size_t maxBands);
+
+/// Samples a centred time-domain window into `outSamples`, oldest to newest.
+/// Values are processed mono audio and normally sit in -1...1, though the
+/// source mix may exceed full scale. The stored waveform is linearly
+/// interpolated to exactly `maxSamples`, so shader array size and window length
+/// are independent.
+///
+/// v1 files carry no waveform: this fills zeroes and returns NO, prompting a
+/// republish without making old spectrum shaders unreadable. Samples outside
+/// the analysis are zero; YES means at least part of the requested window
+/// overlapped published audio.
+BOOL KKSpectrogramWaveformWindowAtTime(KKSpectrogramRef spectrogram,
+                                       double timelineSeconds,
+                                       double windowSeconds, float *outSamples,
+                                       size_t maxSamples);
 
 /// Cumulative "flow": the running total of gated band energy from the start of
 /// the analysis up to `timelineSeconds`. It only ever increases, so an effect
@@ -121,6 +141,16 @@ BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
                         uint32_t numBands, double hopSeconds,
                         double timelineStart, double floorDB, double ceilingDB,
                         NSError **error);
+
+/// Current-format writer with an optional continuous mono waveform. Pass NULL,
+/// zero samples and a zero sample rate to publish spectrum only.
+BOOL KKSpectrogramWriteWithWaveform(NSURL *url, const float *data,
+                                    uint32_t numFrames, uint32_t numBands,
+                                    double hopSeconds, double timelineStart,
+                                    double floorDB, double ceilingDB,
+                                    const float *_Nullable waveform,
+                                    uint64_t numWaveformSamples,
+                                    double waveformSampleRate, NSError **error);
 
 /// The shared app-group directory Sonar publishes into, or nil without the
 /// `group.com.keyframeless` entitlement. A workflow extension's own

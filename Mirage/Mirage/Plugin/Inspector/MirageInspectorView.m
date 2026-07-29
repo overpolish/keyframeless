@@ -273,16 +273,27 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     if (sName.length && code.length)
       dict[sName] = code;
   }
+  if (!MirageCategoryForSource(dict[@"Image"]).length) {
+    NSAlert *alert = [NSAlert new];
+    alert.messageText =
+        RLoc(@"Template type required", @"Missing template directive alert.");
+    alert.informativeText =
+        RLoc(@"Add exactly one `// #template generator`, `filter`, `layout`, "
+             @"or `transition` line to the Image shader before saving.",
+             @"Missing template directive alert detail.");
+    [alert runModal];
+    return;
+  }
   NSData *preview = MirageRenderThumbnailJPEG(_miniViewerRenderer, 320, 180);
   // No author by default - never derive it from the account name (privacy). The
   // user can add an author when publishing.
-  MirageCatalogEntry *saved = [[MirageLocalCatalog shared]
-      saveShaderNamed:name
-               author:@""
-             category:MirageCategoryAtIndex(
-                          note.userInfo[KKCodeEditorSaveCategoryIndexKey])
-             sections:dict
-          previewJPEG:preview];
+  MirageCatalogEntry *saved =
+      [[MirageLocalCatalog shared] saveShaderNamed:name
+                                            author:@""
+                                          sections:dict
+                                       previewJPEG:preview];
+  if (!saved)
+    return;
   // Adopt the new entry's id so this instance is now "running that template" -
   // the same identity a browser load stamps, and what its saved curve defaults
   // are keyed by.
@@ -305,9 +316,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // gives the source scope; the stamp + applyTimeline below move the active
   // scope onto the new id.
   [self _syncCurveDefaultsScope:current];
-  KKScopedDefaultsCopyScope(KKDefaultsActiveScope(),
-                            [[self _curveDefaultsBaseScope]
-                                stringByAppendingFormat:@"/%@", entryID]);
+  KKScopedDefaultsCopyScope(
+      KKDefaultsActiveScope(),
+      [[self _curveDefaultsBaseScope] stringByAppendingFormat:@"/%@", entryID]);
   NSMutableArray<KKLane *> *lanes = [current.lanes mutableCopy];
   BOOL changed = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {

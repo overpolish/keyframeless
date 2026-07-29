@@ -112,10 +112,6 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
   e.entryID = meta[@"id"] ?: dir.lastPathComponent;
   e.name = meta[@"name"] ?: @"Untitled";
   e.author = meta[@"author"] ?: @"";
-  // Normalised, so an entry saved before categories existed (no key at all) and
-  // one published by a newer build (a category this build can't draw) both land
-  // on the default instead of needing a migration pass over the folder.
-  e.category = MirageCategoryNormalize(meta[@"category"]);
   e.version = [meta[@"version"] integerValue] ?: 1;
   e.community = [meta[@"community"] boolValue];
   e.folderPath = dir;
@@ -139,15 +135,22 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
       sections[sectionName] = code;
   }
   e.sections = sections;
+  // The Image shader owns its type. metadata.json repeats it only for remote
+  // catalogue filtering before the source has been downloaded.
+  e.category = MirageCategoryForSource(sections[@"Image"]);
+  if (!e.category.length)
+    return nil;
   return e;
 }
 
 - (MirageCatalogEntry *)
     saveShaderNamed:(NSString *)name
              author:(NSString *)author
-           category:(NSString *)category
            sections:(NSDictionary<NSString *, NSString *> *)sections
         previewJPEG:(NSData *)previewJPEG {
+  NSString *category = MirageCategoryForSource(sections[@"Image"]);
+  if (!category.length)
+    return nil;
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *root = [self rootDirectory];
 
@@ -185,11 +188,9 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
     @"id" : entryID,
     @"name" : name,
     @"author" : author ?: @"",
-    // Written as given, not normalised: writes preserve, reads normalise. The
-    // picker only ever hands us a known id, but keeping the one rule everywhere
-    // is what lets the community install below round-trip a newer build's
-    // category instead of quietly rewriting it.
-    @"category" : category.length ? category : kMirageCategoryDefault,
+    // Denormalised for remote catalogue filtering; the Image directive remains
+    // authoritative whenever the source is available.
+    @"category" : category,
     @"version" : @(version),
     @"preview" : @"preview.jpg",
   };
@@ -303,10 +304,12 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
 - (void)installCommunityID:(NSString *)entryID
                       name:(NSString *)name
                     author:(NSString *)author
-                  category:(NSString *)category
                    version:(NSInteger)version
                   sections:(NSDictionary<NSString *, NSString *> *)sections
                previewJPEG:(NSData *)previewJPEG {
+  NSString *category = MirageCategoryForSource(sections[@"Image"]);
+  if (!category.length)
+    return;
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *dir = [[self rootDirectory] stringByAppendingPathComponent:entryID];
   [fm removeItemAtPath:dir error:nil]; // replace on update
@@ -331,11 +334,7 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
     @"id" : entryID,
     @"name" : name ?: @"",
     @"author" : author ?: @"",
-    // Deliberately NOT normalised: a shader published by a newer build can name
-    // a category this one can't draw, and rewriting it here would downgrade the
-    // entry on disk permanently. Reads normalise for display instead, so an
-    // unknown shows as the default without losing what it really is.
-    @"category" : category.length ? category : kMirageCategoryDefault,
+    @"category" : category,
     @"version" : @(version),
     @"preview" : @"preview.jpg",
     @"community" : @YES,

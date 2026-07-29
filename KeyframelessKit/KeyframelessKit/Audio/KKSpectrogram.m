@@ -13,14 +13,14 @@
 
 const uint32_t KKSpectrogramFormatVersion = 2;
 
-static NSString *const kKKSpectrogramAppGroupID =
-    @"group.com.keyframeless";
+static NSString *const kKKSpectrogramAppGroupID = @"group.com.keyframeless";
 // v1: magic, version, numFrames, numBands, hopSeconds, timelineStart.
 // v2 appends the dB window. The grid starts after whichever header the file
 // declares, so the two sizes are what locate it - not one constant.
 static const size_t kKKSpectrogramHeaderSizeV1 = 4 + 4 + 4 + 4 + 8 + 8;
+// v2 appends the dB window and a continuous waveform's sample metadata.
 static const size_t kKKSpectrogramHeaderSizeV2 =
-    kKKSpectrogramHeaderSizeV1 + 8 + 8;
+    kKKSpectrogramHeaderSizeV1 + 8 + 8 + 8 + 8;
 
 // What v1 was always written with, so a file from before the window was stored
 // reads back as the loudness it actually encoded.
@@ -31,17 +31,28 @@ struct KKSpectrogram {
   void *map;
   size_t mapSize;
   const float *data;
+  const float *waveform;
   uint32_t numFrames;
   uint32_t numBands;
+  uint64_t numWaveformSamples;
   double hopSeconds;
   double timelineStart;
   double floorDB;
   double ceilingDB;
+  double waveformSampleRate;
 };
 
 static uint32_t KKReadU32(const uint8_t *p) {
   return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
          ((uint32_t)p[3] << 24);
+}
+
+static uint64_t KKReadU64(const uint8_t *p) {
+  uint64_t value = 0;
+  for (int i = 0; i < 8; i++) {
+    value |= ((uint64_t)p[i]) << (8 * i);
+  }
+  return value;
 }
 
 /// Appends `v` little-endian, to match `KKReadF64`.
@@ -117,15 +128,19 @@ KKSpectrogramRef KKSpectrogramOpen(NSURL *url) {
       version >= 2 ? kKKSpectrogramHeaderSizeV2 : kKKSpectrogramHeaderSizeV1;
   double floorDB = kKKSpectrogramLegacyFloorDB;
   double ceilingDB = kKKSpectrogramLegacyCeilingDB;
+  double waveformSampleRate = 0;
+  uint64_t numWaveformSamples = 0;
   if (version >= 2) {
     if (size < kKKSpectrogramHeaderSizeV2) {
       munmap(map, size);
-      KKLogWarn(@"KKSpectrogram: %@ claims v%u but has no dB window",
+      KKLogWarn(@"KKSpectrogram: %@ claims v%u but has an incomplete header",
                 url.lastPathComponent, version);
       return NULL;
     }
     floorDB = KKReadF64(bytes + 32);
     ceilingDB = KKReadF64(bytes + 40);
+    waveformSampleRate = KKReadF64(bytes + 48);
+    numWaveformSamples = KKReadU64(bytes + 56);
     // An inverted or collapsed window would make every dB map to the same band
     // value, so treat it as corrupt rather than dividing by ~0 later.
     if (!(ceilingDB > floorDB)) {
@@ -134,12 +149,31 @@ KKSpectrogramRef KKSpectrogramOpen(NSURL *url) {
                 url.lastPathComponent, floorDB, ceilingDB);
       return NULL;
     }
+    if ((numWaveformSamples > 0 && waveformSampleRate <= 0) ||
+        (numWaveformSamples == 0 && waveformSampleRate != 0)) {
+      munmap(map, size);
+      KKLogWarn(@"KKSpectrogram: %@ has inconsistent waveform metadata",
+                url.lastPathComponent);
+      return NULL;
+    }
   }
 
   // Trust nothing: a truncated or corrupt file must fail here, not by reading
   // off the end of the mapping on the render thread.
-  size_t expected = headerSize + (size_t)numFrames * numBands * sizeof(float);
-  if (numFrames == 0 || numBands == 0 || hopSeconds <= 0 || size < expected) {
+  if (numFrames == 0 || numBands == 0 || hopSeconds <= 0 ||
+      (size_t)numFrames > SIZE_MAX / (size_t)numBands ||
+      (size_t)numFrames * numBands > SIZE_MAX / sizeof(float) ||
+      numWaveformSamples > SIZE_MAX / sizeof(float)) {
+    munmap(map, size);
+    KKLogWarn(@"KKSpectrogram: %@ header doesn't match its size",
+              url.lastPathComponent);
+    return NULL;
+  }
+  size_t gridBytes = (size_t)numFrames * numBands * sizeof(float);
+  size_t waveformBytes = (size_t)numWaveformSamples * sizeof(float);
+  if (headerSize > SIZE_MAX - gridBytes ||
+      headerSize + gridBytes > SIZE_MAX - waveformBytes ||
+      size < headerSize + gridBytes + waveformBytes) {
     munmap(map, size);
     KKLogWarn(@"KKSpectrogram: %@ header doesn't match its size",
               url.lastPathComponent);
@@ -154,12 +188,17 @@ KKSpectrogramRef KKSpectrogramOpen(NSURL *url) {
   spectrogram->map = map;
   spectrogram->mapSize = size;
   spectrogram->data = (const float *)(bytes + headerSize);
+  spectrogram->waveform = numWaveformSamples
+                              ? (const float *)(bytes + headerSize + gridBytes)
+                              : NULL;
   spectrogram->numFrames = numFrames;
   spectrogram->numBands = numBands;
+  spectrogram->numWaveformSamples = numWaveformSamples;
   spectrogram->hopSeconds = hopSeconds;
   spectrogram->timelineStart = timelineStart;
   spectrogram->floorDB = floorDB;
   spectrogram->ceilingDB = ceilingDB;
+  spectrogram->waveformSampleRate = waveformSampleRate;
   return spectrogram;
 }
 
@@ -188,6 +227,12 @@ double KKSpectrogramTimelineStart(KKSpectrogramRef s) {
 
 double KKSpectrogramDuration(KKSpectrogramRef s) {
   return s ? (double)s->numFrames * s->hopSeconds : 0;
+}
+double KKSpectrogramWaveformSampleRate(KKSpectrogramRef s) {
+  return s ? s->waveformSampleRate : 0;
+}
+uint64_t KKSpectrogramNumWaveformSamples(KKSpectrogramRef s) {
+  return s ? s->numWaveformSamples : 0;
 }
 
 double KKSpectrogramFloorDB(KKSpectrogramRef s) {
@@ -233,6 +278,39 @@ BOOL KKSpectrogramSampleAtTime(KKSpectrogramRef s, double timelineSeconds,
     outBands[b] = row0[b] + (row1[b] - row0[b]) * t;
   }
   return YES;
+}
+
+BOOL KKSpectrogramWaveformWindowAtTime(KKSpectrogramRef s,
+                                       double timelineSeconds,
+                                       double windowSeconds, float *outSamples,
+                                       size_t maxSamples) {
+  if (!outSamples || maxSamples == 0) {
+    return NO;
+  }
+  memset(outSamples, 0, maxSamples * sizeof(float));
+  if (!s || !s->waveform || s->numWaveformSamples == 0 ||
+      s->waveformSampleRate <= 0 || windowSeconds <= 0) {
+    return NO;
+  }
+
+  BOOL hit = NO;
+  double halfWindow = 0.5 * windowSeconds;
+  for (size_t i = 0; i < maxSamples; i++) {
+    double u = maxSamples > 1 ? (double)i / (double)(maxSamples - 1) : 0.5;
+    double sampleTime = timelineSeconds + (u - 0.5) * (2.0 * halfWindow);
+    double position = (sampleTime - s->timelineStart) * s->waveformSampleRate;
+    if (position < 0 || position > (double)(s->numWaveformSamples - 1)) {
+      continue;
+    }
+    uint64_t i0 = (uint64_t)position;
+    uint64_t i1 = i0 + 1 < s->numWaveformSamples ? i0 + 1 : i0;
+    float t = (float)(position - (double)i0);
+    float a = s->waveform[i0];
+    float b = s->waveform[i1];
+    outSamples[i] = a + (b - a) * t;
+    hit = YES;
+  }
+  return hit;
 }
 
 double KKSpectrogramFlowAtTime(KKSpectrogramRef s, double timelineSeconds,
@@ -289,6 +367,16 @@ BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
                         uint32_t numBands, double hopSeconds,
                         double timelineStart, double floorDB, double ceilingDB,
                         NSError **error) {
+  return KKSpectrogramWriteWithWaveform(url, data, numFrames, numBands,
+                                        hopSeconds, timelineStart, floorDB,
+                                        ceilingDB, NULL, 0, 0, error);
+}
+
+BOOL KKSpectrogramWriteWithWaveform(
+    NSURL *url, const float *data, uint32_t numFrames, uint32_t numBands,
+    double hopSeconds, double timelineStart, double floorDB, double ceilingDB,
+    const float *waveform, uint64_t numWaveformSamples,
+    double waveformSampleRate, NSError **error) {
   if (!data || numFrames == 0 || numBands == 0) {
     if (error) {
       *error = [NSError
@@ -307,9 +395,47 @@ BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
     }
     return NO;
   }
+  if ((numWaveformSamples > 0 && (!waveform || waveformSampleRate <= 0)) ||
+      (numWaveformSamples == 0 && waveformSampleRate != 0)) {
+    if (error) {
+      *error =
+          [NSError errorWithDomain:@"KKSpectrogram"
+                              code:3
+                          userInfo:@{
+                            NSLocalizedDescriptionKey : @"Bad waveform metadata"
+                          }];
+    }
+    return NO;
+  }
+  if ((size_t)numFrames > SIZE_MAX / (size_t)numBands ||
+      (size_t)numFrames * numBands > SIZE_MAX / sizeof(float) ||
+      numWaveformSamples > SIZE_MAX / sizeof(float)) {
+    if (error) {
+      *error =
+          [NSError errorWithDomain:@"KKSpectrogram"
+                              code:4
+                          userInfo:@{
+                            NSLocalizedDescriptionKey : @"Analysis is too large"
+                          }];
+    }
+    return NO;
+  }
   size_t gridBytes = (size_t)numFrames * numBands * sizeof(float);
-  NSMutableData *out =
-      [NSMutableData dataWithCapacity:kKKSpectrogramHeaderSizeV2 + gridBytes];
+  size_t waveformBytes = (size_t)numWaveformSamples * sizeof(float);
+  if (kKKSpectrogramHeaderSizeV2 > SIZE_MAX - gridBytes ||
+      kKKSpectrogramHeaderSizeV2 + gridBytes > SIZE_MAX - waveformBytes) {
+    if (error) {
+      *error =
+          [NSError errorWithDomain:@"KKSpectrogram"
+                              code:4
+                          userInfo:@{
+                            NSLocalizedDescriptionKey : @"Analysis is too large"
+                          }];
+    }
+    return NO;
+  }
+  NSMutableData *out = [NSMutableData
+      dataWithCapacity:kKKSpectrogramHeaderSizeV2 + gridBytes + waveformBytes];
   [out appendBytes:"KKSG" length:4];
   uint32_t version = CFSwapInt32HostToLittle(KKSpectrogramFormatVersion);
   [out appendBytes:&version length:4];
@@ -321,7 +447,13 @@ BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
   KKAppendF64LE(out, timelineStart);
   KKAppendF64LE(out, floorDB);
   KKAppendF64LE(out, ceilingDB);
+  KKAppendF64LE(out, waveformSampleRate);
+  uint64_t waveformCount = CFSwapInt64HostToLittle(numWaveformSamples);
+  [out appendBytes:&waveformCount length:sizeof(waveformCount)];
   [out appendBytes:data length:gridBytes];
+  if (waveformBytes) {
+    [out appendBytes:waveform length:waveformBytes];
+  }
   return [out writeToURL:url options:NSDataWritingAtomic error:error];
 }
 

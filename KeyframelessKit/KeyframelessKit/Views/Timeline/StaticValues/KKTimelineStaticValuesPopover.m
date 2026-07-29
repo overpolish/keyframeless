@@ -953,7 +953,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _laneGatesVisibility = NO;
   for (KKLane *l in _lanes) {
     _currentValuesByLabel[l.key] = l.keyposes.firstObject.values ?: @[];
-    if (l.visibleWhenKey.length)
+    if (l.visibleWhenKey.length || l.maxControllerKey.length)
       _laneGatesVisibility = YES;
   }
 }
@@ -1524,6 +1524,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // does this for field edits), so an expression lane's result strip re-runs
   // against the value being dragged instead of a stale cached keypose.
   _currentValuesByLabel[label] = values;
+  [self _refreshDynamicMaxRows];
 }
 
 - (nullable NSView *)rowViewForLabel:(NSString *)label {

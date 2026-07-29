@@ -71,7 +71,9 @@ typedef struct MiragePluginState {
     // uniforms at bind time. `colorPoolCount` is the number of vec4s used.
     vector_float4 colorPool[KK_SHADER_COLOR_POOL];
     int colorPoolCount;
-    int _colorPad;
+    // Two-input transition coverage:
+    // 0 = both clips, 1 = transparent From, 2 = transparent To.
+    int transitionMode;
 } MiragePluginState;
 
 typedef enum MirageFragmentIndex {

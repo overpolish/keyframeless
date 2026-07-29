@@ -68,7 +68,8 @@ FOUNDATION_EXPORT const CGFloat kChoiceListMaxBody;
   NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
   BOOL _wrapsChoicePills;             // pill wraps to multiple lines
   NSLayoutConstraint *_pillWidthConstraint; // wrapping pill width (= wrapW)
-  BOOL _choiceUsesDropdown; // choice row is a dropdown, not pills
+  BOOL _choiceUsesDropdown;   // choice row is a dropdown, not pills
+  BOOL _choiceAllowsMultiple; // dropdown stores a bitmask checklist
   // What a stored value that names no current choice should read as, and the
   // warning beside it. See KKLane.choiceUnknownLabels.
   NSDictionary<NSNumber *, NSString *> *_choiceUnknownLabels;
@@ -126,6 +127,7 @@ FOUNDATION_EXPORT const CGFloat kChoiceListMaxBody;
 // initWithLane.
 - (double)_storedForChoiceIndex:(NSInteger)index;
 - (NSInteger)_selectedChoiceIndex;
+- (NSIndexSet *)_selectedChoiceIndexes;
 - (void)_syncChoiceFieldTitle;
 - (void)_toggleChoiceList;
 // +Toggles - smooth/link/palette-lock + palette-mode buttons, built + tinted

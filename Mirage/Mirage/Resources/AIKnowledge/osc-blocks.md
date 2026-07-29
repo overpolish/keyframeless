@@ -43,7 +43,7 @@ A block lives in `//` comments (so the GLSL stays valid) and looks like directiv
 - It **continues** through following `//   key = value` comment lines.
 - It **ends** at the first non-comment line, a blank comment line, a `//   }` line, or the next `// @osc`. (So separate each block from the next with a blank line or a `}`.)
 - **One line per `key = value`.** There is no line continuation: a comment line inside a block with no `=` is discarded (the sole exception is the bare `skipsnapping` flag), so a wrapped expression silently loses everything after the first line and leaves the block with unbalanced parentheses. Split a long expression into **locals** instead, which is what they are for.
-- Up to **8** blocks per shader, up to **12** locals per block.
+- Up to **16** blocks per shader, up to **32** locals per block. Each expression may contain up to 2047 UTF-8 bytes.
 
 Put the block anywhere in the source; it doesn't have to sit next to the uniform it binds (though next to it reads best).
 

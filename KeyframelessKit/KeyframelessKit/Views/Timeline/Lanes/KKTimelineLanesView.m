@@ -137,6 +137,21 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 
 @implementation KKTimelineLanesView
 
+- (void)_previewOpenConstantsAtFraction:(double)fraction {
+  // Constants have no keypose time to return to: while their popover is open,
+  // its preview belongs to the live playhead. Keep editFraction following both
+  // the optimistic scrub callback and later host/poller pushes. A keypose
+  // popover deliberately does not enter here; it keeps its fixed editFraction
+  // so stopping playback can snap back to the keypose being edited.
+  if (!_openStaticView || _openStaticIsBoundary || fraction < 0.0 ||
+      fraction > 1.0)
+    return;
+  id del = self.miniViewerDelegate;
+  if ([del respondsToSelector:NSSelectorFromString(@"setEditFraction:")])
+    [del setValue:@(fraction) forKey:@"editFraction"];
+  [_openContentMiniViewer setNeedsDisplay:YES];
+}
+
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
                               timeline:(KKTimeline *)timeline {
   self = [super initWithFrame:NSZeroRect];
@@ -327,7 +342,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   };
   _basicGraph.onScrub = ^(double frac) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onScrub)
+    if (!s)
+      return;
+    [s _previewOpenConstantsAtFraction:frac];
+    if (s->_onScrub)
       s->_onScrub(frac);
   };
   _basicGraph.onZoomChanged = ^(BOOL zoomed) {
@@ -420,7 +438,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   };
   _advancedGraph.onScrub = ^(double frac) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onScrub)
+    if (!s)
+      return;
+    [s _previewOpenConstantsAtFraction:frac];
+    if (s->_onScrub)
       s->_onScrub(frac);
   };
   _advancedGraph.onGapPopover = KKMakeGapForwarder(

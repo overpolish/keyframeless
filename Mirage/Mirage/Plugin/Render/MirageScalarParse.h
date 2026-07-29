@@ -55,6 +55,95 @@ static inline void MirageParseBracedFields(NSString *attrs, NSString *key,
   }
 }
 
+// Parse the scalar reactive-cap pair:
+//   maxby=uLayout maxvalues={4,6,9}
+// The controller is a uniform identity (not its display label). Values are
+// deliberately kept in authored lane units: the KKLane constants UI owns the
+// reactive display clamp, while the shader can still defensively clamp its
+// effective value without mutating stored/keyframed data.
+static inline void MirageScalarParseDynamicMax(NSString *attrs,
+                                               MirageScalarProp *p) {
+  NSTextCheckingResult *controller = [[NSRegularExpression
+      regularExpressionWithPattern:@"\\bmaxby\\s*=\\s*([A-Za-z_]\\w*)"
+                           options:0
+                             error:nil]
+      firstMatchInString:attrs
+                 options:0
+                   range:NSMakeRange(0, attrs.length)];
+  if (controller && [controller rangeAtIndex:1].location != NSNotFound) {
+    NSString *name = [attrs substringWithRange:[controller rangeAtIndex:1]];
+    strncpy(p->maxByName, name.UTF8String ?: "", sizeof(p->maxByName) - 1);
+  }
+
+  NSTextCheckingResult *values = [[NSRegularExpression
+      regularExpressionWithPattern:@"\\bmaxvalues\\s*=\\s*\\{([^}]*)\\}"
+                           options:0
+                             error:nil]
+      firstMatchInString:attrs
+                 options:0
+                   range:NSMakeRange(0, attrs.length)];
+  if (!values || [values rangeAtIndex:1].location == NSNotFound)
+    return;
+
+  NSArray<NSString *> *parts =
+      [[attrs substringWithRange:[values rangeAtIndex:1]]
+          componentsSeparatedByString:@","];
+  for (NSString *part in parts) {
+    if (p->maxByValueCount >= KK_SHADER_MAX_DYNAMIC_MAX_VALUES)
+      break;
+    NSString *token = [part
+        stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    if (!token.length)
+      continue;
+    NSScanner *scanner = [NSScanner scannerWithString:token];
+    double value = 0.0;
+    if ([scanner scanDouble:&value] && scanner.atEnd)
+      p->maxByValues[p->maxByValueCount++] = value;
+  }
+}
+
+static inline void MirageScalarParseVisibility(NSString *attrs,
+                                               MirageScalarProp *p) {
+  NSTextCheckingResult *controller = [[NSRegularExpression
+      regularExpressionWithPattern:@"\\bvisibleby\\s*=\\s*([A-Za-z_]\\w*)"
+                           options:0
+                             error:nil]
+      firstMatchInString:attrs
+                 options:0
+                   range:NSMakeRange(0, attrs.length)];
+  if (controller && [controller rangeAtIndex:1].location != NSNotFound) {
+    NSString *name = [attrs substringWithRange:[controller rangeAtIndex:1]];
+    strncpy(p->visibleByName, name.UTF8String ?: "",
+            sizeof(p->visibleByName) - 1);
+  }
+
+  NSTextCheckingResult *values = [[NSRegularExpression
+      regularExpressionWithPattern:@"\\bvisiblevalues\\s*=\\s*\\{([^}]*)\\}"
+                           options:0
+                             error:nil]
+      firstMatchInString:attrs
+                 options:0
+                   range:NSMakeRange(0, attrs.length)];
+  if (!values || [values rangeAtIndex:1].location == NSNotFound)
+    return;
+
+  NSArray<NSString *> *parts =
+      [[attrs substringWithRange:[values rangeAtIndex:1]]
+          componentsSeparatedByString:@","];
+  for (NSString *part in parts) {
+    if (p->visibleByValueCount >= KK_SHADER_MAX_VISIBILITY_VALUES)
+      break;
+    NSString *token = [part
+        stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    if (!token.length)
+      continue;
+    NSScanner *scanner = [NSScanner scannerWithString:token];
+    double value = 0.0;
+    if ([scanner scanDouble:&value] && scanner.atEnd)
+      p->visibleByValues[p->visibleByValueCount++] = value;
+  }
+}
+
 static inline void MirageScalarParseDefaults(NSString *attrs,
                                              MirageScalarProp *p) {
   switch (p->kind) {
@@ -70,29 +159,65 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
                          ? [attrs substringWithRange:[om rangeAtIndex:1]]
                          : @"";
     strncpy(p->options, opts.UTF8String ?: "", sizeof(p->options) - 1);
-    int cnt = opts.length ? 1 : 0;
-    for (NSUInteger i = 0; i < opts.length; i++)
-      if ([opts characterAtIndex:i] == ',')
-        cnt++;
+    NSMutableArray<NSString *> *labels = [NSMutableArray array];
+    for (NSString *part in [opts componentsSeparatedByString:@","]) {
+      NSString *label =
+          [part stringByTrimmingCharactersInSet:NSCharacterSet
+                                                    .whitespaceCharacterSet];
+      if (label.length)
+        [labels addObject:label];
+    }
+    int cnt = (int)labels.count;
     p->choiceCount = cnt;
     // `dropdown`: a searchable list instead of pills. Opt-in rather than a
     // count threshold, because only the author knows whether their options are
     // worth showing all at once - and a set that silently changed shape at the
     // 6th option would be worse than either.
-    p->choiceDropdown =
-        ([[NSRegularExpression regularExpressionWithPattern:@"\\bdropdown\\b"
-                                                    options:0
-                                                      error:nil]
-             firstMatchInString:attrs
-                        options:0
-                          range:NSMakeRange(0, attrs.length)] != nil)
-            ? 1
-            : 0;
-    int def = MirageAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0);
-    if (def < 0)
-      def = 0;
-    if (cnt > 0 && def >= cnt)
-      def = cnt - 1;
+    p->choiceDropdown = MirageAttrHasBareFlag(attrs, @"dropdown") ? 1 : 0;
+    p->choiceMultiple = MirageAttrHasBareFlag(attrs, @"multiple") ? 1 : 0;
+
+    int def = 0;
+    if (p->choiceMultiple) {
+      NSTextCheckingResult *dm = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\bdefault\\s*=\\s*\"([^\"]*)\""
+                               options:0
+                                 error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+      if (dm && [dm rangeAtIndex:1].location != NSNotFound) {
+        NSArray<NSString *> *selected =
+            [[attrs substringWithRange:[dm rangeAtIndex:1]]
+                componentsSeparatedByString:@","];
+        for (NSString *pick in selected) {
+          NSString *wanted = [pick
+              stringByTrimmingCharactersInSet:NSCharacterSet
+                                                  .whitespaceCharacterSet];
+          for (NSInteger i = 0; i < (NSInteger)labels.count &&
+                                i < KK_SHADER_MAX_MULTIPLE_CHOICE_OPTIONS;
+               i++) {
+            NSString *candidate = labels[i];
+            if ([candidate isEqualToString:wanted]) {
+              def |= 1 << i;
+              break;
+            }
+          }
+        }
+      } else {
+        def = MirageAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0);
+        int validMask = cnt <= 0 ? 0
+                                 : (cnt >= KK_SHADER_MAX_MULTIPLE_CHOICE_OPTIONS
+                                        ? 0x00FFFFFF
+                                        : ((1 << cnt) - 1));
+        def &= validMask;
+      }
+    } else {
+      def = MirageAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0);
+      if (def < 0)
+        def = 0;
+      if (cnt > 0 && def >= cnt)
+        def = cnt - 1;
+    }
     p->cdefault = def;
     break;
   }
@@ -438,6 +563,8 @@ static inline int MirageParseScalarProps(NSString *source,
     p.poolOffset = pool;
     MirageScalarParseOSC(attrs, &p);
     MirageScalarParseDefaults(attrs, &p);
+    MirageScalarParseDynamicMax(attrs, &p);
+    MirageScalarParseVisibility(attrs, &p);
     props[n++] = p;
     pool += 1;
   }

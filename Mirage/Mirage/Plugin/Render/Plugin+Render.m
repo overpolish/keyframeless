@@ -48,11 +48,15 @@ static NSString *const kMiragePassthroughSource =
             includeFilters:YES
                parameterID:0];
       });
-  // Also ask for the "To" image well. In a Motion transition template it is
-  // wired to "Drop Zone Transition B", which lands the incoming clip alongside
-  // the effect clip in -renderDestinationImage: - the only way an FxPlug filter
-  // gets a second texture, and so the whole basis of transition support.
+  // Explicit Transition A/B wells. Ordinary effects still use the effect clip;
+  // transition shaders prefer From for iChannel0 and retain an effect-clip
+  // fallback for Motion templates saved before the From well existed.
   NSMutableArray<FxImageTileRequest *> *reqs = [sourceReqs mutableCopy];
+  [reqs addObject:[[FxImageTileRequest alloc]
+                      initWithSource:kFxImageTileRequestSourceParameter
+                                time:renderTime
+                      includeFilters:NO
+                         parameterID:kParamFromImage]];
   [reqs addObject:[[FxImageTileRequest alloc]
                       initWithSource:kFxImageTileRequestSourceParameter
                                 time:renderTime
@@ -74,10 +78,12 @@ static KKGLSLUniforms MirageBuildUniforms(const MiragePluginState *base,
   // cut regardless of the motion-rate params. chanRes[0] = the source clip
   // resolution (iChannelResolution[0], filled from the bound texture at draw
   // time). Shared layout with the mini via MirageMakeUniforms.
-  return MirageMakeUniforms(
+  KKGLSLUniforms uniforms = MirageMakeUniforms(
       (float)mediaW, (float)mediaH, iTime, base->common.grain,
       base->common.grainSize, base->common.progress, encodeSRGB,
       (simd_float4){(float)mediaW, (float)mediaH, 1.0f, 0.0f});
+  uniforms.transition.w = (float)base->transitionMode;
+  return uniforms;
 }
 
 // A prepared single-pass draw: binds the per-sample uniforms + colour pool and
@@ -103,6 +109,8 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
     _singlePassDrawForSource:(NSString *)effectiveSource
             destinationImage:(FxImageTile *)destinationImage
                 sourceImages:(NSArray<FxImageTile *> *)sourceImages
+            transitionShader:(BOOL)transitionShader
+              transitionMode:(int)transitionMode
                    linearDst:(BOOL)linearDst {
   id<MTLRenderPipelineState> customPS =
       [self customPipelineForSource:effectiveSource
@@ -124,11 +132,17 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
       tr.declaredChannelMask ? KKCustomChannelSampler(device) : nil;
   id<MTLSamplerState> srcSampler =
       tr.declaredChannelMask ? KKCustomSourceSampler(device) : nil;
-  // The clip we're applied to -> iChannel0, the "To" image well -> iChannel1.
-  // In a Motion transition template the well is wired to "Drop Zone Transition
-  // B", so a GL transition samples the outgoing and incoming clips together.
+  id<MTLTexture> transparentTex = tr.declaredChannelMask && transitionMode != 0
+                                      ? KKCustomTransparentTexture(device)
+                                      : nil;
+  id<MTLTexture> rawEffect =
+      sourceImages.count ? [sourceImages[0] metalTextureForDevice:device] : nil;
+  id<MTLTexture> rawFrom =
+      [KKImageTileForParameterID(sourceImages, kParamFromImage)
+          metalTextureForDevice:device];
   id<MTLTexture> rawTo = [KKImageTileForParameterID(sourceImages, kParamToImage)
       metalTextureForDevice:device];
+  id<MTLTexture> rawSrc = transitionShader && rawFrom ? rawFrom : rawEffect;
   // Gamma-encode the linear sources so a Shadertoy shader (gamma-space input,
   // output re-decoded for the float dest) round-trips them instead of
   // double-decoding + darkening. linearDst == float/linear dest; an 8-bit dest
@@ -136,13 +150,10 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
   // same treatment: a transition blending a gamma A against a linear B would
   // tear across the mix.
   //
-  // gammaSrc stays nil when nothing was encoded - the draw block below then
-  // falls back to its own inputTextures[0].
-  id<MTLTexture> gammaSrc = nil, gammaTo = rawTo;
-  if (linearDst && (sourceImages.count || rawTo)) {
-    id<MTLTexture> rawSrc = sourceImages.count
-                                ? [sourceImages[0] metalTextureForDevice:device]
-                                : nil;
+  // Capture the selected source here because a transition's explicit From well
+  // is not the encoder's first effect-clip texture.
+  id<MTLTexture> gammaSrc = rawSrc, gammaTo = rawTo;
+  if (linearDst && (rawSrc || rawTo)) {
     id<MTLCommandQueue> gq = [dc
         commandQueueWithRegistryID:registryID
                        pixelFormat:[KKMetalDeviceCache pixelFormatForImageTile:
@@ -160,20 +171,23 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
     [encoder setRenderPipelineState:customPS];
     id<MTLTexture> src =
         gammaSrc ?: (inputTextures.count ? inputTextures[0] : nil);
+    if (transitionMode == 1)
+      src = transparentTex;
+    id<MTLTexture> channel1 = transitionMode == 2 ? transparentTex : toTex;
     KKGLSLUniforms uu = args.u;
     const simd_float4 *colorPool = args.pool;
     int poolCount = args.poolCount;
     if (src)
       uu.chanRes[0] =
           (simd_float4){(float)src.width, (float)src.height, 1.0f, 0.0f};
-    if (toTex)
-      uu.chanRes[1] =
-          (simd_float4){(float)toTex.width, (float)toTex.height, 1.0f, 0.0f};
+    if (channel1)
+      uu.chanRes[1] = (simd_float4){(float)channel1.width,
+                                    (float)channel1.height, 1.0f, 0.0f};
     KKBindGLSLUniforms(encoder, &uu, colorPool, poolCount);
     KKBindCustomChannelTextures(encoder, tr,
                                 @[
                                   src ?: (id)[NSNull null],
-                                  toTex ?: (id)[NSNull null], [NSNull null],
+                                  channel1 ?: (id)[NSNull null], [NSNull null],
                                   [NSNull null]
                                 ],
                                 srcSampler, noiseTex, chSampler);
@@ -190,11 +204,13 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                source:(NSString *)effectiveSource
                      destinationImage:(FxImageTile *)destinationImage
                          sourceImages:(NSArray<FxImageTile *> *)sourceImages {
-  MirageSinglePassDraw draw =
-      [self _singlePassDrawForSource:effectiveSource
-                    destinationImage:destinationImage
-                        sourceImages:sourceImages
-                           linearDst:(u.extra.w == 0.0f)];
+  MirageSinglePassDraw draw = [self
+      _singlePassDrawForSource:effectiveSource
+              destinationImage:destinationImage
+                  sourceImages:sourceImages
+              transitionShader:KKLooksLikeTransitionShader(effectiveSource)
+                transitionMode:base->transitionMode
+                     linearDst:(u.extra.w == 0.0f)];
   if (!draw)
     return NO;
   MiragePluginState baseCopy = *base;
@@ -230,11 +246,13 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                              destinationImage:(FxImageTile *)destinationImage
                                  sourceImages:
                                      (NSArray<FxImageTile *> *)sourceImages {
-  MirageSinglePassDraw draw =
-      [self _singlePassDrawForSource:effectiveSource
-                    destinationImage:destinationImage
-                        sourceImages:sourceImages
-                           linearDst:(encodeSRGB == 0.0f)];
+  MirageSinglePassDraw draw = [self
+      _singlePassDrawForSource:effectiveSource
+              destinationImage:destinationImage
+                  sourceImages:sourceImages
+              transitionShader:KKLooksLikeTransitionShader(effectiveSource)
+                transitionMode:states[0].transitionMode
+                     linearDst:(encodeSRGB == 0.0f)];
   if (!draw)
     return NO;
   return [KKMotionBlur
@@ -277,7 +295,8 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
 // The renderer applies the shader locally, so these are the RAW textures.
 - (void)_publishMiniViewerFeeds:(FxImageTile *)destinationImage
                    sourceImages:(NSArray<FxImageTile *> *)sourceImages
-                     renderTime:(CMTime)renderTime {
+                     renderTime:(CMTime)renderTime
+               transitionShader:(BOOL)transitionShader {
   // Per slot: single-slot = playhead, multi-slot = boundary preview / filmstrip
   // / onion. Shared glue in KKPlugin (MiniViewerFeed). The single-slot tag is
   // this frame's clip fraction (not a hard 0), so during playback/scrub the
@@ -285,9 +304,15 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
   // the playhead - otherwise the preview stays frozen at t=0 while the timeline
   // moves (the popover live-playback plumbing the rest of the kit already
   // does).
+  FxImageTile *fromTile =
+      transitionShader
+          ? KKImageTileForParameterID(sourceImages, kParamFromImage)
+          : nil;
+  NSArray<FxImageTile *> *primarySources =
+      fromTile.ioSurface ? @[ fromTile ] : sourceImages;
   [self
       kkPublishMiniViewerFeedForDestination:destinationImage
-                               sourceImages:sourceImages
+                               sourceImages:primarySources
                              descriptorPath:
                                  MirageMiniViewerDescriptorPathForUUID(
                                      KKInstanceUUIDForAPI(self.apiManager))
@@ -295,10 +320,10 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive
                           changesOutputSize:NO
-                                 defaultTag:[self.renderCache
-                                                clipFractionAtSeconds:
-                                                    CMTimeGetSeconds(
-                                                        renderTime)]
+                                 defaultTag:
+                                     [self.renderCache
+                                         clipFractionAtSeconds:CMTimeGetSeconds(
+                                                                   renderTime)]
                                 renderCache:self.renderCache];
   // The "To" well as a second feed texture, so the mini-viewer can preview a
   // two-texture (GL-transition) shader instead of falling through to
@@ -390,10 +415,6 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
     return NO;
   }
 
-  [self _publishMiniViewerFeeds:destinationImage
-                   sourceImages:sourceImages
-                     renderTime:renderTime];
-
   // Output dimensions drive the shader's resolution uniform (iResolution etc.).
   CGFloat mediaW = destinationImage.imagePixelBounds.right -
                    destinationImage.imagePixelBounds.left;
@@ -422,6 +443,11 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
   NSString *imageSrc = sections[@"Image"];
   if (imageSrc.length == 0)
     imageSrc = kMiragePassthroughSource;
+  BOOL transitionShader = KKLooksLikeTransitionShader(imageSrc);
+  [self _publishMiniViewerFeeds:destinationImage
+                   sourceImages:sourceImages
+                     renderTime:renderTime
+               transitionShader:transitionShader];
   NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
     return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
   };
@@ -553,6 +579,7 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
                                               mbState:mpMB
                                            renderTime:renderTime
                                        sampleUniforms:sampleUniforms
+                                       transitionMode:base.transitionMode
                                      destinationImage:destinationImage
                                          sourceImages:sourceImages];
   if (mpStates)

@@ -34,8 +34,13 @@ static const float kMirageDefaultPalette[10][4] = {
 /// name).
 #define KK_SHADER_MAX_COLOR_PROPS 8
 typedef struct MirageColorProp {
-  char name[64];    // GLSL uniform name (e.g. "uPalette")
-  char label[80];   // display label ("Palette")
+  char name[64];  // GLSL uniform name (e.g. "uPalette")
+  char label[80]; // display label ("Palette")
+  // Optional `optionsby=uPatterns`: for an array, slot N maps to option N of
+  // the named multiple-choice control. The colour count lane is omitted, each
+  // swatch inherits the option's label, and it is visible only while that
+  // option's bit is enabled.
+  char optionsByName[64];
   int isArray;      // vec4 name[N] vs vec4 name
   int count;        // array dimension N (single = 1)
   int minCount;     // count lane min (arrays)
@@ -200,6 +205,18 @@ static inline int MirageParseColorProps(NSString *source,
             ? [attrs substringWithRange:[lm rangeAtIndex:1]]
             : MiragePrettifyUniformName(nm);
     strncpy(p.label, label.UTF8String ?: "", sizeof(p.label) - 1);
+    NSTextCheckingResult *obm = [[NSRegularExpression
+        regularExpressionWithPattern:@"\\boptionsby\\s*=\\s*([A-Za-z_]\\w*)"
+                             options:0
+                               error:nil]
+        firstMatchInString:attrs
+                   options:0
+                     range:NSMakeRange(0, attrs.length)];
+    if (obm && [obm rangeAtIndex:1].location != NSNotFound) {
+      NSString *controller = [attrs substringWithRange:[obm rangeAtIndex:1]];
+      strncpy(p.optionsByName, controller.UTF8String ?: "",
+              sizeof(p.optionsByName) - 1);
+    }
     p.isArray = isArray;
     p.count = N;
     p.poolOffset = pool;
