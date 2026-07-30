@@ -443,8 +443,9 @@ static inline int MirageParseScalarProps(NSString *source,
     return 0;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
-          [NSString stringWithFormat:@"(?m)^[ \\t]*//[ \\t]*#(%@)\\b([^\\n]*)$",
-                                     MirageScalarKindAlternation()]
+          [NSString stringWithFormat:
+                        @"(?m)^[ \\t]*//[ \\t]*#(%@)(?![-\\w])([^\\n]*)$",
+                        MirageScalarKindAlternation()]
                            options:0
                              error:nil];
   NSRegularExpression *uniRe = [NSRegularExpression

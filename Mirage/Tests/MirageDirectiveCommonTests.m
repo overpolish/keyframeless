@@ -48,11 +48,34 @@ int main(void) {
                          [longLabels componentsJoinedByString:@","]];
     MirageScalarProp prop = {0};
     int used = 0, truncated = 0;
-    KKRequire(MirageParseScalarProps(longChoice, &prop, 1, 0, &used,
-                                     &truncated) == 1,
-              @"parses a long searchable choice");
+    KKRequire(
+        MirageParseScalarProps(longChoice, &prop, 1, 0, &used, &truncated) == 1,
+        @"parses a long searchable choice");
     KKRequire(prop.choiceCount == 40 && prop.cdefault == 39,
               @"preserves every long-choice label and its default");
+
+    // A directive name ends at a hyphen. These patterns used to end in `\b`,
+    // which IS a boundary between a letter and a hyphen, so a future
+    // `#color-surface` parsed as `#color` and handed `-surface ...` over as its
+    // attribute body. Silently, which is the bad part.
+    MirageScalarProp hyphenated = {0};
+    used = 0;
+    truncated = 0;
+    KKRequire(
+        MirageParseScalarProps(@"// #choice-surface options=\"A,B\" default=1\n"
+                               @"uniform int uThing;\n",
+                               &hyphenated, 1, 0, &used, &truncated) == 0,
+        @"does not read #choice-surface as #choice");
+    KKRequire(MirageParseScalarProps(@"// #choice options=\"A,B\" default=1\n"
+                                     @"uniform int uThing;\n",
+                                     &hyphenated, 1, 0, &used, &truncated) == 1,
+              @"still reads a plain #choice");
+
+    templateError = MirageTemplateDirectiveErrorNone;
+    KKRequire(MirageTemplateTypeForSource(
+                  @"// #template-of-mine filter\nvoid mainImage() {}",
+                  &templateError) == MirageTemplateTypeInvalid,
+              @"does not read #template-of-mine as #template");
   }
   return 0;
 }

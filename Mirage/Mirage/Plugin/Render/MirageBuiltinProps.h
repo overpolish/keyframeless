@@ -42,7 +42,7 @@ static inline MirageBuiltins MirageParseBuiltins(NSString *source) {
     return b;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#(speed|seed|grain)\\b([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#(speed|seed|grain)(?![-\\w])([^\\n]*)$"
                            options:0
                              error:nil];
   NSArray<NSTextCheckingResult *> *dirs =

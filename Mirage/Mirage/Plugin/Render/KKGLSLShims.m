@@ -79,7 +79,7 @@ BOOL KKWantsAlphaOutput(NSString *src) {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     re = [NSRegularExpression
-        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#alpha\\b"
+        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#alpha(?![-\\w])"
                              options:0
                                error:nil];
   });
@@ -132,7 +132,8 @@ BOOL MirageMotionBlurDefaultsOnForSource(NSString *src) {
     // The whole directive line after `#motionblur`, so the `on` is found
     // whether or not a mode word precedes it.
     re = [NSRegularExpression
-        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#motionblur\\b(.*)$"
+        regularExpressionWithPattern:
+            @"(?m)^[ \\t]*//[ \\t]*#motionblur(?![-\\w])(.*)$"
                              options:0
                                error:nil];
   });

@@ -51,10 +51,11 @@ MirageTemplateTypeForSource(NSString *source,
     return MirageTemplateTypeInvalid;
   }
 
-  NSRegularExpression *expression = [NSRegularExpression
-      regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#template\\b(.*)$"
-                           options:0
-                             error:nil];
+  NSRegularExpression *expression =
+      [NSRegularExpression regularExpressionWithPattern:
+                               @"(?m)^[ \\t]*//[ \\t]*#template(?![-\\w])(.*)$"
+                                                options:0
+                                                  error:nil];
   NSArray<NSTextCheckingResult *> *matches =
       [expression matchesInString:source
                           options:0

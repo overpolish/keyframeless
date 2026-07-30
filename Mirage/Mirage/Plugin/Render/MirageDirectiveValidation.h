@@ -70,7 +70,7 @@ static inline NSString *MirageFirstMisplacedGroup(NSString *source) {
     return nil;
   NSRegularExpression *re = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#(color|audio|gradient)\\b([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#(color|audio|gradient)(?![-\\w])([^\\n]*)$"
                            options:0
                              error:nil];
   NSRegularExpression *groupRe =
@@ -133,7 +133,7 @@ static inline NSString *MirageFirstOverlongMulti(NSString *source) {
   NSRegularExpression *re = [NSRegularExpression
       regularExpressionWithPattern:
           @"(?m)^[ \\t]*//[ "
-          @"\\t]*#multi\\b[^\\n]*?\\bfields\\s*=\\s*\\{([^}]*)\\}"
+          @"\\t]*#multi(?![-\\w])[^\\n]*?\\bfields\\s*=\\s*\\{([^}]*)\\}"
                            options:0
                              error:nil];
   __block NSString *found = nil;

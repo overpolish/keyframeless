@@ -77,12 +77,17 @@
 
 // A directive HEADER comment: `// #kind ...` / `// @block ...`. Group 1 is the
 // `#kind` / `@block` token. `^` anchors it to the line start (after indent).
+// The token spans internal hyphens so a hyphenated name paints as ONE directive
+// instead of a known prefix plus stray text - the same reason the parsers end a
+// name with `(?![-\w])` rather than `\b`, which would let `#color-surface` be
+// read as `#color`.
 static NSRegularExpression *KKDirectiveHeaderRE(void) {
   static NSRegularExpression *re;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     re = [NSRegularExpression
-        regularExpressionWithPattern:@"^\\s*//\\s*([#@][A-Za-z_]\\w*)"
+        regularExpressionWithPattern:
+            @"^\\s*//\\s*([#@][A-Za-z_]\\w*(?:-[A-Za-z]\\w*)*)"
                              options:0
                                error:nil];
   });
@@ -93,10 +98,10 @@ static NSRegularExpression *KKDirectiveHeaderRE(void) {
 // block-continuation line): group 1 an attribute/field KEY (a word right before
 // `=`), 2 a quoted string, 3 a number.
 //
-// Group 4 spans internal hyphens (`color-transform`), so a hyphenated enum value
-// is ONE token and can match the keyword set. Splitting it left both halves
-// unknown and painted the value flat. The hyphen must be followed by a letter,
-// so a number's leading `-` still belongs to group 3.
+// Group 4 spans internal hyphens (`color-transform`), so a hyphenated enum
+// value is ONE token and can match the keyword set. Splitting it left both
+// halves unknown and painted the value flat. The hyphen must be followed by a
+// letter, so a number's leading `-` still belongs to group 3.
 static NSRegularExpression *KKDirectiveBodyRE(void) {
   static NSRegularExpression *re;
   static dispatch_once_t once;
