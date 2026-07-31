@@ -516,6 +516,27 @@ MirageDirectiveCompletions(NSString *text, NSUInteger caret,
 
   // --- Directive comment context ---
   NSUInteger bodyStart = lineStart + NSMaxRange(slash);
+
+  // Directive NAMES and their enum VALUES can both contain hyphens
+  // (`#color-surface`, `color-transform`, `linear-rec709`), and a hyphen is not
+  // an identifier character, so the caret word restarts mid-token as soon as the
+  // user types past one. Inside a directive comment a hyphen joins the token, so
+  // every branch below filters AND replaces the whole thing: `color-t` was
+  // matching `transition` on its trailing `t`, and accepting that replaced only
+  // the `t`, producing `color-color-transform`.
+  //
+  // Scoped to this context on purpose. In GLSL `a-b` stays two words, and a
+  // hyphen preceded by anything but an identifier character (`min=-5`) never
+  // joins.
+  while (wordStart > bodyStart + 1 &&
+         [text characterAtIndex:wordStart - 1] == '-' &&
+         IsIdentChar([text characterAtIndex:wordStart - 2])) {
+    wordStart--; // the hyphen
+    while (wordStart > bodyStart &&
+           IsIdentChar([text characterAtIndex:wordStart - 1]))
+      wordStart--;
+  }
+  word = [text substringWithRange:NSMakeRange(wordStart, caret - wordStart)];
   unichar beforeWord =
       wordStart > lineStart ? [text characterAtIndex:wordStart - 1] : 0;
 

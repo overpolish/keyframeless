@@ -65,6 +65,62 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   return _channel1Slot.sourceTexture;
 }
 
+- (NSUInteger)auxTextureCount {
+  return _auxSlots.count;
+}
+
+- (id<MTLTexture>)auxTextureAtIndex:(NSUInteger)index {
+  if (index >= _auxSlots.count)
+    return nil;
+  return _auxSlots[index].sourceTexture;
+}
+
+- (uint64_t)auxTextureGenerationAtIndex:(NSUInteger)index {
+  if (index >= _auxSlots.count)
+    return 0;
+  return _auxSlots[index].generation;
+}
+
+// The compare flags live HERE, on the view, and nowhere else. They are not
+// parameters, not lanes and not kParamUIState: an honoured FxPlug write is one
+// undo entry, so a divider dragged across the frame would push a hundred of them
+// in front of the grade the user actually wants to undo. They are not carried on
+// KKPluginInstanceState either - a rebuilt mini is a new look at the frame, and
+// a split silently still on from the last popover reads as a broken preview.
+- (BOOL)compareAvailable {
+  NSUInteger i = [self _activeSlotIndex];
+  if (i >= _filmstripSlots.count)
+    return NO;
+  return _filmstripSlots[i].sourceTexture != nil;
+}
+
+- (void)setCompareSplitEnabled:(BOOL)enabled {
+  if (_compareSplitEnabled == enabled)
+    return;
+  _compareSplitEnabled = enabled;
+  [self setNeedsDisplay:YES];
+  [self _compareStateChanged];
+}
+
+- (void)setCompareBypassing:(BOOL)bypassing {
+  if (_compareBypassing == bypassing)
+    return;
+  _compareBypassing = bypassing;
+  [self setNeedsDisplay:YES];
+  [self _compareStateChanged];
+}
+
+// Clamped just inside the content rect: a divider flush against an edge has no
+// grab band left on one side and can't be dragged back. No state callback - this
+// fires on every tick of a drag, and the host's controls don't depend on it.
+- (void)setCompareSplitFraction:(CGFloat)fraction {
+  CGFloat f = MIN(MAX(fraction, 0.02), 0.98);
+  if (fabs(_compareSplitFraction - f) < 1e-6)
+    return;
+  _compareSplitFraction = f;
+  [self setNeedsDisplay:YES];
+}
+
 - (void)setRenderMode:(NSInteger)mode {
   if (_renderMode == mode)
     return;
@@ -132,6 +188,7 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
     return nil;
 
   _clipAspect = 16.0 / 9.0;
+  _compareSplitFraction = 0.5;
   _zoom = kKKMiniInitialZoom;
   _panPixels = CGPointZero;
   _filmstripSlots = [NSMutableArray array];
@@ -539,6 +596,37 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
              pixelFormat:ch1[@"pixelFormat"]];
   } else if (_channel1Slot) {
     _channel1Slot = nil; // feed stopped publishing it
+  }
+
+  // Auxiliary textures (Mirage's `// #frames` neighbours), positional and
+  // independent of the slots. Resolved before either return path, like
+  // channel 1. Absent from the descriptor for every feed that publishes none,
+  // and the array is only replaced wholesale - a consumer indexing into it must
+  // never see a half-updated set.
+  NSArray *auxEntries = desc[@"aux"];
+  if ([auxEntries isKindOfClass:NSArray.class] && auxEntries.count > 0) {
+    if (!_auxSlots)
+      _auxSlots = [NSMutableArray array];
+    while (_auxSlots.count < auxEntries.count)
+      [_auxSlots addObject:[[_KKMiniFilmSlot alloc] init]];
+    while (_auxSlots.count > auxEntries.count)
+      [_auxSlots removeLastObject];
+    for (NSUInteger i = 0; i < auxEntries.count; i++) {
+      NSDictionary *e = auxEntries[i];
+      if (![e isKindOfClass:NSDictionary.class])
+        continue;
+      uint32_t sid = (uint32_t)[e[@"ioSurfaceID"] unsignedIntValue];
+      uint64_t gen = (uint64_t)[e[@"generation"] unsignedLongLongValue];
+      _KKMiniFilmSlot *slot = _auxSlots[i];
+      if (sid != slot.sid || gen != slot.generation)
+        [self _resolveSlot:slot
+                       sid:sid
+                       gen:gen
+                       tag:0.0
+               pixelFormat:e[@"pixelFormat"]];
+    }
+  } else if (_auxSlots.count) {
+    [_auxSlots removeAllObjects]; // feed stopped publishing them
   }
 
   // Generator: the descriptor carries only the media size (empty `slots`),

@@ -6,6 +6,7 @@
 #import "Constants.h"
 #import "MirageCustomShader.h"
 #import "MirageDirectives.h"         // MirageCommonDefault
+#import "MirageFrameOffsets.h"       // `// #frames` neighbour offsets
 #import "MirageMiniViewerRenderer.h" // per-instance descriptor path
 #import "MirageRenderUniforms.h"     // MirageMakeUniforms (shared with mini)
 #import "MirageStateBlob.h"
@@ -32,7 +33,14 @@ static NSString *const kMiragePassthroughSource =
 // Effect: request the clip we're applied to as the source (bound to iChannel0
 // in the Custom render path). Motion blur averages the shader over a single
 // source frame, so no sub-frame source requests. The boundary-value popover
-// additionally pulls its requested clip fraction for the mini-viewer preview.
+// additionally pulls its requested clip fraction for the mini-viewer preview,
+// and a `// #frames` shader pulls its declared neighbour frames.
+//
+// Callback order is pluginState -> scheduleInputs -> render, so the blob handed
+// in here already carries the shader source: the offsets are re-derived from it
+// rather than stashed between calls. That keeps this XPC-safe (no mutable
+// statics, no per-instance scratch) and guarantees the schedule side and the
+// render side read the same list.
 - (BOOL)scheduleInputs:(NSArray<FxImageTileRequest *> *_Nullable *_Nullable)
                            inputImageRequests
        withPluginState:(NSData *)pluginState
@@ -62,8 +70,150 @@ static NSString *const kMiragePassthroughSource =
                                 time:renderTime
                       includeFilters:NO
                          parameterID:kParamToImage]];
+  // `// #frames`: one more effect-clip request per declared offset. APPENDED to
+  // whatever is already in the list, so this composes with the boundary-preview
+  // requests above and with any sub-frame source requests motion blur adds -
+  // every request in this array is an independent frame FCP delivers, and the
+  // render side pairs each back by mediaTime rather than by position.
+  MirageFrameOffsets fo = MirageFrameOffsetsForSource(
+      MirageStateBlobReadSections(pluginState)[@"Image"], NULL);
+  double frameDur = self.renderCache.frameDurSec;
+  if (fo.count > 0 && frameDur > 0.0) {
+    int32_t scale = renderTime.timescale > 0 ? renderTime.timescale : 600;
+    double base = CMTimeGetSeconds(renderTime);
+    for (int i = 0; i < fo.count; i++) {
+      CMTime t = CMTimeMakeWithSeconds(base + fo.offsets[i] * frameDur, scale);
+      [reqs addObject:[[FxImageTileRequest alloc]
+                          initWithSource:kFxImageTileRequestSourceEffectClip
+                                    time:t
+                          includeFilters:YES
+                             parameterID:0]];
+    }
+  }
   *inputImageRequests = reqs;
   return YES;
+}
+
+// The delivered effect-clip tile whose mediaTime is nearest `wantSeconds`, or
+// nil when nothing lands strictly inside `tolerance` (INFINITY accepts the
+// nearest tile at any distance).
+static FxImageTile *MirageTileNearestMediaTime(
+    NSArray<FxImageTile *> *sourceImages, double wantSeconds, double tolerance) {
+  FxImageTile *best = nil;
+  double bestDelta = tolerance;
+  for (FxImageTile *tile in sourceImages) {
+    if (tile.imageSource != kFxImageTileRequestSourceEffectClip)
+      continue;
+    double delta = fabs(CMTimeGetSeconds(tile.mediaTime) - wantSeconds);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = tile;
+    }
+  }
+  return best;
+}
+
+FxImageTile *MirageCurrentFrameTile(NSArray<FxImageTile *> *sourceImages,
+                                    CMTime renderTime) {
+  return MirageTileNearestMediaTime(sourceImages, CMTimeGetSeconds(renderTime),
+                                    INFINITY)
+             ?: sourceImages.firstObject;
+}
+
+NSArray *MirageNeighborFrameTextures(
+    NSString *source, NSArray<FxImageTile *> *sourceImages, CMTime renderTime,
+    double frameDurSec, id<MTLDevice> device, id<MTLTexture> fallback,
+    id<MTLTexture> (^convert)(id<MTLTexture> tex)) {
+  MirageFrameOffsets fo = MirageFrameOffsetsForSource(source, NULL);
+  if (fo.count <= 0 || !device)
+    return @[];
+  if (frameDurSec <= 0.0)
+    frameDurSec = 1.0 / 60.0;
+  double base = CMTimeGetSeconds(renderTime);
+  double tolerance = frameDurSec * 0.5;
+  NSMutableArray *out = [NSMutableArray arrayWithCapacity:(NSUInteger)fo.count];
+  for (int i = 0; i < fo.count; i++) {
+    double want = base + fo.offsets[i] * frameDurSec;
+    FxImageTile *best =
+        MirageTileNearestMediaTime(sourceImages, want, tolerance);
+    id<MTLTexture> tex = best ? [best metalTextureForDevice:device] : nil;
+    if (tex && convert)
+      tex = convert(tex) ?: tex;
+    if (tex)
+      [out addObject:tex];
+    else if (fallback)
+      [out addObject:fallback];
+    else
+      [out addObject:[NSNull null]];
+  }
+  return out;
+}
+
+- (id<MTLTexture>)reusableGammaDestinationForKey:(NSInteger)key
+                                          device:(id<MTLDevice>)device
+                                           width:(NSUInteger)width
+                                          height:(NSUInteger)height {
+  if (!device || width == 0 || height == 0)
+    return nil;
+  if (!self.gammaDestinations)
+    self.gammaDestinations = [NSMutableDictionary dictionary];
+  NSNumber *k = @(key);
+  id<MTLTexture> dst = self.gammaDestinations[k];
+  // Keyed on size: the format is fixed by KKGammaConvertDestinationTexture, and
+  // a render at another size (a thumbnail pass) rebuilds the slot rather than
+  // reusing a mismatched one.
+  if (dst && dst.width == width && dst.height == height)
+    return dst;
+  dst = KKGammaConvertDestinationTexture(device, width, height);
+  if (dst)
+    self.gammaDestinations[k] = dst;
+  else
+    [self.gammaDestinations removeObjectForKey:k];
+  return dst;
+}
+
+- (NSArray *)gammaMatchNeighbors:(NSArray *)neighbors
+                          decode:(BOOL)decode
+                          device:(id<MTLDevice>)device
+                          encode:(void (^__autoreleasing *)(id<MTLCommandBuffer>))
+                                     outEncode {
+  if (outEncode)
+    *outEncode = nil;
+  NSUInteger n = neighbors.count;
+  if (n == 0 || !device || !KKGammaPipelineAvailable(device, decode))
+    return neighbors;
+  NSMutableArray *out = [NSMutableArray arrayWithCapacity:n];
+  NSMutableArray *pairs = [NSMutableArray array]; // (src, dst) to encode
+  for (NSUInteger i = 0; i < n; i++) {
+    id entry = neighbors[i];
+    if (entry == [NSNull null]) {
+      [out addObject:entry];
+      continue;
+    }
+    id<MTLTexture> src = entry;
+    id<MTLTexture> dst =
+        [self reusableGammaDestinationForKey:MirageGammaDestNeighbor0 +
+                                             (NSInteger)i
+                                      device:device
+                                       width:src.width
+                                      height:src.height];
+    if (!dst) {
+      // Allocation unavailable: bind the source unconverted, which is what the
+      // allocating helper returns in the same situation.
+      [out addObject:src];
+      continue;
+    }
+    [out addObject:dst];
+    [pairs addObject:@[ src, dst ]];
+  }
+  if (pairs.count == 0)
+    return neighbors;
+  if (outEncode)
+    *outEncode = ^(id<MTLCommandBuffer> cb) {
+      for (NSArray *pair in pairs)
+        KKGammaConvertOnBufferInto(cb, pair[0], pair[1], decode);
+    };
+  return out;
 }
 
 // The fixed uniform block for this frame. `mediaW/H` are the output dimensions,
@@ -102,16 +252,59 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                      NSArray<id<MTLTexture>> *inputTextures,
                                      MirageDrawArgs args);
 
+typedef void (^MirageGammaSetup)(id<MTLCommandBuffer>);
+
+// The texture to BIND for `src` once this render's gamma conversion has been
+// planned: the reusable destination (with the (src, dst) pair appended to
+// `pairs` for the setup block to encode) or `src` itself when there is nothing
+// to convert or no destination could be allocated.
+static id<MTLTexture> MiragePlanGammaConversion(MiragePlugin *plugin,
+                                                id<MTLTexture> src,
+                                                MirageGammaDestKey key,
+                                                id<MTLDevice> device,
+                                                NSMutableArray *pairs) {
+  if (!src)
+    return src;
+  id<MTLTexture> dst = [plugin reusableGammaDestinationForKey:key
+                                                       device:device
+                                                        width:src.width
+                                                       height:src.height];
+  if (!dst)
+    return src;
+  [pairs addObject:@[ src, dst ]];
+  return dst;
+}
+
+// Every planned conversion for this render as ONE block, or nil when there is
+// nothing to encode.
+static MirageGammaSetup
+MirageGammaSetupBlock(NSArray *pairs, BOOL decode,
+                      void (^neighborEncode)(id<MTLCommandBuffer>)) {
+  if (pairs.count == 0 && !neighborEncode)
+    return nil;
+  return ^(id<MTLCommandBuffer> cb) {
+    for (NSArray *pair in pairs)
+      KKGammaConvertOnBufferInto(cb, pair[0], pair[1], decode);
+    if (neighborEncode)
+      neighborEncode(cb);
+  };
+}
+
 // Builds a MirageSinglePassDraw for `effectiveSource`. `linearDst` (float dest)
-// triggers the gamma-encode of the linear sources - done once here and shared
-// across all samples. Returns nil if even the error-pattern pipeline fails.
+// triggers the gamma-encode of the linear sources - PLANNED once here and shared
+// across all samples, with `outSetup` carrying the encoding to whatever command
+// buffer the caller is about to render on (nil when nothing needs converting).
+// Returns nil if even the error-pattern pipeline fails.
 - (nullable MirageSinglePassDraw)
     _singlePassDrawForSource:(NSString *)effectiveSource
             destinationImage:(FxImageTile *)destinationImage
                 sourceImages:(NSArray<FxImageTile *> *)sourceImages
             transitionShader:(BOOL)transitionShader
               transitionMode:(int)transitionMode
-                   linearDst:(BOOL)linearDst {
+                   linearDst:(BOOL)linearDst
+                  renderTime:(CMTime)renderTime
+                       setup:(void (^__autoreleasing *)(id<MTLCommandBuffer>))
+                                 outSetup {
   id<MTLRenderPipelineState> customPS =
       [self customPipelineForSource:effectiveSource
                    destinationImage:destinationImage];
@@ -136,7 +329,8 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                       ? KKCustomTransparentTexture(device)
                                       : nil;
   id<MTLTexture> rawEffect =
-      sourceImages.count ? [sourceImages[0] metalTextureForDevice:device] : nil;
+      [MirageCurrentFrameTile(sourceImages, renderTime)
+          metalTextureForDevice:device];
   id<MTLTexture> rawFrom =
       [KKImageTileForParameterID(sourceImages, kParamFromImage)
           metalTextureForDevice:device];
@@ -159,22 +353,43 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
   // already applies for that same 8-bit target.
   BOOL colorTransform = KKLooksLikeColorTransformShader(effectiveSource);
   BOOL decodeSources = !linearDst && colorTransform;
-  if ((decodeSources || (linearDst && !colorTransform)) && (rawSrc || rawTo)) {
-    id<MTLCommandQueue> gq = [dc
-        commandQueueWithRegistryID:registryID
-                       pixelFormat:[KKMetalDeviceCache pixelFormatForImageTile:
-                                                           destinationImage]];
-    if (rawSrc)
-      gammaSrc = decodeSources ? KKGammaDecodeSourceTexture(gq, rawSrc)
-                               : KKGammaEncodeSourceTexture(gq, rawSrc);
-    if (rawTo)
-      gammaTo = (decodeSources ? KKGammaDecodeSourceTexture(gq, rawTo)
-                               : KKGammaEncodeSourceTexture(gq, rawTo))
-                    ?: rawTo;
-    if (gq)
-      [dc returnCommandQueueToCache:gq];
+  BOOL convertSources = decodeSources || (linearDst && !colorTransform);
+  // PLANNED, not encoded: each conversion used to be its own command buffer
+  // with a commit and a blocking wait, and that scheduling latency - not the
+  // work, which measures under a tenth of a millisecond - was most of the render
+  // callback. The pairs are encoded later onto the render's own command buffer,
+  // where Metal orders them ahead of the draw that reads them.
+  NSMutableArray *convertPairs = [NSMutableArray array];
+  if (convertSources && (rawSrc || rawTo) &&
+      KKGammaPipelineAvailable(device, decodeSources)) {
+    gammaSrc = MiragePlanGammaConversion(self, rawSrc, MirageGammaDestSource,
+                                         device, convertPairs);
+    gammaTo = MiragePlanGammaConversion(self, rawTo, MirageGammaDestTo, device,
+                                        convertPairs);
   }
+  // `// #frames` neighbours get the SAME conversion iChannel0 just got. Any
+  // other treatment - even leaving them raw - would make every temporal blend
+  // mix a gamma value against a linear one and shift the colour of the trail
+  // relative to the frame it trails behind.
+  // Resolved RAW here, with no per-texture fallback: an undeliverable offset
+  // stays NSNull and `neighborFallback` below substitutes the current frame at
+  // bind time - the same texture the old per-entry fallback put in the array,
+  // without paying a conversion for it. The whole set is then gamma-matched in
+  // one batch instead of one blocking round trip per neighbour.
+  NSArray *neighborTex = MirageNeighborFrameTextures(
+      effectiveSource, sourceImages, renderTime, self.renderCache.frameDurSec,
+      device, nil, nil);
+  void (^neighborEncode)(id<MTLCommandBuffer>) = nil;
+  if (convertSources && neighborTex.count)
+    neighborTex = [self gammaMatchNeighbors:neighborTex
+                                     decode:decodeSources
+                                     device:device
+                                     encode:&neighborEncode];
+  if (outSetup)
+    *outSetup = MirageGammaSetupBlock([convertPairs copy], decodeSources,
+                                      neighborEncode);
   id<MTLTexture> toTex = gammaTo;
+  id<MTLTexture> neighborFallback = gammaSrc ?: noiseTex;
   return ^(id<MTLRenderCommandEncoder> encoder,
            NSArray<id<MTLTexture>> *inputTextures, MirageDrawArgs args) {
     [encoder setRenderPipelineState:customPS];
@@ -200,6 +415,8 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                                   [NSNull null]
                                 ],
                                 srcSampler, noiseTex, chSampler);
+    KKBindCustomNeighborTextures(encoder, tr, neighborTex, srcSampler,
+                                 neighborFallback);
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0
                 vertexCount:4];
@@ -211,21 +428,26 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
 - (BOOL)_renderSinglePassWithUniforms:(KKGLSLUniforms)u
                                  base:(const MiragePluginState *)base
                                source:(NSString *)effectiveSource
+                           renderTime:(CMTime)renderTime
                      destinationImage:(FxImageTile *)destinationImage
                          sourceImages:(NSArray<FxImageTile *> *)sourceImages {
+  void (^setup)(id<MTLCommandBuffer>) = nil;
   MirageSinglePassDraw draw = [self
       _singlePassDrawForSource:effectiveSource
               destinationImage:destinationImage
                   sourceImages:sourceImages
               transitionShader:KKLooksLikeTransitionShader(effectiveSource)
                 transitionMode:base->transitionMode
-                     linearDst:(u.extra.w == 0.0f)];
+                     linearDst:(u.extra.w == 0.0f)
+                    renderTime:renderTime
+                         setup:&setup];
   if (!draw)
     return NO;
   MiragePluginState baseCopy = *base;
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages
+                                        setup:setup
                                      commands:^(
                                          id<MTLRenderCommandEncoder> encoder,
                                          NSArray<id<MTLTexture>>
@@ -255,15 +477,21 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                              destinationImage:(FxImageTile *)destinationImage
                                  sourceImages:
                                      (NSArray<FxImageTile *> *)sourceImages {
+  void (^setup)(id<MTLCommandBuffer>) = nil;
   MirageSinglePassDraw draw = [self
       _singlePassDrawForSource:effectiveSource
               destinationImage:destinationImage
                   sourceImages:sourceImages
               transitionShader:KKLooksLikeTransitionShader(effectiveSource)
                 transitionMode:states[0].transitionMode
-                     linearDst:(encodeSRGB == 0.0f)];
+                     linearDst:(encodeSRGB == 0.0f)
+                    renderTime:renderTime
+                         setup:&setup];
   if (!draw)
     return NO;
+  // Every sample reads the same converted sources, so the conversion is encoded
+  // ONCE, on the first sample's command buffer, ahead of that sample's encoder.
+  __block BOOL setupEncoded = NO;
   return [KKMotionBlur
       applyToDestinationImage:destinationImage
                  sourceImages:sourceImages
@@ -279,6 +507,10 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
                     const MiragePluginState *s = &states[si];
                     KKGLSLUniforms su =
                         MirageBuildUniforms(s, mediaW, mediaH, encodeSRGB);
+                    if (setup && !setupEncoded) {
+                      setupEncoded = YES;
+                      setup(commandBuffer);
+                    }
                     return [self
                         encodeFullScreenQuadIntoTexture:sampleDest
                                        destinationImage:destinationImage
@@ -305,6 +537,7 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
 - (void)_publishMiniViewerFeeds:(FxImageTile *)destinationImage
                    sourceImages:(NSArray<FxImageTile *> *)sourceImages
                      renderTime:(CMTime)renderTime
+                    imageSource:(NSString *)imageSource
                transitionShader:(BOOL)transitionShader
              technicalTransform:(BOOL)technicalTransform {
   // Per slot: single-slot = playhead, multi-slot = boundary preview / filmstrip
@@ -342,6 +575,63 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
   [self kkPublishMiniViewerChannel1ForDestination:destinationImage
                                      sourceImages:sourceImages
                                   wellParameterID:kParamToImage];
+  [self _publishMiniViewerNeighbors:destinationImage
+                       sourceImages:sourceImages
+                         renderTime:renderTime
+                        imageSource:imageSource];
+}
+
+// `// #frames`: pump the neighbour frames THIS render just resolved into the
+// feed's auxiliary textures, so the inspector-side preview binds the real
+// neighbours instead of clamping every one of them to the current frame.
+//
+// RAW like the source slot, not gamma-converted: the feed writes whatever it is
+// handed through one encoding, and the mini renderer then applies to a neighbour
+// exactly the treatment it applies to iChannel0. Converting here would put the
+// neighbours one encode ahead of the frame they trail, which is the same colour
+// shift the FCP render path takes care to avoid.
+//
+// An offset FCP could not deliver falls back to the CURRENT frame, matching the
+// render's edge-of-clip clamp, so the pumped count always equals the directive's
+// count and the consumer never has to guess which offset is missing.
+- (void)_publishMiniViewerNeighbors:(FxImageTile *)destinationImage
+                       sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                         renderTime:(CMTime)renderTime
+                        imageSource:(NSString *)imageSource {
+  // Literal gate before the parse. MirageFrameOffsetsForSource builds a fresh
+  // NSRegularExpression and matches it over the whole shader on every call, and
+  // this runs per render tick for EVERY instance - including the ones with no
+  // `#frames` at all, which paid none of it before neighbours were pumped. A
+  // source without the text cannot carry the directive, so the outcome is
+  // identical and only the regex is skipped.
+  if ([imageSource rangeOfString:@"#frames"].location == NSNotFound) {
+    if (self.miniViewerFeed.auxTextureCount)
+      [self kkPublishMiniViewerAuxTexturesForDestination:destinationImage
+                                                textures:@[]];
+    return;
+  }
+  MirageFrameOffsets fo = MirageFrameOffsetsForSource(imageSource, NULL);
+  if (fo.count <= 0) {
+    if (self.miniViewerFeed.auxTextureCount)
+      [self kkPublishMiniViewerAuxTexturesForDestination:destinationImage
+                                                textures:@[]];
+    return;
+  }
+  KKMetalDeviceCache *dc = [KKMetalDeviceCache sharedCache];
+  id<MTLDevice> device =
+      [dc deviceWithRegistryID:destinationImage.deviceRegistryID];
+  if (!device)
+    return;
+  id<MTLTexture> current = [MirageCurrentFrameTile(sourceImages, renderTime)
+      metalTextureForDevice:device];
+  NSArray *neighbors = MirageNeighborFrameTextures(
+      imageSource, sourceImages, renderTime, self.renderCache.frameDurSec,
+      device, current, nil);
+  if (neighbors.count != self.miniViewerFeed.auxTextureCount)
+    KKLogDebug(@"[Mirage] mini aux neighbours n=%lu firstOffset=%+d",
+               (unsigned long)neighbors.count, fo.offsets[0]);
+  [self kkPublishMiniViewerAuxTexturesForDestination:destinationImage
+                                            textures:neighbors];
 }
 
 // FCP renders browser / effect-library thumbnails at a REDUCED pixel size, but
@@ -391,6 +681,30 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
   }
 }
 
+// The four buffer sources in fixed A, B, C, D order, each with Common already
+// prepended and an absent one left as an empty string so the index still names
+// the buffer. `*outAny` is YES when any buffer is present at all, which is what
+// selects the multi-pass path (buffer textures feed the passes' iChannels).
+static NSArray<NSString *> *
+MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
+                                NSString * (^withCommon)(NSString *),
+                                BOOL *outAny) {
+  NSArray<NSString *> *bufNames =
+      @[ @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
+  NSMutableArray<NSString *> *bufSources = [NSMutableArray arrayWithCapacity:4];
+  for (NSString *bn in bufNames) {
+    NSString *bs = sections[bn];
+    if (bs.length > 0) {
+      [bufSources addObject:withCommon(bs)];
+      if (outAny)
+        *outAny = YES;
+    } else {
+      [bufSources addObject:@""];
+    }
+  }
+  return bufSources;
+}
+
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
                    pluginState:(NSData *)pluginState
@@ -405,7 +719,35 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
   // destination surface, and "make the shader fail" must not be a way to get a
   // clean frame out of the trial.
   KKWatermarkApplyIfUnlicensed(KKLicenseProductMirage, destinationImage);
+  [self _reportStrayRenderWaits];
   return ok;
+}
+
+// Canary: ONE mandatory wait per callback is the architecture, on every path -
+// motion blur included, since it shares the frame's queue and commits once.
+// Steady playback prints nothing at all; a checkpoint or a cold seek on a
+// feedback chain is the only expected source. Anything else names a path that
+// reintroduced a second round trip, which is what made playback crawl before.
+- (void)_reportStrayRenderWaits {
+  NSInteger strays = self.renderStrayWaitsSnapshot +
+                     self.renderStrayWaitsRestore +
+                     self.renderStrayWaitsBlurDrain;
+  if (strays <= 0)
+    return;
+  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+  if (now - self.renderStrayWaitsLastLog <= 2.0)
+    return;
+  self.renderStrayWaitsLastLog = now;
+  KKLogDebug(@"[RenderGuard] render STRAY WAITS n=%ld | snapshot=%ld "
+             @"restore=%ld blurDrain=%ld | mbSamples=%ld (each is a "
+             @"KKMotionBlur commit+wait of its own)",
+             (long)strays, (long)self.renderStrayWaitsSnapshot,
+             (long)self.renderStrayWaitsRestore,
+             (long)self.renderStrayWaitsBlurDrain,
+             (long)self.lastRenderBlurSamples);
+  self.renderStrayWaitsSnapshot = 0;
+  self.renderStrayWaitsRestore = 0;
+  self.renderStrayWaitsBlurDrain = 0;
 }
 
 - (BOOL)_renderDestinationImageInner:(FxImageTile *)destinationImage
@@ -458,6 +800,7 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
   [self _publishMiniViewerFeeds:destinationImage
                    sourceImages:sourceImages
                      renderTime:renderTime
+                    imageSource:imageSrc
                transitionShader:transitionShader
              technicalTransform:KKLooksLikeColorTransformShader(imageSrc)];
   NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
@@ -479,6 +822,8 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
   // accumulate. iMotionBlur stays 0 for accumulate/off so those never
   // self-blur on top of the plugin's averaging.
   MirageMotionBlurMode mbMode = MirageMotionBlurModeForSource(imageSrc);
+  self.lastRenderBlurSamples =
+      (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled) ? n : 0;
   if (mbMode == MirageMotionBlurModeNative && mbState.enabled) {
     double frameDur = self.renderCache.frameDurSec;
     // Shutter as a fraction of a frame (1.0 == 360deg). A trail shader maps
@@ -491,21 +836,9 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
     u.transition.z = (float)mbState.sampleCount;
   }
 
-  // Any Buffer A-D present -> multi-pass (buffer textures feed the passes'
-  // iChannels).
-  NSArray<NSString *> *bufNames =
-      @[ @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
-  NSMutableArray<NSString *> *bufSources = [NSMutableArray arrayWithCapacity:4];
   BOOL anyBuffer = NO;
-  for (NSString *bn in bufNames) {
-    NSString *bs = sections[bn];
-    if (bs.length > 0) {
-      [bufSources addObject:withCommon(bs)];
-      anyBuffer = YES;
-    } else {
-      [bufSources addObject:@""];
-    }
-  }
+  NSArray<NSString *> *bufSources =
+      MirageBufferSourcesFromSections(sections, withCommon, &anyBuffer);
   if (!anyBuffer) {
     // Accumulate blur is plugin-owned + single-pass only (feedback buffers
     // can't be re-simulated per sub-frame sample cheaply). Only in accumulate
@@ -533,11 +866,13 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
       if (ok)
         return YES;
     }
-    return [self _renderSinglePassWithUniforms:u
-                                          base:&base
-                                        source:withCommon(imageSrc)
-                              destinationImage:destinationImage
-                                  sourceImages:sourceImages];
+    BOOL spOK = [self _renderSinglePassWithUniforms:u
+                                               base:&base
+                                             source:withCommon(imageSrc)
+                                         renderTime:renderTime
+                                   destinationImage:destinationImage
+                                       sourceImages:sourceImages];
+    return spOK;
   }
 
   // Frame index + per-frame iTime step, so feedback buffers advance

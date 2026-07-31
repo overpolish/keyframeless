@@ -403,22 +403,14 @@
         return;
       }
 
+      // The return value is IGNORED on purpose. Measured on an adjustment
+      // clip: movePlayheadToTime: reports NO for an effect on a connected
+      // clip, yet [action currentTime] and the render times both track the
+      // requested targets - the playhead visibly moves. Gating anything on
+      // that NO (an earlier attempt latched it as "host refuses" and stopped
+      // seeking) kills a scrub that is actually working.
       CMTime targetTime = CMTimeMakeWithSeconds(targetSec, 600);
-      NSError *seekError = nil;
-      BOOL moved = [cmd movePlayheadToTime:targetTime error:&seekError];
-      KKLogInfo(@"[scrub] frac=%.6f current=%.6f effectStart=%.6f "
-                @"effectDuration=%.6f inputStart=%.6f inputDuration=%.6f "
-                @"timelineStart=%.6f timelineEnd=%.6f timelineIn=%.6f "
-                @"timelineOut=%.6f frame=%.6f "
-                @"target=%.6f fcp=%d timing=%p command=%p action=%p "
-                @"seekScope=inside-action moved=%d error=%@",
-                frac, CMTimeGetSeconds(currentTime),
-                CMTimeGetSeconds(effectStart), CMTimeGetSeconds(effectDuration),
-                CMTimeGetSeconds(inputStart), CMTimeGetSeconds(inputDuration),
-                startSec, endSec, CMTimeGetSeconds(timelineIn),
-                CMTimeGetSeconds(timelineOut), frameDur, targetSec,
-                [KKHostInfo isRunningInFinalCut], timing, cmd, action, moved,
-                seekError);
+      [cmd movePlayheadToTime:targetTime error:nil];
     }];
   };
 

@@ -304,13 +304,53 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
                                            id<MTLRenderCommandEncoder> encoder,
                                            NSArray<id<MTLTexture>>
                                                *inputTextures))commands {
+  return [self encodeRenderCommandsForDestinationImage:destinationImage
+                                          sourceImages:sourceImages
+                                                 setup:nil
+                                              commands:commands];
+}
+
+- (BOOL)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                               sourceImages:
+                                   (NSArray<FxImageTile *> *)sourceImages
+                                      setup:
+                                          (void (^)(id<MTLCommandBuffer>
+                                                        commandBuffer))setup
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures))commands {
+  return [self encodeRenderCommandsForDestinationImage:destinationImage
+                                          sourceImages:sourceImages
+                                          commandQueue:nil
+                                                 setup:setup
+                                              commands:commands];
+}
+
+- (BOOL)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                               sourceImages:
+                                   (NSArray<FxImageTile *> *)sourceImages
+                               commandQueue:(id<MTLCommandQueue>)suppliedQueue
+                                      setup:
+                                          (void (^)(id<MTLCommandBuffer>
+                                                        commandBuffer))setup
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures))commands {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   MTLPixelFormat pixelFormat =
       [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
   uint64_t registryID = destinationImage.deviceRegistryID;
 
   id<MTLCommandQueue> commandQueue =
-      [cache commandQueueWithRegistryID:registryID pixelFormat:pixelFormat];
+      suppliedQueue
+          ?: [cache commandQueueWithRegistryID:registryID
+                                   pixelFormat:pixelFormat];
   if (!commandQueue)
     return NO;
 
@@ -329,6 +369,10 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
   commandBuffer.label = @"KKPlugin Command Buffer";
   [commandBuffer enqueue];
+
+  // Input preparation rides this buffer, ahead of the render encoder below.
+  if (setup)
+    setup(commandBuffer);
 
   MTLRenderPassColorAttachmentDescriptor *colorAttachment =
       [[MTLRenderPassColorAttachmentDescriptor alloc] init];
@@ -389,9 +433,13 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
 
   [encoder endEncoding];
   [commandBuffer commit];
+  // The one mandatory round trip: FxPlug requires the destination filled before
+  // the render callback returns. On a supplied queue this also drains whatever
+  // the caller committed ahead of it.
   [commandBuffer waitUntilCompleted];
 
-  [cache returnCommandQueueToCache:commandQueue];
+  if (!suppliedQueue)
+    [cache returnCommandQueueToCache:commandQueue];
 
   return YES;
 }

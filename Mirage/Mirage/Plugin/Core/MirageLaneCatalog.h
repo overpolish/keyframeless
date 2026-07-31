@@ -20,7 +20,8 @@
 #import "MirageDirectiveCatalog.h" // directive + GLSL autocomplete
 #import "MirageDirectiveVocab.h" // MirageDirectiveValueKeywords (highlight set)
 #import "MirageDirectives.h"
-#import "MirageLocalized.h" // RLoc
+#import "MirageLocalized.h"        // RLoc
+#import "MirageSurfaceResponse.h"  // `#color-surface` ring validation
 
 // --- Dynamic colour lanes ------------------------------------------------
 // A shader declares colour properties by annotating standalone uniforms:
@@ -1054,6 +1055,74 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
         return RLoc(@"`#template` must be generator, filter, layout, "
                     @"transition, or color-transform",
                     @"Mirage invalid template-type directive error.");
+      // The Color panel's opt-in. Reported here rather than left to the panel:
+      // a rejected `#color-surface` simply means no panel appears, which looks
+      // exactly like never having typed it.
+      MirageColorSurfaceError surfaceError = MirageColorSurfaceErrorNone;
+      MirageColorSurfaceForSource(activeTemplateSource, NULL, &surfaceError);
+      if (surfaceError == MirageColorSurfaceErrorMultiple)
+        return RLoc(@"Use one `#color-surface`, or two with `ring=hue` and "
+                    @"`ring=light`",
+                    @"Mirage duplicate colour-surface directive error.");
+      if (surfaceError == MirageColorSurfaceErrorValue)
+        return RLoc(@"`#color-surface space=` must be linear-rec709",
+                    @"Mirage invalid colour-surface space error.");
+      // `// #frames`: the offsets are the BINDING ORDER of the iNeighbor
+      // samplers, so anything ambiguous about the list is rejected rather than
+      // repaired - a silently folded or renumbered list would leave the shader
+      // reading a different frame than it was written against.
+      MirageFramesDirectiveError framesError = MirageFramesDirectiveErrorNone;
+      MirageFrameOffsetsForSource(code, &framesError);
+      switch (framesError) {
+      case MirageFramesDirectiveErrorNone:
+        break;
+      case MirageFramesDirectiveErrorMultiple:
+        return RLoc(@"Use exactly one `#frames` directive in the Image shader",
+                    @"Mirage duplicate frames directive error.");
+      case MirageFramesDirectiveErrorMissing:
+        return RLoc(@"`#frames` needs offsets=\"-1,+1\", a comma-separated "
+                    @"list of whole frames",
+                    @"Mirage frames directive missing-offsets error.");
+      case MirageFramesDirectiveErrorValue:
+        return RLoc(@"`#frames` offsets must be whole frames, like "
+                    @"offsets=\"-2,-1,+1\"",
+                    @"Mirage frames directive malformed-offset error.");
+      case MirageFramesDirectiveErrorZero:
+        return RLoc(@"`#frames` offset 0 is the current frame - read that from "
+                    @"iChannel0",
+                    @"Mirage frames directive zero-offset error.");
+      case MirageFramesDirectiveErrorDuplicate:
+        return RLoc(@"`#frames` lists the same offset twice - each offset "
+                    @"binds its own iNeighbor slot",
+                    @"Mirage frames directive duplicate-offset error.");
+      case MirageFramesDirectiveErrorTooMany:
+        return [NSString
+            stringWithFormat:RLoc(@"`#frames` takes at most %d offsets - each "
+                                  @"one is another full frame in memory",
+                                  @"Mirage frames directive offset-count "
+                                  @"error."),
+                             KK_SHADER_MAX_FRAME_OFFSETS];
+      }
+      MirageSurfaceRingBindingError bindingError =
+          MirageSurfaceRingBindingErrorNone;
+      NSString *badBinding =
+          MirageFirstBadSurfaceRingBinding(activeTemplateSource, &bindingError);
+      if (badBinding.length) {
+        if (bindingError == MirageSurfaceRingBindingErrorUnnamed)
+          return [NSString
+              stringWithFormat:RLoc(@"Control \"%@\": with two rings declared, "
+                                    @"`surface=` must start with `hue` or "
+                                    @"`light`",
+                                    @"Mirage unattached colour-surface "
+                                    @"mapping error."),
+                               badBinding];
+        return [NSString
+            stringWithFormat:RLoc(@"Control \"%@\": `surface=` names a ring "
+                                  @"this shader doesn't declare",
+                                  @"Mirage colour-surface mapping aimed at an "
+                                  @"undeclared ring error."),
+                             badBinding];
+      }
     }
     // Duplicate directive LABELS are allowed - the lane identity is the
     // uniform name, so two controls may share a display name (the link-bus

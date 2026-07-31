@@ -68,6 +68,33 @@
   NSUInteger start = caret;
   while (start > 0 && [idSet characterIsMember:[s characterAtIndex:start - 1]])
     start--;
+  // Hyphenated directive tokens (`#color-surface`, `color-transform`) are one
+  // word to the user, but a hyphen is not an identifier character, so without
+  // this the word under the caret restarts after the hyphen: completion stops
+  // matching, and offers nothing at all with the caret right after a hyphen.
+  //
+  // Allowed anywhere inside a COMMENT, because that is where the directive
+  // vocabulary lives and where the catalog applies the same rule. In code `a-b`
+  // is subtraction and must stay two words, so the comment test is what keeps
+  // this from leaking. A hyphen not preceded by an identifier character
+  // (`min=-5`) never joins either way.
+  NSUInteger lineStart = start;
+  while (lineStart > 0 && [s characterAtIndex:lineStart - 1] != '\n')
+    lineStart--;
+  NSRange comment =
+      [s rangeOfString:@"//"
+               options:0
+                 range:NSMakeRange(lineStart, start - lineStart)];
+  if (comment.location != NSNotFound) {
+    NSUInteger floor = NSMaxRange(comment);
+    while (start > floor + 1 && [s characterAtIndex:start - 1] == '-' &&
+           [idSet characterIsMember:[s characterAtIndex:start - 2]]) {
+      start--; // the hyphen
+      while (start > floor &&
+             [idSet characterIsMember:[s characterAtIndex:start - 1]])
+        start--;
+    }
+  }
   if (start == caret)
     return NSMakeRange(NSNotFound, 0);
   unichar first = [s characterAtIndex:start];

@@ -4,16 +4,23 @@
  */
 
 #import "KKGLSLTranspiler_Internal.h"
+#import "MirageFrameOffsets.h" // KK_SHADER_MAX_FRAME_OFFSETS
 
 @implementation KKGLSLTranspileResult {
   NSInteger _texIdx[4];
   NSInteger _sampIdx[4];
+  NSInteger _nbrTexIdx[KK_SHADER_MAX_FRAME_OFFSETS];
+  NSInteger _nbrSampIdx[KK_SHADER_MAX_FRAME_OFFSETS];
 }
 - (instancetype)init {
   if ((self = [super init])) {
     for (int i = 0; i < 4; i++) {
       _texIdx[i] = NSNotFound;
       _sampIdx[i] = NSNotFound;
+    }
+    for (int i = 0; i < KK_SHADER_MAX_FRAME_OFFSETS; i++) {
+      _nbrTexIdx[i] = NSNotFound;
+      _nbrSampIdx[i] = NSNotFound;
     }
     _fragmentName = @"main0";
     _vertexName = @"kkVertex";
@@ -45,8 +52,9 @@ static NSString *KKFoldErrorToken(NSString *raw) {
 // No parseable line: surface the first non-empty log line.
 - (nullable NSString *)_firstLogLine {
   for (NSString *ln in [self.errorLog componentsSeparatedByString:@"\n"]) {
-    NSString *t = [ln stringByTrimmingCharactersInSet:
-                          NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSString *t = [ln
+        stringByTrimmingCharactersInSet:NSCharacterSet
+                                            .whitespaceAndNewlineCharacterSet];
     if (t.length)
       return t;
   }
@@ -61,10 +69,10 @@ static NSString *KKFoldErrorToken(NSString *raw) {
   static NSRegularExpression *re;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
-    re = [NSRegularExpression
-        regularExpressionWithPattern:@"(?:ERROR|WARNING):\\s*\\d+:(\\d+):\\s*(.*)"
-                             options:0
-                               error:nil];
+    re = [NSRegularExpression regularExpressionWithPattern:
+                                  @"(?:ERROR|WARNING):\\s*\\d+:(\\d+):\\s*(.*)"
+                                                   options:0
+                                                     error:nil];
   });
   NSTextCheckingResult *m =
       [re firstMatchInString:self.errorLog
@@ -107,10 +115,27 @@ static NSString *KKFoldErrorToken(NSString *raw) {
 - (NSInteger)samplerIndexForChannel:(NSUInteger)ch {
   return ch < 4 ? _sampIdx[ch] : NSNotFound;
 }
-- (void)setTexture:(NSInteger)t sampler:(NSInteger)sm forChannel:(NSUInteger)ch {
+- (void)setTexture:(NSInteger)t
+           sampler:(NSInteger)sm
+        forChannel:(NSUInteger)ch {
   if (ch < 4) {
     _texIdx[ch] = t;
     _sampIdx[ch] = sm;
+  }
+}
+
+- (NSInteger)textureIndexForNeighbor:(NSUInteger)i {
+  return i < KK_SHADER_MAX_FRAME_OFFSETS ? _nbrTexIdx[i] : NSNotFound;
+}
+- (NSInteger)samplerIndexForNeighbor:(NSUInteger)i {
+  return i < KK_SHADER_MAX_FRAME_OFFSETS ? _nbrSampIdx[i] : NSNotFound;
+}
+- (void)setTexture:(NSInteger)t
+           sampler:(NSInteger)sm
+       forNeighbor:(NSUInteger)i {
+  if (i < KK_SHADER_MAX_FRAME_OFFSETS) {
+    _nbrTexIdx[i] = t;
+    _nbrSampIdx[i] = sm;
   }
 }
 @end

@@ -72,6 +72,14 @@
         NSUInteger ti = availTileIdx[bestPos].unsignedIntegerValue;
         [pairs addObject:@[ @(slot), sourceImages[ti] ]];
         [availTileIdx removeObjectAtIndex:bestPos];
+      } else {
+        NSMutableArray<NSNumber *> *had = [NSMutableArray array];
+        for (NSNumber *p in availTileIdx)
+          [had addObject:@(CMTimeGetSeconds(
+                     sourceImages[p.unsignedIntegerValue].mediaTime))];
+        KKLogWarn(@"[Boundary] slot %lu want=%.3f NO tile within %.2fs, "
+                  @"delivered=%@ (last frame stays on screen)",
+                  (unsigned long)slot, want, kMaxDt, had);
       }
     }
   } else {
@@ -88,8 +96,11 @@
     // Sub-tile (parent Scale > 100%) would publish a squashed sub-region.
     BOOL fullFrame = (sTile.left == sImg.left && sTile.right == sImg.right &&
                       sTile.top == sImg.top && sTile.bottom == sImg.bottom);
-    if (!fullFrame)
+    if (!fullFrame) {
+      KKLogWarn(@"[Boundary] slot %lu DROPPED: sub-tile, not a full frame",
+                (unsigned long)slotIdx);
       continue;
+    }
     int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
     // Size gate: FCP re-runs this instance for the tiny project-library /
     // browser thumbnail (~112x64, ~same aspect as the timeline), which the
@@ -101,8 +112,11 @@
     // gate). Mirrors the generator's largest-size-seen guard.
     CGSize maxSrc = self.miniViewerFeed.largestSourceSizeSeen;
     if (maxSrc.width > 0 && maxSrc.height > 0 &&
-        (sW < maxSrc.width / 4.0 || sH < maxSrc.height / 4.0))
+        (sW < maxSrc.width / 4.0 || sH < maxSrc.height / 4.0)) {
+      KKLogWarn(@"[Boundary] slot %lu DROPPED: %dx%d too small vs %.0fx%.0f",
+                (unsigned long)slotIdx, sW, sH, maxSrc.width, maxSrc.height);
       continue;
+    }
     if ((double)sW * sH > (double)maxSrc.width * maxSrc.height)
       self.miniViewerFeed.largestSourceSizeSeen = CGSizeMake(sW, sH);
     // FCP's project-library preview re-runs the effect into a browser-thumb
@@ -116,8 +130,11 @@
       int dW = dImg.right - dImg.left, dH = dImg.top - dImg.bottom;
       double sAsp = (sH > 0) ? fabs((double)sW / (double)sH) : 0;
       double dAsp = (dH > 0) ? fabs((double)dW / (double)dH) : 0;
-      if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05)
+      if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05) {
+        KKLogWarn(@"[Boundary] slot %lu DROPPED: aspect %.3f vs dest %.3f",
+                  (unsigned long)slotIdx, sAsp, dAsp);
         continue;
+      }
     }
     double tag = (slotIdx < boundaryReqFracs.count)
                      ? boundaryReqFracs[slotIdx].doubleValue
@@ -177,8 +194,14 @@
     id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid
                                                   pixelFormat:pf];
     id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
-    if (!q || !dev)
+    // A checked-out queue must go back even when the DEVICE lookup is what
+    // failed. The pool is fixed size and process-wide, so one bail that skips
+    // the return shrinks it permanently for every instance in this process.
+    if (!q || !dev) {
+      if (q)
+        [cache returnCommandQueueToCache:q];
       continue;
+    }
     id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
     if (!srcTex) {
       [cache returnCommandQueueToCache:q];
@@ -211,14 +234,85 @@
   uint64_t rid = destinationImage.deviceRegistryID;
   id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid pixelFormat:pf];
   id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
-  if (!q || !dev)
+  // Same fixed-size-pool hazard as the slot publish above: return the queue
+  // even when it was the device lookup that failed.
+  if (!q || !dev) {
+    if (q)
+      [cache returnCommandQueueToCache:q];
     return;
+  }
   id<MTLTexture> tex = [wellTile metalTextureForDevice:dev];
   if (tex)
     [self.miniViewerFeed updateChannel1WithSourceTexture:tex
                                                   device:dev
                                             commandQueue:q];
   [cache returnCommandQueueToCache:q];
+}
+
+- (void)kkPublishMiniViewerAuxTexturesForDestination:
+            (FxImageTile *)destinationImage
+                                            textures:(NSArray *)textures {
+  KKMiniViewerFeed *feed = self.miniViewerFeed;
+  if (!feed)
+    return; // the slot publish creates the feed; nothing to attach to yet
+  if (textures.count == 0) {
+    if (feed.auxTextureCount != 0) {
+      feed.auxTextureCount = 0;
+      [feed publishDescriptor];
+    }
+    return;
+  }
+
+  // Same-frame geometry gate. The feed downscales every surface by one
+  // long-edge rule, so an aux frame only lines up with slot 0 when it came in
+  // at the same source size. FCP re-runs the instance at a browser-thumbnail
+  // size, and the slot publish drops those; without this the aux set would keep
+  // the thumbnail and a shader sampling a neighbour would read a differently
+  // framed image. All-or-nothing: a mixed set is worse than a stale one.
+  CGSize primary = feed.primarySourceSize;
+  if (primary.width > 0 && primary.height > 0) {
+    for (id entry in textures) {
+      if (entry == [NSNull null])
+        continue;
+      id<MTLTexture> t = entry;
+      if (t.width != (NSUInteger)primary.width ||
+          t.height != (NSUInteger)primary.height) {
+        KKLogWarn(@"[MiniFeed] aux DROPPED: %lux%lu vs source %.0fx%.0f",
+                  (unsigned long)t.width, (unsigned long)t.height,
+                  primary.width, primary.height);
+        return;
+      }
+    }
+  }
+
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  MTLPixelFormat pf =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  uint64_t rid = destinationImage.deviceRegistryID;
+  id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid pixelFormat:pf];
+  id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
+  if (!q || !dev) {
+    if (q)
+      [cache returnCommandQueueToCache:q];
+    return;
+  }
+  BOOL countChanged = (feed.auxTextureCount != textures.count);
+  feed.auxTextureCount = textures.count;
+  for (NSUInteger i = 0; i < textures.count; i++) {
+    id entry = textures[i];
+    if (entry == [NSNull null])
+      continue; // unresolved this tick - keep the last good frame at this index
+    [feed updateAuxTexture:entry atIndex:i device:dev commandQueue:q];
+  }
+  [cache returnCommandQueueToCache:q];
+  if (countChanged) {
+    id<MTLTexture> first = textures.firstObject != [NSNull null]
+                               ? textures.firstObject
+                               : nil;
+    KKLogDebug(@"[MiniFeed] aux pump count=%lu first=%lux%lu",
+               (unsigned long)textures.count, (unsigned long)first.width,
+               (unsigned long)first.height);
+  }
 }
 
 @end

@@ -9,7 +9,8 @@ A Custom shader can expose its own **inspector controls** and **on-screen contro
 
 - **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu, pill, or multi-select checklist), `#angle` (a dial), `#color` (a colour well), `#gradient` (a colour ramp), `#multi` (2-4 numbers), `#random` (a dice field).
 - **Spatial controls:** `#point` (a draggable position handle). Add `osc` to a value control for an on-screen ring, box, or rotation ring that edits the same lane.
-- **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep.
+- **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep; `#frames` delivers the source clip at other frames.
+- **Grading:** `#color-surface` opts the shader into the inspector's Color panel - a scope you can drag - and `surface=` maps a control onto its puck.
 - **Template type:** every Image shader requires exactly one `#template generator|filter|layout|transition|color-transform` directive.
 - **Built-ins:** `#speed`, `#seed`, `#grain` opt into engine controls and stand alone (no uniform).
 - Attributes tune each one: `label=`, `min=` / `max=`, `default=`, `group=` (which inspector group it lands in), and `osc=` place the on-screen control. The rest of this doc details every kind.
@@ -24,7 +25,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 **Rules that always hold:**
 
 - The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, `transition`, or `color-transform`. This drives browser classification and runtime input behavior.
-- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The built-ins (`#speed` / `#seed` / `#grain` / `#template`) are the exception: they annotate nothing and stand on their own line.
+- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The whole-shader directives (`#speed` / `#seed` / `#grain` / `#template` / `#alpha` / `#motionblur` / `#frames` / `#color-surface`) are the exception: they annotate nothing and stand on their own line.
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
@@ -59,26 +60,28 @@ Values are compared after rounding, matching choice indices and integer controls
 
 ## Control kinds
 
-| Directive   | Uniform type       | Inspector control                                | What the shader receives                                                                             |
-| ----------- | ------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `#color`    | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)                                                          |
-| `#color`    | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count                                                            |
-| `#gradient` | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count                                      |
-| `#float`    | `float n;`         | slider                                           | the raw value                                                                                        |
-| `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                                                |
-| `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** - transition progress; see below                                                            |
-| `#int`      | `float n;`         | integer slider                                   | `int`                                                                                                |
-| `#random`   | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                                                |
-| `#angle`    | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)                                                               |
-| `#bool`     | `bool n;`          | checkbox                                         | `bool`                                                                                               |
-| `#choice`   | `int n;`           | pills or dropdown; `multiple` makes a checklist  | selected index, or an option bitmask with `multiple`                                                 |
-| `#point`    | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)                                                   |
-| `#multi`    | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                                                                       |
-| `#audio`    | `vec4 n[N];`       | audio source picker                              | spectrum `nBand(i)`; optional `flow` and `waveform=N` helpers (see below)                            |
-| `#speed`    | _(none)_           | Speed slider                                     | nothing directly - scales `iTime`                                                                    |
-| `#seed`     | _(none)_           | Seed field                                       | nothing directly - offsets `iTime`                                                                   |
-| `#grain`    | _(none)_           | Grain + Grain Size                               | nothing directly - grain is overlaid on the output                                                   |
-| `#template` | _(none)_           | no separate control                              | declares `generator`, `filter`, `layout`, or `transition`; transition adds the shared coverage pills |
+| Directive        | Uniform type       | Inspector control                                | What the shader receives                                                                             |
+| ---------------- | ------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `#color`         | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)                                                          |
+| `#color`         | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count                                                            |
+| `#gradient`      | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count                                      |
+| `#float`         | `float n;`         | slider                                           | the raw value                                                                                        |
+| `#percent`       | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                                                |
+| `#progress`      | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** - transition progress; see below                                                            |
+| `#int`           | `float n;`         | integer slider                                   | `int`                                                                                                |
+| `#random`        | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                                                |
+| `#angle`         | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)                                                               |
+| `#bool`          | `bool n;`          | checkbox                                         | `bool`                                                                                               |
+| `#choice`        | `int n;`           | pills or dropdown; `multiple` makes a checklist  | selected index, or an option bitmask with `multiple`                                                 |
+| `#point`         | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)                                                   |
+| `#multi`         | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                                                                       |
+| `#audio`         | `vec4 n[N];`       | audio source picker                              | spectrum `nBand(i)`; optional `flow` and `waveform=N` helpers (see below)                            |
+| `#speed`         | _(none)_           | Speed slider                                     | nothing directly - scales `iTime`                                                                    |
+| `#seed`          | _(none)_           | Seed field                                       | nothing directly - offsets `iTime`                                                                   |
+| `#grain`         | _(none)_           | Grain + Grain Size                               | nothing directly - grain is overlaid on the output                                                   |
+| `#template`      | _(none)_           | no separate control                              | declares `generator`, `filter`, `layout`, or `transition`; transition adds the shared coverage pills |
+| `#color-surface` | _(none)_           | the Color panel (a draggable scope)              | nothing directly - controls opt in with `surface=`                                                   |
+| `#frames`        | _(none)_           | no separate control                              | the source clip at other frames: `iNeighborAt(i, uv)`, `iNeighborCount`, `iNeighborOffset(i)`        |
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
 
@@ -225,7 +228,7 @@ Transition shaders can read `iTransitionMode` (`0` = Transition, `1` = In, `2` =
 
 The user's **Motion Blur** popover (on/off, shutter, samples) is separate from any directive. `// #motionblur <mode>` (on its own line, no uniform) only decides **who applies** those settings. Absent, the default is `accumulate`.
 
-- **`accumulate`** (default): the plugin re-renders the shader at N sub-frame times across the shutter and averages them. Correct for any ordinary animated shader with **nothing to declare** - it just works. Multi-pass is fine: a buffer chain that only reads earlier buffers is a pure function of the current uniforms, so it is encoded ONCE and each sample re-runs only the Image pass. That makes a buffer the right home for an expensive precompute (a source blur, say) - inline, it would be recomputed inside every sample. A **feedback** chain (a buffer reading itself or a later buffer) is the exception: its state depends on history, so it can't be shared across samples and validation asks you to declare `native` or `off` instead.
+- **`accumulate`** (default): the plugin re-renders the shader at N sub-frame times across the shutter and averages them. Correct for any ordinary animated shader with **nothing to declare** - it just works. Multi-pass is fine: a buffer chain that only reads earlier buffers is a pure function of the current uniforms, so it is encoded ONCE and each sample re-runs only the Image pass. That makes a buffer the right home for an expensive precompute (a source blur, say) - inline, it would be recomputed inside every sample. A **feedback** chain (a buffer reading itself or a later buffer) is the exception: its state depends on history, so it can't be shared across samples and validation asks you to declare `native` or `off` instead. (For when a feedback chain is the right way to depend on history at all, see "Feedback or `#frames`" below.)
 - **`native`**: the shader **blurs itself** - a feedback trail, or its own internal sampling loop. The plugin renders once and hands you the popover settings as globals:
   - **`iMotionBlur`** - shutter as `0..1` (`0` when Motion Blur is off). Map it onto your effect, e.g. a trail's decay.
   - **`iMotionBlurSamples`** - the sample count, if you loop internally.
@@ -246,6 +249,106 @@ void mainImage(out vec4 O, in vec2 fc) {
 ```
 
 Reach for `native` only when the shader genuinely produces its own smear (trails / feedback) or wants an internal loop; otherwise leave it off and let `accumulate` handle it.
+
+### Feedback or `#frames`: picking the temporal tool
+
+Mirage has two ways to make an effect depend on time rather than only on the current frame, and they are not interchangeable. **Feedback remembers, `#frames` looks.** Ask one question: can the history be summarised as running state, or does the shader need to look at specific other frames? Running state is feedback (a buffer reading itself, or reading a later buffer). Specific frames are `#frames`.
+
+**Feedback costs one extra pass, flat**, no matter what the shader sits on: the state texture is already there from last frame, so nothing beneath the shader is re-rendered to produce it. Its temporal reach is **unbounded** - a decaying accumulator draws on seconds of history for the same per-frame cost as one that decays in three frames. What it does not have is **random access**: individual past frames only exist blended into the state, so there is no way to ask what the picture looked like exactly 7 frames ago. Distinct true delayed frames can be built as a buffer delay line (each buffer passing its content to the next), but that caps at about 3, which is the buffer budget. Scrub determinism reconstructs feedback state through checkpoints with a 90-frame window, so sequential playback is exact and a seek may settle a very long tail slightly differently.
+
+**`#frames` looks at real frames**, and pays per look - see the cost section below for what a look costs where.
+
+| Reach for feedback                                                   | Reach for `#frames`                                       |
+| -------------------------------------------------------------------- | --------------------------------------------------------- |
+| Trails, echo, ghosting, light streaks, long exposure                 | Anything that sees the **future** (feedback never can)    |
+| Warp accumulation (each frame displaced a little further)            | True frame blending at exact taps                         |
+| Simulations: reaction-diffusion, fluid, particles, cellular automata | Motion-compensated temporal comparison of real neighbours |
+| Running temporal averages                                            | Frame difference / time displacement between real frames  |
+| Motion-energy buildup                                                | Freeze or hold of one specific offset                     |
+
+#### Worked example: motion-gated trails with no `#frames` at all
+
+A trail that only builds where the picture is actually moving needs the previous **source** frame, which sounds like `#frames offsets="-1"`. Feedback gives it for free instead. Skip Buffer A so `iChannel0` stays the source. **Buffer C** is a one-line passthrough that stores the current source. **Buffer B** is the accumulator: it reads ITSELF on `iChannel1` (its own previous frame) and reads Buffer C on `iChannel2` - a LATER buffer, so also a previous frame, which is exactly the previous source. That is a true previous-frame motion mask with zero frame requests.
+
+Buffer B, the core of it (`uv` is `fragCoord / iResolution.xy`):
+
+```glsl
+vec3 src = texture(iChannel0, uv).rgb;
+vec4 history = texture(iChannel1, uv);        // this buffer, one frame ago
+vec3 prevSrc = texture(iChannel2, uv).rgb;    // Buffer C, one frame ago
+float motion = clamp(dot(abs(src - prevSrc), vec3(1.0)) * 8.0, 0.0, 1.0);
+vec3 prevTrail = (abs(history.a - 0.8125) < 0.01) ? history.rgb * 0.9 : vec3(0.0);
+fragColor = vec4(max(prevTrail, src * motion), 0.8125);
+```
+
+Buffer C:
+
+```glsl
+fragColor = texture(iChannel0, fragCoord / iResolution.xy);
+```
+
+The Image pass then composites `texture(iChannel1, uv)` (Buffer B) over the source.
+
+The `0.8125` is an **alpha signature**: on the very first frame the history texture holds whatever was in memory, and reading it as a trail flashes garbage. Writing a known constant into alpha and testing for it means the accumulator only trusts history it wrote itself, and starts from black otherwise. Pick a value that survives the round trip exactly.
+
+### `#frames` (reading other frames)
+
+`iChannel0` is the source clip at the current frame, and nothing else. `// #frames` asks Final Cut for the clip at **other** frames too, so a shader can compare, blend or trail across time. It stands alone on its own line and binds no uniform, like `#template` and `#motionblur`.
+
+```glsl
+// #frames offsets="-1,-2,-3,-4"
+```
+
+**Units.** Each offset is a signed count of **whole frames** relative to the frame being rendered, resolved against the clip's own frame duration. `-1` is the previous frame, `+2` is two frames ahead. There is no seconds form: temporal effects reason in frames, and a fractional offset would land between the frames Final Cut can actually deliver.
+
+**What the shader gets:**
+
+- **`iNeighborAt(i, uv)`** returns the source clip at the `i`-th declared offset, sampled at `uv`. This is the accessor to reach for. A GLSL sampler array cannot be indexed by a loop variable, so an indexed accessor is what lets a trail loop over the frames.
+- **`iNeighborCount`** is how many offsets were declared, as a compile-time constant, so `for (int i = 0; i < iNeighborCount; i++)` is a bounded loop.
+- **`iNeighborOffset(i)`** gives the `i`-th offset back in whole frames, for a shader whose weighting depends on the distance in time rather than on the slot number.
+- **`iNeighbor0`, `iNeighbor1`, ...** are the underlying samplers, if you would rather write `texture(iNeighbor0, uv)` directly. Note that `iFrame` is unrelated: that is still the frame **counter**.
+
+**Binding order is declaration order.** `offsets="-1,+3,-2"` binds `iNeighbor0` to one frame back, `iNeighbor1` to three frames forward and `iNeighbor2` to two frames back. The list is never sorted, so what you write is what you index.
+
+**Rules the editor enforces:**
+
+- **At most 8 offsets.** Each one is a full-resolution texture held for the frame, so this is a memory budget rather than a binding limit.
+- **Offset `0` is rejected.** That frame is already `iChannel0`, and accepting it would spend a sampler and an upstream render on a duplicate.
+- **A repeated offset is rejected**, not folded. Folding would shift every later slot down, so a shader written against `iNeighbor2` would quietly start reading a different frame.
+- **One `#frames` line per Image shader**, and `offsets=` must be a comma-separated list of whole numbers. `#frames` applies to the Image pass; a Buffer pass gets no neighbour samplers.
+
+**Colour.** Every neighbour frame arrives in **exactly the same encoding as `iChannel0`** (gamma-encoded for an ordinary shader, linear for a `color-transform`). That is deliberate: mixing a gamma frame against a linear one shifts the colour of the blend, so a trail would drift away from the footage that cast it. Weight and mix the frames directly, the way you would sample `iChannel0` twice.
+
+**Edge of the clip.** A frame Final Cut cannot deliver, before the clip starts or past where it ends, resolves to the **current frame**. The behaviour is a deterministic clamp, never transparent black, so a trail shortens smoothly into the first frames of a clip instead of blinking against a hole.
+
+**Mini viewer.** The inspector's preview shows the real thing: the render process hands its resolved neighbour frames to the mini viewer alongside the source, so trails, echoes and frame differences appear there as they do in the viewer. The neighbours it holds are the ones from the **last frame Final Cut rendered**. With the playhead parked that set does not change, which is exactly what makes tuning work - drag a decay and the same neighbours re-blend under it. Move the playhead and the next render replaces them. Until the first render of a session lands, and for the moment after a `#frames` edit changes how many offsets there are, the preview clamps every neighbour to the current frame rather than showing a mismatched set.
+
+**Cost.** Each offset is **one frame request**, not a range: four offsets ask Final Cut for four extra frames, no more and no less. What that request costs depends entirely on what the shader sits on.
+
+**On a clip**, an offset is a media decode. A past offset is close to free, because that frame has just played and is still cache-warm. A near-future offset is cheap, because Final Cut renders a little ahead of the playhead anyway. A far-future offset pays a decode-ahead on every displayed frame, and long-GOP media (H.264, HEVC) pays far more for that than ProRes or optimized media, because reaching a future frame means decoding from the last keyframe forward.
+
+**On an adjustment layer, or anywhere above a stack of effects**, an offset is not a decode: it is a full render of _everything below it_ at that time. The cost multiplies rather than adds, so N offsets can mean up to N+1 evaluations of the whole stack per displayed frame. Only the **immediately previous frame (`-1`)** is reliably cache-warm there: measured, `offsets="-1"` is effectively free, `offsets="-1,-2"` already pays a full stack render every frame, and offsets further out degrade from there. That is also why performance on an adjustment layer oscillates between fine and unusable with no change to the shader - Final Cut serves some of those from its cache and re-renders the rest. Baking the stack below (make the clips a compound clip and render it) turns every offset back into a cheap decode.
+
+If all the shader needs above a stack is the previous frame's _result_, feedback gives it for one flat pass instead - see the decision guide above.
+
+**So:** keep offsets few and near for realtime work. A far look-ahead is an export-quality choice, not a playback one. Prefer a short trail with a stronger decay over a long one.
+
+Note also that Final Cut's playback scheduler does not recover mid-playback once it has fallen behind: a pause and a resume resets it instantly, so judge a change from a fresh play rather than from the tail of a struggling one.
+
+```glsl
+// #template filter
+// #frames offsets="-1,-2"
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / iResolution.xy;
+    vec3 c = texture(iChannel0, uv).rgb;
+    for (int i = 0; i < iNeighborCount; i++)
+        c = max(c, iNeighborAt(i, uv).rgb * (0.6 / float(i + 1)));
+    fragColor = vec4(c, 1.0);
+}
+```
+
+`#frames` and `#motionblur` are independent and compose: a shader may declare both, and the frames each one needs are scheduled together and paired back by their own timing, so neither claims the other's. A trail shader usually wants `// #motionblur off` anyway, since the trail already reads as motion.
 
 ### `#audio` is the odd one out
 
@@ -377,6 +480,138 @@ Point and position handles snap while dragging: hold **Cmd** and the handle snap
 ### Hiding OSCs
 
 Every declared OSC is a hideable element in the viewer's On-Screen Controls settings (Option-click a control to hide it; Option-hold reveals hidden ones as dimmed ghosts). A rotation gizmo is one group with per-axis X/Y/Z children, each hideable on its own.
+
+## The Color surface (`#color-surface`)
+
+`// #color-surface` stands alone like `#template` or `#motionblur` and opts the shader into the inspector's **Color panel**: a circle whose outline is a scope carrying the frame's own distribution, with one or more draggable **pucks** inside it. It is opt-in, so a shader that never asks for it never grows the panel.
+
+```glsl
+// #color-surface ring=light xaxis="Cool,Warm" yaxis="Darker,Brighter"
+```
+
+The puck writes the shader's **real controls**. There is no hidden grading state: drag toward Brighter and the Threshold and Bloom lanes visibly move in the inspector, so a grading gesture keyframes, undoes and exports exactly like a typed value.
+
+| Attribute | On            | What it does                                                                                                                      |
+| --------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ring=`   | the directive | what the outline paints: `plain` (default), `light`, or `hue`. One `hue` surface and one `light` surface may be declared together |
+| `xaxis=`  | the directive | the two ends of the horizontal axis, negative end first: `xaxis="Cool,Warm"`                                                      |
+| `yaxis=`  | the directive | the two ends of the vertical axis, negative end first: `yaxis="Darker,Brighter"`                                                  |
+| `space=`  | the directive | the colour space the shader's maths works in. Only `linear-rec709` is accepted, and it is the default, so it can be left out      |
+
+`ring=` is the legend AND the scope, so choose the one the axes are about. `light` paints a dark-to-bright ramp with the frame's luminance distribution around it. `hue` paints a hue wheel with the frame's chroma as a polar cloud - a vectorscope you can pull against. `plain` is a bare outline, right for axes that are about neither. An undeclared axis is drawn as an unlabelled direction rather than given an invented name.
+
+`space=` is a declaration, not a conversion request: nothing here transforms the image. Normalise upstream with the Color Transform effect.
+
+### Two rings at once
+
+A shader may declare the directive **twice**, once with `ring=hue` and once with `ring=light`. The panel then stacks both circles, in declaration order, and grows downward to fit them. A grade needs both readings of the frame - the cast is a hue problem and the exposure is a light one - and they are two measurements of the same picture rather than one control with a mode, so neither has to be put away to look at the other.
+
+```glsl
+// #color-surface ring=hue
+// #color-surface ring=light xaxis="Flat,Punchy" yaxis="Darker,Brighter"
+```
+
+Each surface carries its **own** `xaxis=`, `yaxis=` and `space=`. Each ring gets its own pucks, its own active puck and its own rows in the readout, and both are fed from the same measured frame: the wheel draws the chroma cloud and the cast cross, the tonal circle draws the luminance distribution. The eyedropper and the memory-colour sampler belong to the **hue** ring, because a cast is a position on it and there is nowhere on a tonal ramp for one to be.
+
+The rules are exact:
+
+- Two is the ceiling, and the pair must be one `ring=hue` and one `ring=light`. Two of the same ring, or a `plain` outline as one of the two, is an error - there is nothing a second copy of a wheel could measure that the first does not, and a plain outline has no keyword a control could aim at.
+- A shader declaring **one** surface is completely unaffected. Nothing below is required of it.
+
+### Mapping a control to the puck: `surface=`
+
+`surface=` on any value control binds it to a puck. It is **cartesian** (`x:` / `y:`) for two independent directions, or **polar** (`r:` / `a:`) for a wheel. A surface is one or the other - mixing is rejected, since both describe the same two degrees of freedom.
+
+```glsl
+// #percent label="Threshold" min=0 max=100 default=58 surface="y:-14"
+uniform float uThreshold;
+
+// #percent label="Saturation" min=0 max=200 default=100 surface="r:+40"
+uniform float uSaturation;
+```
+
+The number is the move **at full deflection, in the control's own units**: at full upward deflection that Threshold falls 14 percent. `r:` responds to the puck's distance from the centre, so the centre is always the control's declared default and the rim its full response. `a:` responds to the puck's bearing, its magnitude being the value at half a turn, so `a:+180` makes the bearing the angle directly. A `#color` control's response is in **degrees of hue**, which follows from its kind rather than needing its own syntax.
+
+`default=`, `min=` and `max=` are part of the mapping, not decoration:
+
+- `default=` is the **base** - what a centred puck means. It is read from the directive, not from wherever the control happens to sit, or the puck would always derive back to the centre.
+- `min=` / `max=` are the **limits the rim reaches**. The response is a cubic whose slope at the centre is the authored magnitude and whose edge lands exactly on the limit, so small moves stay predictable near the middle while the extremes are still reachable. Without both limits the response stays plain linear rather than inventing a range.
+
+On a **cartesian** surface the rim reaches every mapped control's full range in **every** direction, diagonals included: a pair like `x:-100` and `y:-100` both land at their limits together in the corner. So two perpendicular mappings can be authored as a genuine pair without one direction quietly costing the other most of its travel.
+
+The relationship is bi-directional and deliberately asymmetric: dragging applies the **change** in puck position to the controls, while the puck's drawn position is **derived** from the controls by a least-squares fit. That is what keeps a hand-tuned value from being snapped onto the mapping the instant the puck is nudged, and it means a control pinned at its min or max makes the puck visibly lag the cursor instead of the drag going quietly dead.
+
+#### Saying which ring, when there are two
+
+With **two** surfaces declared, `surface="x:+31 y:+17"` no longer says enough: the same gesture means a cast on one circle and an exposure on the other, and nothing in the shader decides which. So the value starts with the ring's own word:
+
+```glsl
+// #color-surface ring=hue
+// #color-surface ring=light xaxis="Flat,Punchy" yaxis="Darker,Brighter"
+
+// #float label="Red / Cyan" min=-100 max=100 default=0 surface="hue x:+31 y:+17"
+uniform float uRedCyan;
+
+// #float label="Exposure" units="stops" min=-5 max=5 default=0 surface="light y:+1.5"
+uniform float uExposure;
+```
+
+`hue` or `light`, in front of the terms. It is a **marker**, not a position in the file: binding each control to the nearest `#color-surface` above it would make the order of the directives load-bearing, and directives are reordered all the time to group the inspector. It would also have no failure mode, since every control sits under some surface, so a mis-aimed one would attach silently to the wrong ring instead of saying so.
+
+The marker is optional on a shader with **one** surface, because there is only one thing it could name - which is why no existing shader needs an edit. Naming it there anyway is legal as long as the word matches the ring that is declared. The editor reports the two ways it can be wrong:
+
+- a `surface=` with no ring word while two rings are declared
+- a `surface=` naming a ring the shader does not declare
+
+`puck=`, `track=` and `pick=` are unchanged by any of this. Pucks are scoped to their ring, so two rings may each have a handle of the same name without them being the same handle - the readout then heads each block with the ring, and only then.
+
+### Named pucks: `puck=`
+
+`puck={"Name", "sf.symbol"}` says which handle drives the control. Controls **sharing a name share a handle**, so one circle can carry several independent corrections - a three-way's shadows, midtones and highlights - with no mode control to switch between them and nothing to hide while comparing. Omit it and every mapping drives the surface's single unnamed puck.
+
+```glsl
+// #float label="Red / Cyan" group={"Shadows", "moon"} puck={"Shadows", "moon"} min=-100 max=100 default=0 surface="x:+40"
+uniform float uShadowRC;
+```
+
+Pucks are **not** inferred from `group=`: one gesture often spans several inspector groups (a bloom's Threshold, Bloom and Mist), which grouping would split into a puck each. The symbol is optional but effectively required once there is more than one puck, since the icon is the only thing saying which handle is which.
+
+### Rotation-only pucks: `track=`
+
+`track=<0.1..1>` pins a puck to a circle at that fraction of the radius, so the drag is a **rotation and nothing else**. Declared once per puck, on any of its controls.
+
+```glsl
+// #float label="Target Hue" units="°" min=-180 max=180 default=0 surface="a:+180" puck={"Target", "eyedropper"} track=0.78
+uniform float uTargetHue;
+```
+
+Reach for it when a puck's controls are all angular - a hue selector, say. Distance there is not merely unused, it is meaningless, and a handle that slides in and out while only its bearing does anything invites the reading that the middle means "less".
+
+### A hue control points AT the hue
+
+For a **hue-valued** control - a `#color` swatch driven through an angular `a:` term, or a hue-in-degrees float - the puck's bearing **is the absolute hue**, the hue as the grading wheel measures it, so the bearing and the ring under it name the same colour. Point the handle at green and you get green, whatever the control's `default=` is. It is not an offset from the default, because a handle sitting on a painted hue wheel that reports something other than the hue it is sitting on is unreadable. Ordinary cartesian and `r:` mappings are unaffected: they still move relative to the control's base.
+
+### Sampling from the footage: `pick=`
+
+`pick=hue` | `pick=saturation` | `pick=luma` | `pick=color` on a control subscribes it to the panel's **eyedropper**. When the current shader declares at least one `pick=` on a currently-visible control, the Color panel shows an eyedropper, and clicking the footage in the mini-viewer samples a small patch and writes the chosen property of that colour into **every subscribed control at once, in one undo step**.
+
+```glsl
+// #percent label="Pivot" min=1 max=99 default=18 pick=luma
+uniform float uPivot;
+```
+
+| `pick=`      | What lands in the control                                                                                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hue`        | the hue as the grading wheel measures it, in degrees, wrapped to -180..180 when the control's `min=` is negative and 0..360 otherwise. A neutral or grey patch writes nothing |
+| `saturation` | 0..1, the patch's colourfulness as a fraction of the most colourful thing Rec.709 shows, multiplied by 100 for a percent-range control                                        |
+| `luma`       | Rec.709 luma, with the same scaling                                                                                                                                           |
+| `color`      | the sampled RGB into a `#color` control's swatch                                                                                                                              |
+
+Beside the eyedropper, the panel offers **Set from clip**. It arms one click in the preview, and that click aims only the **active puck's** subscribers - the handle you last touched - at the colour under it, all in one undo step. The colour is read from the original clip rather than from the graded result, so re-picking the same pixel does not walk the value as the grade moves it. Escape, clicking the button again, or the click itself disarms.
+
+Scoping is by `puck=`, which a `pick=` control may declare on its own without a `surface=`: `puck=` names the handle a control belongs to, and `surface=` only says how it responds to being dragged. In a shader that names pucks, a `pick=` control naming none is skipped by Set from clip - it has not said which handle it belongs to, and writing it from every handle would fill all of them with the same colour. The eyedropper still writes it, since that gesture is deliberately shader-wide. A shader that names no puck at all has one unnamed handle every control belongs to, so both buttons reach everything.
+
+`pick=` works with or without a `surface=` mapping on the same control, and it never affects the puck layout. Use it where the control's value genuinely **is** a property of a colour in the frame - a hue to key, a mid-grey pivot, a light's tint. It is the wrong tool for a gate or a threshold that the click should fall inside: writing the clicked pixel's own saturation into a minimum-saturation control excludes half of what was just clicked.
 
 ## Worked example
 

@@ -56,6 +56,11 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
             @"A 0-100% sweep that auto-runs across a "
             @"transition.",
             @"#progress "),
+          E(@"#color-surface", @"#color-surface",
+            @"Adds the Grading panel: scopes for this effect, plus handles for "
+            @"any control it gives a colour role to. Declare it twice - "
+            @"ring=hue and ring=light - to stack both circles.",
+            @"#color-surface "),
           E(@"#template", @"#template",
             @"Required template type: generator, filter, layout, transition, "
             @"or color-transform.",
@@ -63,6 +68,10 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
           E(@"#motionblur", @"#motionblur",
             @"Who renders motion blur: accumulate, native, or off.",
             @"#motionblur "),
+          E(@"#frames", @"#frames",
+            @"Also deliver the clip at other frames, for trails and other "
+            @"effects that read across time.",
+            @"#frames offsets=\""),
           E(@"#speed", @"#speed",
             @"Adds a Speed control that scales the shader's time.", @"#speed"),
           E(@"#seed", @"#seed",
@@ -111,6 +120,55 @@ MirageDirectiveAttributeKeys(void) {
             @"Map a colour array to a multiple-choice control's options.",
             @"optionsby="),
           E(@"default", @"default=", @"Starting value.", @"default="),
+          E(@"space", @"space=",
+            @"The colour space this shader's maths works in, so the Grading "
+            @"panel measures it correctly.",
+            @"space="),
+          E(@"surface", @"surface=\"\"",
+            @"Bind this control to the Color panel's puck. Cartesian: "
+            @"\"y:+30\", \"x:-4 y:+12\". Polar, for a wheel: \"r:+35\" follows "
+            @"the puck's distance from the centre, \"a:+180\" follows its "
+            @"bearing. The number is the move at full deflection, in this "
+            @"control's own units, and the rim reaches its min / max. With two "
+            @"rings declared, start the value with the ring this control "
+            @"belongs to: \"hue x:+31 y:+17\", \"light y:+1.5\".",
+            @"surface=\""),
+          E(@"puck", @"puck={\"\", \"\"}",
+            @"Which handle in the Color panel drives this control, e.g. "
+            @"puck={\"Shadows\", \"moon\"}. Controls sharing a name share a "
+            @"handle, so one circle can carry a whole three-way. Omit it and "
+            @"every mapping drives the single puck.",
+            @"puck={\""),
+          E(@"track", @"track=",
+            @"Pin this control's puck to a circle at that fraction of the "
+            @"radius, e.g. track=0.75, so it can only be rotated. For a handle "
+            @"whose controls are all angular - picking a hue - distance means "
+            @"nothing, and a track says so instead of leaving it to be "
+            @"discovered.",
+            @"track="),
+          E(@"pick", @"pick=",
+            @"Feed this control from the Color panel's eyedropper: pick=hue, "
+            @"pick=saturation, pick=luma or pick=color. Sampling the picture "
+            @"writes that property of the sampled colour here - the hue in "
+            @"this control's own convention, saturation and luma as 0..1 or as "
+            @"percent when the declared max says so, and the colour itself "
+            @"into a #color swatch. Independent of surface=: a control can "
+            @"take the eyedropper without being on the puck.",
+            @"pick="),
+          E(@"ring", @"ring=",
+            @"#color-surface: what the circle's outline paints - plain, light "
+            @"or hue. It doubles as the scope, so pick the one your axes are "
+            @"about. A shader may declare one hue surface and one light "
+            @"surface, and no more.",
+            @"ring="),
+          E(@"xaxis", @"xaxis=\"\"",
+            @"#color-surface: the two ends of the puck's horizontal axis, e.g. "
+            @"xaxis=\"Cool,Warm\". Drawn either side of the circle.",
+            @"xaxis=\""),
+          E(@"yaxis", @"yaxis=\"\"",
+            @"#color-surface: the two ends of the puck's vertical axis, e.g. "
+            @"yaxis=\"Darker,Brighter\". Negative end first, as with xaxis.",
+            @"yaxis=\""),
           E(@"osc", @"osc=",
             @"Add an on-screen control: point, position, ring, box or rotate.",
             @"osc="),
@@ -141,6 +199,10 @@ MirageDirectiveAttributeKeys(void) {
             @"group=\""),
           E(@"size", @"size=", @"#grain: the grain's cell size, in pixels.",
             @"size="),
+          E(@"offsets", @"offsets=\"\"",
+            @"#frames: which frames to deliver, signed and relative to this "
+            @"one, like \"-2,-1,+1\".",
+            @"offsets=\""),
           E(@"waveform", @"waveform=",
             @"#audio: expose this many signed time-domain samples.",
             @"waveform="),
@@ -231,7 +293,10 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"percent",      @"int",        @"px", // #multi units/modifiers
       @"accumulate",   @"native",     @"off",      @"on", // #motionblur modes
       @"generator",    @"filter",     @"layout",   @"transition",
-      @"color-transform" // templates
+      @"color-transform",  // templates
+      @"linear-rec709",    // #color-surface space=
+      @"plain",            // #color-surface ring=
+      @"light",            @"hue"
     ]];
   });
   return v;
@@ -611,6 +676,20 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageGLSLIdents(void) {
             @"iChannel1"),
           E(@"iChannel2", @"iChannel2", @"An extra input image.", @"iChannel2"),
           E(@"iChannel3", @"iChannel3", @"An extra input image.", @"iChannel3"),
+          E(@"iNeighborAt", @"iNeighborAt(i, uv)",
+            @"The source clip at the i-th frame offset declared by #frames, "
+            @"sampled at uv.",
+            @"iNeighborAt("),
+          E(@"iNeighborCount", @"iNeighborCount",
+            @"How many frames #frames declared.", @"iNeighborCount"),
+          E(@"iNeighborOffset", @"iNeighborOffset(i)",
+            @"The i-th #frames offset, in whole frames.", @"iNeighborOffset("),
+          E(@"iNeighbor0", @"iNeighbor0",
+            @"The clip at the first #frames offset. Prefer iNeighborAt.",
+            @"iNeighbor0"),
+          E(@"iNeighbor1", @"iNeighbor1",
+            @"The clip at the second #frames offset. Prefer iNeighborAt.",
+            @"iNeighbor1"),
           E(@"iTime", @"iTime", @"Time in seconds since the clip started.",
             @"iTime"),
           E(@"iTimeDelta", @"iTimeDelta", @"Seconds since the previous frame.",
@@ -702,6 +781,30 @@ MirageValueEnumForKey(NSString *key) {
         @[
           E(@"true", @"true", @"Keep the two fields in proportion.", @"true"),
           E(@"false", @"false", @"Each field resizes on its own.", @"false"),
+        ],
+        kVAR);
+  if ([k isEqualToString:@"space"])
+    return Colored(
+        @[
+          E(@"linear-rec709", @"linear-rec709",
+            @"Linear Rec.709, what Color Transform outputs by default.",
+            @"linear-rec709"),
+        ],
+        kVAR);
+  if ([k isEqualToString:@"ring"])
+    return Colored(
+        @[
+          E(@"plain", @"plain",
+            @"A plain outline. The default, for axes that are about neither "
+            @"light nor hue.",
+            @"plain"),
+          E(@"light", @"light",
+            @"A dark-to-bright ramp, with the frame's tones plotted inside it.",
+            @"light"),
+          E(@"hue", @"hue",
+            @"A hue wheel, with the frame's colour as a vectorscope cloud "
+            @"inside it.",
+            @"hue"),
         ],
         kVAR);
   if ([k isEqualToString:@"body"])

@@ -147,6 +147,62 @@ NS_ASSUME_NONNULL_BEGIN
                                            NSArray<id<MTLTexture>>
                                                *inputTextures))commands;
 
+/// As above, plus a `setup` block handed THIS pass's command buffer before the
+/// render encoder is created, for GPU work the draw depends on.
+///
+/// The point is round trips. Preparing an input on its own command buffer means
+/// commit + wait before the render can even be encoded, and that scheduling
+/// latency dwarfs the work itself when the passes are small - measured at
+/// several ms per round trip against 0.1ms of actual GPU time. Encoded here
+/// instead, the preparation rides the render's own buffer: Metal runs the
+/// passes in encode order and hazard-tracks the textures between them, so the
+/// existing single wait at the end covers everything.
+///
+/// The block must END every encoder it opens - a command buffer allows one live
+/// encoder, and the render encoder is created immediately after this returns.
+- (BOOL)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                               sourceImages:
+                                   (NSArray<FxImageTile *> *)sourceImages
+                                      setup:
+                                          (nullable void (^)(
+                                              id<MTLCommandBuffer>
+                                                  commandBuffer))setup
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures))commands;
+
+/// As above, on a CALLER-SUPPLIED queue.
+///
+/// For a render that had to submit earlier work of its own (a multi-pass
+/// chain's buffer passes) and needs this pass to run after it. Command buffers
+/// on one queue execute in commit order, so the caller commits its work
+/// WITHOUT waiting, hands the same queue here, and this pass's mandatory wait
+/// covers both - one round trip for the frame instead of one per submission.
+/// Queues from the shared cache pool are interchangeable, so two separately
+/// checked-out queues give no such ordering: it must be the same object.
+///
+/// A supplied queue is NOT returned to the cache - the caller owns its
+/// lifetime. Pass nil to check one out and return it, which is the behaviour of
+/// every variant above.
+- (BOOL)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                               sourceImages:
+                                   (NSArray<FxImageTile *> *)sourceImages
+                               commandQueue:
+                                   (nullable id<MTLCommandQueue>)commandQueue
+                                      setup:
+                                          (nullable void (^)(
+                                              id<MTLCommandBuffer>
+                                                  commandBuffer))setup
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures))commands;
+
 /// Like `encodeRenderCommandsForDestinationImage:...` but targets an
 /// arbitrary MTLTexture and uses a caller-owned command buffer (no commit).
 /// Used by KKMotionBlur to draw plugin samples into pool textures, sharing

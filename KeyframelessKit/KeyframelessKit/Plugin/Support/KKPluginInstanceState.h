@@ -110,6 +110,21 @@ KKPluginInstanceState *_Nullable KKInstanceStateForAPI(id<PROAPIAccessing> api);
 KKPluginInstanceState *_Nullable KKInstanceStateEnsureForAPI(
     id<PROAPIAccessing> api);
 
+/// Call from the plugin's `parameterChanged:` with every parameter ID; acts only
+/// on `kKKParamInstanceID`. Re-reads the param and replaces the per-api cached
+/// UUID when it differs.
+///
+/// This is what keeps the RENDER process honest across a paste-attributes:
+/// pasting clones `kKKParamInstanceID`, the duplicate-owner detection above
+/// re-mints a fresh UUID for the pasted clip (in the inspector's ViewBridge
+/// process, whose createView captures the fresh value) - but the render process
+/// had already cached the cloned UUID at its first render, and the cache had no
+/// invalidation. The render then published its mini-viewer feed under the OLD
+/// UUID's rendezvous paths while the inspector listened on the new ones: a
+/// preview frozen on a stale descriptor whose IOSurface no longer exists.
+void KKInstanceUUIDHandleParameterChanged(id<PROAPIAccessing> api,
+                                          UInt32 parameterID);
+
 /// Snapshot of all live per-instance states. Used by the OSC flush pump to
 /// broadcast view updates across every effect instance - any single running
 /// `drawOSC` (the OSC-selected effect) can deliver updates to every live

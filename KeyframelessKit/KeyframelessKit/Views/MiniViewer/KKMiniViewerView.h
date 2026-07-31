@@ -517,6 +517,29 @@ NS_ASSUME_NONNULL_BEGIN
 /// caller applies its own colour handling.
 @property(nonatomic, readonly, nullable) id<MTLTexture> channel1Texture;
 
+/// AUXILIARY source textures the feed published via
+/// `-[KKMiniViewerFeed updateAuxTexture:atIndex:...]`, indexed positionally in
+/// the order the publisher wrote them. Zero for every feed that publishes none.
+///
+/// Mirage uses them for a `// #frames` shader's neighbour frames, so the mini
+/// previews a temporal shader on the real neighbours. They keep the LAST
+/// pumped frames between renders on purpose - a parked playhead must still
+/// preview while the user tunes - so a consumer treats a count that disagrees
+/// with what it expects as "not mine yet" and falls back rather than
+/// mis-indexing. Raw, like the slot textures: the caller applies its own
+/// colour handling.
+@property(nonatomic, readonly) NSUInteger auxTextureCount;
+- (nullable id<MTLTexture>)auxTextureAtIndex:(NSUInteger)index;
+
+/// The publisher's frame counter for an aux index, or 0 when unresolved.
+///
+/// THE cache key for anything derived from an aux texture. The MTLTexture
+/// object is not one: the feed rewrites the same IOSurface in place, so the
+/// wrapper object stays identical across new frames and only this value moves.
+/// A consumer that colour-converts a neighbour caches the result against
+/// (texture, generation) and reconverts only when a pump lands.
+- (uint64_t)auxTextureGenerationAtIndex:(NSUInteger)index;
+
 /// The active slot's rendered FINAL frame - the effect's output the mini-viewer
 /// is currently displaying (BGRA8). Exposed so the thumbnail bake can capture
 /// the real composited result directly (transitions, picture-in-picture,
@@ -526,14 +549,72 @@ NS_ASSUME_NONNULL_BEGIN
 /// pixels re-renders from `sourceTexture` instead.
 @property(nonatomic, readonly, nullable) id<MTLTexture> processedTexture;
 
+/// Where the image is actually drawn inside this view, in view points, honouring
+/// aspect, zoom and pan. Public so a host can map a click in the preview to a
+/// position in the frame - the Grading surface's grey picker needs exactly that.
+/// Bottom-left origin, like the view and like the processed texture.
+- (CGRect)contentRectInViewPoints;
+
 /// The active slot's RAW input frame (this clip's real footage, as delivered
 /// by the feed). The effect has not run on it and the watermark never touches
 /// it, so a bake can re-render clean output from here.
 @property(nonatomic, readonly, nullable) id<MTLTexture> sourceTexture;
 
+/// Before/after comparison, drawn ONLY here.
+///
+/// Both modes are a draw-time composite of the two textures above and never
+/// reach the plugin's render path, so a split can't be exported as half-graded
+/// footage. Both are session-only VIEW state - not parameters, not lanes, not
+/// keyframable, not undoable - because every honoured param write in this
+/// codebase costs an undo entry, and a draggable divider stored as one would
+/// bury the user's actual grade under a hundred Cmd-Z steps.
+///
+/// Off by default and entirely opt-in: a plugin that never touches these
+/// properties draws exactly as before.
+
+/// YES when there IS an ungraded frame to compare against (the active slot
+/// resolved a source texture). NO for a source-less generator, where "before"
+/// would only be black - a host hides its compare controls on this, and both
+/// modes below no-op rather than drawing a black frame.
+@property(nonatomic, readonly) BOOL compareAvailable;
+
+/// Split compare: graded (`processedTexture`) LEFT of the divider, ungraded
+/// (`sourceTexture`) RIGHT of it, with a draggable divider drawn as one more
+/// on-screen control. Ignored while `compareAvailable` is NO.
+@property(nonatomic) BOOL compareSplitEnabled;
+
+/// Divider position as a fraction of the content rect's width (0 = left edge,
+/// 1 = right edge). Defaults to 0.5; clamped just inside the edges so the
+/// divider never becomes ungrabbable.
+@property(nonatomic) CGFloat compareSplitFraction;
+
+/// Hold-to-bypass: while YES the whole preview draws `sourceTexture`, restoring
+/// on release. Independent of the split - a host drives it from a press-and-hold
+/// button. Ignored while `compareAvailable` is NO.
+@property(nonatomic) BOOL compareBypassing;
+
+/// Fired on the main thread when `compareAvailable`, `compareSplitEnabled` or
+/// `compareBypassing` changes. Availability is the one a host can't otherwise
+/// see: the feed resolves its first frame well after the UI is built, so a
+/// control gated on it would stay hidden forever without this.
+@property(nonatomic, copy, nullable) void (^onCompareStateChanged)(void);
+
 /// Fired when `sourceMediaSize` first resolves (or changes) - lets a host
 /// re-render any pixel-scaled UI that depends on it.
 @property(nonatomic, copy, nullable) void (^onSourceResolved)(void);
+
+/// Fired on the main thread after a frame's effect render has actually COMPLETED
+/// on the GPU, so `processedTexture` holds finished pixels.
+///
+/// For a consumer that measures the rendered frame (the Grading surfaces' scopes)
+/// rather than displays it. Polling on a timer is the wrong tool: an NSTimer in
+/// the default run-loop mode does not fire while the mouse is down, so a scope
+/// driven that way freezes for the whole of a parameter drag and only catches up
+/// on mouse-up - which is exactly when the user has stopped needing it.
+///
+/// Called once per rendered frame while the view is drawing, so a handler must be
+/// cheap or throttle itself.
+@property(nonatomic, copy, nullable) void (^onProcessedFrameReady)(void);
 
 /// Which kind of view-transform gesture the user performed - lets a guide
 /// teach pan and zoom as separate steps (the signal alone can't otherwise tell

@@ -587,3 +587,69 @@
 }
 
 @end
+
+// Before/after compare: divider geometry and its drag. Interaction rather than
+// draw, so the overlay's hit-test and the canvas's composite read the divider's
+// position from ONE place and can't disagree by a pixel.
+@implementation KKMiniViewerView (Compare)
+
+- (BOOL)_compareBypassActive {
+  return self.compareBypassing && self.compareAvailable;
+}
+
+// Bypass wins: holding "before" with a split armed shows a whole ungraded frame
+// rather than a split of two identical halves.
+- (BOOL)_compareSplitActive {
+  return self.compareSplitEnabled && self.compareAvailable &&
+         !self.compareBypassing;
+}
+
+/// Device pixels per view point, or 0 when the drawable has no size yet.
+- (CGFloat)_compareBackingScale {
+  CGSize drawable = self.drawableSize;
+  CGFloat width = self.bounds.size.width;
+  if (drawable.width <= 0.0 || width <= 0.0)
+    return 0.0;
+  return drawable.width / width;
+}
+
+// SNAPPED to a whole device pixel, and the composite's seam is snapped the same
+// way from the same number. A divider at a fractional pixel puts the boundary
+// between the two halves mid-texel: the edge samples both images at once and the
+// seam bleeds and shimmers as it moves. Rounding the line without rounding the
+// seam would be worse still - the stroke would sit a half pixel off the join it
+// is supposed to mark.
+- (CGFloat)_compareDividerXInViewPoints {
+  if (![self _compareSplitActive] || self.livePlaybackActive)
+    return -1.0;
+  CGRect cr = [self contentRectInViewPoints];
+  if (cr.size.width <= 0.5)
+    return -1.0;
+  CGFloat x = CGRectGetMinX(cr) + self.compareSplitFraction * cr.size.width;
+  CGFloat scale = [self _compareBackingScale];
+  return scale > 0.0 ? round(x * scale) / scale : x;
+}
+
+- (BOOL)_compareDividerGrabbableAtPoint:(CGPoint)point {
+  CGFloat x = [self _compareDividerXInViewPoints];
+  if (x < 0.0)
+    return NO;
+  CGRect cr = [self contentRectInViewPoints];
+  if (point.y < CGRectGetMinY(cr) || point.y > CGRectGetMaxY(cr))
+    return NO;
+  return fabs(point.x - x) <= kKKMiniCompareGrabPt;
+}
+
+- (void)_dragCompareDividerToPoint:(CGPoint)point {
+  CGRect cr = [self contentRectInViewPoints];
+  if (cr.size.width <= 0.5)
+    return;
+  self.compareSplitFraction = (point.x - CGRectGetMinX(cr)) / cr.size.width;
+}
+
+- (void)_compareStateChanged {
+  if (self.onCompareStateChanged)
+    self.onCompareStateChanged();
+}
+
+@end

@@ -79,6 +79,38 @@ NS_ASSUME_NONNULL_BEGIN
                                  device:(id<MTLDevice>)device
                            commandQueue:(id<MTLCommandQueue>)commandQueue;
 
+/// Number of AUXILIARY textures this feed carries alongside the slots and
+/// channel 1. Default 0 - a feed that never sets it publishes no `aux` key at
+/// all, so consumers (and descriptors) are byte-identical to before.
+///
+/// Auxiliary means "extra whole textures the consumer indexes positionally",
+/// which is neither of the existing shapes: slots are the same source at
+/// different TIMES and their count tracks the filmstrip/onion fan-out, and
+/// channel 1 is a single fixed second source. Mirage publishes its `// #frames`
+/// neighbour frames here, in directive order, so the inspector-side preview
+/// binds the real neighbours instead of clamping to the current frame.
+///
+/// Setting a different count discards excess surfaces. The `aux` key is
+/// published only when EVERY slot holds a surface - a partially-filled array
+/// would shift the consumer's indices onto the wrong entries.
+@property(nonatomic) NSUInteger auxTextureCount;
+
+/// Per-index variant of `-updateWithSourceTexture:`, downscaled by the same
+/// long-edge rule and written in the same encoding as the slots, so a consumer
+/// sampling an aux texture and slot 0 together sees consistent geometry.
+/// Out-of-range indices are ignored (set `auxTextureCount` first).
+- (void)updateAuxTexture:(id<MTLTexture>)sourceTexture
+                 atIndex:(NSUInteger)index
+                  device:(id<MTLDevice>)device
+            commandQueue:(id<MTLCommandQueue>)commandQueue;
+
+/// Pixel size of the SOURCE frame last written into slot 0 (not the downscaled
+/// surface), or zero before the first publish. A caller pumping auxiliary
+/// textures compares against this to reject a frame from a different render
+/// pass (FCP's tiny library-preview run), which would otherwise land at a
+/// different downscaled size than the slot it must line up with.
+@property(nonatomic, readonly) CGSize primarySourceSize;
+
 /// Output media pixel size, for a GENERATOR with no source frames to carry it.
 /// When set (and there are no published slots), `publishDescriptor` writes a
 /// dims-only descriptor (`srcWidth`/`srcHeight`, empty `slots`) so a consuming

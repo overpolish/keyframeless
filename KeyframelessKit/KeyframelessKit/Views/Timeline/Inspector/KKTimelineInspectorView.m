@@ -334,6 +334,14 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     if (strong.onScrub)
       strong.onScrub(frac);
   };
+  // Keypose seek rides the same host-seek path as a scrub. No local
+  // setPlayheadFraction: the host's own render ticks push the playhead back,
+  // and seeding it here would race them.
+  _basicView.onBoundarySeekHostPlayhead = ^(double frac) {
+    KKTimelineInspectorView *strong = weak;
+    if (strong.onScrub)
+      strong.onScrub(frac);
+  };
   _basicView.onZoomChanged = ^(BOOL zoomed) {
     KKTimelineInspectorView *strong = weak;
     strong->_resetButton.zoomed = zoomed;

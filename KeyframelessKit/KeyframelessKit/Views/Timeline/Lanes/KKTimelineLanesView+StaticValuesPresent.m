@@ -56,6 +56,12 @@
                                  fraction:cfg.fraction
                            excludedLabels:cfg.excludedLabels];
     [self _publishBoundaryRequestForFraction:cfg.fraction];
+    // Seek the HOST playhead to the keypose, not just nudge a render: an
+    // adjustment layer's source can only be composited from the segment under
+    // the playhead, so without this a keypose past a cut previews the wrong
+    // clip's pixels (or black). See onBoundarySeekHostPlayhead.
+    if (self.onBoundarySeekHostPlayhead)
+      self.onBoundarySeekHostPlayhead(cfg.fraction);
     // Static playhead → no render → -scheduleInputs: never sees the request
     // just written. Nudge one render so the boundary frame resolves now.
     if (self.onBoundaryPreviewNeedsRender)

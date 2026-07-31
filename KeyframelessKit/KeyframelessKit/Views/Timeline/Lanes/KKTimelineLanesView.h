@@ -42,9 +42,10 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 
 /// The editing clip's instance uuid, so its expression popover can read the
 /// clip's own manifest off the bus and scope the reference picker to the clip's
-/// project (the project id lives on the manifest, written by the render process).
-/// Resolved on the view side because the render process can't push across to the
-/// ViewBridge-hosted popover. Empty / nil = unknown (picker stays library-wide).
+/// project (the project id lives on the manifest, written by the render
+/// process). Resolved on the view side because the render process can't push
+/// across to the ViewBridge-hosted popover. Empty / nil = unknown (picker stays
+/// library-wide).
 - (void)setLinkSelfUUID:(nullable NSString *)uuid;
 
 /// Optional all-owners (all-layers) timeline. When set, BOTH graphs (Basic +
@@ -107,6 +108,17 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// unknown. Read from the Basic motion graph; used by "apply preset at
 /// playhead".
 @property(nonatomic, readonly) double playheadFraction;
+
+/// The clip fraction the open static-values popover is currently EDITING: the
+/// keypose's own fraction for a keypose popover, and the live playhead for a
+/// constants one (which previews wherever the playhead is).
+///
+/// Live, not the value the popover opened with. Both move without the popover
+/// reopening - keypose navigation walks between keyposes in place, and the
+/// playhead moves whenever the user scrubs - so a companion panel that captured
+/// the open notification's `fraction` reads animated lanes at the wrong time
+/// for the rest of the popover's life. Returns 0 with no popover open.
+@property(nonatomic, readonly) double staticPopoverEditFraction;
 
 /// The current timeline state. KVO-unsafe; read only from the main queue.
 @property(nonatomic, readonly) KKTimeline *currentTimeline;
@@ -319,6 +331,20 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// boundary preview resolves without manual scrubbing.
 @property(nonatomic, copy, nullable) void (^onBoundaryPreviewNeedsRender)(void);
 
+/// Move the HOST playhead to this clip fraction because the user is looking at
+/// a keypose there (popover open, keypose navigation, and the settle
+/// ping-back).
+///
+/// The render nudge above is not enough on its own: for an effect on an
+/// adjustment layer, FCP composites source requests only from the segment UNDER
+/// the playhead, so a keypose past a cut in the storyline below comes back as
+/// the wrong clip's pixels (held) or black. The only correct frame is the one
+/// rendered with the playhead actually at the keypose - which is also the
+/// behaviour a keypose click had before, and what FCP's own keyframe UI does.
+/// Wired to the same host seek as onScrub.
+@property(nonatomic, copy, nullable) void (^onBoundarySeekHostPlayhead)
+    (double frac);
+
 /// Cold-start clip aspect (w/h) for the mini viewer before a source resolves.
 /// Defaults to 16:9.
 @property(nonatomic) CGFloat miniViewerClipAspect;
@@ -366,12 +392,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
                    preferredEdge:(NSRectEdge)preferredEdge
                          onClose:(nullable void (^)(void))onClose;
 
-/// Push live-playback state to the currently-open keypose or constants popover's
-/// mini preview. While `playing`, the mini follows the playhead (each feed frame
-/// rendered at its own tag) with its on-screen controls hidden, so the clip can
-/// be played back without closing the popover; when it goes NO the mini snaps
-/// back to the edited keypose with its controls. A no-op when no mini popover is
-/// open. Gated on the same play-button state that the playhead poll drives.
+/// Push live-playback state to the currently-open keypose or constants
+/// popover's mini preview. While `playing`, the mini follows the playhead (each
+/// feed frame rendered at its own tag) with its on-screen controls hidden, so
+/// the clip can be played back without closing the popover; when it goes NO the
+/// mini snaps back to the edited keypose with its controls. A no-op when no
+/// mini popover is open. Gated on the same play-button state that the playhead
+/// poll drives.
 - (void)setOpenPopoverLivePlaying:(BOOL)playing;
 
 /// The value-editor row (slider/fields) for `label` in the currently open

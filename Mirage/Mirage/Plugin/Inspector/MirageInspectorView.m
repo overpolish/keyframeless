@@ -9,6 +9,7 @@
 #import "Constants.h"        // MirageCustomDefaultShaderSource
 #import "KKGLSLTranspiler.h" // MirageMotionBlurDefaultsOnForSource
 #import "MirageCategory.h"
+#import "MirageColorSurfaceProps.h" // #color-surface opt-in
 #import "MirageDirectives.h" // #color / #float ... default parsing
 #import "MirageInspectorView+Guides.h"
 #import "MirageInspectorView_Private.h"
@@ -191,6 +192,26 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
           [[MirageLocalCatalog shared] renameEntryID:e.entryID toName:name];
           [s->_browserController refreshLocal]; // local change, don't re-fetch
         };
+    _colorPanelController = [[MirageColorPanelController alloc]
+        initWithLanesView:self.basicLanesView];
+    // The puck writes real controls, so it persists through the same chain as any
+    // other edit, and brackets its drag so the burst collapses to one undo entry.
+    _colorPanelController.onTimelineMutated = ^(KKTimeline *updated) {
+      __strong typeof(weak) s = weak;
+      if (s.onTimelineMutated)
+        s.onTimelineMutated(updated);
+      [s applyTimeline:updated];
+    };
+    _colorPanelController.onDragBegin = ^{
+      __strong typeof(weak) s = weak;
+      if (s.onDragBegin)
+        s.onDragBegin();
+    };
+    _colorPanelController.onDragEnd = ^{
+      __strong typeof(weak) s = weak;
+      if (s.onDragEnd)
+        s.onDragEnd();
+    };
     [self _bakeBuiltinThumbnails];
   }
   return self;
@@ -255,6 +276,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
 - (void)dealloc {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [_browserController invalidate];
+  [_colorPanelController invalidate];
 }
 
 // The code editor's save bar (a `codeSavable` lane) fired: persist the current
@@ -573,6 +595,13 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
       effective = l.codeString;
       break;
     }
+  MirageColorSurfaceSpace surfaceSpace = MirageColorSurfaceSpaceInvalid;
+  MirageColorSurfaceError surfaceError = MirageColorSurfaceErrorNone;
+  BOOL wantsSurface =
+      MirageColorSurfaceForSource(effective, &surfaceSpace, &surfaceError) &&
+      surfaceError == MirageColorSurfaceErrorNone;
+  _colorPanelController.surfaceEnabled = wantsSurface;
+  [_colorPanelController timelineDidChange];
   if (![effective isEqualToString:(_lastEffectiveShaderSource ?: @"")]) {
     _lastEffectiveShaderSource = [effective copy];
     // Route through the lanes view's code-commit block (not just the plugin's

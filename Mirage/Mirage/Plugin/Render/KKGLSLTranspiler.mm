@@ -4,6 +4,7 @@
  */
 
 #import "KKGLSLTranspiler_Internal.h"
+#import "MirageFrameOffsets.h"
 
 #import <CommonCrypto/CommonDigest.h>
 
@@ -209,6 +210,13 @@ static NSString *KKPrepareGLSL(NSString *userGLSL, KKGLSLPassKind pass,
   if (glTransition)
     channelMask |= 0x3u;
   result.declaredChannelMask = KKDeclaredChannelMask(channelMask, pass);
+  // `// #frames`: the wrapper declares one neighbour sampler per offset, on the
+  // Image pass only. Recorded from the DIRECTIVE, not from reflection, so the
+  // render knows how many frames to schedule even when the shader never samples
+  // one (and SPIRV-Cross therefore strips its binding).
+  result.neighborCount = (pass == KKGLSLPassImage)
+                             ? MirageFrameOffsetCountForSource(shimmed)
+                             : 0;
 
   NSInteger lineOffset = 0;
   NSString *glsl = KKWrapGLSL(shimmed, channelMask, &lineOffset, pass);
@@ -233,30 +241,41 @@ static void KKReflectBindings(spvc_compiler compiler,
       resources, SPVC_RESOURCE_TYPE_SAMPLED_IMAGE, &list, &count);
   for (size_t i = 0; i < count; i++) {
     NSString *name = @(list[i].name);
-    for (NSUInteger ch = 0; ch < 4; ch++) {
+    NSInteger channel = -1, neighbor = -1;
+    for (NSUInteger ch = 0; ch < 4; ch++)
       if ([name isEqualToString:[NSString stringWithFormat:@"iChannel%lu",
-                                                           (unsigned long)ch]]) {
-        unsigned t =
-            spvc_compiler_msl_get_automatic_resource_binding(compiler, list[i].id);
-        unsigned sm = spvc_compiler_msl_get_automatic_resource_binding_secondary(
-            compiler, list[i].id);
-        // SPIRV-Cross returns uint32_t(-1) when a resource got NO automatic
-        // binding - it was declared but never referenced, so the compiler
-        // dropped it. Recording that verbatim made it a real-looking index
-        // (4294967295) that passed every NSNotFound guard downstream and
-        // reached setFragmentTexture:atIndex:, which writes far outside the
-        // argument table and corrupts GPU memory. The fault then surfaces at
-        // some LATER, unrelated Metal call, which is what makes it so hard to
-        // place. A stripped channel is simply unused - record it as such.
-        static const unsigned kNoBinding = 0xFFFFFFFFu;
-        if (t == kNoBinding && sm == kNoBinding)
-          break;
-        [result setTexture:(t == kNoBinding ? NSNotFound : (NSInteger)t)
-                   sampler:(sm == kNoBinding ? NSNotFound : (NSInteger)sm)
-                forChannel:ch];
-        break;
-      }
-    }
+                                                           (unsigned long)ch]])
+        channel = (NSInteger)ch;
+    for (NSUInteger n = 0; channel < 0 && n < KK_SHADER_MAX_FRAME_OFFSETS; n++)
+      if ([name isEqualToString:[NSString stringWithFormat:@"iNeighbor%lu",
+                                                           (unsigned long)n]])
+        neighbor = (NSInteger)n;
+    if (channel < 0 && neighbor < 0)
+      continue;
+
+    unsigned t =
+        spvc_compiler_msl_get_automatic_resource_binding(compiler, list[i].id);
+    unsigned sm = spvc_compiler_msl_get_automatic_resource_binding_secondary(
+        compiler, list[i].id);
+    // SPIRV-Cross returns uint32_t(-1) when a resource got NO automatic
+    // binding - it was declared but never referenced, so the compiler
+    // dropped it. Recording that verbatim made it a real-looking index
+    // (4294967295) that passed every NSNotFound guard downstream and
+    // reached setFragmentTexture:atIndex:, which writes far outside the
+    // argument table and corrupts GPU memory. The fault then surfaces at
+    // some LATER, unrelated Metal call, which is what makes it so hard to
+    // place. A stripped channel is simply unused - record it as such.
+    static const unsigned kNoBinding = 0xFFFFFFFFu;
+    if (t == kNoBinding && sm == kNoBinding)
+      continue;
+    NSInteger texIdx = (t == kNoBinding ? NSNotFound : (NSInteger)t);
+    NSInteger sampIdx = (sm == kNoBinding ? NSNotFound : (NSInteger)sm);
+    if (channel >= 0)
+      [result setTexture:texIdx sampler:sampIdx forChannel:(NSUInteger)channel];
+    else
+      [result setTexture:texIdx
+                 sampler:sampIdx
+             forNeighbor:(NSUInteger)neighbor];
   }
 }
 

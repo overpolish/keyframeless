@@ -64,6 +64,26 @@ NS_ASSUME_NONNULL_BEGIN
                                          (NSArray<FxImageTile *> *)sourceImages
                                   wellParameterID:(UInt32)wellParameterID;
 
+/// Publish already-resolved AUXILIARY textures into the feed, in the caller's
+/// order, so an inspector-side renderer can bind them positionally. Pass an
+/// empty array to drop the whole set (the descriptor's `aux` key disappears).
+/// `textures` may carry `NSNull` for a slot the caller could not resolve; that
+/// index keeps whatever it last held.
+///
+/// General on purpose - the feed is shared, and a plugin that never calls this
+/// publishes byte-identical descriptors. Mirage uses it for a `// #frames`
+/// shader's neighbour frames.
+///
+/// Call AFTER the slot publish (which is what creates the feed); a no-op until
+/// then. Textures must be full frames on the destination's device, the same
+/// pixel size as the frame being fed to slot 0 - the feed downscales them by
+/// the same long-edge rule, so a differently-sized frame (FCP's tiny
+/// library-preview render) would land at a size that no longer lines up with
+/// the slot it must be sampled against, and is dropped with a warning.
+- (void)kkPublishMiniViewerAuxTexturesForDestination:
+            (FxImageTile *)destinationImage
+                                            textures:(NSArray *)textures;
+
 @end
 
 NS_ASSUME_NONNULL_END

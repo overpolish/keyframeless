@@ -40,6 +40,7 @@ typedef struct {
   NSInteger cp = [fb nearestCheckpointAtMost:F];
   if (cp < 0) // cold seek: re-sim a bounded window from clear
     return (MirageSimRange){MAX((NSInteger)0, F - kFeedbackWindow), F, YES};
+  self.renderStrayWaitsRestore++; // restoreFrame blits and waits internally
   [fb restoreFrame:cp device:device queue:queue];
   fb->lastFrame = cp;
   fb->hasState = YES;
@@ -74,27 +75,6 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
           (simd_float4){(float)ct.width, (float)ct.height, 1.0f, 0.0f};
   }
   return chArr;
-}
-
-// Gamma-encode the linear source so a Shadertoy shader (which assumes
-// gamma-space iChannel input, and whose output wrapper re-decodes it for a
-// float dest) round-trips it instead of double-decoding + darkening.
-// u.extra.w==0 marks the float/linear dest; an 8-bit dest already carries gamma
-// source. `decode` runs the inverse, for a `#template color-transform` whose
-// contract is linear in and linear out, so it is the 8-bit dest that hands it
-// the wrong encoding.
-- (id<MTLTexture>)gammaConvertedSource:(id<MTLTexture>)srcTex
-                            registryID:(uint64_t)registryID
-                           pixelFormat:(MTLPixelFormat)pf
-                                decode:(BOOL)decode {
-  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
-  id<MTLCommandQueue> gq = [cache commandQueueWithRegistryID:registryID
-                                                 pixelFormat:pf];
-  id<MTLTexture> g = decode ? KKGammaDecodeSourceTexture(gq, srcTex)
-                            : KKGammaEncodeSourceTexture(gq, srcTex);
-  if (gq)
-    [cache returnCommandQueueToCache:gq];
-  return g ?: srcTex;
 }
 
 - (BOOL)
@@ -134,7 +114,8 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   id<MTLSamplerState> chSampler = KKCustomChannelSampler(device);
   id<MTLSamplerState> srcSampler = KKCustomSourceSampler(device);
   id<MTLTexture> effectTex =
-      sourceImages.count ? [sourceImages[0] metalTextureForDevice:device] : nil;
+      [MirageCurrentFrameTile(sourceImages, renderTime)
+          metalTextureForDevice:device];
   id<MTLTexture> fromTex =
       [KKImageTileForParameterID(sourceImages, kParamFromImage)
           metalTextureForDevice:device];
@@ -157,17 +138,41 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   BOOL colorTransform = KKLooksLikeColorTransformShader(imageSource);
   BOOL floatDst = u.extra.w == 0.0f;
   BOOL decodeSources = !floatDst && colorTransform;
-  if (srcTex && (decodeSources || (floatDst && !colorTransform)))
-    srcTex = [self gammaConvertedSource:srcTex
-                             registryID:registryID
-                            pixelFormat:pf
-                                 decode:decodeSources];
-  if (toTex && transitionMode != 2 &&
-      (decodeSources || (floatDst && !colorTransform)))
-    toTex = [self gammaConvertedSource:toTex
-                            registryID:registryID
-                           pixelFormat:pf
-                                decode:decodeSources];
+  // PLANNED, encoded later onto a buffer that is already being submitted - see
+  // the single-pass path. Each of these used to be its own command buffer with
+  // a blocking wait, and on a transition (which has both A and B) that was two
+  // round trips of pure scheduling latency per frame.
+  NSMutableArray *convertPairs = [NSMutableArray array];
+  BOOL convertSources = decodeSources || (floatDst && !colorTransform);
+  if (convertSources && KKGammaPipelineAvailable(device, decodeSources)) {
+    if (srcTex) {
+      id<MTLTexture> dst =
+          [self reusableGammaDestinationForKey:MirageGammaDestSource
+                                        device:device
+                                         width:srcTex.width
+                                        height:srcTex.height];
+      if (dst) {
+        [convertPairs addObject:@[ srcTex, dst ]];
+        srcTex = dst;
+      }
+    }
+    if (toTex && transitionMode != 2) {
+      id<MTLTexture> dst =
+          [self reusableGammaDestinationForKey:MirageGammaDestTo
+                                        device:device
+                                         width:toTex.width
+                                        height:toTex.height];
+      if (dst) {
+        [convertPairs addObject:@[ toTex, dst ]];
+        toTex = dst;
+      }
+    }
+  }
+  void (^encodeConversions)(id<MTLCommandBuffer>) =
+      convertPairs.count ? ^(id<MTLCommandBuffer> cb) {
+        for (NSArray *pair in convertPairs)
+          KKGammaConvertOnBufferInto(cb, pair[0], pair[1], decodeSources);
+      } : nil;
 
   BOOL present[4];
   for (int c = 0; c < 4; c++)
@@ -219,10 +224,12 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                                                   width:bufW
                                                  height:bufH];
 
-  // Checkpoint queue for snapshot / restore blits (returned to the cache
-  // below).
-  id<MTLCommandQueue> ckptQueue = [cache commandQueueWithRegistryID:registryID
-                                                        pixelFormat:pf];
+  // ONE queue for the whole frame: the buffer passes, the checkpoint blits and
+  // the image pass all ride it, so commit order alone orders them and only the
+  // image pass has to wait. Two queues from the pool are interchangeable objects
+  // with no ordering between them, which is why this must be shared explicitly.
+  id<MTLCommandQueue> frameQueue = [cache commandQueueWithRegistryID:registryID
+                                                         pixelFormat:pf];
   NSInteger F = frameIndex;
   // Only a FEEDBACK chain can reuse a previous render's buffers: its state is a
   // function of history, so once frame F is simulated it stays valid. A
@@ -236,8 +243,42 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                            ? [self simRangeForSet:fb
                                        frameIndex:F
                                            device:device
-                                            queue:ckptQueue]
+                                            queue:frameQueue]
                            : (MirageSimRange){0, 0, NO}; // always recompute
+
+  // ONE command buffer for every buffer pass this render encodes, created on
+  // first use. Metal runs render passes on a buffer in encode order and
+  // hazard-tracks the reads between them (these textures come from
+  // -newTextureWithDescriptor:, not an untracked heap), so the ordering the old
+  // per-pass wait enforced is automatic here - and a re-simulation of N steps
+  // costs one round trip instead of N.
+  __block id<MTLCommandBuffer> passBuffer = nil;
+  __block BOOL conversionsEncoded = NO;
+  id<MTLCommandBuffer> (^ensurePassBuffer)(void) = ^id<MTLCommandBuffer>(void) {
+    if (passBuffer)
+      return passBuffer;
+    if (!frameQueue)
+      return nil;
+    passBuffer = [frameQueue commandBuffer];
+    passBuffer.label = @"Mirage buffer passes";
+    // The buffer passes SAMPLE the converted sources, so the conversions have
+    // to be encoded ahead of them on this same buffer.
+    if (encodeConversions && !conversionsEncoded) {
+      conversionsEncoded = YES;
+      encodeConversions(passBuffer);
+    }
+    return passBuffer;
+  };
+  // Submit WITHOUT waiting. Everything that reads these textures - a checkpoint
+  // blit, and the image pass - is committed to the SAME queue afterwards, and a
+  // queue runs its command buffers in commit order, so the ordering the old
+  // per-pass wait enforced still holds while the frame keeps ONE round trip.
+  void (^submitPassBuffer)(void) = ^{
+    if (!passBuffer)
+      return;
+    [passBuffer commit];
+    passBuffer = nil;
+  };
 
   for (NSInteger f = sim.from; f <= sim.to; f++) {
     int prevI = fb->prevIdx, curI = 1 - prevI;
@@ -265,10 +306,8 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
       KKGLSLUniforms bufU = fu;
       NSArray *chArr = MirageChannelsForBuffer(k, fb, curI, prevI, present,
                                                noPrev, srcTex, toTex, &bufU);
-      id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:registryID
-                                                        pixelFormat:pf];
-      if (queue) {
-        id<MTLCommandBuffer> cb = [queue commandBuffer];
+      id<MTLCommandBuffer> cb = ensurePassBuffer();
+      if (cb) {
         [self encodeFullScreenQuadIntoTexture:cur
                              destinationImage:destinationImage
                                 commandBuffer:cb
@@ -286,21 +325,63 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                                                vertexStart:0
                                                vertexCount:4];
                                      }];
-        [cb commit];
-        [cb waitUntilCompleted]; // must finish before later passes read it
-        [cache returnCommandQueueToCache:queue];
       }
     }
     fb->prevIdx = curI; // this step's set is the newest
-    if (F >= 0 && f >= 0 && (f % kCheckpointEvery == 0))
-      [fb snapshotFrame:f device:device queue:ckptQueue];
+    // Checkpoints exist ONLY so a later cold seek can restore feedback history,
+    // and the only reader - simRangeForSet: - is called only for a feedback
+    // chain. A non-feedback chain recomputes from the current uniforms every
+    // render and never consults them, so its checkpoints were pure cost.
+    //
+    // And they were not occasional: a non-feedback chain runs the fixed range
+    // {0, 0}, so `f` is 0 on every render and `f % kCheckpointEvery == 0` is
+    // true EVERY FRAME. That is the per-frame snapshot wait the canary caught.
+    if (needsFeedback && F >= 0 && f >= 0 && (f % kCheckpointEvery == 0)) {
+      // The snapshot blits these textures. It runs on the SAME queue, committed
+      // after the passes that wrote them, so commit order already serialises it
+      // behind them - no flush needed. It does wait internally, which is why
+      // the canary counts checkpoint frames.
+      submitPassBuffer();
+      self.renderStrayWaitsSnapshot++;
+      [fb snapshotFrame:f device:device queue:frameQueue];
+    }
   }
+  submitPassBuffer();
   if (F >= 0 && sim.to >= sim.from) {
     fb->lastFrame = F;
     fb->hasState = YES;
   } else if (F < 0) {
     fb->hasState = YES;
   }
+
+  // `// #frames` neighbours, gamma-matched to the source exactly as the single-
+  // pass path does. Bound on the IMAGE pass only: a Buffer pass stores data for
+  // a later pass and never declares them, so its transpile reports none.
+  // Resolved RAW, then gamma-matched as ONE batch - see the single-pass path.
+  // An undeliverable offset stays NSNull and `neighborFallback` substitutes the
+  // current frame at bind time, exactly as the per-entry fallback used to.
+  NSArray *neighborTex = MirageNeighborFrameTextures(
+      imageSource, sourceImages, renderTime, self.renderCache.frameDurSec,
+      device, nil, nil);
+  void (^neighborEncode)(id<MTLCommandBuffer>) = nil;
+  if (convertSources && neighborTex.count)
+    neighborTex = [self gammaMatchNeighbors:neighborTex
+                                     decode:decodeSources
+                                     device:device
+                                     encode:&neighborEncode];
+  // Whatever preparation has not already ridden the buffer-pass submission goes
+  // onto the image pass's own command buffer. With no buffer passes to run -
+  // the carry-forward case, which is the common one on a parked or looping
+  // playhead - that leaves the render at ONE round trip for the whole frame.
+  BOOL conversionsPending = encodeConversions && !conversionsEncoded;
+  void (^imageSetup)(id<MTLCommandBuffer>) =
+      (conversionsPending || neighborEncode) ? ^(id<MTLCommandBuffer> cb) {
+        if (conversionsPending)
+          encodeConversions(cb);
+        if (neighborEncode)
+          neighborEncode(cb);
+      } : nil;
+  id<MTLTexture> neighborFallback = srcTex ?: noiseTex;
 
   // Image pass reads the newest (this-frame) set.
   int newestI = fb->prevIdx;
@@ -325,12 +406,17 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   // cannot be shared like this - hence the guard.
   BOOL mbAccumulate =
       mbState.enabled && sampleUniforms != nil && !needsFeedback;
+  __block BOOL imageSetupEncoded = NO;
   if (mbAccumulate) {
+    // Blur submits on the FRAME's queue, so commit order puts it after the
+    // buffer passes already committed there - no drain, and its single wait
+    // covers both.
     BOOL blurred = [KKMotionBlur
         applyToDestinationImage:destinationImage
                    sourceImages:sourceImages
                           state:mbState
                      renderTime:renderTime
+                   commandQueue:frameQueue
                     renderBlock:^BOOL(int sampleIndex,
                                       id<MTLTexture> sampleDest,
                                       id<MTLCommandBuffer> commandBuffer,
@@ -339,6 +425,12 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                       const simd_float4 *sPool = colorPool;
                       int sCount = poolCount;
                       sampleUniforms(sampleIndex, &su, &sPool, &sCount);
+                      // Once, on the first sample's buffer: every sample reads
+                      // the same prepared inputs.
+                      if (imageSetup && !imageSetupEncoded) {
+                        imageSetupEncoded = YES;
+                        imageSetup(commandBuffer);
+                      }
                       // The buffer chain's own channel resolutions still apply:
                       // only the animation clock and pool differ per sample.
                       for (int c = 0; c < 4; c++)
@@ -361,6 +453,10 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                                                        enc, imgTR, imgCh,
                                                        srcSampler, noiseTex,
                                                        chSampler);
+                                                   KKBindCustomNeighborTextures(
+                                                       enc, imgTR, neighborTex,
+                                                       srcSampler,
+                                                       neighborFallback);
                                                    [enc
                                                        drawPrimitives:
                                                            MTLPrimitiveTypeTriangleStrip
@@ -369,8 +465,8 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                                                  }];
                     }];
     if (blurred) {
-      if (ckptQueue)
-        [cache returnCommandQueueToCache:ckptQueue];
+      if (frameQueue)
+        [cache returnCommandQueueToCache:frameQueue];
       return YES;
     }
     // Fall through to a single pass on any bail.
@@ -379,6 +475,9 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   BOOL ok = [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages
+                                 commandQueue:frameQueue
+                                        setup:imageSetupEncoded ? nil
+                                                                : imageSetup
                                      commands:^(
                                          id<MTLRenderCommandEncoder> encoder,
                                          NSArray<id<MTLTexture>>
@@ -389,14 +488,17 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                                        KKBindCustomChannelTextures(
                                            encoder, imgTR, imgCh, srcSampler,
                                            noiseTex, chSampler);
+                                       KKBindCustomNeighborTextures(
+                                           encoder, imgTR, neighborTex,
+                                           srcSampler, neighborFallback);
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip
                                               vertexStart:0
                                               vertexCount:4];
                                      }];
-  if (ckptQueue)
-    [cache returnCommandQueueToCache:ckptQueue];
+  if (frameQueue)
+    [cache returnCommandQueueToCache:frameQueue];
   return ok;
 }
 

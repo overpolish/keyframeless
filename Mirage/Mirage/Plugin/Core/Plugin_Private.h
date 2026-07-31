@@ -28,6 +28,27 @@
 /// viewer, thumbnails, and library previews keep independent ping-pong sets.
 /// Holds `MirageFeedbackSet` values (see MirageFeedbackSet.h).
 @property(nonatomic, strong, nullable) NSMutableDictionary *feedbackSets;
+/// waitUntilCompleted calls made during render callbacks by anything other than
+/// the kit helper. ONE mandatory wait per callback is the architecture, on every
+/// path; a non-zero value names a path that reintroduced a second round trip.
+/// Reported by the `[RenderGuard] STRAY WAITS` line and cleared when it emits.
+@property(nonatomic) NSInteger renderStrayWaitsSnapshot;
+@property(nonatomic) NSInteger renderStrayWaitsRestore;
+@property(nonatomic) NSInteger renderStrayWaitsBlurDrain;
+/// Throttle for that line, so a sustained stray cannot flood the log.
+@property(nonatomic) NSTimeInterval renderStrayWaitsLastLog;
+/// Motion-blur samples the last render asked for. KKMotionBlur commits AND
+/// waits per sample, so this is a round-trip multiplier the canary cannot count
+/// from outside: N samples are N waits plus one for the accumulate.
+@property(nonatomic) NSInteger lastRenderBlurSamples;
+/// Reused gamma-conversion destinations, keyed by role (see the
+/// `MirageGammaDest*` keys): the source, the To well, and one per `// #frames`
+/// neighbour. Held per instance so the render stops allocating a
+/// full-resolution RGBA16Float per converted texture per frame. Safe to reuse
+/// across frames because the render callback commits AND waits before
+/// returning, so no previous frame can still be reading one.
+@property(nonatomic, strong, nullable)
+    NSMutableDictionary<NSNumber *, id<MTLTexture>> *gammaDestinations;
 /// Last-read Sonar tickets (key -> ticket), refreshed by `syncAudioTickets…`.
 ///
 /// Cached because the lane builder needs them where the param APIs don't

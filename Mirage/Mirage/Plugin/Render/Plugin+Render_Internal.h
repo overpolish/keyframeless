@@ -25,7 +25,68 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// The delivered tile carrying the CURRENT frame - what iChannel0 binds. With
+/// boundary-preview and `// #frames` requests in flight there are several
+/// effect-clip tiles in one delivery and FCP does not honour request order, so
+/// this picks the one whose `mediaTime` is nearest the render time rather than
+/// trusting index 0. Identical to `sourceImages[0]` when only the current frame
+/// was requested.
+FxImageTile *_Nullable MirageCurrentFrameTile(
+    NSArray<FxImageTile *> *sourceImages, CMTime renderTime);
+
+/// The `// #frames` neighbour textures for this render, in DIRECTIVE ORDER
+/// (entry i is the sampler `iNeighbor` i). Empty when `source` declares no
+/// offsets.
+///
+/// FCP does not honour request order, so each offset is paired to the delivered
+/// effect-clip tile whose `mediaTime` is nearest its requested time, within
+/// half a frame - the same nearest-mediaTime identification KKMotionBlur uses
+/// for its sub-frame samples, which is why the two features can share one
+/// delivery list without either claiming the other's frames.
+///
+/// An offset FCP could not deliver (before the clip start, past its end)
+/// resolves to `fallback` - the current frame - so a temporal read CLAMPS at
+/// the clip edge instead of sampling black or noise.
+///
+/// `convert` is the gamma treatment iChannel0 received on this render; passing
+/// the same block is what keeps a neighbour frame in the same encoding as the
+/// current one. nil leaves the textures untouched.
+NSArray *MirageNeighborFrameTextures(
+    NSString *source, NSArray<FxImageTile *> *sourceImages, CMTime renderTime,
+    double frameDurSec, id<MTLDevice> device, id<MTLTexture> _Nullable fallback,
+    id<MTLTexture> _Nullable (^_Nullable convert)(id<MTLTexture> tex));
+
+/// Role keys for the per-instance reusable gamma destinations. Neighbours
+/// occupy `MirageGammaDestNeighbor0 + i`, so every converted texture in a render
+/// has one stable slot and none of them is reallocated per frame.
+typedef NS_ENUM(NSInteger, MirageGammaDestKey) {
+  MirageGammaDestSource = 0,
+  MirageGammaDestTo = 1,
+  MirageGammaDestNeighbor0 = 100,
+};
+
 @interface MiragePlugin (RenderInternal)
+
+/// A reusable RGBA16Float conversion destination for `key`, rebuilt only when
+/// the required size changes. Never a per-frame allocation.
+- (nullable id<MTLTexture>)reusableGammaDestinationForKey:(NSInteger)key
+                                                   device:(id<MTLDevice>)device
+                                                    width:(NSUInteger)width
+                                                   height:(NSUInteger)height;
+
+/// Plan the gamma match for a resolved neighbour set: hand back the textures to
+/// BIND, and encode nothing yet. The returned block does the encoding when it is
+/// handed a command buffer, so the conversions ride the render's own buffer
+/// instead of paying a commit + wait each.
+///
+/// Entries are converted by index; an `NSNull` (an offset FCP could not deliver)
+/// passes through untouched, so the binder still substitutes the current frame.
+/// `outEncode` is nil when there is nothing to convert.
+- (NSArray *)gammaMatchNeighbors:(NSArray *)neighbors
+                          decode:(BOOL)decode
+                          device:(id<MTLDevice>)device
+                          encode:(void (^_Nullable *_Nullable)
+                                      (id<MTLCommandBuffer>))outEncode;
 
 /// Display pipeline for the final Image pass: derives the pixel format from the
 /// destination tile.

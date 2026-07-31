@@ -36,6 +36,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
 // resetting to a default on nil) - @dynamic stops the primary from
 // auto-synthesizing a nil-unaware setter for this null_resettable property.
 @dynamic saveNamePlaceholder;
+@dynamic saveName;
 
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];

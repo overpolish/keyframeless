@@ -1,0 +1,252 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+#import <KeyframelessKit/KKFloatingPanel.h>
+#import <KeyframelessKit/KKMiniViewerView.h>
+#import <KeyframelessKit/KKPaddedScrollView.h>
+
+#import "MirageColorPanelController.h"
+#import "MirageColorSurfaceProps.h"
+#import "MirageScopeSampler.h"
+#import "MirageSurfaceCircleView.h"
+#import "MirageSurfaceResponse.h"
+
+static const CGFloat kReadoutFontSize = 11.0;
+
+// Defined in +Readout.m, +PuckWrite.m and the core file respectively, and
+// exported rather than static because each of them is read from a category
+// that does not own it.
+FOUNDATION_EXPORT NSString *_Nullable MirageDeclarationSentence(
+    MirageMemoryColor kind, NSPoint cast);
+FOUNDATION_EXPORT NSString *_Nonnull MirageReadoutPlaceholder(void);
+FOUNDATION_EXPORT BOOL
+MirageResponseBelongsToPuck(MirageSurfaceResponse r,
+                            NSString *_Nullable puckName);
+FOUNDATION_EXPORT KKMiniViewerView *_Nullable MirageFindMiniViewer(
+    NSView *_Nullable root);
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// A button that answers the first click, since the panel it sits in never becomes
+/// key: an ordinary NSButton spends that click asking for focus it cannot get, so
+/// the eyedropper would need pressing twice.
+@interface _MirageFirstMouseButton : NSButton
+/// Set to make this a press-and-hold button: called YES on the press and NO on
+/// the release, instead of firing an action once per click. Leave nil for the
+/// ordinary click behaviour every other header button wants.
+@property(nonatomic, copy, nullable) void (^onHoldChanged)(BOOL held);
+@end
+
+@interface MirageColorPanelController () {
+@package
+  KKFloatingPanel *_panel;
+  NSWindow *_parentWindow;
+  NSView *_popoverContentView;
+  NSRect _openCard;
+  /// The fraction the popover reported at open. A fallback only - see
+  /// -_editFraction, which is what everything actually reads.
+  double _openFraction;
+  /// Control values as they stood when the drag began, keyed by lane key. The puck
+  /// writes absolute positions, so these are not what the new values are computed
+  /// from - they supply the "before" number in the readout, and a colour's own
+  /// saturation and brightness while only its hue is being driven.
+  NSDictionary<NSString *, NSArray<NSNumber *> *> *_dragStartValues;
+  /// YES between onDragBegin and its onDragEnd. The host wraps those in an undo
+  /// group, and FCP RAISES from FFChannelAction lockChannels if a second group
+  /// opens inside the first - so this is a structural guard, not bookkeeping: a
+  /// begin can never fire twice without an intervening end.
+  BOOL _writeGroupOpen;
+  /// YES while a puck drag is in progress. Separate from _writeGroupOpen because
+  /// the panel's other writes (recentre, eyedropper) open the same group without
+  /// being a gesture that can lose its mouse-up.
+  BOOL _puckDragActive;
+  NSUInteger _puckDragIndex;
+  /// Which declared surface the open drag belongs to, so the log names the ring
+  /// and the OTHER ring's view can be dropped without touching this one.
+  NSUInteger _puckDragRing;
+  /// The source the ring and axis labels were last built from, so a recompile
+  /// rebuilds them and an unchanged frame does not re-parse every tick.
+  NSString *_lastSpecSource;
+  /// The declared rings, in declaration order: index 0 is the circle on top.
+  NSArray<NSNumber *> *_ringKinds;
+  __weak KKTimelineLanesView *_lanesView;
+  /// One circle per surface the grammar allows, built once and shown as the
+  /// source asks. Built up front rather than on demand because a recompile can
+  /// add a ring under an open panel, and rebuilding the hierarchy there would
+  /// tear down the very view a latched drag is still holding.
+  NSArray<MirageSurfaceCircleView *> *_circles;
+  /// The container both circles live in. Sized by -_applyPanelLayout, which is the
+  /// only thing in this panel that sets a frame.
+  NSView *_well;
+  NSView *_body;
+  KKPanelDragHandleView *_header;
+  KKPaddedScrollView *_readoutScroll;
+  NSStackView *_readoutStack;
+  /// Right edge of the panel title, which the comparison icons are laid out from.
+  CGFloat _titleRightEdge;
+  NSTextField *_readoutHint;
+  NSButton *_pickButton;
+  NSButton *_pickColorButton;
+  /// Arms the click-to-pick gesture: one click in the preview aims the ACTIVE
+  /// puck's `pick=` controls at whatever colour was clicked.
+  NSButton *_pickSourceButton;
+  /// Before/after comparison, both driven straight into the mini viewer's own
+  /// session view state. Hidden whenever the preview reports it has no ungraded
+  /// frame to compare against.
+  NSButton *_splitButton;
+  _MirageFirstMouseButton *_beforeButton;
+  /// Armed: the next click in the mini viewer picks the reference patch.
+  BOOL _picking;
+  /// What the next picked patch is declared to be. An ivar rather than a default:
+  /// it is a statement about THIS shot, so a fresh popover starts at Neutral rather
+  /// than silently measuring a face against grass someone sampled last week.
+  MirageMemoryColor _pickDeclaration;
+  /// The plain-language reading of the current declared pick, or nil. Held so it can
+  /// be CLEARED - a sentence describing a cast that has since been corrected is
+  /// worse than no sentence at all.
+  NSString *_declarationSentence;
+  /// Armed: the next click picks a colour for the shader's `pick=` controls. Only
+  /// one of the two can be armed - they consume the same click and mean different
+  /// things by it, so arming either disarms the other.
+  BOOL _pickingColor;
+  /// A colour pick that has been clicked but not yet measured. The patch is read
+  /// out of the next rendered frame, which may not have arrived when the click did.
+  BOOL _pendingColorPick;
+  /// A measured pick whose write has been scheduled but not performed yet. A second
+  /// pick cannot be clicked in that window, but the sampler can satisfy the same
+  /// pending pick twice if a frame lands between the two, and two writes racing into
+  /// one action scope is the shape of the crash this defers around.
+  BOOL _pickWriteInFlight;
+  /// Armed: the next click in the preview reads the SOURCE pixel under it and
+  /// aims the active puck's `pick=` controls at that colour. A third armed state
+  /// rather than a mode on the eyedropper, since the three consume the same click
+  /// and mean different things by it - arming any one disarms the others.
+  BOOL _pickingSource;
+  id _pickMonitor;
+  id _pickGlobalMonitor;
+  /// While armed, the pointer over the preview says so. The mini viewer's own
+  /// cursor rects never fire for it inside a ViewBridge popover, so the cursor is
+  /// pushed from the same monitor stream every other gesture in this panel is
+  /// driven by.
+  id _pickCursorMonitor;
+  id _pickCursorGlobalMonitor;
+  /// Escape disarms. Local and global for the reason the click monitors are both:
+  /// a popover this panel does not own gets the key events, and neither monitor
+  /// alone sees the whole stream.
+  id _pickKeyMonitor;
+  id _pickKeyGlobalMonitor;
+  MirageScopeSampler *_sampler;
+  __weak KKMiniViewerView *_measuredMini;
+  NSTimeInterval _lastSampleTime;
+  BOOL _samplePending;
+}
+
+- (void)_showIfPopoverOpen;
+- (void)_showIfPopoverOpenAttempt:(NSInteger)attempt;
+- (BOOL)_resolveSurfaceEnabledFromLanes;
+- (void)_toggleCompareSplit:(id)sender;
+- (void)_setCompareBypass:(BOOL)held;
+- (void)_refreshCompareButtons;
+- (NSSet<NSString *> *)_drivableKeysIn:(KKTimeline *)timeline
+                              fraction:(double)frac;
+- (double)_editFraction;
+- (NSArray<NSNumber *> *)_valuesForLane:(KKLane *)lane fraction:(double)frac;
+- (void)_startSampling;
+- (void)_stopSampling;
+- (void)_frameReady;
+- (void)_sampleOnce;
+- (void)_popoverDidOpen:(NSNotification *)note;
+- (void)_popoverDidClose:(NSNotification *)note;
+
+@end
+
+// Panel construction, the ring set the panel is sized from, and every frame in
+// it. Implemented in MirageColorPanelController+Layout.m.
+@interface MirageColorPanelController (Layout)
+- (NSUInteger)_ringCount;
+- (MirageColorSurfaceRing)_ringAtIndex:(NSUInteger)index;
+- (nullable MirageSurfaceCircleView *)_hueCircle;
+- (void)_applyPanelLayout;
+- (void)_applySurfaceSpecIfChanged:(NSString *)source;
+- (void)_pushSurfaceSpec;
+- (void)_resolveRingsFromLanes;
+- (_MirageFirstMouseButton *)_headerIconButtonNamed:(NSString *)symbol
+                                              label:(NSString *)label
+                                             action:(nullable SEL)action;
+- (_MirageFirstMouseButton *)_headerButtonWithAction:(SEL)action;
+- (void)_layoutHeaderButtons;
+- (KKFloatingPanel *)_ensurePanel;
+@end
+
+// The three armed picks, their monitors and the writes they schedule.
+// Implemented in MirageColorPanelController+Picking.m.
+@interface MirageColorPanelController (Picking)
+- (void)_showPickMenu:(id)sender;
+- (void)_choosePickDeclaration:(NSMenuItem *)item;
+- (void)_armPicking;
+- (void)_toggleColorPicking:(id)sender;
+- (void)_togglePickFromClip:(id)sender;
+- (void)_installPickMonitors;
+- (void)_updatePickCursor;
+- (void)_disarmPicking;
+- (BOOL)_handlePickEvent:(NSEvent *)event;
+- (void)_pickFromSourceAtUV:(NSPoint)uv inMini:(KKMiniViewerView *)mini;
+- (void)_schedulePickWrite:(NSArray<NSNumber *> *)rgb
+            activePuckOnly:(BOOL)activePuckOnly;
+- (void)_applyPickedRGB:(NSArray<NSNumber *> *)rgb
+         activePuckOnly:(BOOL)activePuckOnly;
+- (BOOL)_hasDrivablePicksIn:(KKTimeline *)timeline source:(NSString *)source;
+- (void)_refreshHeaderButtonTitlesIn:(KKTimeline *)timeline
+                              source:(NSString *)source;
+- (NSArray<NSString *> *)_pickTargetLabelsIn:(KKTimeline *)timeline
+                                      source:(NSString *)source;
+- (NSUInteger)_pickRingIndex;
+- (NSDictionary<NSString *, NSNumber *> *)
+    _picksForActivePuckIn:(KKTimeline *)timeline
+                   source:(NSString *)source;
+@end
+
+// The write-group lifecycle, the puck drag it brackets, and the apply/derive
+// pair. Implemented in MirageColorPanelController+PuckWrite.m.
+@interface MirageColorPanelController (PuckWrite)
+- (void)_focusLeftPanel:(NSNotification *)note;
+- (void)_windowResignedKey:(NSNotification *)note;
+- (void)_resetMappedControlsForPuck:(NSUInteger)puckIndex
+                               ring:(NSUInteger)ringIndex;
+- (void)_beginWriteGroup:(NSString *)reason;
+- (void)_endWriteGroup:(NSString *)reason;
+- (void)_beginPuckDrag:(NSUInteger)puckIndex ring:(NSUInteger)ringIndex;
+- (void)_endPuckDragReason:(NSString *)reason;
+- (void)_endPuckDragReason:(NSString *)reason keepingRing:(NSUInteger)keepRing;
+- (nullable NSString *)_puckNameAtIndex:(NSUInteger)index
+                                   ring:(NSUInteger)ringIndex
+                                 source:(NSString *)source;
+- (MirageSurfaceAxisSet)_axesForPuck:(NSString *)puckName
+                           responses:
+                               (NSDictionary<NSString *, NSValue *> *)responses
+                            drivable:(NSSet<NSString *> *)drivable;
+- (void)_applyPuckTo:(NSPoint)position
+                puck:(NSUInteger)puckIndex
+                ring:(NSUInteger)ringIndex;
+- (void)_refreshPuck;
+- (NSPoint)_derivePositionForPuck:(NSString *)puckName
+                         timeline:(KKTimeline *)timeline
+                        responses:(NSDictionary<NSString *, NSValue *> *)responses
+                         drivable:(NSSet<NSString *> *)drivable
+                            polar:(BOOL)polar
+                         fraction:(double)frac;
+@end
+
+// What the readout says: the rows, the empty state and the declaration
+// sentence. Implemented in MirageColorPanelController+Readout.m.
+@interface MirageColorPanelController (Readout)
+- (void)_setReadoutRows:(NSArray<NSDictionary<NSString *, NSString *> *> *)rows;
+- (void)_setDeclarationSentence:(nullable NSString *)sentence;
+- (void)_refreshReadout;
+@end
+
+NS_ASSUME_NONNULL_END

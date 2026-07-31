@@ -34,6 +34,10 @@ typedef NS_ENUM(NSInteger, _MirageItemKind) {
 /// A MirageCategory.h id, already normalised. Drives the card's type badge and
 /// the header's category filter.
 @property(nonatomic, copy) NSString *category;
+/// Whether the shader declares `// #color-surface` - i.e. it is a colour tool
+/// whatever its template type says.
+/// Resolved once per rebuild from the entry's own source, not per keystroke.
+@property(nonatomic) BOOL colorSurface;
 @property(nonatomic, strong, nullable) NSImage *thumbnail;
 @property(nonatomic)
     BOOL updateAvailable; // installed + remote has newer version

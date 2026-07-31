@@ -7,6 +7,7 @@
 
 #import "MirageBrowserInternal.h"
 #import "MirageCategory.h"
+#import "MirageColorSurfaceProps.h"
 #import "MirageLocalCatalog.h"
 #import "MirageLocalized.h"
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -259,14 +260,29 @@ static const CGFloat kHeaderH = 22.0;
   [self _rebuildAll];
 }
 
+// Does this entry's Image shader declare `// #color-surface`? nil entry (a remote
+// card whose source has not been downloaded) is NO rather than unknown: it still
+// filters by its published category, and gains the surface once installed.
+static BOOL MirageBrowserDeclaresColorSurface(
+    MirageCatalogEntry *_Nullable entry) {
+  return MirageColorSurfaceForSource(entry.sections[@"Image"], NULL, NULL);
+}
+
 - (BOOL)_matches:(_MirageBrowserItem *)it {
   if (_favoritesOnly && ![[MirageLocalCatalog shared] isFavorite:it.entryID])
     return NO;
   // Normalised, so an entry whose category this build doesn't know filters as
   // the default rather than as nothing at all (it badges as the default too).
-  if (_categoryFilter.count &&
-      ![_categoryFilter containsObject:MirageCategoryNormalize(it.category)])
-    return NO;
+  if (_categoryFilter.count) {
+    BOOL any = NO;
+    for (NSString *filterID in _categoryFilter)
+      if (MirageCategoryMatchesFilter(it.category, it.colorSurface, filterID)) {
+        any = YES;
+        break;
+      }
+    if (!any)
+      return NO;
+  }
   if (_query.length &&
       [it.name rangeOfString:_query options:NSCaseInsensitiveSearch].location ==
           NSNotFound)
@@ -307,6 +323,7 @@ static const CGFloat kHeaderH = 22.0;
     it.name = e.name;
     it.author = e.author;
     it.category = e.category;
+    it.colorSurface = MirageBrowserDeclaresColorSurface(e);
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
     if ([self _matches:it])
@@ -322,6 +339,9 @@ static const CGFloat kHeaderH = 22.0;
     // An installed copy is the authority (it may be a newer publish than the
     // last fetch); otherwise the remote's.
     it.category = inst ? inst.category : r.category;
+    // Only an installed copy carries its source. A remote-only card still filters by
+    // its published category, and picks the surface up once installed.
+    it.colorSurface = MirageBrowserDeclaresColorSurface(inst);
     it.communityEntry = r.communityEntry;
     if (inst) {
       it.kind = _MirageItemInstalled;
@@ -348,6 +368,7 @@ static const CGFloat kHeaderH = 22.0;
     it.name = inst.name;
     it.author = inst.author;
     it.category = inst.category;
+    it.colorSurface = MirageBrowserDeclaresColorSurface(inst);
     it.thumbnail = inst.thumbnail;
     it.localEntry = inst;
     if ([self _matches:it])
@@ -362,6 +383,7 @@ static const CGFloat kHeaderH = 22.0;
     it.name = e.name;
     it.author = e.author;
     it.category = e.category;
+    it.colorSurface = MirageBrowserDeclaresColorSurface(e);
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
     if ([self _matches:it])

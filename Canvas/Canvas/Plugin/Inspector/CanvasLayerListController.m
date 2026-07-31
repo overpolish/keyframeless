@@ -10,6 +10,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h> // KKWriteCustomParamString
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin.h>   // KKPerformUndoable
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimeline.h>
@@ -340,19 +341,54 @@ static const CGFloat kSlideDistance = 12.0;
       _highlightLayerIDs = @[ _selectedLayerID ];
   }
 
-  // Mark this popover as the pending target, then show after a delay so the
-  // popover's own entrance plays first.
+  // Mark this popover as the pending target, then show once it is actually on
+  // screen - the delay also lets the popover's own entrance play first.
   _parentWindow = popoverWindow;
+  [self _showWhenVisibleWithCard:card
+                   nonSelectable:nonSelectable
+                         attempt:0];
+}
+
+// Wait for the popover window to actually be on screen, RETRYING rather than
+// checking once.
+//
+// The first time a popover opens its views are built from scratch, so on a cold
+// FCP boot it is routinely still invisible when a single fixed delay elapses.
+// The old one-shot check just returned, and the layer list then never appeared
+// until the popover was closed and reopened - by which point the window was warm
+// and made the deadline, which is why it only ever looked broken on the first
+// try. Bounded, so a popover that never appears stops the chain instead of
+// polling forever.
+//
+// The window is re-read from the CONTENT VIEW on every attempt: at cold boot the
+// notification can carry a window that is not the one the view ends up in, and
+// holding the original meant waiting on a window that would never show.
+- (void)_showWhenVisibleWithCard:(NSRect)card
+                   nonSelectable:(NSSet<NSString *> *)nonSelectable
+                         attempt:(NSInteger)attempt {
+  static const NSInteger kMaxAttempts = 100; // ~10s at kShowDelay
+  NSView *pending = _popoverContentView;
+  NSWindow *window = pending.window ?: _parentWindow;
+  if (window && window.isVisible) {
+    _parentWindow = window;
+    [self _showBesideCard:card ofWindow:window nonSelectable:nonSelectable];
+    return;
+  }
+  if (attempt + 1 >= kMaxAttempts) {
+    KKLogWarn(@"[LayerList] popover never became visible, no panel");
+    return;
+  }
   __weak typeof(self) weakSelf = self;
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kShowDelay * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
         __strong typeof(weakSelf) s = weakSelf;
-        if (!s || s->_parentWindow != popoverWindow || !popoverWindow.isVisible)
-          return; // popover closed (or replaced) during the delay
-        [s _showBesideCard:card
-                  ofWindow:popoverWindow
-             nonSelectable:nonSelectable];
+        // A different popover took over, or this one closed.
+        if (!s || s->_popoverContentView != pending)
+          return;
+        [s _showWhenVisibleWithCard:card
+                      nonSelectable:nonSelectable
+                            attempt:attempt + 1];
       });
 }
 

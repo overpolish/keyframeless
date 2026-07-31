@@ -2479,6 +2479,48 @@
         }
       }
     },
+    "Before": {
+      "comment": "Color panel button held down to see the frame without the effect applied.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorher"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "適用前"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "적용 전"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用前"
+          }
+        }
+      }
+    },
     "Bend a direction through a surface.": {
       "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
       "extractionState": "manual",
@@ -2643,6 +2685,258 @@
           "stringUnit": {
             "state": "translated",
             "value": "让方向在表面上反射。"
+          }
+        }
+      }
+    },
+    "Click a color in the frame to set this shader's controls from it.": {
+      "comment": "Tooltip for the Color panel's sampler that writes controls.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke auf eine Farbe im Bild, um die Regler dieses Shaders daraus zu setzen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en un color del fotograma para ajustar los controles de este shader a partir de él."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur une couleur de l'image pour en déduire les paramètres de ce shader."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面内の色をクリックすると、このシェーダーのコントロールがその色から設定されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면의 색상을 클릭하면 이 셰이더의 컨트롤이 그 색상으로 설정됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击画面中的颜色，以此设置该着色器的控件。"
+          }
+        }
+      }
+    },
+    "Click a face in the frame. The cross shows how far the skin is from where skin belongs - drag the puck the other way until it centres.": {
+      "comment": "Tooltip for the Color panel's sampler when it is set to skin.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke auf ein Gesicht im Bild. Das Kreuz zeigt, wie weit die Haut von der richtigen Hautfarbe abweicht - ziehe den Steuerpunkt in die andere Richtung, bis es mittig steht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en un rostro del fotograma. La cruz muestra cuánto se aleja la piel de donde debería estar - arrastra el punto de control en sentido contrario hasta centrarla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur un visage dans l'image. La croix indique l'écart entre la peau et sa teinte correcte - faites glisser le point de contrôle dans l'autre sens jusqu'à ce qu'elle soit centrée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面内の顔をクリックします。十字は肌が本来の位置からどれだけ離れているかを示します - 十字が中央に来るまでコントロールポイントを反対方向にドラッグしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임에서 얼굴을 클릭하세요. 십자는 피부색이 제자리에서 얼마나 벗어났는지 보여줍니다 - 십자가 가운데로 올 때까지 컨트롤 포인트를 반대 방향으로 드래그하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点按画面中的人脸。十字显示肤色偏离正确位置的程度 - 将控制点向相反方向拖移，直到十字居中。"
+          }
+        }
+      }
+    },
+    "Click clear sky in the frame. Sky varies more than anything else you can sample, so treat this one as approximate - drag the puck the other way until the cross centres.": {
+      "comment": "Tooltip for the Color panel's sampler when it is set to sky, warning that the reading is only approximate.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke auf klaren Himmel im Bild. Der Himmel schwankt stärker als jede andere Referenz, betrachte dies also nur als Näherung - ziehe den Steuerpunkt in die andere Richtung, bis das Kreuz mittig steht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en un cielo despejado del fotograma. El cielo varía más que cualquier otra referencia, así que tómalo como algo aproximado - arrastra el punto de control en sentido contrario hasta centrar la cruz."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur un ciel dégagé dans l'image. Le ciel varie plus que toute autre référence, ce relevé est donc approximatif - faites glisser le point de contrôle dans l'autre sens jusqu'à centrer la croix."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面内の晴れた空をクリックします。空は他のどの基準よりばらつきが大きいため、目安として扱ってください - 十字が中央に来るまでコントロールポイントを反対方向にドラッグしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임에서 맑은 하늘을 클릭하세요. 하늘은 다른 어떤 기준보다 편차가 크므로 참고용으로만 사용하세요 - 십자가 가운데로 올 때까지 컨트롤 포인트를 반대 방향으로 드래그하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点按画面中的晴空。天空的变化比任何其他参考都大，因此仅供参考 - 将控制点向相反方向拖移，直到十字居中。"
+          }
+        }
+      }
+    },
+    "Click grass or leaves in the frame. The cross shows how far they are from where foliage belongs - drag the puck the other way until it centres.": {
+      "comment": "Tooltip for the Color panel's sampler when it is set to foliage.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke auf Gras oder Laub im Bild. Das Kreuz zeigt, wie weit sie von der richtigen Laubfarbe abweichen - ziehe den Steuerpunkt in die andere Richtung, bis es mittig steht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en hierba u hojas del fotograma. La cruz muestra cuánto se alejan de donde debería estar la vegetación - arrastra el punto de control en sentido contrario hasta centrarla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur de l'herbe ou des feuilles dans l'image. La croix indique leur écart par rapport à la teinte correcte du feuillage - faites glisser le point de contrôle dans l'autre sens jusqu'à ce qu'elle soit centrée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面内の草や葉をクリックします。十字は緑が本来の位置からどれだけ離れているかを示します - 十字が中央に来るまでコントロールポイントを反対方向にドラッグしてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임에서 풀이나 나뭇잎을 클릭하세요. 십자는 초목 색이 제자리에서 얼마나 벗어났는지 보여줍니다 - 십자가 가운데로 올 때까지 컨트롤 포인트를 반대 방향으로 드래그하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点按画面中的草地或树叶。十字显示植物颜色偏离正确位置的程度 - 将控制点向相反方向拖移，直到十字居中。"
+          }
+        }
+      }
+    },
+    "Click something in the frame that should be grey. The cross shows how far off it is - drag the puck the other way until it centres.": {
+      "comment": "Tooltip for the Color panel's grey-reference sampler.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke im Bild auf etwas, das grau sein sollte. Das Kreuz zeigt die Abweichung - ziehe den Steuerpunkt in die Gegenrichtung, bis es mittig steht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en algo del fotograma que debería ser gris. La cruz muestra la desviación: arrastra el control en sentido contrario hasta centrarla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur un élément de l'image qui devrait être gris. La croix indique l'écart : faites glisser le point de contrôle dans l'autre sens jusqu'à ce qu'elle se centre."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面内でグレーであるべき部分をクリックします。十字が偏差を示すので、中央に来るまでコントロールポイントを反対方向にドラッグします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면에서 회색이어야 하는 부분을 클릭하세요. 십자가 편차를 나타내며, 가운데로 올 때까지 컨트롤 포인트를 반대 방향으로 드래그합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击画面中应为灰色的部分。十字会显示偏差，将控制点向相反方向拖动，直到十字居中。"
+          }
+        }
+      }
+    },
+    "Color": {
+      "comment": "Title of the Mirage colour panel: the wheel, its scope and the grey picker.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbe"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couleur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カラー"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颜色"
           }
         }
       }
@@ -3403,6 +3697,216 @@
         }
       }
     },
+    "Foliage is clearly too blue.": {
+      "comment": "Color panel readout: the sampled grass or leaves are well too blue.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Laub ist deutlich zu blau."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La vegetación tira claramente a azul."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le feuillage tire nettement trop vers le bleu."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "緑が明らかに青すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초목 색이 확실히 너무 파랗습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "植物颜色明显偏蓝。"
+          }
+        }
+      }
+    },
+    "Foliage is clearly too yellow.": {
+      "comment": "Color panel readout: the sampled grass or leaves are well too yellow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Laub ist deutlich zu gelb."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La vegetación tira claramente a amarillo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le feuillage tire nettement trop vers le jaune."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "緑が明らかに黄色すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초목 색이 확실히 너무 노랗습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "植物颜色明显偏黄。"
+          }
+        }
+      }
+    },
+    "Foliage is slightly too blue.": {
+      "comment": "Color panel readout: the sampled grass or leaves are a little too blue.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Laub ist etwas zu blau."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La vegetación tira un poco a azul."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le feuillage tire un peu trop vers le bleu."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "緑がやや青すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초목 색이 약간 너무 파랗습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "植物颜色略微偏蓝。"
+          }
+        }
+      }
+    },
+    "Foliage is slightly too yellow.": {
+      "comment": "Color panel readout: the sampled grass or leaves are a little too yellow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Laub ist etwas zu gelb."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La vegetación tira un poco a amarillo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le feuillage tire un peu trop vers le jaune."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "緑がやや黄色すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초목 색이 약간 너무 노랗습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "植物颜色略微偏黄。"
+          }
+        }
+      }
+    },
+    "Foliage looks right.": {
+      "comment": "Color panel readout: the sampled grass or leaves need no correction.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Laub sieht richtig aus."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La vegetación se ve bien."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le feuillage est correct."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "緑は良好です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초목 색이 적절합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "植物颜色正常。"
+          }
+        }
+      }
+    },
     "Four numbers, xyzw or rgba.": {
       "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
       "extractionState": "manual",
@@ -3777,6 +4281,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "允许的最大值。"
+          }
+        }
+      }
+    },
+    "Hold to see the frame without this effect.": {
+      "comment": "Tooltip for the Color panel's hold-to-bypass button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halte die Taste gedrückt, um das Bild ohne diesen Effekt zu sehen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén pulsado para ver el fotograma sin este efecto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez le bouton enfoncé pour voir l'image sans cet effet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "押している間、このエフェクトを適用していない画面を表示します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "누르고 있는 동안 이 효과가 적용되지 않은 화면을 표시합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住可查看未应用此效果的画面。"
           }
         }
       }
@@ -4957,6 +5503,720 @@
         }
       }
     },
+    "Pick %@": {
+      "comment": "Color panel button that sets one named control from a colour clicked in the frame. %@ is that control's name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ übernehmen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prélever %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@を取得"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 선택"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拾取%@"
+          }
+        }
+      }
+    },
+    "Pick from frame": {
+      "comment": "Color panel button that sets several controls at once from a colour clicked in the frame.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus Bild übernehmen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar del fotograma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prélever dans l'image"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面から取得"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면에서 선택"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从画面拾取"
+          }
+        }
+      }
+    },
+    "Sample foliage": {
+      "comment": "Color panel button that samples a patch of grass or leaves to measure how far off it is.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laub messen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestrear vegetación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échantillonner le feuillage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "緑をサンプル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초목 샘플링"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取样植物"
+          }
+        }
+      }
+    },
+    "Sample grey": {
+      "comment": "Color panel button that samples a patch which ought to be neutral, to measure the frame's cast.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grau messen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestrear gris"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échantillonner le gris"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グレーをサンプル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "회색 샘플링"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取样灰色"
+          }
+        }
+      }
+    },
+    "Sample skin": {
+      "comment": "Color panel button that samples a patch of skin to measure how far off it is.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haut messen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestrear piel"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échantillonner la peau"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肌をサンプル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "피부 샘플링"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取样肤色"
+          }
+        }
+      }
+    },
+    "Sample sky": {
+      "comment": "Color panel button that samples a patch of clear sky to measure how far off it is.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Himmel messen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestrear cielo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échantillonner le ciel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空をサンプル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하늘 샘플링"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取样天空"
+          }
+        }
+      }
+    },
+    "Skin is clearly too pink.": {
+      "comment": "Color panel readout: the sampled skin is well too pink.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Haut ist deutlich zu rosa."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La piel tira claramente a rosa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La peau tire nettement trop vers le rose."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肌が明らかにピンクすぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "피부색이 확실히 너무 분홍빛입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肤色明显偏粉。"
+          }
+        }
+      }
+    },
+    "Skin is clearly too yellow.": {
+      "comment": "Color panel readout: the sampled skin is well too yellow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Haut ist deutlich zu gelb."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La piel tira claramente a amarillo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La peau tire nettement trop vers le jaune."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肌が明らかに黄色すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "피부색이 확실히 너무 노랗습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肤色明显偏黄。"
+          }
+        }
+      }
+    },
+    "Skin is slightly too pink.": {
+      "comment": "Color panel readout: the sampled skin is a little too pink.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Haut ist etwas zu rosa."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La piel tira un poco a rosa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La peau tire un peu trop vers le rose."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肌がややピンクすぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "피부색이 약간 너무 분홍빛입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肤色略微偏粉。"
+          }
+        }
+      }
+    },
+    "Skin is slightly too yellow.": {
+      "comment": "Color panel readout: the sampled skin is a little too yellow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Haut ist etwas zu gelb."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La piel tira un poco a amarillo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La peau tire un peu trop vers le jaune."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肌がやや黄色すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "피부색이 약간 너무 노랗습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肤色略微偏黄。"
+          }
+        }
+      }
+    },
+    "Skin looks right.": {
+      "comment": "Color panel readout: the sampled skin needs no correction.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Haut sieht richtig aus."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La piel se ve bien."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La peau est correcte."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肌は良好です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "피부색이 적절합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "肤色正常。"
+          }
+        }
+      }
+    },
+    "Sky is clearly too green.": {
+      "comment": "Color panel readout: the sampled sky is well too green.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Himmel ist deutlich zu grün."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cielo tira claramente a verde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le ciel tire nettement trop vers le vert."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空が明らかに緑すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하늘색이 확실히 너무 초록빛입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天空明显偏绿。"
+          }
+        }
+      }
+    },
+    "Sky is clearly too purple.": {
+      "comment": "Color panel readout: the sampled sky is well too purple.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Himmel ist deutlich zu violett."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cielo tira claramente a púrpura."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le ciel tire nettement trop vers le violet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空が明らかに紫すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하늘색이 확실히 너무 보랏빛입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天空明显偏紫。"
+          }
+        }
+      }
+    },
+    "Sky is slightly too green.": {
+      "comment": "Color panel readout: the sampled sky is a little too green.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Himmel ist etwas zu grün."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cielo tira un poco a verde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le ciel tire un peu trop vers le vert."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空がやや緑すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하늘색이 약간 너무 초록빛입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天空略微偏绿。"
+          }
+        }
+      }
+    },
+    "Sky is slightly too purple.": {
+      "comment": "Color panel readout: the sampled sky is a little too purple.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Himmel ist etwas zu violett."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cielo tira un poco a púrpura."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le ciel tire un peu trop vers le violet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空がやや紫すぎます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하늘색이 약간 너무 보랏빛입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天空略微偏紫。"
+          }
+        }
+      }
+    },
+    "Sky looks right.": {
+      "comment": "Color panel readout: the sampled sky needs no correction.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Himmel sieht richtig aus."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cielo se ve bien."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le ciel est correct."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空は良好です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하늘색이 적절합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天空颜色正常。"
+          }
+        }
+      }
+    },
+    "The controls this puck drives are listed here.": {
+      "comment": "Placeholder in the Color panel's readout, shown when no puck controls are listed.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Regler, die dieser Steuerpunkt bewegt, werden hier aufgeführt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aquí se muestran los controles que mueve este punto de control."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les paramètres pilotés par ce point de contrôle sont indiqués ici."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコントロールポイントが操作するコントロールがここに表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 컨트롤 포인트가 조절하는 컨트롤이 여기에 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此控制点所控制的参数将显示在此处。"
+          }
+        }
+      }
+    },
     "Per-field units for #multi: % or px.": {
       "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
       "extractionState": "manual",
@@ -5881,6 +7141,48 @@
         }
       }
     },
+    "Show the graded frame beside the original. Drag the divider in the preview to move the split.": {
+      "comment": "Tooltip for the Color panel's split-preview toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt das bearbeitete Bild neben dem Original. Ziehe die Trennlinie in der Vorschau, um die Teilung zu verschieben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra el fotograma corregido junto al original. Arrastra el divisor en la previsualización para mover la división."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiche l'image étalonnée à côté de l'originale. Faites glisser la séparation dans l'aperçu pour déplacer le partage."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "補正後の画面を元の画面と並べて表示します。プレビュー内の分割線をドラッグすると分割位置が変わります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보정된 화면을 원본과 나란히 표시합니다. 미리보기의 분할선을 드래그하면 분할 위치가 바뀝니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将调色后的画面与原始画面并排显示。拖动预览中的分割线可移动分割位置。"
+          }
+        }
+      }
+    },
     "Sine, angle in radians.": {
       "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
       "extractionState": "manual",
@@ -6045,6 +7347,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "像转盘一样平面旋转。"
+          }
+        }
+      }
+    },
+    "Split": {
+      "comment": "Color panel button that splits the preview: the graded frame on the left, the original on the right.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teilen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diviser"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分割"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "분할"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分屏"
           }
         }
       }
@@ -9069,6 +10413,762 @@
           "stringUnit": {
             "state": "translated",
             "value": "true 使双字段圆环或方框保持比例。Shift 键反转。"
+          }
+        }
+      }
+    },
+    "Hue": {
+      "comment": "Color panel readout heading naming the hue ring, when a shader declares both rings.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbton"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tono"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teinte"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色相"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色相"
+          }
+        }
+      }
+    },
+    "Light": {
+      "comment": "Color panel readout heading naming the light ring, when a shader declares both rings.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Licht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luz"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lumière"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明るさ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "밝기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亮度"
+          }
+        }
+      }
+    },
+    "Surface": {
+      "comment": "Color panel readout heading naming an unpainted grading circle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fläche"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Superficie"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Surface"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーフェス"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서피스"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表面"
+          }
+        }
+      }
+    },
+    "Use exactly one `#frames` directive in the Image shader": {
+      "comment": "Mirage duplicate frames directive error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwende genau eine `#frames`-Direktive im Image-Shader"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa exactamente una directiva `#frames` en el shader Image"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "N’utilisez qu’une seule directive `#frames` dans le shader Image"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image シェーダーでは `#frames` ディレクティブをちょうど 1 つ使用してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image 셰이더에는 `#frames` 지시문을 정확히 하나만 사용하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Image 着色器中只能使用一条 `#frames` 指令"
+          }
+        }
+      }
+    },
+    "`#frames` needs offsets=\"-1,+1\", a comma-separated list of whole frames": {
+      "comment": "Mirage frames directive missing-offsets error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` benötigt offsets=\"-1,+1\", eine kommagetrennte Liste ganzer Frames"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` necesita offsets=\"-1,+1\", una lista de fotogramas enteros separados por comas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` exige offsets=\"-1,+1\", une liste d’images entières séparées par des virgules"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` には offsets=\"-1,+1\" が必要です。カンマ区切りの整数フレームで指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames`에는 offsets=\"-1,+1\"이 필요합니다. 쉼표로 구분한 정수 프레임 목록을 지정하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` 需要 offsets=\"-1,+1\"，即以逗号分隔的整数帧列表"
+          }
+        }
+      }
+    },
+    "`#frames` offsets must be whole frames, like offsets=\"-2,-1,+1\"": {
+      "comment": "Mirage frames directive malformed-offset error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames`-Offsets müssen ganze Frames sein, etwa offsets=\"-2,-1,+1\""
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los desplazamientos de `#frames` deben ser fotogramas enteros, como offsets=\"-2,-1,+1\""
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les décalages de `#frames` doivent être des images entières, comme offsets=\"-2,-1,+1\""
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` のオフセットは offsets=\"-2,-1,+1\" のような整数フレームで指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` 오프셋은 offsets=\"-2,-1,+1\"처럼 정수 프레임이어야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` 的偏移必须是整数帧，例如 offsets=\"-2,-1,+1\""
+          }
+        }
+      }
+    },
+    "`#frames` offset 0 is the current frame - read that from iChannel0": {
+      "comment": "Mirage frames directive zero-offset error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der `#frames`-Offset 0 ist der aktuelle Frame – lies ihn über iChannel0"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El desplazamiento 0 de `#frames` es el fotograma actual: léelo desde iChannel0"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le décalage 0 de `#frames` est l’image actuelle : lisez-la depuis iChannel0"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` のオフセット 0 は現在のフレームです。iChannel0 から読み取ってください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` 오프셋 0은 현재 프레임입니다. iChannel0에서 읽으세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` 偏移 0 就是当前帧，请改从 iChannel0 读取"
+          }
+        }
+      }
+    },
+    "`#frames` lists the same offset twice - each offset binds its own iNeighbor slot": {
+      "comment": "Mirage frames directive duplicate-offset error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` nennt denselben Offset zweimal – jeder Offset belegt seinen eigenen iNeighbor-Slot"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` repite el mismo desplazamiento: cada uno ocupa su propia ranura iNeighbor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` répète le même décalage : chacun occupe son propre emplacement iNeighbor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` に同じオフセットが 2 回あります。各オフセットはそれぞれの iNeighbor スロットに割り当てられます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames`에 같은 오프셋이 두 번 있습니다. 각 오프셋은 고유한 iNeighbor 슬롯에 연결됩니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` 中同一偏移出现了两次，每个偏移各占一个 iNeighbor 插槽"
+          }
+        }
+      }
+    },
+    "`#frames` takes at most %d offsets - each one is another full frame in memory": {
+      "comment": "Mirage frames directive offset-count error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` erlaubt höchstens %d Offsets – jeder ist ein weiterer vollständiger Frame im Speicher"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` admite como máximo %d desplazamientos: cada uno es otro fotograma completo en memoria"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` accepte au maximum %d décalages : chacun représente une image complète de plus en mémoire"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` のオフセットは最大 %d 個です。1 つにつきフレーム 1 枚分のメモリを消費します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames`는 오프셋을 최대 %d개까지 받습니다. 하나마다 프레임 한 장이 메모리에 더 올라갑니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#frames` 最多接受 %d 个偏移，每个偏移都会在内存中多占用一整帧"
+          }
+        }
+      }
+    },
+    "Also deliver the clip at other frames, for trails and other effects that read across time.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liefert den Clip zusätzlich zu anderen Frames – für Spuren und andere Effekte, die über die Zeit lesen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrega también el clip en otros fotogramas, para estelas y otros efectos que leen a lo largo del tiempo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fournit aussi le plan à d’autres images, pour les traînées et les effets qui lisent dans le temps."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "他のフレームのクリップも受け取ります。時間をまたいで読み取る軌跡などの効果に使います。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다른 프레임의 클립도 전달합니다. 시간을 가로질러 읽는 잔상 등의 효과에 사용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同时提供其他帧的片段，可用于拖尾等需要跨时间读取的效果。"
+          }
+        }
+      }
+    },
+    "#frames: which frames to deliver, signed and relative to this one, like \"-2,-1,+1\".": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames: welche Frames geliefert werden – vorzeichenbehaftet und relativ zu diesem, etwa \"-2,-1,+1\"."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames: qué fotogramas entregar, con signo y relativos a este, como \"-2,-1,+1\"."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames : quelles images fournir, signées et relatives à celle-ci, comme \"-2,-1,+1\"."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames: 受け取るフレーム。このフレームからの符号付き相対値で、例えば \"-2,-1,+1\" のように指定します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames: 전달할 프레임. 현재 프레임 기준의 부호 있는 상대값이며 예를 들어 \"-2,-1,+1\"입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames：要提供哪些帧，为相对当前帧的带符号数值，例如 \"-2,-1,+1\"。"
+          }
+        }
+      }
+    },
+    "The source clip at the i-th frame offset declared by #frames, sampled at uv.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Quellclip beim i-ten von #frames deklarierten Frame-Offset, an uv abgetastet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El clip de origen en el i-ésimo desplazamiento declarado por #frames, muestreado en uv."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plan source au i-ème décalage déclaré par #frames, échantillonné en uv."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames が宣言した i 番目のフレームオフセットのソースクリップを uv でサンプリングします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames가 선언한 i번째 프레임 오프셋의 소스 클립을 uv에서 샘플링합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames 声明的第 i 个帧偏移处的源片段，在 uv 处采样。"
+          }
+        }
+      }
+    },
+    "How many frames #frames declared.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie viele Frames #frames deklariert hat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuántos fotogramas declaró #frames."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combien d’images #frames a déclarées."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames が宣言したフレーム数です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames가 선언한 프레임 수입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#frames 声明的帧数。"
+          }
+        }
+      }
+    },
+    "The i-th #frames offset, in whole frames.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der i-te #frames-Offset, in ganzen Frames."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El i-ésimo desplazamiento de #frames, en fotogramas enteros."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le i-ème décalage de #frames, en images entières."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "i 番目の #frames オフセットを整数フレームで返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "i번째 #frames 오프셋을 정수 프레임으로 반환합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 i 个 #frames 偏移，以整数帧表示。"
+          }
+        }
+      }
+    },
+    "The clip at the first #frames offset. Prefer iNeighborAt.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Clip beim ersten #frames-Offset. Nutze bevorzugt iNeighborAt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El clip en el primer desplazamiento de #frames. Es preferible iNeighborAt."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plan au premier décalage de #frames. Préférez iNeighborAt."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最初の #frames オフセットのクリップです。iNeighborAt の使用を推奨します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "첫 번째 #frames 오프셋의 클립입니다. iNeighborAt 사용을 권장합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第一个 #frames 偏移处的片段。建议改用 iNeighborAt。"
+          }
+        }
+      }
+    },
+    "The clip at the second #frames offset. Prefer iNeighborAt.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Clip beim zweiten #frames-Offset. Nutze bevorzugt iNeighborAt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El clip en el segundo desplazamiento de #frames. Es preferible iNeighborAt."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plan au deuxième décalage de #frames. Préférez iNeighborAt."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 番目の #frames オフセットのクリップです。iNeighborAt の使用を推奨します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 번째 #frames 오프셋의 클립입니다. iNeighborAt 사용을 권장합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第二个 #frames 偏移处的片段。建议改用 iNeighborAt。"
+          }
+        }
+      }
+    },
+    "Set from clip": {
+      "comment": "Color panel button: arms a click in the preview that aims the selected handle's controls at the color clicked in the original footage.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus Clip übernehmen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definir desde el clip"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Définir depuis le plan"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップから設定"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립에서 설정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从片段取色"
+          }
+        }
+      }
+    },
+    "Click a color in the preview to aim the selected handle at it. The color is read from the original clip, not from the graded result.": {
+      "comment": "Tooltip for the Color panel's click-to-pick button, explaining that the sampled color comes from the untouched footage.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke in der Vorschau auf eine Farbe, um den ausgewählten Regler darauf auszurichten. Die Farbe wird aus dem Originalclip gelesen, nicht aus dem korrigierten Ergebnis."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en un color de la previsualización para apuntar hacia él el controlador seleccionado. El color se lee del clip original, no del resultado etalonado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur une couleur dans l'aperçu pour y pointer la poignée sélectionnée. La couleur est lue dans le plan d'origine, pas dans le résultat étalonné."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プレビューで色をクリックすると、選択中のハンドルがその色に向けられます。色は補正後の結果ではなく、元のクリップから読み取られます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미리보기에서 색상을 클릭하면 선택한 핸들이 그 색상을 향합니다. 색상은 보정된 결과가 아니라 원본 클립에서 읽습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在预览中点按某个颜色，即可让所选控制柄对准该颜色。颜色取自原始片段，而非调色后的结果。"
           }
         }
       }

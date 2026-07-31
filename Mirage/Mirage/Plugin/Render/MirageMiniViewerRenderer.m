@@ -12,6 +12,7 @@
 #import "MirageAudioPool.h"
 #import "MirageCustomShader.h" // MirageCustomErrorShaderSource
 #import "MirageDirectives.h"
+#import "MirageFrameOffsets.h" // `// #frames` neighbour offsets
 #import "MirageExprMiniSet.h"     // // @osc custom-handling handles
 #import "MirageOSCBlockRuntime.h" // rotate blocks feed the rotation set
 #import "MirageRenderUniforms.h"  // MirageMakeUniforms (shared with FCP render)
@@ -63,6 +64,20 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   }
 }
 
+// One colour-matched `// #frames` neighbour, held across draws. The conversion
+// it caches is a full-frame render pass plus an RGBA16Float allocation, and the
+// pixels behind it only move when the render process pumps a new frame - so the
+// work belongs to the pump, not to the redraw.
+@interface _MirageNeighborConversion : NSObject
+@property(nonatomic, strong) id<MTLTexture> raw;
+@property(nonatomic) uint64_t generation;
+@property(nonatomic) BOOL technicalTransform;
+@property(nonatomic, strong) id<MTLTexture> converted;
+@end
+
+@implementation _MirageNeighborConversion
+@end
+
 @implementation MirageMiniViewerRenderer {
   NSMutableDictionary<NSString *, id<MTLRenderPipelineState>> *_pipelines;
   MTLPixelFormat _pipelineFormat;
@@ -79,6 +94,13 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   NSString *_rotSyncedSource;
   KKRotationOSCSet *_rotSet;
   MirageExprMiniSet *_exprSet;
+  // Last logged `// #frames` bind state (declared count / first offset / pumped
+  // count), so the diagnostic fires on a change instead of once per drawn frame.
+  NSString *_neighborBindSignature;
+  // Colour-matched neighbours, one entry per aux index. Same shape as the
+  // _hiResTex / _pipelines caches: an ivar-held Metal object rebuilt only when
+  // its key inputs change.
+  NSMutableArray<_MirageNeighborConversion *> *_neighborConversions;
 }
 
 - (instancetype)init {
@@ -622,6 +644,100 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   return v ?: source;
 }
 
+// The `// #frames` neighbour textures to bind for `source`, in DIRECTIVE order.
+//
+// Call this BEFORE opening any render encoder on `commandBuffer`: matching a
+// neighbour's colour to iChannel0 encodes its own render pass, exactly like the
+// srcLin / toLin conversions this sits beside, and a command buffer permits one
+// live encoder at a time.
+//
+// The conversions are CACHED per aux index and reused until the render process
+// pumps a new frame. A drag redraws the mini many times against neighbours that
+// cannot have changed, and each conversion is a full-frame pass plus an
+// RGBA16Float allocation - multiplied by the filmstrip's slot count, since the
+// effect pass runs once per slot. Reconverting per redraw was the mini's lag on
+// a `#frames` shader.
+//
+// The render process pumps the neighbours it resolved into the feed's auxiliary
+// textures, so a trails / echo / temporal shader previews on the real frames.
+// Between FCP renders the last pumped set stays - tuning on a parked playhead
+// has to keep previewing, so nothing here invalidates them.
+//
+// Three deterministic fallbacks, all of which return a short/empty array that
+// KKBindCustomNeighborTextures fills with the caller's current-frame fallback
+// (skipping the bind is not an option: a declared-but-unbound sampler aborts
+// under Metal API Validation):
+//   - the shader declares no offsets, so there is nothing to bind;
+//   - nothing pumped yet (cold boot, or a shader without `// #frames`);
+//   - the pumped count disagrees with the directive, which is a pump from
+//     before a directive edit - clamping is wrong-but-stable, mis-indexing
+//     would show frames the shader never asked for.
+- (NSArray *)_neighborTexturesForSource:(NSString *)source
+                     technicalTransform:(BOOL)technicalTransform
+                          commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
+  MirageFrameOffsets fo = MirageFrameOffsetsForSource(source, NULL);
+  if (fo.count <= 0)
+    return @[];
+  NSUInteger available = self.canvas.auxTextureCount;
+  NSString *signature =
+      [NSString stringWithFormat:@"%d/%+d/%lu", fo.count, fo.offsets[0],
+                                 (unsigned long)available];
+  if (![signature isEqualToString:_neighborBindSignature]) {
+    _neighborBindSignature = [signature copy];
+    KKLogDebug(@"[Mirage] mini bind neighbours declared=%d firstOffset=%+d "
+               @"pumped=%lu",
+               fo.count, fo.offsets[0], (unsigned long)available);
+  }
+  if (available != (NSUInteger)fo.count)
+    return @[];
+  if (!_neighborConversions)
+    _neighborConversions = [NSMutableArray array];
+  while (_neighborConversions.count < available)
+    [_neighborConversions addObject:[[_MirageNeighborConversion alloc] init]];
+  while (_neighborConversions.count > available)
+    [_neighborConversions removeLastObject];
+
+  NSMutableArray *out = [NSMutableArray arrayWithCapacity:available];
+  for (NSUInteger i = 0; i < available; i++) {
+    id<MTLTexture> raw = [self.canvas auxTextureAtIndex:i];
+    _MirageNeighborConversion *entry = _neighborConversions[i];
+    if (!raw) {
+      entry.raw = nil;
+      entry.converted = nil;
+      [out addObject:[NSNull null]];
+      continue;
+    }
+    // Keyed on the PUBLISHER's generation as well as the texture object: the
+    // feed writes each new frame into the same IOSurface, so the wrapper object
+    // alone would report "unchanged" forever and the preview would freeze on
+    // the first pumped neighbours.
+    uint64_t generation = [self.canvas auxTextureGenerationAtIndex:i];
+    if (entry.converted && entry.raw == raw && entry.generation == generation &&
+        entry.technicalTransform == technicalTransform) {
+      [out addObject:entry.converted];
+      continue;
+    }
+    // The same colour handling iChannel0 gets a few lines above, so a temporal
+    // blend mixes like values: the feed's surface is display-encoded, so read
+    // it linearly, then re-encode to gamma for an ordinary Shadertoy shader.
+    id<MTLTexture> tex = [self _linearSourceView:raw];
+    if (!technicalTransform)
+      tex = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, tex) ?: tex;
+    entry.raw = raw;
+    entry.generation = generation;
+    entry.technicalTransform = technicalTransform;
+    // Written by THIS command buffer and read by later ones. Safe without a
+    // fence: every mini draw commits on the one view queue, and command buffers
+    // on a queue execute in commit order. Metal retains a resource for as long
+    // as any encoded buffer references it, so replacing the entry cannot pull a
+    // texture out from under a frame still in flight.
+    entry.converted = tex;
+    [out addObject:tex ?: (id)[NSNull null]];
+  }
+
+  return out;
+}
+
 // Custom mini render: Buffer A-D render into offscreen RGBA16F textures on the
 // shared command buffer, then the Image pass draws into the hi-res intermediate
 // (downscaled to dest). Mirrors the FCP render's multi-pass routing
@@ -754,6 +870,14 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
     toLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, toLin);
   if (transitionMode == 2)
     toLin = transparentTex;
+  // `// #frames` neighbours resolve HERE, alongside srcLin/toLin and ahead of
+  // every render encoder below, because their colour match is itself a render
+  // pass on this same command buffer - and a command buffer allows exactly one
+  // live encoder. Resolving them at the bind site asked for a second encoder
+  // while the image pass was open, which Metal aborts on.
+  NSArray *neighborTex = [self _neighborTexturesForSource:image
+                                       technicalTransform:technicalTransform
+                                            commandBuffer:commandBuffer];
   id<MTLSamplerState> noiseSampler = KKCustomChannelSampler(device);
 
   // Precompile buffer pipelines + transpile; detect FEEDBACK (a buffer reading
@@ -911,6 +1035,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   KKBindGLSLUniforms(e, &imgU, colorPool, colorPoolN);
   KKBindCustomChannelTextures(e, imgTR, imgCh, srcSampler, noiseTex,
                               noiseSampler);
+  KKBindCustomNeighborTextures(e, imgTR, neighborTex, srcSampler,
+                               (bufTex[0] ?: srcLin) ?: noiseTex);
   [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   [e endEncoding];
 

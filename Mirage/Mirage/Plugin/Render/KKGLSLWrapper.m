@@ -5,6 +5,7 @@
 
 #import "KKGLSLTranspiler_Internal.h"
 #import "MirageDirectives.h" // MirageParseColorProps (`// #color` block injection)
+#import "MirageFrameOffsets.h" // `// #frames` neighbour-frame samplers
 
 // GLSL body -> full core-450 GLSL. No #version (forced via the API): the
 // uniform block is all-vec4 so std140 maps 1:1 to KKGLSLUniforms; iResolution /
@@ -271,6 +272,46 @@ static void KKEmitGradientProps(NSString *userSource, NSMutableString *body,
   }
 }
 
+// `// #frames offsets="..."`: one sampler per declared offset, in declaration
+// order, at the bindings straight after iChannel0-3. The render fills each with
+// the source clip at that frame - gamma-encoded exactly as iChannel0 is, so a
+// temporal blend mixes like values instead of shifting colour.
+//
+// Emitted for the IMAGE pass only. A Buffer pass stores data a later pass
+// samples and is not the place a frame arrives; it also has no guaranteed
+// iChannel0 for `iNeighborAt` to fall back on.
+//
+// The samplers are declared but reached through `iNeighborAt(i, uv)`: a GLSL
+// sampler array cannot be indexed by a runtime value under Vulkan rules, and a
+// trail loop wants exactly that. The chained constant-index compares below give
+// the loop back, and an out-of-range index reads the current frame rather than
+// whatever the last texture unit happens to hold.
+static void KKAppendFrameSamplers(NSMutableString *s, NSString *userSource,
+                                  KKGLSLPassKind pass) {
+  if (pass != KKGLSLPassImage)
+    return;
+  MirageFrameOffsets fo = MirageFrameOffsetsForSource(userSource, NULL);
+  if (fo.count <= 0)
+    return;
+  for (int i = 0; i < fo.count; i++)
+    [s appendFormat:@"layout(binding = %d) uniform sampler2D iNeighbor%d;\n",
+                    5 + i, i];
+  [s appendFormat:@"#define iNeighborCount %d\n", fo.count];
+  NSMutableString *values = [NSMutableString string];
+  for (int i = 0; i < fo.count; i++)
+    [values appendFormat:@"%@%d", i ? @", " : @"", fo.offsets[i]];
+  [s appendFormat:@"const int kkNeighborOffsets[%d] = int[%d](%@);\n", fo.count,
+                  fo.count, values];
+  [s appendString:@"int iNeighborOffset(int kki) {\n"
+                  @"  return (kki < 0 || kki >= iNeighborCount) ? 0\n"
+                  @"       : kkNeighborOffsets[kki];\n}\n"
+                  @"vec4 iNeighborAt(int kki, vec2 kkuv) {\n"];
+  for (int i = 0; i < fo.count; i++)
+    [s appendFormat:@"  if (kki == %d) return texture(iNeighbor%d, kkuv);\n", i,
+                    i];
+  [s appendString:@"  return texture(iChannel0, kkuv);\n}\n"];
+}
+
 // The sRGB decode + core film-grain overlay every display path calls. Grain is
 // ported verbatim from MirageCommon.h so Custom grain matches the built-in
 // Types; it is applied in gamma space before encoding.
@@ -342,11 +383,10 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
     // deliberately consumes and produces those values directly; applying the
     // ordinary Shadertoy sRGB compatibility decode here would corrupt log
     // curves and wide-gamut linear outputs. Encode only for an 8-bit target.
-    [s appendString:
-           @"  vec3 rgb = max(kkColor.rgb, vec3(0.0));\n"
-           @"  rgb = (kkExtra.w == 0.0) ? rgb : kkLinearToSrgb(rgb);\n"
-           @"  float kka = clamp(kkColor.a, 0.0, 1.0);\n"
-           @"  kk_outColor = vec4(rgb * kka, kka);\n}\n"];
+    [s appendString:@"  vec3 rgb = max(kkColor.rgb, vec3(0.0));\n"
+                    @"  rgb = (kkExtra.w == 0.0) ? rgb : kkLinearToSrgb(rgb);\n"
+                    @"  float kka = clamp(kkColor.a, 0.0, 1.0);\n"
+                    @"  kk_outColor = vec4(rgb * kka, kka);\n}\n"];
     return;
   }
   // Grain in gamma/display space (screen-fixed, raw gl_FragCoord) before the
@@ -445,6 +485,7 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
       [s appendFormat:@"layout(binding = %lu) uniform sampler2D iChannel%lu;\n",
                       (unsigned long)(ch + 1), (unsigned long)ch];
   }
+  KKAppendFrameSamplers(s, userSource, pass);
   // GL-Transitions dialect. Scoped to shaders that actually declare
   // `vec4 transition(vec2 ...)`, so `progress` stays a usable local name
   // everywhere else. Emitted AFTER the sampler declarations above - these

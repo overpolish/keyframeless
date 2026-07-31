@@ -46,6 +46,11 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
+  // Paste-attributes clones the instance-id param and the inspector re-mints a
+  // fresh one; this refreshes THIS process's cached UUID so per-instance
+  // rendezvous paths follow instead of pointing at the old id forever.
+  KKInstanceUUIDHandleParameterChanged(self.apiManager, parameterID);
+
   if (parameterID == kParamUIState) {
     __block NSString *json = nil;
     KKPerformUndoable(self.apiManager, self, nil,

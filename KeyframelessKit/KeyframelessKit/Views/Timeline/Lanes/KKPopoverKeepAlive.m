@@ -5,6 +5,8 @@
 
 #import "KKPopoverKeepAlive.h"
 
+#import "KKLog.h"
+
 NSNotificationName const KKStaticValuesPopoverDidOpenNotification =
     @"KKStaticValuesPopoverDidOpenNotification";
 NSNotificationName const KKStaticValuesPopoverDidCloseNotification =
@@ -55,7 +57,14 @@ BOOL KKPopoverPointInKeepAliveWindow(NSPoint screenPoint) {
 static void KKPostPopoverOpenWhenWindowed(NSPopover *popover, id sender,
                                           NSString *kind, BOOL isBoundary,
                                           double fraction, NSInteger attempt) {
-  static const NSInteger kMaxAttempts = 20; // ~1s at kRetryDelay
+  // ~5s. `popover.isShown` is the real stop condition - this cap only bounds a
+  // popover that is shown but never lands in a window. It was ~1s, which a COLD
+  // FCP boot routinely exceeds: the whole inspector is being built for the first
+  // time, the deadline passed, and the window-less notification below then told
+  // every companion panel there was nothing to attach to. That is the long-
+  // standing "first popover after launch shows no side panel" bug, and it was
+  // never specific to one panel.
+  static const NSInteger kMaxAttempts = 100;
   static const NSTimeInterval kRetryDelay = 0.05;
   NSView *contentView = popover.contentViewController.view;
   if (!contentView.window && popover.isShown && attempt < kMaxAttempts) {
@@ -77,6 +86,15 @@ static void KKPostPopoverOpenWhenWindowed(NSPopover *popover, id sender,
                           convertRectToScreen:[contentView
                                                   convertRect:contentView.bounds
                                                        toView:nil]]];
+  } else if (contentView) {
+    // Windowless give-up. Pass the content view anyway: it is the one object
+    // that WILL acquire a window, so an observer can keep waiting on it instead
+    // of being told there is nothing to attach to. Without this the notification
+    // carried `kind` alone and every companion panel silently gave up.
+    info[@"contentView"] = contentView;
+    KKLogWarn(@"[Popover] %@ never windowed in %.1fs, companions must resolve "
+              @"the window from contentView",
+              kind ?: @"constants", kMaxAttempts * kRetryDelay);
   }
   info[@"isBoundary"] = @(isBoundary);
   info[@"fraction"] = @(fraction);

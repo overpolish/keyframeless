@@ -13,6 +13,10 @@
   BOOL _dragging;
   BOOL _toolbarDragging;
   BOOL _toolDrawing;
+  // The compare divider drag. Deliberately NOT routed through `_dragging`: that
+  // path opens the host's undo group around the delegate's value writes, and the
+  // divider writes no value at all - it is view state.
+  BOOL _compareDragging;
   NSTrackingArea *_optTrackingArea;
   BOOL _optReveal;
   // Live only while _dragging: catch the drag ticks and the mouseUp when they
@@ -84,9 +88,12 @@
   if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
       [d miniViewerToolDrawingActive:c])
     return self;
+  // The compare divider is grabbable, but it only ever wins where no parameter
+  // handle wants the point (the tie-break below and in mouseDown).
+  BOOL onDivider = [c _compareDividerGrabbableAtPoint:p];
   if (![d respondsToSelector:@selector(
                                  miniViewer:handleHitAtPoint:contentRect:)])
-    return nil;
+    return onDivider ? self : nil;
   // While a pan/zoom gesture is live, skip the per-anchor handle hit-test - a
   // two-finger scroll / pinch never targets a handle, and on a dense path this
   // call costs ~35ms, which AppKit invokes once per scroll event and was the
@@ -94,11 +101,11 @@
   // the canvas (which drives the pan) for the duration of the gesture.
   if ([c _isPanZoomGestureActive])
     return nil;
-  return [d miniViewer:c
-             handleHitAtPoint:p
-                  contentRect:[c contentRectInViewPoints]]
-             ? self
-             : nil;
+  if ([d miniViewer:c
+          handleHitAtPoint:p
+               contentRect:[c contentRectInViewPoints]])
+    return self;
+  return onDivider ? self : nil;
 }
 
 // Handles are drawn by the canvas's Metal pass (shared KKPointOSC shader).
@@ -180,6 +187,11 @@
 
 - (void)mouseDown:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
+  // A press means any earlier divider drag is over, even if its mouseUp was lost
+  // to another window (the cross-popover case the handle drag installs monitors
+  // for). Nothing is left open by a dropped divider drag, so clearing the flag
+  // is the whole recovery.
+  _compareDragging = NO;
   // Free-drawing tool (pen): route every press here (the delegate's controller
   // does its own double-click detection). The toolbar (chrome) still wins; no
   // handle-drag / auto-select / reset-view path runs.
@@ -253,6 +265,36 @@
                                     miniViewer:toolbarMouseDownAtPoint:)] &&
           [d miniViewer:c toolbarMouseDownAtPoint:tp];
       [self setNeedsDisplay:YES];
+      return;
+    }
+  }
+  // Compare divider. Checked AFTER asking the delegate whether it wants the same
+  // point, so the divider loses every tie: with a narrow grab band and the
+  // delegate given first refusal, a point OSC parked at frame centre stays
+  // grabbable with the split on - the same nearest-within-reach arbitration the
+  // colour pucks use, with the divider's reach deliberately the smaller one.
+  //
+  // Outside the onHandleDragBegin/End pair on purpose: the divider is session
+  // view state, so it must not open an undo group or write a parameter.
+  {
+    NSPoint dp = [self convertPoint:e.locationInWindow fromView:nil];
+    BOOL delegateWants =
+        [d respondsToSelector:@selector(miniViewer:handleHitAtPoint:
+                                                  contentRect:)] &&
+        [d miniViewer:c
+            handleHitAtPoint:dp
+                 contentRect:[c contentRectInViewPoints]];
+    if (!delegateWants && [c _compareDividerGrabbableAtPoint:dp]) {
+      [c endFieldEditingGrabbingFocusIfNeeded];
+      [self.window makeKeyWindow];
+      _compareDragging = YES;
+      // The SAME monitors a handle drag installs. Inside a popover this
+      // overlay's -mouseDragged: is not reliably delivered, so without them the
+      // press positioned the divider once and every subsequent movement was
+      // dropped - it looked like the line jumped a pixel and then refused to
+      // move however far you dragged.
+      [self _installDragMonitors];
+      [c _dragCompareDividerToPoint:dp];
       return;
     }
   }
@@ -332,6 +374,11 @@
     [self setNeedsDisplay:YES];
     return;
   }
+  if (_compareDragging) {
+    [c _dragCompareDividerToPoint:[self convertPoint:e.locationInWindow
+                                            fromView:nil]];
+    return;
+  }
   if (!_dragging)
     return;
   CGPoint p = [self convertPoint:e.locationInWindow fromView:nil];
@@ -367,6 +414,11 @@
     [self setNeedsDisplay:YES];
     return;
   }
+  if (_compareDragging) {
+    _compareDragging = NO;
+    [self _removeDragMonitors];
+    return;
+  }
   [self _endActiveHandleDragReason:@"mouseUp"];
 }
 
@@ -394,13 +446,23 @@
 // converted against this overlay directly.
 - (void)_dragTickAtScreenPoint:(NSPoint)screenPoint
                      modifiers:(NSEventModifierFlags)mods {
-  if (!_dragging || !self.window)
+  if (!self.window)
     return;
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   CGPoint p =
       [self convertPoint:[self.window convertPointFromScreen:screenPoint]
                 fromView:nil];
+  // The divider shares the monitors but not the handle-drag path: it talks to
+  // the view directly and opens no undo group, so it is answered here and the
+  // delegate never hears about it.
+  if (_compareDragging) {
+    [c _dragCompareDividerToPoint:p];
+    [self setNeedsDisplay:YES];
+    return;
+  }
+  if (!_dragging)
+    return;
   CGRect cr = [c contentRectInViewPoints];
   if ([d respondsToSelector:
               @selector(miniViewer:dragHandleToPoint:contentRect:modifiers:)])
@@ -532,6 +594,12 @@
              cursorAtPoint:p
                contentRect:[c contentRectInViewPoints]];
   }
+  // Only where the delegate wants nothing: the divider loses the cursor for the
+  // same reason it loses the press.
+  if (!cursor &&
+      [c _compareDividerGrabbableAtPoint:[self convertPoint:windowPoint
+                                                   fromView:nil]])
+    cursor = [NSCursor resizeLeftRightCursor];
   [(cursor ?: [NSCursor arrowCursor]) set];
 }
 

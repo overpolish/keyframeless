@@ -26,7 +26,7 @@ static id<MTLTexture> KKWatermarkTexture(id<MTLDevice> device, NSUInteger width,
   CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
   CGContextRef ctx = CGBitmapContextCreate(
       NULL, width, height, 8, width * 4, colorSpace,
-      kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+      (CGBitmapInfo)kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
   CGColorSpaceRelease(colorSpace);
   if (!ctx)
     return nil;

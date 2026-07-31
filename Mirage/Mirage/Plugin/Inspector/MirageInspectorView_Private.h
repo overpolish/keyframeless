@@ -6,6 +6,7 @@
 #pragma once
 
 #import "MirageBrowserController.h"
+#import "MirageColorPanelController.h"
 #import "MirageInspectorView.h"
 #import "MirageMiniViewerRenderer.h"
 
@@ -19,6 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
 @protected
   MirageMiniViewerRenderer *_miniViewerRenderer;
   MirageBrowserController *_browserController;
+  MirageColorPanelController *_colorPanelController;
   /// Where this clip starts in TIMELINE seconds (FCP's clock, timecode
   /// included), pushed from the render tick (the only place trims surface).
   /// Negative = not known yet.

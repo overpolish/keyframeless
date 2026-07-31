@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import "KKLog.h"
 #import "KKMiniViewerView.h"
 #import "KKOSCGlyphStyle.h"
 #import <IOSurface/IOSurface.h>
@@ -32,6 +33,12 @@ static const CGFloat kKKMiniInitialZoom = 0.85;
 // filmstrip cell counts as a click (swap the active cell on mouseUp); past it
 // the gesture is a pan and the pending swap is dropped.
 static const CGFloat kKKMiniFilmstripClickSlopPt = 3.0;
+
+// Grab reach (view points) either side of the compare divider. Deliberately
+// narrow, and the divider LOSES every tie to a parameter OSC handle under the
+// same press (see the overlay's mouseDown) - a point handle parked near frame
+// centre has to stay grabbable with the split turned on.
+static const CGFloat kKKMiniCompareGrabPt = 5.0;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -79,6 +86,11 @@ NS_ASSUME_NONNULL_BEGIN
   // the onion/filmstrip fan-out, so an index into it would move. nil unless the
   // feed publishes one. Exposed to renderers as -channel1Texture.
   _KKMiniFilmSlot *_channel1Slot;
+  // Optional AUXILIARY textures from the descriptor's `aux` array, indexed
+  // positionally by the renderer (Mirage's `// #frames` neighbour frames).
+  // Empty unless the feed publishes them. Exposed as -auxTextureCount /
+  // -auxTextureAtIndex:.
+  NSMutableArray<_KKMiniFilmSlot *> *_auxSlots;
   NSTimer *_pollTimer;
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
@@ -136,8 +148,12 @@ NS_ASSUME_NONNULL_BEGIN
   // fresh sample. Live playback evaluates the effect here instead of at the
   // frame's own tag (FCP renders a constant ~0.27s ahead of the playhead).
   double _feedPlayheadFrac;
+  // Last availability the host was told about, so the change callback fires
+  // once when the feed's first frame resolves rather than every drawn frame.
+  BOOL _compareWasAvailable;
 }
-- (CGRect)contentRectInViewPoints;
+// contentRectInViewPoints is declared PUBLICLY (KKMiniViewerView.h): a host that
+// samples the preview needs to map a click to an image position.
 - (CGSize)sourceMediaSize;
 
 // Slot/texture resolution + filmstrip geometry (main file); called by the
@@ -145,7 +161,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot
                  sid:(uint32_t)sid
                  gen:(uint64_t)gen
-                 tag:(double)tag;
+                 tag:(double)tag
+         pixelFormat:(nullable NSString *)format;
 - (NSUInteger)_activeSlotIndex;
 - (void)_syncSlot0Aliases;
 - (CGRect)_contentRectInDrawable;
@@ -168,10 +185,35 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+// Before/after compare. Geometry + the divider drag live in
+// KKMiniViewerView+Interaction.m (with the rest of the hit geometry); the
+// composite and the divider's own drawing live in KKMiniViewerView+Draw.m.
+@interface KKMiniViewerView (Compare)
+/// The two modes, already gated on availability: bypass wins over the split, so
+/// holding "before" with a split armed shows a whole ungraded frame.
+- (BOOL)_compareBypassActive;
+- (BOOL)_compareSplitActive;
+/// Divider x in view points, or -1 when no divider is drawable right now.
+- (CGFloat)_compareDividerXInViewPoints;
+/// YES if `point` (overlay view points, y-up) is inside the divider's narrow
+/// grab band. Pure hit-test - the caller arbitrates against the delegate's
+/// handles first.
+- (BOOL)_compareDividerGrabbableAtPoint:(CGPoint)point;
+- (void)_dragCompareDividerToPoint:(CGPoint)point;
+/// Fire `onCompareStateChanged` (nil-safe). Called by the setters and by the
+/// draw path when availability flips.
+- (void)_compareStateChanged;
+@end
+
 // Drawing / MTKViewDelegate. The protocol is adopted on this category (not the
 // () extension) so the primary @implementation isn't expected to provide the
 // required delegate methods - they live in KKMiniViewerView+Draw.m.
 @interface KKMiniViewerView (Draw) <MTKViewDelegate>
+/// Stroke the compare divider across the content rect. No-op unless the split is
+/// active and there's an ungraded frame to split against.
+- (void)_encodeCompareDividerInContentRect:(CGRect)contentRect
+                                   encoder:
+                                       (id<MTLRenderCommandEncoder>)encoder;
 @end
 
 // Tool-overlay primitive batching. Implemented in KKMiniViewerView+ToolBatch.m

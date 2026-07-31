@@ -24,6 +24,12 @@ static const NSUInteger kTargetLongEdge = 2048;
 // and the mini viewer would stay stale until the next render frame fired.
 static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
 
+// Trailing-edge delay for the coalesced republish. Half a 60fps frame: long
+// enough that every surface update completing within one render tick folds into
+// one write, short enough to stay far inside the consumer's poll period (~16ms
+// live, ~66ms idle) so the descriptor is never the stale link.
+static const NSTimeInterval kPublishCoalesceInterval = 1.0 / 120.0;
+
 // One IOSurface + texture + bookkeeping per filmstrip frame. Slot 0 is the
 // single-slot default; onion-skin enlarges the array.
 @interface _KKMiniFeedSlot : NSObject
@@ -51,6 +57,19 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
              : @"bgra8";
 }
 
+// How one surface is described to a consumer. Every published entry - slot,
+// channel 1, aux - carries exactly these keys, so a consumer resolves any of
+// them the same way.
+static NSDictionary *KKMiniFeedSlotEntry(_KKMiniFeedSlot *slot) {
+  return @{
+    @"ioSurfaceID" : @((uint32_t)IOSurfaceGetID(slot.surface)),
+    @"width" : @(slot.dstW),
+    @"height" : @(slot.dstH),
+    @"generation" : @(slot.generation),
+    @"pixelFormat" : KKMiniFeedFormatName(slot),
+  };
+}
+
 @implementation KKMiniViewerFeed {
   NSString *_descriptorPath;
   NSMutableArray<_KKMiniFeedSlot *> *_slots;
@@ -60,7 +79,15 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
   // shift under a consumer's feet. Published as its own descriptor key, absent
   // when nil, so feeds that never set it are byte-identical to before.
   _KKMiniFeedSlot *_channel1;
+  // Auxiliary textures: extra whole frames a consumer indexes POSITIONALLY,
+  // outside both existing shapes (slots = one source at many times, channel 1 =
+  // a single fixed second source). Published as its own `aux` array, absent
+  // when empty, so a feed that never fills it is unchanged.
+  NSMutableArray<_KKMiniFeedSlot *> *_auxSlots;
   MPSImageBilinearScale *_scaler;
+  // Republish coalescing (see -_schedulePublishLocked).
+  BOOL _publishDirty;
+  BOOL _publishScheduled;
 }
 
 - (instancetype)initWithDescriptorPath:(NSString *)descriptorPath {
@@ -70,6 +97,7 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
     _playheadFrac = -1.0; // unknown until a playing render tick sets it
     _slots = [NSMutableArray array];
     [_slots addObject:[[_KKMiniFeedSlot alloc] init]];
+    _auxSlots = [NSMutableArray array];
   }
   return self;
 }
@@ -93,6 +121,32 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
   }
 }
 
+- (NSUInteger)auxTextureCount {
+  @synchronized(self) {
+    return _auxSlots.count;
+  }
+}
+
+- (void)setAuxTextureCount:(NSUInteger)auxTextureCount {
+  @synchronized(self) {
+    if (_auxSlots.count == auxTextureCount)
+      return;
+    while (_auxSlots.count < auxTextureCount)
+      [_auxSlots addObject:[[_KKMiniFeedSlot alloc] init]];
+    while (_auxSlots.count > auxTextureCount)
+      [_auxSlots removeLastObject];
+    KKLogDebug(@"[MiniFeed] aux count -> %lu",
+               (unsigned long)_auxSlots.count);
+  }
+}
+
+- (CGSize)primarySourceSize {
+  @synchronized(self) {
+    _KKMiniFeedSlot *first = _slots.firstObject;
+    return CGSizeMake((CGFloat)first.srcW, (CGFloat)first.srcH);
+  }
+}
+
 - (void)_computeDstForSrcW:(NSUInteger)sw
                          h:(NSUInteger)sh
                       slot:(_KKMiniFeedSlot *)slot {
@@ -105,6 +159,30 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
   NSUInteger h = (NSUInteger)lround((double)sh * scale);
   slot.dstW = MAX(w & ~1u, 2u); // keep even
   slot.dstH = MAX(h & ~1u, 2u);
+}
+
+// The backing surface for one preview slot, at the element size and pixel format
+// the linear-float / display-encoded choice implies. Returns NULL (and logs) when
+// the surface could not be made.
+static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
+                                            BOOL linearFloat) {
+  size_t bytesPerElement = linearFloat ? 8 : 4;
+  OSType surfaceFormat =
+      linearFloat ? kCVPixelFormatType_64RGBAHalf : (OSType)'BGRA';
+  size_t bpr =
+      IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, w * bytesPerElement);
+  NSDictionary *props = @{
+    (id)kIOSurfaceWidth : @(w),
+    (id)kIOSurfaceHeight : @(h),
+    (id)kIOSurfaceBytesPerElement : @(bytesPerElement),
+    (id)kIOSurfaceBytesPerRow : @(bpr),
+    (id)kIOSurfacePixelFormat : @((uint32_t)surfaceFormat),
+  };
+  IOSurfaceRef surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
+  if (!surface)
+    KKLogError(@"KKMiniViewerFeed: IOSurfaceCreate failed (%lux%lu)",
+               (unsigned long)w, (unsigned long)h);
+  return surface;
 }
 
 - (BOOL)_ensureSurfaceForSlot:(_KKMiniFeedSlot *)slot
@@ -126,24 +204,10 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
     slot.surface = NULL;
   }
 
-  size_t bytesPerElement = self.linearFloat ? 8 : 4;
-  OSType surfaceFormat =
-      self.linearFloat ? kCVPixelFormatType_64RGBAHalf : (OSType)'BGRA';
-  size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow,
-                                      slot.dstW * bytesPerElement);
-  NSDictionary *props = @{
-    (id)kIOSurfaceWidth : @(slot.dstW),
-    (id)kIOSurfaceHeight : @(slot.dstH),
-    (id)kIOSurfaceBytesPerElement : @(bytesPerElement),
-    (id)kIOSurfaceBytesPerRow : @(bpr),
-    (id)kIOSurfacePixelFormat : @((uint32_t)surfaceFormat),
-  };
-  slot.surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
-  if (!slot.surface) {
-    KKLogError(@"KKMiniViewerFeed: IOSurfaceCreate failed (%lux%lu)",
-               (unsigned long)slot.dstW, (unsigned long)slot.dstH);
+  slot.surface =
+      KKMiniFeedCreateSurface(slot.dstW, slot.dstH, self.linearFloat);
+  if (!slot.surface)
     return NO;
-  }
 
   // The default feed display-encodes FCP's linear source through an sRGB-typed
   // BGRA8 target. Technical color transforms instead retain the linear float
@@ -176,13 +240,41 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
 - (NSDictionary *)_channel1EntryLocked {
   if (!_channel1 || !_channel1.surface)
     return nil;
-  return @{
-    @"ioSurfaceID" : @((uint32_t)IOSurfaceGetID(_channel1.surface)),
-    @"width" : @(_channel1.dstW),
-    @"height" : @(_channel1.dstH),
-    @"generation" : @(_channel1.generation),
-    @"pixelFormat" : KKMiniFeedFormatName(_channel1),
-  };
+  return KKMiniFeedSlotEntry(_channel1);
+}
+
+// The `aux` array, or nil when there is nothing to publish. All-or-nothing: a
+// half-filled array would shift a positional consumer onto the wrong entries,
+// and a consumer that sees no `aux` has a defined fallback, so publishing a
+// partial one is strictly worse than publishing none.
+- (NSArray *)_auxEntriesLocked {
+  if (_auxSlots.count == 0)
+    return nil;
+  NSMutableArray *entries = [NSMutableArray arrayWithCapacity:_auxSlots.count];
+  for (_KKMiniFeedSlot *s in _auxSlots) {
+    if (!s.surface)
+      return nil;
+    [entries addObject:KKMiniFeedSlotEntry(s)];
+  }
+  return entries;
+}
+
+// Attach the optional second-texture keys, serialize and write. Both publish
+// shapes - the generator's dimensions-only document and the full one - carry the
+// same `channel1` / `aux` entries, absent when nothing has published them.
+- (void)_writeDescriptorLocked:(NSMutableDictionary *)desc {
+  NSDictionary *ch1 = [self _channel1EntryLocked];
+  if (ch1)
+    desc[@"channel1"] = ch1;
+  NSArray *aux = [self _auxEntriesLocked];
+  if (aux)
+    desc[@"aux"] = aux;
+  NSData *json = [NSJSONSerialization dataWithJSONObject:desc
+                                                 options:0
+                                                   error:nil];
+  BOOL wrote = [json writeToFile:_descriptorPath atomically:YES];
+  if (!wrote)
+    KKLogWarn(@"KKMiniViewerFeed: failed to write %@", _descriptorPath);
 }
 
 - (void)_publishLocked {
@@ -190,14 +282,9 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
   for (_KKMiniFeedSlot *s in _slots) {
     if (!s.surface)
       continue;
-    [slotEntries addObject:@{
-      @"ioSurfaceID" : @((uint32_t)IOSurfaceGetID(s.surface)),
-      @"width" : @(s.dstW),
-      @"height" : @(s.dstH),
-      @"generation" : @(s.generation),
-      @"tag" : @(s.tag),
-      @"pixelFormat" : KKMiniFeedFormatName(s),
-    }];
+    NSMutableDictionary *entry = [KKMiniFeedSlotEntry(s) mutableCopy];
+    entry[@"tag"] = @(s.tag);
+    [slotEntries addObject:entry];
   }
   if (slotEntries.count == 0) {
     // Generator: no source frames, but publish the output media size so a
@@ -211,14 +298,7 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
         @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
         @"slots" : @[],
       } mutableCopy];
-      NSDictionary *ch1 = [self _channel1EntryLocked];
-      if (ch1)
-        dimsOnly[@"channel1"] = ch1;
-      NSData *json = [NSJSONSerialization dataWithJSONObject:dimsOnly
-                                                     options:0
-                                                       error:nil];
-      if (![json writeToFile:_descriptorPath atomically:YES])
-        KKLogWarn(@"KKMiniViewerFeed: failed to write %@", _descriptorPath);
+      [self _writeDescriptorLocked:dimsOnly];
     }
     return;
   }
@@ -239,20 +319,48 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
     @"playheadFrac" : @(_playheadFrac),
     @"slots" : slotEntries,
   } mutableCopy];
-  NSDictionary *ch1 = [self _channel1EntryLocked];
-  if (ch1)
-    desc[@"channel1"] = ch1;
-  NSData *json = [NSJSONSerialization dataWithJSONObject:desc
-                                                 options:0
-                                                   error:nil];
-  if (![json writeToFile:_descriptorPath atomically:YES])
-    KKLogWarn(@"KKMiniViewerFeed: failed to write %@", _descriptorPath);
+  [self _writeDescriptorLocked:desc];
 }
 
 - (void)publishDescriptor {
   @synchronized(self) {
     [self _publishLocked];
   }
+}
+
+// Coalesce the post-update republish. The descriptor is a WHOLE-FEED snapshot,
+// so N surface updates completing inside one render tick used to serialise and
+// atomically write N copies of the same document - source plus one per aux
+// texture, measured at ~2.7 writes per tick and ~160 temp-file+rename pairs a
+// second across two instances during playback. One trailing write per burst
+// carries exactly the same information.
+//
+// Trailing edge, not leading: the LAST update in a burst is the one whose
+// generations the consumer needs, and a leading-edge throttle would drop it and
+// leave the mini a frame behind whenever playback stopped. The dirty flag makes
+// the coalesce lossless - any update that lands while a write is pending is
+// covered by that pending write. Caller holds the lock.
+- (void)_schedulePublishLocked {
+  _publishDirty = YES;
+  if (_publishScheduled)
+    return;
+  _publishScheduled = YES;
+  __weak typeof(self) weakSelf = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW,
+                    (int64_t)(kPublishCoalesceInterval * NSEC_PER_SEC)),
+      dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        KKMiniViewerFeed *strong = weakSelf;
+        if (!strong)
+          return;
+        @synchronized(strong) {
+          strong->_publishScheduled = NO;
+          if (!strong->_publishDirty)
+            return;
+          strong->_publishDirty = NO;
+          [strong _publishLocked];
+        }
+      });
 }
 
 - (void)_encodeUpdateForSlot:(_KKMiniFeedSlot *)slot
@@ -281,7 +389,7 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
   slot.lastUpdate = [NSDate timeIntervalSinceReferenceDate];
   [cb addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull done) {
     @synchronized(self) {
-      [self _publishLocked];
+      [self _schedulePublishLocked];
     }
   }];
   [cb commit];
@@ -322,6 +430,27 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
     [self _encodeUpdateForSlot:slot
                  sourceTexture:sourceTexture
                            tag:tag
+                        device:device
+                  commandQueue:commandQueue];
+  }
+}
+
+- (void)updateAuxTexture:(id<MTLTexture>)sourceTexture
+                 atIndex:(NSUInteger)index
+                  device:(id<MTLDevice>)device
+            commandQueue:(id<MTLCommandQueue>)commandQueue {
+  if (!sourceTexture || !device || !commandQueue)
+    return;
+  @synchronized(self) {
+    if (index >= _auxSlots.count)
+      return;
+    _KKMiniFeedSlot *slot = _auxSlots[index];
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    if (now - slot.lastUpdate < kMinUpdateInterval)
+      return;
+    [self _encodeUpdateForSlot:slot
+                 sourceTexture:sourceTexture
+                           tag:0.0
                         device:device
                   commandQueue:commandQueue];
   }

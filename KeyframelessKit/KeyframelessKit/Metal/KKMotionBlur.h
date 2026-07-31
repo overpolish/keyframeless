@@ -178,6 +178,28 @@ typedef struct {
                                   NSArray<id<MTLTexture>> *inputTextures))
                             renderBlock;
 
+/// As above, on a CALLER-SUPPLIED queue.
+///
+/// For a render that already submitted work this pass must run after (a
+/// multi-pass chain's buffer passes). Command buffers on one queue execute in
+/// commit order, so the caller commits its earlier work WITHOUT waiting, hands
+/// the same queue here, and this call's single wait covers both. Two queues
+/// checked out of the shared cache are interchangeable objects with no ordering
+/// between them, so it must be the same object.
+///
+/// A supplied queue is NOT returned to the cache - the caller owns it. Pass nil
+/// to check one out and return it, which is what the variant above does.
++ (BOOL)applyToDestinationImage:(FxImageTile *)destinationImage
+                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                          state:(KKMotionBlurState)state
+                     renderTime:(CMTime)renderTime
+                   commandQueue:(nullable id<MTLCommandQueue>)commandQueue
+                    renderBlock:
+                        (BOOL (^)(int sampleIndex, id<MTLTexture> sampleDest,
+                                  id<MTLCommandBuffer> commandBuffer,
+                                  NSArray<id<MTLTexture>> *inputTextures))
+                            renderBlock;
+
 @end
 
 NS_ASSUME_NONNULL_END

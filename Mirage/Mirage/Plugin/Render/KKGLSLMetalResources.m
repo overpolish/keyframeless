@@ -217,8 +217,8 @@ static id<MTLRenderPipelineState> KKGammaPipeline(id<MTLDevice> device,
                       [lib newFunctionWithName:(decode ? @"kkGammaDecodeFS"
                                                        : @"kkGammaFS")];
                   if (!vfn || !ffn) {
-                    KKLogError(@"[Custom] gamma-convert shader build failed: %@",
-                               err);
+                    KKLogError(
+                        @"[Custom] gamma-convert shader build failed: %@", err);
                     return nil;
                   }
                   MTLRenderPipelineDescriptor *desc =
@@ -243,19 +243,44 @@ static id<MTLTexture> KKGammaConvertOnBuffer(id<MTLCommandBuffer> commandBuffer,
   if (!commandBuffer || !src)
     return src;
   id<MTLDevice> device = commandBuffer.device;
-  id<MTLRenderPipelineState> ps = KKGammaPipeline(device, decode);
-  if (!ps)
+  if (!KKGammaPipeline(device, decode))
     return src;
+  id<MTLTexture> dst =
+      KKGammaConvertDestinationTexture(device, src.width, src.height);
+  if (!dst)
+    return src;
+  return KKGammaConvertOnBufferInto(commandBuffer, src, dst, decode) ? dst
+                                                                     : src;
+}
+
+BOOL KKGammaPipelineAvailable(id<MTLDevice> device, BOOL decode) {
+  return device != nil && KKGammaPipeline(device, decode) != nil;
+}
+
+id<MTLTexture> KKGammaConvertDestinationTexture(id<MTLDevice> device,
+                                                NSUInteger width,
+                                                NSUInteger height) {
+  if (!device || width == 0 || height == 0)
+    return nil;
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Float
-                                   width:src.width
-                                  height:src.height
+                                   width:width
+                                  height:height
                                mipmapped:NO];
   td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   td.storageMode = MTLStorageModePrivate;
-  id<MTLTexture> dst = [device newTextureWithDescriptor:td];
-  if (!dst)
-    return src;
+  return [device newTextureWithDescriptor:td];
+}
+
+BOOL KKGammaConvertOnBufferInto(id<MTLCommandBuffer> commandBuffer,
+                                id<MTLTexture> src, id<MTLTexture> dst,
+                                BOOL decode) {
+  if (!commandBuffer || !src || !dst)
+    return NO;
+  id<MTLDevice> device = commandBuffer.device;
+  id<MTLRenderPipelineState> ps = KKGammaPipeline(device, decode);
+  if (!ps)
+    return NO;
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
   rpd.colorAttachments[0].texture = dst;
   rpd.colorAttachments[0].loadAction = MTLLoadActionDontCare;
@@ -269,7 +294,7 @@ static id<MTLTexture> KKGammaConvertOnBuffer(id<MTLCommandBuffer> commandBuffer,
   [e setFragmentSamplerState:KKGammaEncodeSampler(device) atIndex:0];
   [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   [e endEncoding];
-  return dst;
+  return YES;
 }
 
 static id<MTLTexture> KKGammaConvert(id<MTLCommandQueue> queue,
@@ -340,6 +365,30 @@ void KKBindCustomChannels(id<MTLRenderCommandEncoder> encoder,
           (useSource && sourceSampler) ? sourceSampler : sampler;
       [encoder setFragmentSamplerState:smp atIndex:(NSUInteger)si];
     }
+  }
+}
+
+void KKBindCustomNeighborTextures(id<MTLRenderCommandEncoder> encoder,
+                                  KKGLSLTranspileResult *tr,
+                                  NSArray *frameTextures,
+                                  id<MTLSamplerState> sampler,
+                                  id<MTLTexture> fallback) {
+  for (NSUInteger i = 0; i < (NSUInteger)tr.neighborCount; i++) {
+    NSInteger ti = [tr textureIndexForNeighbor:i];
+    if (ti == NSNotFound)
+      continue;
+    id entry = (i < frameTextures.count) ? frameTextures[i] : (id)[NSNull null];
+    id<MTLTexture> tex =
+        (entry != [NSNull null]) ? (id<MTLTexture>)entry : fallback;
+    // A declared-but-unbound sampler aborts under Metal API Validation, and the
+    // caller always has a current frame to stand in for a slot FCP could not
+    // fill, so there is nothing to skip for.
+    if (!tex)
+      continue;
+    [encoder setFragmentTexture:tex atIndex:(NSUInteger)ti];
+    NSInteger si = [tr samplerIndexForNeighbor:i];
+    if (si != NSNotFound && sampler)
+      [encoder setFragmentSamplerState:sampler atIndex:(NSUInteger)si];
   }
 }
 

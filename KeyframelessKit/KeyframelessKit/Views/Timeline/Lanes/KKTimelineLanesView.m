@@ -1144,10 +1144,24 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 - (void)setPlayheadFraction:(double)frac {
   [_basicGraph setPlayheadFraction:frac];
   [_advancedGraph setPlayheadFraction:frac];
+  // Keypose popover open + playhead moving: re-request the keypose frame once
+  // the playhead settles, so the preview pings back to the keypose instead of
+  // staying on whatever frame the scrub or playback stopped at.
+  [self _scheduleBoundaryPingBackForPlayheadFraction:frac];
 }
 
 - (double)playheadFraction {
   return _basicGraph.playheadFraction;
+}
+
+- (double)staticPopoverEditFraction {
+  if (_openStaticIsBoundary)
+    return MAX(0.0, MIN(1.0, _openStaticBoundaryFraction));
+  // A constants popover previews at the live playhead, so that is the time its
+  // values are being read at. Negative means the render tick has not pushed a
+  // playhead yet, which reads as the start of the clip.
+  double frac = self.playheadFraction;
+  return frac < 0.0 ? 0.0 : MIN(1.0, frac);
 }
 
 - (void)resetZoom {

@@ -118,6 +118,13 @@ NS_ASSUME_NONNULL_BEGIN
   // mid-interaction (add/remove already refresh themselves). External changes
   // (cmd-Z) land outside the window → they refresh.
   NSTimeInterval _boundaryRedriveSuppressUntil;
+  // Ping-back after the playhead settles with a keypose popover open. Playhead
+  // renders rightly take over the mini viewer while the user scrubs or plays;
+  // once the pushes stop, the LAST scheduled debounce fires and re-requests the
+  // keypose frame. The generation counter is the debounce: every push
+  // supersedes the pending one.
+  NSInteger _boundaryPingBackGeneration;
+  double _boundaryPingBackLastFrac;
   // Open hold-modulation popover plumbing: weak editor + a rebuilder
   // closure supplied by the host (Basic/Advanced) so external timeline
   // changes (e.g. cmd-Z) can push fresh participation states into the
@@ -395,6 +402,7 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 /// updates live instead of waiting for a close/reopen or a nav. No-op when no
 /// boundary popover is open or render mode is Off.
 - (void)_republishBoundaryRequestIfOpen;
+- (void)_scheduleBoundaryPingBackForPlayheadFraction:(double)frac;
 @end
 
 // Config + presenter for the unified static-values popover (the constants

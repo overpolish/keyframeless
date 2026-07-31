@@ -70,6 +70,26 @@ static inline NSString *MirageCategoryNormalize(NSString *_Nullable raw) {
   return kMirageCategoryDefault;
 }
 
+/// Whether a shader belongs under `filterID` in the browser.
+///
+/// Membership is not just its declared type. A `filter` that declares a colour
+/// surface (`// #color-surface`) IS a colour tool, it exists to grade, so it
+/// belongs beside Color Transform when someone narrows the browser to colour work. A
+/// filter without one does not: a CRT or a blur processes the clip but has nothing
+/// to do with colour, and burying the colour tools among them is what makes the
+/// filter category useless for finding them.
+///
+/// One-directional on purpose: a colour-transform template does not show up under
+/// `filter`, because its type is the more specific answer.
+static inline BOOL MirageCategoryMatchesFilter(NSString *_Nullable category,
+                                               BOOL hasColorSurface,
+                                               NSString *filterID) {
+  if ([MirageCategoryNormalize(category) isEqualToString:filterID])
+    return YES;
+  return hasColorSurface &&
+         [filterID isEqualToString:kMirageCategoryColorTransform];
+}
+
 /// The SF Symbol that stands for a category on a card badge / filter row.
 static inline NSString *MirageCategorySymbol(NSString *_Nullable categoryID) {
   NSString *c = MirageCategoryNormalize(categoryID);

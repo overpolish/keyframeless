@@ -99,6 +99,15 @@ typedef enum KKGLSLPassKind {
 // iChannel<ch>, or NSNotFound when that channel is unused.
 - (NSInteger)textureIndexForChannel:(NSUInteger)ch;
 - (NSInteger)samplerIndexForChannel:(NSUInteger)ch;
+// How many `// #frames` neighbour samplers (iNeighbor0..N-1) the wrapped shader
+// declares. 0 for a shader with no `#frames` directive, and for every Buffer
+// pass. The render binds this many time-shifted source frames, in the order the
+// directive listed its offsets.
+@property(nonatomic) NSInteger neighborCount;
+// Same as the channel pair, for iNeighbor<i>. NSNotFound when the shader
+// declared the offset but never sampled it (SPIRV-Cross strips it).
+- (NSInteger)textureIndexForNeighbor:(NSUInteger)i;
+- (NSInteger)samplerIndexForNeighbor:(NSUInteger)i;
 @end
 
 // Transpile a GLSL image-shader body (mainImage + helpers +
@@ -181,6 +190,28 @@ id<MTLTexture> _Nullable KKGammaDecodeSourceTextureOnBuffer(
     id<MTLCommandBuffer> commandBuffer, id<MTLTexture> _Nullable src);
 id<MTLTexture> _Nullable KKGammaDecodeSourceTexture(
     id<MTLCommandQueue> queue, id<MTLTexture> _Nullable src);
+// A destination for the gamma conversion, with exactly the descriptor the
+// allocating variants above use. Exposed so a caller that converts the SAME
+// sources every frame (a `// #frames` shader's neighbours) can hold one per
+// slot and reuse it instead of allocating a full-resolution RGBA16Float per
+// texture per frame.
+id<MTLTexture> _Nullable KKGammaConvertDestinationTexture(id<MTLDevice> device,
+                                                          NSUInteger width,
+                                                          NSUInteger height);
+// Encode the conversion into a CALLER-OWNED destination, returning NO when the
+// pipeline is unavailable (the caller then binds the source unconverted, as the
+// allocating variants do). Encodes one render pass onto `commandBuffer` and
+// never waits, so a caller can batch many conversions into one buffer and pay a
+// single round trip. The allocating variants are implemented on top of this, so
+// the two cannot drift.
+BOOL KKGammaConvertOnBufferInto(id<MTLCommandBuffer> commandBuffer,
+                                id<MTLTexture> src, id<MTLTexture> dst,
+                                BOOL decode);
+// Whether the conversion pipeline exists on `device`. A caller that PLANS
+// conversions before it has a command buffer asks first, so a missing pipeline
+// makes it bind the sources unconverted - the same outcome the allocating
+// variants produce - instead of binding a destination nothing wrote into.
+BOOL KKGammaPipelineAvailable(id<MTLDevice> device, BOOL decode);
 // Bind textures to every channel `tr` uses, at the MSL indices SPIRV-Cross
 // assigned. iChannel0 gets `source` (the effect's clip) when non-nil, falling
 // back to `noise`; iChannel1-3 always get `noise`.
@@ -198,6 +229,16 @@ void KKBindCustomChannelTextures(id<MTLRenderCommandEncoder> encoder,
                                  id<MTLSamplerState> _Nullable sampler,
                                  id<MTLTexture> noise,
                                  id<MTLSamplerState> noiseSampler);
+// Bind the `// #frames` neighbour samplers (iNeighbor0..N-1). `frameTextures`
+// is in DIRECTIVE ORDER, one entry per declared offset; a short array or an
+// NSNull entry (a frame FCP could not deliver) binds `fallback`, which the
+// caller sets to the CURRENT frame so a temporal read clamps at the clip edge
+// rather than sampling black. Same clamp/linear sampler as iChannel0.
+void KKBindCustomNeighborTextures(id<MTLRenderCommandEncoder> encoder,
+                                  KKGLSLTranspileResult *tr,
+                                  NSArray *frameTextures,
+                                  id<MTLSamplerState> _Nullable sampler,
+                                  id<MTLTexture> _Nullable fallback);
 #ifdef __cplusplus
 }
 #endif

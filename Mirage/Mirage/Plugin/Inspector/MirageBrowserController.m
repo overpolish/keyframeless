@@ -5,6 +5,7 @@
 
 #import "MirageBrowserController.h"
 #import "MirageBrowserView.h"
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
@@ -184,14 +185,21 @@ static const CGFloat kSlideDistance = 12.0;
       [kind isEqualToString:@"osc"] || [kind isEqualToString:@"appliesTo"])
     return;
   NSWindow *popoverWindow = note.userInfo[@"window"];
+  NSView *contentView = note.userInfo[@"contentView"];
+  // A cold boot can deliver this before the popover has a window at all, and
+  // bailing here was one of the two ways the browser failed to appear on the
+  // first open. The content view is enough to wait on - it is what acquires the
+  // window - so only give up when there is neither.
   if (![popoverWindow isKindOfClass:[NSWindow class]])
+    popoverWindow = nil;
+  if (!popoverWindow && ![contentView isKindOfClass:[NSView class]])
     return;
   NSValue *cardVal = note.userInfo[@"contentRect"];
   NSRect card = cardVal ? cardVal.rectValue : popoverWindow.frame;
-  _popoverContentView = note.userInfo[@"contentView"];
+  _popoverContentView = contentView;
   _parentWindow = popoverWindow;
 
-  [self _showWhenVisible:popoverWindow card:card attempt:0];
+  [self _showWhenVisibleWithCard:card attempt:0];
 }
 
 // Wait for the popover window to actually be on screen, then show beside it.
@@ -202,24 +210,34 @@ static const CGFloat kSlideDistance = 12.0;
 // browser hidden until the user closed and reopened (by which point the window
 // was warm and made the deadline). Bounded so a popover that never appears
 // stops the chain instead of polling forever.
-- (void)_showWhenVisible:(NSWindow *)popoverWindow
-                    card:(NSRect)card
-                 attempt:(NSInteger)attempt {
-  static const NSInteger kMaxAttempts = 20; // ~2s at kShowDelay
+// The window is re-read from the CONTENT VIEW on every attempt, and the retry
+// runs long enough to outlast a cold boot. Holding the window handed over at
+// open time meant waiting on one that might never show (or might not exist yet),
+// and a 2s ceiling expired well before FCP had the first popover on screen -
+// either way the browser stayed hidden until the popover was closed and
+// reopened, by which point the window was warm and made the deadline.
+- (void)_showWhenVisibleWithCard:(NSRect)card attempt:(NSInteger)attempt {
+  static const NSInteger kMaxAttempts = 100; // ~10s at kShowDelay
+  NSView *pending = _popoverContentView;
+  NSWindow *window = pending.window ?: _parentWindow;
+  if (window.isVisible) {
+    _parentWindow = window;
+    [self _showBesideCard:card ofWindow:window];
+    return;
+  }
+  if (attempt + 1 >= kMaxAttempts) {
+    KKLogWarn(@"[Browser] popover never became visible, no panel");
+    return;
+  }
   __weak typeof(self) weak = self;
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kShowDelay * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
         __strong typeof(weak) s = weak;
         // A different popover took over (or this one closed): abandon quietly.
-        if (!s || s->_parentWindow != popoverWindow)
+        if (!s || s->_popoverContentView != pending)
           return;
-        if (!popoverWindow.isVisible) {
-          if (attempt + 1 < kMaxAttempts)
-            [s _showWhenVisible:popoverWindow card:card attempt:attempt + 1];
-          return;
-        }
-        [s _showBesideCard:card ofWindow:popoverWindow];
+        [s _showWhenVisibleWithCard:card attempt:attempt + 1];
       });
 }
 

@@ -195,10 +195,10 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 @end
 
 /// Multi-section (tabbed) editing + formatting. Declared as a category because
-/// these are implemented in KKCodeEditorView+Sections.m / +Validation.m, not
-/// the primary @implementation - keeping them here (vs the main @interface)
-/// silences the -Wincomplete-implementation / -Wobjc-protocol-method
-/// pair while staying public API.
+/// these are implemented in KKCodeEditorView+Sections.m / +Validation.m rather
+/// than the primary implementation - keeping them here, instead of in the main
+/// class interface, silences the -Wincomplete-implementation /
+/// -Wobjc-protocol-method pair while staying public API.
 @interface KKCodeEditorView (Sections)
 
 /// Multi-section (tabbed) editing. Each section is

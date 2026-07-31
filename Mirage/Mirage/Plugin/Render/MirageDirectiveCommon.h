@@ -74,6 +74,26 @@ static inline NSString *MirageAttrString(NSString *s, NSString *key) {
   return [s substringWithRange:[m rangeAtIndex:1]];
 }
 
+/// An UNQUOTED word attribute (`key=value`), or nil when absent. Hyphens count
+/// as part of the value, so an enum like `space=linear-rec709` arrives whole
+/// rather than truncated at the hyphen the way `\w+` would leave it.
+static inline NSString *MirageAttrWord(NSString *s, NSString *key) {
+  if (!s.length)
+    return nil;
+  NSString *pat =
+      [NSString stringWithFormat:@"\\b%@\\s*=\\s*([A-Za-z0-9_][\\w-]*)", key];
+  NSTextCheckingResult *m =
+      [[NSRegularExpression regularExpressionWithPattern:pat
+                                                 options:0
+                                                   error:nil]
+          firstMatchInString:s
+                     options:0
+                       range:NSMakeRange(0, s.length)];
+  if (!m || [m rangeAtIndex:1].location == NSNotFound)
+    return nil;
+  return [s substringWithRange:[m rangeAtIndex:1]];
+}
+
 /// Whether `word` appears as a bare directive flag. Quoted attribute values are
 /// ignored, so labels and option names cannot accidentally enable behaviour.
 static inline BOOL MirageAttrHasBareFlag(NSString *attrs, NSString *word) {
@@ -142,23 +162,27 @@ static NSString *const kMirageDefaultGroupSymbol = @"slider.horizontal.3";
 static NSString *const kMirageShaderCategory = @"Shader";
 static NSString *const kMirageColorCategory = @"Colors";
 
-/// Parse a `group=` attribute into its display name and optional SF Symbol.
-/// Accepts the braced pair `group={"Glow Options", "sparkles"}` (the symbol is
-/// optional) and the bare `group="Glow Options"`. The quoted strings are pulled
-/// out in order rather than split on commas, so a group name may contain one.
-/// Absent attribute = both buffers left as they were (the caller's default).
-static inline void MirageParseGroupAttr(NSString *attrs, char *outGroup,
-                                        size_t groupSize, char *outSymbol,
-                                        size_t symbolSize) {
-  if (!attrs.length)
+/// Parse a `name={"Display Name", "sf.symbol"}` attribute into its two parts.
+/// Accepts the braced pair (the symbol is optional) and the bare
+/// `name="Display Name"`. The quoted strings are pulled out in order rather
+/// than split on commas, so a name may contain one. Absent attribute = both
+/// buffers left as they were (the caller's default). `group=` and `puck=` share
+/// this shape, so they share this parse.
+static inline void MirageParseNamedPairAttr(NSString *attrs, NSString *key,
+                                            char *outName, size_t nameSize,
+                                            char *outSymbol,
+                                            size_t symbolSize) {
+  if (!attrs.length || !key.length)
     return;
-  NSTextCheckingResult *m = [[NSRegularExpression
-      regularExpressionWithPattern:@"\\bgroup\\s*=\\s*(\\{[^}]*\\}|\"[^\"]*\")"
-                           options:0
-                             error:nil]
-      firstMatchInString:attrs
-                 options:0
-                   range:NSMakeRange(0, attrs.length)];
+  NSString *pattern = [NSString
+      stringWithFormat:@"\\b%@\\s*=\\s*(\\{[^}]*\\}|\"[^\"]*\")", key];
+  NSTextCheckingResult *m =
+      [[NSRegularExpression regularExpressionWithPattern:pattern
+                                                 options:0
+                                                   error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
   if (!m || [m rangeAtIndex:1].location == NSNotFound)
     return;
   NSString *body = [attrs substringWithRange:[m rangeAtIndex:1]];
@@ -175,10 +199,17 @@ static inline void MirageParseGroupAttr(NSString *attrs, char *outGroup,
     if (!t.length)
       continue;
     if (k == 0)
-      strncpy(outGroup, t.UTF8String ?: "", groupSize - 1);
+      strncpy(outName, t.UTF8String ?: "", nameSize - 1);
     else
       strncpy(outSymbol, t.UTF8String ?: "", symbolSize - 1);
   }
+}
+
+static inline void MirageParseGroupAttr(NSString *attrs, char *outGroup,
+                                        size_t groupSize, char *outSymbol,
+                                        size_t symbolSize) {
+  MirageParseNamedPairAttr(attrs, @"group", outGroup, groupSize, outSymbol,
+                           symbolSize);
 }
 
 /// Fallback shared-params block (timing + grain). `origin`/`scale`/`rotation`

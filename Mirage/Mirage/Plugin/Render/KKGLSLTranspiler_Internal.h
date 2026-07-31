@@ -76,6 +76,8 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
 @interface KKGLSLTranspileResult (Internal)
 // Record the MSL texture/sampler indices SPIRV-Cross assigned to iChannel<ch>.
 - (void)setTexture:(NSInteger)t sampler:(NSInteger)sm forChannel:(NSUInteger)ch;
+// Same, for a `// #frames` neighbour sampler iNeighbor<i>.
+- (void)setTexture:(NSInteger)t sampler:(NSInteger)sm forNeighbor:(NSUInteger)i;
 @end
 
 NS_ASSUME_NONNULL_END

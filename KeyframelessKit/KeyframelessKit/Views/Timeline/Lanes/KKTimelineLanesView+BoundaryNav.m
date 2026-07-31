@@ -317,6 +317,45 @@
     self.onGuideMiniViewerSizeChanged(sizeIndex);
 }
 
+// Scrub or playback with a keypose popover open: the playhead renders rightly
+// take over the mini viewer while the timeline is moving - the user asked to see
+// it move. But those renders consume the boundary request, so once the playhead
+// SETTLES nothing re-asks for the keypose frame and the preview stays stuck on
+// wherever the playhead stopped. Each render-tick push schedules a debounced
+// re-request; while pushes keep arriving each one supersedes the last, and the
+// final one fires after the playhead has been still for a beat - re-publishing
+// the request and nudging a render, exactly what clicking the keypose did.
+//
+// Deliberately NOT via _republishBoundaryRequestIfOpen: that helper is the
+// filmstrip re-drive and bails in render-mode Off, while this ping-back is
+// wanted in every mode.
+- (void)_scheduleBoundaryPingBackForPlayheadFraction:(double)frac {
+  if (!_openStaticIsBoundary || !_openStaticView || frac < 0.0)
+    return;
+  if (fabs(frac - _boundaryPingBackLastFrac) < 1e-6)
+    return; // playhead not actually moving: nothing consumed the request
+  _boundaryPingBackLastFrac = frac;
+  NSInteger gen = ++_boundaryPingBackGeneration;
+  __weak typeof(self) weak = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        __strong typeof(weak) s = weak;
+        if (!s || s->_boundaryPingBackGeneration != gen)
+          return; // superseded: the playhead is still moving
+        if (!s->_openStaticIsBoundary || !s->_openStaticView)
+          return; // popover closed while we waited
+        [s _publishBoundaryRequestForFraction:s->_openStaticBoundaryFraction];
+        // Bring the playhead back to the keypose too: on an adjustment layer
+        // the re-requested frame is only composited correctly with the
+        // playhead there, and "settled" means the user has stopped steering.
+        if (s.onBoundarySeekHostPlayhead)
+          s.onBoundarySeekHostPlayhead(s->_openStaticBoundaryFraction);
+        if (s.onBoundaryPreviewNeedsRender)
+          s.onBoundaryPreviewNeedsRender();
+      });
+}
+
 - (void)_republishBoundaryRequestIfOpen {
   if (_renderMode == KKMiniViewerRenderModeOff)
     return;
@@ -356,6 +395,11 @@
   // (navigation between boundaries).
   if (fracChanged) {
     [self _publishBoundaryRequestForFraction:fraction];
+    // Navigation is "look at THAT keypose now", so the host playhead goes too -
+    // required for adjustment layers, whose source only composites correctly
+    // under the playhead. See onBoundarySeekHostPlayhead.
+    if (self.onBoundarySeekHostPlayhead)
+      self.onBoundarySeekHostPlayhead(fraction);
     if (self.onBoundaryPreviewNeedsRender)
       self.onBoundaryPreviewNeedsRender();
   }
