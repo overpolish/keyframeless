@@ -22,9 +22,11 @@
 #import "MirageDirectiveVocab.h" // MirageDirectiveValueKeywords (highlight set)
 #import "MirageDirectives.h"
 #import "MirageLocalized.h"       // RLoc
+#import "MirageSchemaDoc.h"       // Copy Schema clipboard document
 #import "MirageSlotBudget.h"      // `#slots` pool budget at max instances
 #import "MirageSlotLanes.h"       // `#slots` prototype -> instance stamping
 #import "MirageSurfaceResponse.h" // `#color-surface` ring validation
+#import "Plugin.h" // MiragePlugin, for the bundle the schema markdown ships in
 
 // --- Dynamic colour lanes ------------------------------------------------
 // A shader declares colour properties by annotating standalone uniforms:
@@ -1501,6 +1503,16 @@ MirageBuildAvailableLanesForSourceStamped(NSString *shaderSource,
     // astyle the GLSL, then align the `//` directive blocks on top.
     return MirageTidyDirectives(KKFormatGLSL(code));
   };
+  // Copy Schema button: the directive reference (from the same AIKnowledge
+  // markdown the built-in AI reads) on the clipboard, for authoring a template
+  // with an outside assistant. Option-click hands `sections` in, and the
+  // shader's own tabs are appended under a marked heading.
+  shader.codeSchemaProvider =
+      ^NSString *(NSArray<NSDictionary<NSString *, NSString *> *> *sections) {
+        NSBundle *bundle = [NSBundle bundleForClass:[MiragePlugin class]];
+        return MirageSchemaDocument(MirageSchemaReferenceURLInBundle(bundle),
+                                    sections);
+      };
   // Context-aware autocomplete: `//` directive kinds + attributes + `@osc`
   // fields/values + GLSL builtins + this shader's declared uniforms.
   shader.codeCompletionProvider =

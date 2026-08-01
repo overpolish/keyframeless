@@ -803,6 +803,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.codeValidator = tmpl.codeValidator;
     lane.codeValidationComposer = tmpl.codeValidationComposer;
     lane.codeFormatter = tmpl.codeFormatter;
+    lane.codeSchemaProvider = tmpl.codeSchemaProvider;
     lane.codeCompletionProvider = tmpl.codeCompletionProvider;
     lane.codeDirectiveKeywords = tmpl.codeDirectiveKeywords;
     lane.codeDirectiveKinds = tmpl.codeDirectiveKinds;

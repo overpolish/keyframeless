@@ -144,17 +144,6 @@ FOUNDATION_EXPORT void MirageDrawSurfacePuck(MirageSurfacePuck *puck,
     (NSUInteger puckIndex, NSPoint position);
 @property(nonatomic, copy, nullable) void (^onDragEnded)(NSUInteger puckIndex);
 
-/// Drop an in-progress drag WITHOUT reporting an end, for a host that is
-/// closing the write group itself.
-///
-/// A drag whose mouse-up went to another application leaves this view latched
-/// to the cursor with its monitors still installed. With two circles in the
-/// panel that is not merely stale: a drag begun on the OTHER ring feeds this
-/// view's monitors too, so a puck nobody is holding would follow the pointer
-/// and write its controls. The host ends the group and drops the latch in one
-/// move.
-- (void)cancelDrag;
-
 /// Double-click a puck: return ITS mapped controls to their declared
 /// `default=`, which is what a centred puck means. The others are left alone.
 @property(nonatomic, copy, nullable) void (^onResetToCentre)

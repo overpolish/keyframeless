@@ -845,6 +845,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
         lane.codeValidator; // set before text so it validates
     editor.validationSourceComposer = lane.codeValidationComposer;
     editor.codeFormatter = lane.codeFormatter;
+    editor.schemaProvider = lane.codeSchemaProvider;
     editor.completionProvider = lane.codeCompletionProvider;
     editor.directiveKeywords = lane.codeDirectiveKeywords;
     editor.directiveKinds = lane.codeDirectiveKinds;

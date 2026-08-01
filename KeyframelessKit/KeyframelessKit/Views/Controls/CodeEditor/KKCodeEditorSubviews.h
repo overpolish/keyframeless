@@ -18,6 +18,11 @@ NS_ASSUME_NONNULL_BEGIN
 @interface _KKCodeTextView : NSTextView
 @property(nonatomic, copy) BOOL (^escapeHandler)(void);
 @property(nonatomic, copy) BOOL (^benignOutsideClick)(NSEvent *event);
+/// First refusal on a PASTE (and only a paste - typing is never routed here):
+/// the pasteboard's plain text is offered to the owner, and returning YES means
+/// the owner consumed it (the multi-tab `// #tab` split). NO falls through to
+/// the ordinary insert-at-caret.
+@property(nonatomic, copy) BOOL (^pasteHandler)(NSString *text);
 @end
 
 // Hit-transparent edge shadow overlay (decorative only).

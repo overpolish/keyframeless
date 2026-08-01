@@ -118,6 +118,19 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
     [NSEvent removeMonitor:_outsideClickMon];
 }
 
+// Paste is the one edit the owner gets first refusal on: a blob carrying
+// `// #tab` markers is a whole multi-tab template, not text for the caret.
+// Every other insert (typing, drops, the completion insert) is untouched.
+- (void)paste:(id)sender {
+  if (_pasteHandler) {
+    NSString *text =
+        [NSPasteboard.generalPasteboard stringForType:NSPasteboardTypeString];
+    if (text.length && _pasteHandler(text))
+      return;
+  }
+  [super paste:sender];
+}
+
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
   if (self.window.firstResponder != self)
     return [super performKeyEquivalent:event];

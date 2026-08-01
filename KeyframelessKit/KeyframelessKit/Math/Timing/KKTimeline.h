@@ -217,6 +217,16 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// is carried template->reconciled in -seededFrom: like `codeValidator`.
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeFormatter)
     (NSString *code);
+/// For a `KKLaneValueTypeCode` lane: optional language-reference provider
+/// powering a "Copy Schema" button left of Format in the editor's tab strip.
+/// Return the document to put on the clipboard (for pasting into an AI
+/// assistant); nil/empty = nothing to copy. `sections` is nil for a plain click
+/// and the editor's current section set for an Option-click (append the user's
+/// own source). The kit stays language-agnostic - the plugin composes the whole
+/// document. Not serialized (a block), so it is carried template->reconciled in
+/// -seededFrom: like `codeFormatter`.
+@property(nonatomic, copy, nullable) NSString *_Nullable (^codeSchemaProvider)
+    (NSArray<NSDictionary<NSString *, NSString *> *> *_Nullable sections);
 /// For a `KKLaneValueTypeCode` lane: optional autocomplete provider (GLSL mode)
 /// wired to the editor's `completionProvider` - given the text + caret, returns
 /// the context-filtered candidate items + the range a pick replaces. Keeps the

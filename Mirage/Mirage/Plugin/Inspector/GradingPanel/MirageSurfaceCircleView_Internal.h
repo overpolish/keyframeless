@@ -139,6 +139,16 @@ NS_ASSUME_NONNULL_BEGIN
 // The drag: which puck a press means, the monitors that carry it, and the
 // double-click reset. Implemented in MirageSurfaceCircleView+Interaction.m.
 @interface MirageSurfaceCircleView (Interaction)
+/// Drop an in-progress drag WITHOUT reporting an end, for a host that is
+/// closing the write group itself.
+///
+/// A drag whose mouse-up went to another application leaves this view latched
+/// to the cursor with its monitors still installed. With two circles in the
+/// panel that is not merely stale: a drag begun on the OTHER ring feeds this
+/// view's monitors too, so a puck nobody is holding would follow the pointer
+/// and write its controls. The host ends the group and drops the latch in one
+/// move.
+- (void)cancelDrag;
 - (NSUInteger)_puckIndexForPress:(NSPoint)down
                          grabbed:(nullable BOOL *)outGrabbed;
 - (void)_dragTickWithEvent:(NSEvent *)event;

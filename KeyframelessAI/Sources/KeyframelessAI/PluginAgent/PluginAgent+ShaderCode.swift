@@ -13,7 +13,8 @@ extension AIPluginAgent {
 	/// `currentShaderSource` is the shader currently in the editor, or "" when it's
 	/// the untouched default (the host passes "" so a fresh ask starts clean). When
 	/// non-empty, the model EDITS it - preserving what works and its controls -
-	/// rather than replacing it wholesale.
+	/// rather than replacing it wholesale. A multi-pass shader arrives (and comes
+	/// back) as one flat `// #tab` blob, which the host splits into sections.
 	@MainActor
 	static func generateShaderCode(
 		prompt: String, productContext: String, currentShaderSource: String
@@ -28,8 +29,17 @@ extension AIPluginAgent {
 			that compiles your source and runs it live on the clip.
 
 			Rules (follow exactly):
-			- Output ONE complete, compilable GLSL Image shader whose entry point is \
-			  `void mainImage(out vec4 fragColor, in vec2 fragCoord)`.
+			- Output complete, compilable GLSL. The Image pass is the entry point and \
+			  its function is `void mainImage(out vec4 fragColor, in vec2 fragCoord)`.
+			- The Image source must declare exactly one `// #template ...` line (see \
+			  the reference for the types and which one fits).
+			- A single-pass shader is just the Image source, with no marker line \
+			  around it. If the effect genuinely needs several passes, output every \
+			  section in ONE block, each opened by its own `// #tab <name>` line: \
+			  `image`, `common`, and `buffer-a` through `buffer-d`, and nothing else. \
+			  Mark a section only when you are writing more than one, and give each \
+			  pass its own `mainImage`. `// #tab` is an interchange marker, not a \
+			  directive - it is stripped before the source is compiled.
 			- The clip being processed is `iChannel0` (a sampler2D). Sample it with \
 			  `texture(iChannel0, fragCoord/iResolution.xy)`. Process or composite \
 			  over the footage unless the user clearly wants a look that ignores it.
@@ -51,7 +61,9 @@ extension AIPluginAgent {
 			? """
 			The user is editing the CURRENT shader below. Modify it to satisfy the \
 			request while preserving everything that already works and its existing \
-			`// #` controls. Return the COMPLETE updated shader, not a diff.
+			`// #` controls. Return the COMPLETE updated shader, not a diff. If it \
+			carries `// #tab` markers it is a multi-pass shader: keep the markers, \
+			return every tab whole, and never flatten them into one pass.
 
 			CURRENT SHADER:
 			\(currentShaderSource)
@@ -90,7 +102,8 @@ extension AIPluginAgent {
 			userMessage: prompt,
 			schemaName: "author_shader",
 			schemaDescription:
-				"Emit the complete GLSL source for the requested shader look/effect.",
+				"Emit the complete GLSL source for the requested shader look/effect - "
+				+ "one blob, with `// #tab` markers only when it is multi-pass.",
 			jsonSchema: schema,
 			modelOverride: AIKeyState.shared.activeProvider == .anthropic
 				? "claude-haiku-4-5-20251001"

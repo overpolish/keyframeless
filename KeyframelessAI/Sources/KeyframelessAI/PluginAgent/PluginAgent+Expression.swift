@@ -31,9 +31,12 @@ extension AIPluginAgent {
 			REFERENCE above exactly - only the variables and functions it lists exist.
 
 			Rules (follow exactly):
-			- Pick the target property (lane) from the AVAILABLE LANES list by its exact \
-			  label. Emit one operation per lane you drive; drive several only when the \
-			  request clearly spans several (e.g. "wobble X and Y differently").
+			- Pick the target property (lane) from the AVAILABLE LANES list and answer \
+			  with its quoted id EXACTLY as listed - that is the property's identity, \
+			  which is not always the name shown in the inspector. A lane that isn't \
+			  listed cannot be driven. Emit one operation per lane you drive; drive \
+			  several only when the request clearly spans several (e.g. "wobble X and \
+			  Y differently").
 			- `value` is the lane's OWN current value - build on it (`value + ...`, \
 			  `value * ...`); do not throw it away unless the user wants an absolute \
 			  formula. Never invent a keyframed value.
@@ -54,7 +57,7 @@ extension AIPluginAgent {
 			"""
 		let cachedPrefix = docs.isEmpty ? rules : (docs + "\n\n" + rules)
 
-		var context = "AVAILABLE LANES (drive these by exact label):\n" + laneCtx
+		var context = "AVAILABLE LANES (drive these by their quoted id):\n" + laneCtx
 		if hasSources {
 			context +=
 				"\n\nAVAILABLE SOURCES (other clips you may reference as "
@@ -106,21 +109,30 @@ extension AIPluginAgent {
 	/// if the host registered no docs.
 	@MainActor
 	private static func expressionDocs() async -> String {
+		// `expressions` is the prose guide; `expression-functions` is the exhaustive
+		// variable/function list generated from the editor's own catalog. Both, or
+		// the model invents plausible-looking functions the evaluator doesn't have.
+		let wanted: Set<String> = ["expressions", "expression-functions"]
 		let entries = await AIKnowledgeRegistry.shared.allEntries()
-			.filter { $0.topic.id == "expressions" }
-		guard let e = entries.first else { return "" }
-		return "EXPRESSION REFERENCE (follow these conventions exactly):\n\n"
-			+ e.topic.content
+			.filter { wanted.contains($0.topic.id) }
+		guard !entries.isEmpty else { return "" }
+		var out = "EXPRESSION REFERENCE (follow these conventions exactly):\n"
+		for e in entries.sorted(by: { $0.topic.id < $1.topic.id }) {
+			out += "\n" + e.topic.content + "\n"
+		}
+		return out
 	}
 
-	/// One line per available lane: its label, component count, and current
-	/// expression (for edit-vs-fresh), parsed from the timeline JSON. Falls back to
-	/// the bare label list when the JSON has no per-lane detail.
+	/// One line per available lane: its id (the lane KEY the host matches on, which
+	/// for a directive-derived control is the uniform name, not the display label),
+	/// the label when it differs, the component count, and the current expression
+	/// (for edit-vs-fresh), parsed from the timeline JSON. Falls back to the bare
+	/// label list when the JSON has no per-lane detail.
 	private static func laneExpressionContext(
 		fromTimelineJSON json: String, laneLabels: [String]
 	) -> String {
 		let lanes = decodeLanes(json) ?? []
-		var byLabel: [String: (components: Int, expr: String)] = [:]
+		var byLabel: [String: (key: String, components: Int, expr: String)] = [:]
 		for lane in lanes {
 			guard let label = lane["label"] as? String else { continue }
 			var comps = 1
@@ -131,18 +143,21 @@ extension AIPluginAgent {
 				comps = max(1, vals.count)
 			}
 			let expr = (lane["link_expr"] as? String) ?? ""
-			byLabel[label] = (comps, expr)
+			byLabel[label] = ((lane["key"] as? String) ?? label, comps, expr)
 		}
 		let labels = laneLabels.isEmpty ? Array(byLabel.keys) : laneLabels
 		if labels.isEmpty { return "(no lanes available)" }
 		return labels.map { label -> String in
 			let info = byLabel[label]
+			let id = info?.key ?? label
+			// Only worth the extra words when identity and display disagree.
+			let labelText = id == label ? "" : " (shown as \"\(label)\")"
 			let comps = info?.components ?? 1
 			let compText = comps > 1 ? " (\(comps) components)" : ""
 			let expr = info?.expr ?? ""
 			let exprText =
 				expr.isEmpty ? "" : ", current expression: \(expr)"
-			return "- \"\(label)\"\(compText)\(exprText)"
+			return "- \"\(id)\"\(labelText)\(compText)\(exprText)"
 		}.joined(separator: "\n")
 	}
 }

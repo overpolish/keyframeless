@@ -14,8 +14,10 @@
 #import "MirageOSCBlockRuntime.h" // // @osc custom-handling blocks (checklist)
 #import "MirageOSCSnapshot.h" // OSC timeline snapshot + frame-duration setters
 #import "MiragePresets.h"     // MirageBuiltinPresets (built-in look presets)
+#import "MirageShaderTabs.h"  // // #tab blob <-> lane sections (AI code route)
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKCodeTabInterchange.h> // // #tab split (AI answers)
 #import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKGLSLSyntax.h> // KKExprCatalogMarkdown (AI reference)
@@ -59,10 +61,27 @@ static BOOL MirageAIWriteTimelineJSON(MiragePlugin *plugin, NSString *json,
   return YES;
 }
 
+// Every section name the shader lane can hold, Image (the primary section,
+// stored in `codeString`) first and the rest in catalog order. Read off the
+// lane template rather than spelled out here, so the AI's tab vocabulary can
+// never drift from the "+" menu the user sees.
+static NSArray<NSString *> *MirageAIShaderTabNames(void) {
+  NSMutableArray<NSString *> *names = [NSMutableArray arrayWithObject:@"Image"];
+  for (KKLane *l in MirageBuildAvailableLanes())
+    if ([l.key isEqualToString:kMirageCodeLaneLabel]) {
+      for (NSString *n in l.codeTabCatalog)
+        if (![names containsObject:n])
+          [names addObject:n];
+      break;
+    }
+  return names;
+}
+
 // Code authoring: set the AI-written GLSL on the "Mirage" code lane (creating
 // it if the persisted timeline has none) and write back; applyTimeline
 // re-transpiles and rebuilds the controls (same path a manual code commit
-// takes).
+// takes). A multi-pass answer arrives as one `// #tab` blob and is split back
+// into sections here - one lane, one write, so it stays one undo entry.
 static void MirageAIApplyShaderSource(MiragePlugin *plugin, NSString *newSrc,
                                       NSString *timelineBlob) {
   if (!newSrc.length) {
@@ -89,16 +108,34 @@ static void MirageAIApplyShaderSource(MiragePlugin *plugin, NSString *newSrc,
     shaderLane.enabled = NO;
     tl.lanes = [tl.lanes arrayByAddingObject:shaderLane];
   }
-  shaderLane.codeString = newSrc;
+  NSArray<NSString *> *knownTabs = MirageAIShaderTabNames();
+  NSDictionary<NSString *, NSString *> *split =
+      KKCodeSplitTabbedText(newSrc, knownTabs);
+  if (!split) {
+    shaderLane.codeString = newSrc; // single-pass answer: no markers to split
+  } else {
+    if (split[@"Image"])
+      shaderLane.codeString = split[@"Image"];
+    NSArray<NSDictionary<NSString *, NSString *> *> *tabs =
+        MirageShaderTabsMerged(shaderLane.codeTabs, split, knownTabs);
+    shaderLane.codeTabs = tabs.count ? tabs : nil;
+  }
   MirageAIWriteTimelineJSON(
       plugin, [KKTimeline jsonFromTimeline:tl],
       @"Couldn't open the FCP action scope to apply the shader.");
 }
 
 // Expression authoring: for each {lane, expression} op set that lane's
-// linkExpression (creating the lane if absent; friendly ${Clip.Param} refs
-// translated to the stored ${uuid.label} form via the current manifests), then
-// write back so applyTimeline re-derives the driven values.
+// linkExpression (friendly ${Clip.Param} refs translated to the stored
+// ${uuid.label} form via the current manifests), then write back so
+// applyTimeline re-derives the driven values.
+//
+// The op names a lane by its KEY (what the agent is handed and told to answer
+// with), with a label match as the fallback for a model that answered with the
+// display name anyway - for a directive-derived control the two differ (key =
+// uniform name, label = the `name=` string). Neither matching means the lane
+// does not exist: every Mirage lane is derived from the shader source, so
+// inventing one here would only add a row nothing renders.
 static void MirageAIApplyExpressionOps(MiragePlugin *plugin, NSString *opsJSON,
                                        NSString *timelineBlob) {
   NSData *opsData = [opsJSON dataUsingEncoding:NSUTF8StringEncoding];
@@ -120,26 +157,38 @@ static void MirageAIApplyExpressionOps(MiragePlugin *plugin, NSString *opsJSON,
     tl = [KKTimeline timeline];
   NSArray<KKLinkManifest *> *manifests = [KKLinkBus allManifests];
   NSMutableArray<KKLane *> *lanes = [tl.lanes mutableCopy];
+  NSUInteger applied = 0;
   for (NSDictionary *op in ops) {
     if (![op isKindOfClass:[NSDictionary class]])
       continue;
-    NSString *label = op[@"lane"];
+    NSString *name = op[@"lane"];
     NSString *expr = op[@"expression"];
-    if (![label isKindOfClass:[NSString class]] || label.length == 0 ||
+    if (![name isKindOfClass:[NSString class]] || name.length == 0 ||
         ![expr isKindOfClass:[NSString class]] || expr.length == 0)
       continue;
     NSString *stored = KKLinkStoredExpressionFromDisplay(expr, manifests);
     KKLane *target = nil;
     for (KKLane *l in lanes)
-      if ([l.key isEqualToString:label]) {
+      if ([l.key isEqualToString:name]) {
         target = l;
         break;
       }
+    if (!target)
+      for (KKLane *l in lanes)
+        if ([l.label isEqualToString:name]) {
+          target = l;
+          break;
+        }
     if (!target) {
-      target = [KKLane laneWithKey:label label:label];
-      [lanes addObject:target];
+      KKLogWarn(@"AI[expr] no lane named '%@' - skipping its expression", name);
+      continue;
     }
     target.linkExpression = stored;
+    applied++;
+  }
+  if (!applied) {
+    [KKAIDraft setError:@"AI targeted a control that doesn't exist."];
+    return;
   }
   tl.lanes = lanes;
   MirageAIWriteTimelineJSON(
@@ -560,8 +609,10 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
     // The expression function/variable reference, GENERATED from the editor's
     // own KKExprCatalog so the AI's vocabulary can never drift from the
     // autocomplete (the expressions.md prose teaches concepts; this is the
-    // exhaustive list). The expression + shader-code agents pull ALL knowledge
-    // entries, so it always travels with them.
+    // exhaustive list). Each agent pulls the entries it names by topic id: this
+    // one rides with the EXPRESSION agent (alongside `expressions`). The
+    // shader-code agent deliberately doesn't take it - GLSL has no expression
+    // vocabulary.
     [KKAIKnowledge registerInlineDocWithName:@"Expression Reference"
                                      topicID:@"expression-functions"
                                      summary:@"Every expression variable and "
@@ -681,22 +732,28 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
         // and the current shader source. Pass "" when it's the untouched
         // default so a from-scratch ask starts clean; a customised shader is
         // passed so the AI edits it in place ("add a slider", "make the ripples
-        // bigger").
+        // bigger"). A multi-pass shader goes over as the flat `// #tab` blob,
+        // which is also the shape the answer comes back in.
         timelineBlob = KKReadCustomParamString(getAPI, kKKParamTimelineData);
-        NSString *rawShaderSrc = @"";
         KKTimeline *readTimeline =
             timelineBlob.length ? [KKTimeline timelineFromJSON:timelineBlob]
                                 : nil;
+        KKLane *readShaderLane = nil;
         for (KKLane *l in readTimeline.lanes)
-          if ([l.key isEqualToString:kMirageCodeLaneLabel] &&
-              l.codeString.length) {
-            rawShaderSrc = l.codeString;
+          if ([l.key isEqualToString:kMirageCodeLaneLabel]) {
+            readShaderLane = l;
             break;
           }
-        aiShaderSrc =
-            [rawShaderSrc isEqualToString:MirageCustomDefaultShaderSource()]
-                ? @""
-                : rawShaderSrc;
+        // The default check is on the Image source alone: extra sections mean
+        // the user has been in the editor, so there is nothing untouched about
+        // it even if Image still matches the seed.
+        aiShaderSrc = (!readShaderLane ||
+                       (readShaderLane.codeTabs.count == 0 &&
+                        [readShaderLane.codeString
+                            isEqualToString:MirageCustomDefaultShaderSource()]))
+                          ? @""
+                          : MirageShaderTabsBlob(readShaderLane.codeString,
+                                                 readShaderLane.codeTabs);
         NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
         NSDictionary *uiState =
             (uiJson.length

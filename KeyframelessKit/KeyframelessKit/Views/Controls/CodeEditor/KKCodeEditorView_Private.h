@@ -80,6 +80,12 @@
   NSInteger _activeTab;
   NSStackView *_tabBar;
   NSLayoutConstraint *_tabBarHeight;
+  // Copy Schema: the live Option retitle ("+ Code"), and the 1s "Copied" flash
+  // that outranks it while it shows.
+  NSButton *_schemaButton;
+  NSTimer *_optPollTimer;
+  BOOL _optHeld;
+  BOOL _schemaFlashing;
 }
 @end
 
@@ -95,6 +101,13 @@
 - (void)_hideCompletion;
 // +Sections - the tab strip is rebuilt from the core init + external applies.
 - (void)_rebuildTabBar;
+// +Sections - the Copy Schema button's live Option retitle. Driven from the
+// core's window hooks so the poll only runs while the editor is on screen.
+- (void)_startOptionModifierPolling;
+- (void)_stopOptionModifierPolling;
+// +Sections - the `// #tab` multi-tab paste, offered from the text view's
+// paste hook. YES = consumed (the blob was split across the tabs).
+- (BOOL)_applyTabbedPaste:(NSString *)text;
 // Core (main .m) - is there local uncommitted typing (guards a tab swap).
 - (BOOL)_hasUncommittedTyping;
 // +Validation - re-run on a section swap / external apply.

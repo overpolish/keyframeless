@@ -31,6 +31,28 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
 
+### Multi-tab interchange: `// #tab`
+
+A multi-pass template lives in several editor tabs (Image, Common, Buffer A-D), but an assistant answers in one block of text. `// #tab <name>` on a line of its own is how that one block says where each part goes:
+
+```glsl
+// #tab common
+float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+// #tab image
+void mainImage(out vec4 O, in vec2 I) { O = vec4(hash(I), 0.0, 0.0, 1.0); }
+```
+
+Paste that into the code editor and it lands in the right tabs, marker lines stripped. The rules:
+
+- Names resolve loosely: `image`, `common`, `buffer-a`, `Buffer A` and `BUFFER_A` all name the same tab, since only letters and digits are compared.
+- A named tab is **replaced whole**. A tab the blob never names keeps what it had, so a paste of just `// #tab image` leaves your buffers alone.
+- A named tab the template does not have yet is **created**, as long as it is one the **+** menu offers.
+- Text before the first marker belongs to the **Image** tab, so a single-pass shader needs no marker at all and pastes exactly as it always did.
+- If any marker names something that is not a tab (`// #tab buffer-e`), the whole paste is treated as ordinary text and drops at the cursor. Nothing is ever silently discarded.
+- Blank space around each section is trimmed, so two markers with nothing between them give an empty tab.
+
+`// #tab` is **not a directive**. It never reaches the shader compiler or the directive parser, because it only exists between the marker being pasted and the text reaching a tab. Option-clicking **Copy Schema** exports the current template in exactly this format, so what the assistant reads is what it should write back.
+
 ### Reactive maximums
 
 A single-value numeric lane can make its effective upper bound follow another lane with `maxby=` and `maxvalues={}`:

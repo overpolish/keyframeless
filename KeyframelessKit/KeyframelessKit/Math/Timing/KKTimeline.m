@@ -383,6 +383,8 @@ static const KKLaneField kKKLaneFields[] = {
      KKLaneFieldTemplateCanonical}, // block
     {@"codeFormatter", nil, nil, KKLaneFieldObject,
      KKLaneFieldTemplateCanonical}, // block
+    {@"codeSchemaProvider", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical}, // block
     {@"codeCompletionProvider", nil, nil, KKLaneFieldObject,
      KKLaneFieldTemplateCanonical}, // block
     {@"codeDirectiveKeywords", nil, nil, KKLaneFieldObject,

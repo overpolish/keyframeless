@@ -156,6 +156,22 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeFormatter)
     (NSString *code);
 
+/// Optional language-reference provider. When set, a "Copy Schema" button
+/// appears in the top tab strip immediately LEFT of Format; pressing it puts
+/// the returned document on the general pasteboard (for pasting into an AI
+/// assistant) and briefly flashes "Copied" in place of the title. Return nil /
+/// empty for nothing to copy (the click then no-ops).
+///
+/// `sections` is nil for a plain click (the reference alone) and the CURRENT
+/// section set - every tab, not just the visible one, same shape as
+/// `-sections` - for an Option-click, so the host can append the user's own
+/// source under whatever heading its document wants. The kit knows nothing
+/// about any host's schema or how source belongs in it: it supplies the gesture
+/// and the text, the host composes every word. A host that sets no provider
+/// shows no button at all.
+@property(nonatomic, copy, nullable) NSString *_Nullable (^schemaProvider)
+    (NSArray<NSDictionary<NSString *, NSString *> *> *_Nullable sections);
+
 /// Placeholder shown in the save bar's name field. Defaults to a generic
 /// "Name"; a host (e.g. a shader preset editor) can set something
 /// domain-specific.

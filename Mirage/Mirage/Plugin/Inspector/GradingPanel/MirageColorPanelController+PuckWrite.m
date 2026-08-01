@@ -19,6 +19,7 @@
 #import "MirageLocalized.h"
 #import "MirageScopeSampler.h"
 #import "MirageSurfaceCircleView.h"
+#import "MirageSurfaceCircleView_Internal.h" // cancelDrag
 #import "MirageSurfaceResponse.h"
 #import "Plugin_Private.h" // +shaderSourceFromTimeline:
 

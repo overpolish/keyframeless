@@ -32,6 +32,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
 @implementation KKCodeEditorView
 @synthesize codeValidator = _codeValidator;
 @synthesize codeFormatter = _codeFormatter;
+@synthesize schemaProvider = _schemaProvider;
 // Accessors live in +SaveBar (backed by the name field's placeholderString,
 // resetting to a default on nil) - @dynamic stops the primary from
 // auto-synthesizing a nil-unaware setter for this null_resettable property.
@@ -76,6 +77,10 @@ NSNotificationName const KKCodeEditorReloadNotification =
         return YES;
       }
       return NO;
+    };
+    ((_KKCodeTextView *)_textView).pasteHandler = ^BOOL(NSString *text) {
+      __strong typeof(weakEsc) s = weakEsc;
+      return s ? [s _applyTabbedPaste:text] : NO;
     };
     ((_KKCodeTextView *)_textView).benignOutsideClick = ^BOOL(NSEvent *e) {
       __strong typeof(weakEsc) s = weakEsc;
@@ -478,12 +483,20 @@ NSNotificationName const KKCodeEditorReloadNotification =
   // category override would REPLACE this method and kill the undo clear.)
   if (newWindow != self.window)
     [self _hideCompletion];
+  // The Copy Schema Option-retitle poll runs only while we're in a window -
+  // ViewBridge popovers close and reopen constantly, and a live timer would
+  // both leak and keep sampling for a strip nobody can see.
+  if (newWindow)
+    [self _startOptionModifierPolling];
+  else
+    [self _stopOptionModifierPolling];
 }
 
 - (void)dealloc {
   [NSNotificationCenter.defaultCenter removeObserver:self];
   if (_nameOutsideClickMon)
     [NSEvent removeMonitor:_nameOutsideClickMon];
+  [_optPollTimer invalidate];
 }
 
 - (NSString *)codeText {
@@ -530,6 +543,13 @@ NSNotificationName const KKCodeEditorReloadNotification =
 - (void)setCodeFormatter:(NSString * (^)(NSString *))codeFormatter {
   _codeFormatter = [codeFormatter copy];
   [self _rebuildTabBar]; // show / hide the Format button
+}
+
+- (void)setSchemaProvider:
+    (NSString * (^)(NSArray<NSDictionary<NSString *, NSString *> *> *))
+        schemaProvider {
+  _schemaProvider = [schemaProvider copy];
+  [self _rebuildTabBar]; // show / hide the Copy Schema button
 }
 
 - (BOOL)_hasUncommittedTyping {
