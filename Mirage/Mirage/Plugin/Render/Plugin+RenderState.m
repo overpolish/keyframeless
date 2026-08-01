@@ -103,9 +103,20 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
     return MirageLaneValuesAtFraction(timeline, label, frac, timelineSec,
                                       durSec);
   };
+  // A `// #slots` group's instances, in the order the registry (not the lane
+  // list) puts them: that order IS which array element each instance packs
+  // into.
+  NSArray<NSString *> * (^slotInstances)(NSString *) =
+      ^NSArray<NSString *> *(NSString *groupName) {
+    return KKTimelineSlotInstanceIDs(timeline, groupName);
+  };
   MirageShaderModel *model = [MirageShaderModel modelForSource:shaderSrc];
-  int poolN = [model fillColorPool:outState->colorPool valuesForLabel:values];
-  poolN = [model fillScalarPool:outState->colorPool valuesForLabel:values];
+  int poolN = [model fillColorPool:outState->colorPool
+                    valuesForLabel:values
+                     slotInstances:slotInstances];
+  poolN = [model fillScalarPool:outState->colorPool
+                 valuesForLabel:values
+                  slotInstances:slotInstances];
   // `// #audio` props: sampled from the bound Sonar spectrogram at the TIMELINE
   // time, not the clip fraction - the grid is keyed by timeline seconds. That
   // is NOT the render time: `timelineSec` comes from
@@ -114,6 +125,10 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   poolN = MirageFillAudioPool(model, outState->colorPool, timelineSec, values);
   // `// #gradient` ramps last, so the three pools above keep their offsets.
   poolN = [model fillGradientPool:outState->colorPool valuesForLabel:values];
+  // The injected `#slots` counts sit after everything else, so they close the
+  // pool and their fill returns what gets bound.
+  poolN = [model fillSlotCountPool:outState->colorPool
+                     slotInstances:slotInstances];
   outState->colorPoolCount = poolN;
 }
 

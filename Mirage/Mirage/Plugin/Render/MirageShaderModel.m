@@ -7,6 +7,8 @@
 
 #import "MirageScalarParse.h"
 
+#import <KeyframelessKit/KKSlotInstances.h>
+
 // An editing session churns many one-off source variants; past this many the
 // least-recently-used model is dropped.
 #define KK_SHADER_MODEL_CACHE_CAP 32
@@ -186,6 +188,30 @@ static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
   return kept;
 }
 
+// The instances of one group that the pool has room for, in registry order.
+// Anything past `maxCount` is a group the user grew beyond the ceiling its
+// author declared - it has no array element to land in, so it is dropped here
+// rather than overwriting the prop that follows.
+static NSArray<NSString *> *MirageSlotLiveIDs(MirageSlotInstancesBlock block,
+                                              const char *group, int maxCount) {
+  if (!block || !group || !group[0] || maxCount <= 0)
+    return @[];
+  NSArray<NSString *> *ids = block(@(group)) ?: @[];
+  if ((int)ids.count > maxCount)
+    ids = [ids subarrayWithRange:NSMakeRange(0, (NSUInteger)maxCount)];
+  return ids;
+}
+
+// The lane key one instance uses for one uniform. The CONTROL part of the key
+// is the GLSL uniform name, exactly as a non-repeatable Mirage lane is keyed,
+// so the panel that stamps the lanes and the fill that reads them share one
+// naming scheme instead of two that have to be kept in step.
+static NSString *MirageSlotLaneKeyForUniform(const char *group,
+                                             NSString *instanceID,
+                                             const char *uniformName) {
+  return KKSlotLaneKey(@(group), instanceID, @(uniformName));
+}
+
 @implementation MirageShaderModel {
   MirageColorProp *_colors;
   MirageScalarProp *_scalars;
@@ -228,6 +254,21 @@ static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
       MirageParseGradientProps(source, gTmp, KK_SHADER_MAX_GRADIENT_PROPS,
                                cUsed + sUsed + aUsed, &gUsed);
   _gradientPoolUsed = gUsed;
+  // One vec4 per `// #slots` group holds that group's live instance count.
+  // LAST in the pool: a shader gaining a group must not shift an offset any
+  // earlier prop already published.
+  _slotGroups = MirageSlotGroupsForSource(source, NULL, NULL);
+  _slotCountPoolBase = cUsed + sUsed + aUsed + gUsed;
+  _slotCountPoolUsed = (int)_slotGroups.count;
+  if (_slotCountPoolBase + _slotCountPoolUsed > KK_SHADER_COLOR_POOL) {
+    _slotCountPoolUsed = KK_SHADER_COLOR_POOL - _slotCountPoolBase;
+    // A group with nowhere to put its count is a group whose controls the
+    // shader can't bound a loop over. Same answer as a dropped control: say so
+    // rather than compiling something that quietly renders wrong.
+    _scalarTruncated = YES;
+  }
+  if (_slotCountPoolUsed < 0)
+    _slotCountPoolUsed = 0;
   // The opt-in built-ins. No pool slots: they drive the shared uniforms, so
   // they take no offset and don't shift anything after them.
   _builtins = MirageParseBuiltins(source);
@@ -321,12 +362,43 @@ static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
   return _colors;
 }
 
+// One swatch per live instance of a repeatable colour, in registry order. The
+// pool is already zeroed, so the slots past the count need no second pass.
+static void
+MirageFillColorSlots(const MirageColorProp *p, vector_float4 *pool,
+                     NSArray<NSNumber *> * (^valuesForLabel)(NSString *),
+                     MirageSlotInstancesBlock slotInstances) {
+  NSArray<NSString *> *ids =
+      MirageSlotLiveIDs(slotInstances, p->slotGroup, p->slotMax);
+  for (NSUInteger i = 0; i < ids.count; i++) {
+    NSArray<NSNumber *> *cv = valuesForLabel(
+        MirageSlotLaneKeyForUniform(p->slotGroup, ids[i], p->name));
+    if (cv.count >= 4) {
+      pool[p->poolOffset + (int)i] =
+          (vector_float4){cv[0].floatValue, cv[1].floatValue, cv[2].floatValue,
+                          cv[3].floatValue};
+      continue;
+    }
+    // An instance whose lane isn't stamped yet resolves exactly as a single
+    // colour does: the shader's authored default, else the shared palette
+    // walked by INSTANCE so a fresh set isn't all one colour.
+    const float *d =
+        p->hasDefColors ? p->defColors[0] : kMirageDefaultPalette[i % 10];
+    pool[p->poolOffset + (int)i] = (vector_float4){d[0], d[1], d[2], d[3]};
+  }
+}
+
 - (int)fillColorPool:(vector_float4 *)pool
-      valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel {
+      valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel
+       slotInstances:(MirageSlotInstancesBlock)slotInstances {
   for (int i = 0; i < KK_SHADER_COLOR_POOL; i++)
     pool[i] = (vector_float4){0, 0, 0, 0};
   for (int pi = 0; pi < _colorCount; pi++) {
     const MirageColorProp *p = &_colors[pi];
+    if (p->slotMax > 0) {
+      MirageFillColorSlots(p, pool, valuesForLabel, slotInstances);
+      continue;
+    }
     if (p->isArray) {
       // An options-linked array has a fixed slot per multiple-choice option;
       // regular palettes retain their editable count lane.
@@ -379,66 +451,104 @@ static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
   return _colorPoolUsed;
 }
 
-- (int)fillScalarPool:(vector_float4 *)pool
-       valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel {
-  for (int pi = 0; pi < _scalarCount; pi++) {
-    const MirageScalarProp *p = &_scalars[pi];
-    // Look up by the uniform NAME (the lane identity), not the display label.
-    NSArray<NSNumber *> *v = valuesForLabel(@(p->name));
-    switch (p->kind) {
-    case MirageScalarKindPoint: {
-      double x = v.count >= 1 ? v[0].doubleValue : p->pdefx;
-      double y = v.count >= 2 ? v[1].doubleValue : p->pdefy;
-      pool[p->poolOffset] = (vector_float4){(float)x, (float)y, 0, 0};
-      break;
-    }
-    case MirageScalarKindMulti: {
-      // N components packed into .xyz (one pool vec4). Missing components fall
-      // back to the per-component default.
-      float c[4] = {0, 0, 0, 0};
-      for (int k = 0; k < p->fieldCount && k < 4; k++)
-        c[k] = (float)(v.count > k ? v[k].doubleValue : p->mdef[k]);
-      // Deliberately NOT rounded, for rotation or anything else: this value is
-      // resolved per RENDERED FRAME, so quantizing here strands an animated
-      // rotation on whole degrees - a slow spin then only moves every Nth
-      // frame and reads as stutter. Whole degrees belong in the inspector
-      // (`integerValued` on the lane), not in what reaches the shader.
-      if (p->isPercent)
-        for (int k = 0; k < 4; k++)
-          c[k] /= 100.0f; // lane is 0..100 %, shader wants 0..1
-      pool[p->poolOffset] = (vector_float4){c[0], c[1], c[2], c[3]};
-      break;
-    }
-    case MirageScalarKindFloat:
-    case MirageScalarKindPercent:
-    case MirageScalarKindProgress:
-    case MirageScalarKindRandom:
-    case MirageScalarKindInt:
-    case MirageScalarKindAngle:
-    case MirageScalarKindBool:
-    case MirageScalarKindChoice: {
-      double val = v.count ? v[0].doubleValue
-                           : (p->isChoice ? (double)p->cdefault : p->fdefault);
-      if (p->maxByName[0] && p->maxByValueCount > 0) {
-        NSArray<NSNumber *> *controller = valuesForLabel(@(p->maxByName));
-        if (controller.count) {
-          NSInteger index = (NSInteger)llround(controller[0].doubleValue);
-          if (index >= 0 && index < p->maxByValueCount) {
-            double cap = p->maxByValues[index];
-            if (p->hasMin)
-              cap = fmax(cap, p->fmin);
-            val = fmin(val, cap);
-          }
+// One scalar prop's pool vec4, given the lane values behind it (nil = fall back
+// to the directive's default). Split out because a `// #slots` member resolves
+// the SAME way per instance, only from a different lane key - a second copy of
+// this would be a second set of unit rules to keep in step.
+static vector_float4
+MirageScalarPoolValue(const MirageScalarProp *p, NSArray<NSNumber *> *v,
+                      NSArray<NSNumber *> * (^valuesForLabel)(NSString *)) {
+  switch (p->kind) {
+  case MirageScalarKindPoint: {
+    double x = v.count >= 1 ? v[0].doubleValue : p->pdefx;
+    double y = v.count >= 2 ? v[1].doubleValue : p->pdefy;
+    return (vector_float4){(float)x, (float)y, 0, 0};
+  }
+  case MirageScalarKindMulti: {
+    // N components packed into .xyz (one pool vec4). Missing components fall
+    // back to the per-component default.
+    float c[4] = {0, 0, 0, 0};
+    for (int k = 0; k < p->fieldCount && k < 4; k++)
+      c[k] = (float)(v.count > k ? v[k].doubleValue : p->mdef[k]);
+    // Deliberately NOT rounded, for rotation or anything else: this value is
+    // resolved per RENDERED FRAME, so quantizing here strands an animated
+    // rotation on whole degrees - a slow spin then only moves every Nth
+    // frame and reads as stutter. Whole degrees belong in the inspector
+    // (`integerValued` on the lane), not in what reaches the shader.
+    if (p->isPercent)
+      for (int k = 0; k < 4; k++)
+        c[k] /= 100.0f; // lane is 0..100 %, shader wants 0..1
+    return (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  case MirageScalarKindFloat:
+  case MirageScalarKindPercent:
+  case MirageScalarKindProgress:
+  case MirageScalarKindRandom:
+  case MirageScalarKindInt:
+  case MirageScalarKindAngle:
+  case MirageScalarKindBool:
+  case MirageScalarKindChoice: {
+    double val = v.count ? v[0].doubleValue
+                         : (p->isChoice ? (double)p->cdefault : p->fdefault);
+    if (p->maxByName[0] && p->maxByValueCount > 0) {
+      NSArray<NSNumber *> *controller = valuesForLabel(@(p->maxByName));
+      if (controller.count) {
+        NSInteger index = (NSInteger)llround(controller[0].doubleValue);
+        if (index >= 0 && index < p->maxByValueCount) {
+          double cap = p->maxByValues[index];
+          if (p->hasMin)
+            cap = fmax(cap, p->fmin);
+          val = fmin(val, cap);
         }
       }
-      if (p->isPercent)
-        val /= 100.0; // lane is 0..100 %, shader wants 0..1
-      pool[p->poolOffset] = (vector_float4){(float)val, 0, 0, 0};
-      break;
     }
+    if (p->isPercent)
+      val /= 100.0; // lane is 0..100 %, shader wants 0..1
+    return (vector_float4){(float)val, 0, 0, 0};
+  }
+  }
+}
+
+// One element per live instance of a repeatable scalar, in registry order; the
+// rest were zeroed by the colour fill and stay that way.
+static void
+MirageFillScalarSlots(const MirageScalarProp *p, vector_float4 *pool,
+                      NSArray<NSNumber *> * (^valuesForLabel)(NSString *),
+                      MirageSlotInstancesBlock slotInstances) {
+  NSArray<NSString *> *ids =
+      MirageSlotLiveIDs(slotInstances, p->slotGroup, p->slotMax);
+  for (NSUInteger i = 0; i < ids.count; i++) {
+    NSString *key = MirageSlotLaneKeyForUniform(p->slotGroup, ids[i], p->name);
+    pool[p->poolOffset + (int)i] =
+        MirageScalarPoolValue(p, valuesForLabel(key), valuesForLabel);
+  }
+}
+
+- (int)fillScalarPool:(vector_float4 *)pool
+       valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel
+        slotInstances:(MirageSlotInstancesBlock)slotInstances {
+  for (int pi = 0; pi < _scalarCount; pi++) {
+    const MirageScalarProp *p = &_scalars[pi];
+    if (p->slotMax > 0) {
+      MirageFillScalarSlots(p, pool, valuesForLabel, slotInstances);
+      continue;
     }
+    // Look up by the uniform NAME (the lane identity), not the display label.
+    pool[p->poolOffset] =
+        MirageScalarPoolValue(p, valuesForLabel(@(p->name)), valuesForLabel);
   }
   return _colorPoolUsed + _scalarPoolUsed;
+}
+
+- (int)fillSlotCountPool:(vector_float4 *)pool
+           slotInstances:(MirageSlotInstancesBlock)slotInstances {
+  for (int g = 0; g < _slotCountPoolUsed; g++) {
+    MirageSlotsGroup group = MirageSlotsGroupValue(_slotGroups[g]);
+    NSArray<NSString *> *ids =
+        MirageSlotLiveIDs(slotInstances, group.name, group.maxCount);
+    pool[_slotCountPoolBase + g] = (vector_float4){(float)ids.count, 0, 0, 0};
+  }
+  return _slotCountPoolBase + _slotCountPoolUsed;
 }
 
 - (const MirageScalarProp *)scalarProps {

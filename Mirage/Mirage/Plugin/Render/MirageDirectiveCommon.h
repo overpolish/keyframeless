@@ -168,6 +168,12 @@ static NSString *const kMirageColorCategory = @"Colors";
 /// than split on commas, so a name may contain one. Absent attribute = both
 /// buffers left as they were (the caller's default). `group=` and `puck=` share
 /// this shape, so they share this parse.
+///
+/// The braced body is scanned as alternating plain text and WHOLE quoted
+/// strings rather than as "everything up to the first `}`". A `{n}` slot
+/// placeholder lives inside the quotes, so the naive scan stopped at the
+/// placeholder's own brace and handed back an empty name and symbol - no
+/// error, just a control that had quietly lost its puck.
 static inline void MirageParseNamedPairAttr(NSString *attrs, NSString *key,
                                             char *outName, size_t nameSize,
                                             char *outSymbol,
@@ -175,7 +181,8 @@ static inline void MirageParseNamedPairAttr(NSString *attrs, NSString *key,
   if (!attrs.length || !key.length)
     return;
   NSString *pattern = [NSString
-      stringWithFormat:@"\\b%@\\s*=\\s*(\\{[^}]*\\}|\"[^\"]*\")", key];
+      stringWithFormat:
+          @"\\b%@\\s*=\\s*(\\{(?:[^{}\"]|\"[^\"]*\")*\\}|\"[^\"]*\")", key];
   NSTextCheckingResult *m =
       [[NSRegularExpression regularExpressionWithPattern:pattern
                                                  options:0
@@ -203,6 +210,33 @@ static inline void MirageParseNamedPairAttr(NSString *attrs, NSString *key,
     else
       strncpy(outSymbol, t.UTF8String ?: "", symbolSize - 1);
   }
+}
+
+/// Whether `key=` is written at all, whatever shape its value takes. Quoted
+/// values are stripped first, so a label mentioning another attribute does not
+/// count as writing it. The question a validator asks that the parse above
+/// cannot answer: a key present but unreadable and a key absent both leave the
+/// caller's buffers alone, and only one of them is a mistake.
+static inline BOOL MirageAttrHasKey(NSString *attrs, NSString *key) {
+  if (!attrs.length || !key.length)
+    return NO;
+  NSString *bare =
+      [[NSRegularExpression regularExpressionWithPattern:@"\"[^\"]*\""
+                                                 options:0
+                                                   error:nil]
+          stringByReplacingMatchesInString:attrs
+                                   options:0
+                                     range:NSMakeRange(0, attrs.length)
+                              withTemplate:@""];
+  NSString *pattern = [NSString
+      stringWithFormat:@"\\b%@\\s*=",
+                       [NSRegularExpression escapedPatternForString:key]];
+  return [[NSRegularExpression regularExpressionWithPattern:pattern
+                                                    options:0
+                                                      error:nil]
+             firstMatchInString:bare
+                        options:0
+                          range:NSMakeRange(0, bare.length)] != nil;
 }
 
 static inline void MirageParseGroupAttr(NSString *attrs, char *outGroup,

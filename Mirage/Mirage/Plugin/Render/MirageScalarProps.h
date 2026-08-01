@@ -68,6 +68,13 @@ typedef struct MirageScalarProp {
     char group[80];
     char groupSymbol[40];
     int poolOffset; // vec4 index in the pool (value in .x, or xy for a point)
+    // Set when the declaration sits inside a `// #slots` block: the uniform
+    // reaches the shader as an ARRAY of slotMax and takes slotMax pool vec4s,
+    // one per instance in registry order (element i = instance i). 0 for the
+    // ordinary case, which is every uniform outside a block.
+    int slotMax;
+    int slotGroupIndex;
+    char slotGroup[48];
     double fmin, fmax,
         fdefault;    // float (percent: in 0..100); fmax = nominal when
                      // !hasMax (slider cap; the field is unbounded)
@@ -91,9 +98,9 @@ typedef struct MirageScalarProp {
     // Searchable technical menus (camera transforms, codecs, devices) need
     // substantially more room than a short pill row. This is parser metadata,
     // not GPU state, so favour complete stable labels over silent truncation.
-    char options[1024];  // choice: comma-separated pill labels
-    int choiceCount;     // number of options
-    int cdefault;        // choice default index
+    char options[1024]; // choice: comma-separated pill labels
+    int choiceCount;    // number of options
+    int cdefault;       // choice default index
     // On-screen control opt-in (`osc` attribute) - PARSE-SIDE ONLY. These raw
     // fields feed the model's block synthesis (every opt-in becomes a standard
     // `@osc` block) and directive validation; runtime consumers query

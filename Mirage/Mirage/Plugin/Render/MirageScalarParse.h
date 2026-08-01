@@ -16,6 +16,7 @@
 
 #import "MirageScalarOSC.h"
 #import "MirageScalarProps.h"
+#import "MirageSlots.h"
 #import "MirageTypes.h"
 
 // Parse a braced per-field list `key={a,b,c,d}` into out[4]/has[4]. Partial
@@ -457,6 +458,8 @@ static inline int MirageParseScalarProps(NSString *source,
       [dirRe matchesInString:source
                      options:0
                        range:NSMakeRange(0, source.length)];
+  NSDictionary<NSString *, NSValue *> *slotBindings =
+      MirageSlotBindingsByUniform(source);
   for (int di = 0; di < (int)dirs.count; di++) {
     // Out of room: say so rather than quietly returning a short control set.
     if (n >= maxProps || pool + 1 > KK_SHADER_COLOR_POOL) {
@@ -561,13 +564,28 @@ static inline int MirageParseScalarProps(NSString *source,
       else if ([u isEqualToString:@"%"] || [u isEqualToString:@"percent"])
         p.fieldUnit[0] = '%';
     }
+    MirageSlotBinding slot = MirageSlotBindingValue(slotBindings[nm]);
+    if (slot.maxCount > 0) {
+      p.slotMax = slot.maxCount;
+      p.slotGroupIndex = slot.groupIndex;
+      strncpy(p.slotGroup, slot.groupName, sizeof(p.slotGroup) - 1);
+    }
+    // A repeatable control costs its group's CEILING: the block layout is
+    // compiled once, so every instance the user may add needs a home in it
+    // already. Out of room is the same answer as above - say so.
+    int span = p.slotMax > 0 ? p.slotMax : 1;
+    if (pool + span > KK_SHADER_COLOR_POOL) {
+      if (outTruncated)
+        *outTruncated = 1;
+      break;
+    }
     p.poolOffset = pool;
     MirageScalarParseOSC(attrs, &p);
     MirageScalarParseDefaults(attrs, &p);
     MirageScalarParseDynamicMax(attrs, &p);
     MirageScalarParseVisibility(attrs, &p);
     props[n++] = p;
-    pool += 1;
+    pool += span;
   }
   if (outUsed)
     *outUsed = pool - startOffset;

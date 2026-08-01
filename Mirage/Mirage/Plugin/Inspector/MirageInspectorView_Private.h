@@ -40,6 +40,12 @@ NS_ASSUME_NONNULL_BEGIN
   /// change that swaps the shader (incl. a guide seed dropping the code lane =>
   /// the baked default) re-wires the source-derived OSC set exactly once.
   NSString *_lastEffectiveShaderSource;
+  /// The slot registry the lane templates were last derived from, as a
+  /// fingerprint. The source is not enough on its own: a `#slots` instance
+  /// added or removed changes how many lane sets that same source stands for,
+  /// and an undo brings the change back through the blob without a single
+  /// character of the shader moving.
+  NSString *_lastSlotSignature;
   /// Kept so the link-thumbnail bake can resolve this instance's UUID
   /// (KKInstanceUUIDForAPI) - the SAME key the render-side manifest uses.
   id<PROAPIAccessing> _thumbAPIManager;

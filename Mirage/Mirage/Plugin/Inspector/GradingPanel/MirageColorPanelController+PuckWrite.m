@@ -14,13 +14,13 @@
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 
+#import "MirageColorPanelController_Internal.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageLocalized.h"
 #import "MirageScopeSampler.h"
 #import "MirageSurfaceCircleView.h"
 #import "MirageSurfaceResponse.h"
 #import "Plugin_Private.h" // +shaderSourceFromTimeline:
-#import "MirageColorPanelController_Internal.h"
 
 /// The same name for the logs, which are read as evidence and must not change
 /// with the user's language.
@@ -32,19 +32,42 @@ static NSString *MirageRingLogName(MirageColorSurfaceRing ring) {
   return @"surface";
 }
 
-/// A puck's icon from its declared SF Symbol. Nil for an unnamed symbol or one this
-/// Mac does not have: a missing glyph leaves a plain handle, which is a blemish,
-/// where a nil in an array literal would be a crash.
-static NSImage *_Nullable MirageSurfaceIconNamed(NSString *_Nullable symbol) {
-  if (!symbol.length)
-    return nil;
-  return [NSImage imageWithSystemSymbolName:symbol accessibilityDescription:nil];
+/// The glyph for a handle that declared no symbol and is not one of a numbered
+/// run: the shader's single global puck. An icon-like mark rather than a word -
+/// it is drawn at nine points inside a handle and is never read as language -
+/// so it is deliberately NOT localized.
+static NSString *const kMirageGlobalPuckGlyph = @"G";
+
+/// Put the declared glyph on `puck`, deciding between a symbol and literal
+/// text.
+///
+/// The symbol slot is resolved as an SF Symbol first, because that is what
+/// nearly every template writes. A name macOS does not have is then taken at
+/// its word and drawn as text: authors ask for "S" or "3" far more often than
+/// there is a symbol shaped like it, and a mistyped symbol name that reads as
+/// itself is a typo you can see rather than a handle that silently lost its
+/// mark.
+///
+/// With nothing declared the defaults fill in: a `#slots` instance shows its
+/// own number, anything else shows the global glyph. Both are last resorts - an
+/// authored symbol or text always wins.
+static void MirageApplyPuckGlyph(MirageSurfacePuck *puck,
+                                 NSDictionary<NSString *, NSString *> *spec) {
+  NSString *symbol = spec[@"symbol"] ?: @"";
+  if (symbol.length) {
+    puck.icon = [NSImage imageWithSystemSymbolName:symbol
+                          accessibilityDescription:nil];
+    if (!puck.icon)
+      puck.textGlyph = symbol;
+    return;
+  }
+  NSString *number = spec[@"number"] ?: @"";
+  puck.textGlyph = number.length ? number : kMirageGlobalPuckGlyph;
 }
 
-/// YES when `r` belongs to the puck being dragged. A shader with no `puck=` has one
-/// unnamed puck and every mapping belongs to it.
-BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
-                                        NSString *puckName) {
+/// YES when `r` belongs to the puck being dragged. A shader with no `puck=` has
+/// one unnamed puck and every mapping belongs to it.
+BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   return [(@(r.puck) ?: @"") isEqualToString:puckName ?: @""];
 }
 
@@ -65,15 +88,15 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
 // so a reset is a single step back.
 - (void)_resetMappedControlsForPuck:(NSUInteger)puckIndex
                                ring:(NSUInteger)ringIndex {
-  // A double-click reaches the view's reset branch without its drag branch, so a
-  // drag left open by a lost mouse-up would still be open here.
+  // A double-click reaches the view's reset branch without its drag branch, so
+  // a drag left open by a lost mouse-up would still be open here.
   [self _endPuckDragReason:@"recentred"];
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline)
     return;
   NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
   NSDictionary<NSString *, NSValue *> *responses =
-      MirageSurfaceResponsesForRing(source, [self _ringAtIndex:ringIndex]);
+      [self _responsesForRing:ringIndex source:source];
   if (!responses.count)
     return;
   double frac = [self _editFraction];
@@ -104,9 +127,10 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
       continue;
     NSMutableArray<NSNumber *> *values = [current mutableCopy];
     if (r.baseIsHue) {
-      // Rotate back to the declared hue rather than replacing the colour, so the
-      // lightness and colourfulness the user chose survive the recentre. Oklab,
-      // because `r.base` is an Oklab angle and so is everything the wheel paints.
+      // Rotate back to the declared hue rather than replacing the colour, so
+      // the lightness and colourfulness the user chose survive the recentre.
+      // Oklab, because `r.base` is an Oklab angle and so is everything the
+      // wheel paints.
       if (values.count < 3)
         continue;
       double L = 0.0, chroma = 0.0, hue = -1.0;
@@ -140,16 +164,16 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
   [self _refreshPuck];
 }
 
-// Every write this panel makes goes through this pair, and the BOOL is what makes
-// the pairing structural.
+// Every write this panel makes goes through this pair, and the BOOL is what
+// makes the pairing structural.
 //
 // FCP reported a caught exception from inside our own "Adjust Mirage" action -
 // FFChannelChangeContext willSetChannel: through FFChannelAction lockChannels -
-// which is what its channel lock raises when a second undo group opens inside one
-// that is still open. Reordering the call sites cannot prevent that, because the
-// missing end is not a call site at all: it is a mouse-up that was delivered to
-// another application. So the guard closes the stale group instead of trusting
-// anyone to have closed it.
+// which is what its channel lock raises when a second undo group opens inside
+// one that is still open. Reordering the call sites cannot prevent that,
+// because the missing end is not a call site at all: it is a mouse-up that was
+// delivered to another application. So the guard closes the stale group instead
+// of trusting anyone to have closed it.
 - (void)_beginWriteGroup:(NSString *)reason {
   if (_writeGroupOpen) {
     KKLogWarn(@"[Surface] a write group was still open when \"%@\" began - a "
@@ -173,10 +197,11 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
 }
 
 - (void)_beginPuckDrag:(NSUInteger)puckIndex ring:(NSUInteger)ringIndex {
-  // A drag whose mouse-up went to another application never reached -_endPuckDrag,
-  // so the view can hand us a second begin with the first still open. End it here,
-  // the way the mini viewer's overlay ends a drag on a new mouseDown. The ring the
-  // new drag is on is kept, since its view has just latched on purpose.
+  // A drag whose mouse-up went to another application never reached
+  // -_endPuckDrag, so the view can hand us a second begin with the first still
+  // open. End it here, the way the mini viewer's overlay ends a drag on a new
+  // mouseDown. The ring the new drag is on is kept, since its view has just
+  // latched on purpose.
   [self _endPuckDragReason:@"lost mouse-up - a new drag began"
                keepingRing:ringIndex];
   KKTimeline *timeline = _lanesView.currentTimeline;
@@ -189,7 +214,7 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
   }
   NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
   NSDictionary<NSString *, NSValue *> *responses =
-      MirageSurfaceResponsesForRing(source, [self _ringAtIndex:ringIndex]);
+      [self _responsesForRing:ringIndex source:source];
   NSMutableDictionary *captured = [NSMutableDictionary dictionary];
   double frac = [self _editFraction];
   for (KKLane *lane in timeline.lanes) {
@@ -213,10 +238,11 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
   [self _endPuckDragReason:reason keepingRing:NSNotFound];
 }
 
-/// End an in-progress puck drag exactly once, whatever ended it. Called from the
-/// view's own drag-ended callback, from a new drag beginning while this one is
-/// still marked active, from the app or the panel losing focus, and from teardown -
-/// so a begin always has a matching end and the undo group never leaks.
+/// End an in-progress puck drag exactly once, whatever ended it. Called from
+/// the view's own drag-ended callback, from a new drag beginning while this one
+/// is still marked active, from the app or the panel losing focus, and from
+/// teardown - so a begin always has a matching end and the undo group never
+/// leaks.
 ///
 /// The circles are unlatched whether or not a group was open: closing the group
 /// and leaving a view following the cursor is the half-fix that lets a drag on
@@ -240,36 +266,38 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
 
 // Write the controls the puck's POSITION implies.
 //
-// Absolute, not a delta from where the drag started. A delta is what a mouse gives
-// you and it is the wrong currency here: the response curve is nonlinear, so a
-// control nudged by curve(offset) from its drag-start value does not sit where
-// curve(position) says it should, and the derive - which reads position straight
-// back out of the values - disagrees with the puck the moment the drag ends. That
-// disagreement was the jump.
+// Absolute, not a delta from where the drag started. A delta is what a mouse
+// gives you and it is the wrong currency here: the response curve is nonlinear,
+// so a control nudged by curve(offset) from its drag-start value does not sit
+// where curve(position) says it should, and the derive - which reads position
+// straight back out of the values - disagrees with the puck the moment the drag
+// ends. That disagreement was the jump.
 //
-// So the puck means one thing: every mapped control equals its declared `default=`
-// plus the curve at this position. Hand-tuned MAPPED controls therefore snap onto
-// the mapping on first drag, which is the honest consequence of a puck that claims
-// to show where they are. Unmapped controls are never touched.
-/// The puck name at `index`, or nil when the index is stale (a recompile can change
-/// the puck list under a drag).
+// So the puck means one thing: every mapped control equals its declared
+// `default=` plus the curve at this position. Hand-tuned MAPPED controls
+// therefore snap onto the mapping on first drag, which is the honest
+// consequence of a puck that claims to show where they are. Unmapped controls
+// are never touched.
+/// The puck name at `index`, or nil when the index is stale (a recompile can
+/// change the puck list under a drag).
 - (NSString *)_puckNameAtIndex:(NSUInteger)index
                           ring:(NSUInteger)ringIndex
                         source:(NSString *)source {
   NSArray<NSDictionary<NSString *, NSString *> *> *pucks =
-      MirageSurfacePucksForRing(source, [self _ringAtIndex:ringIndex]);
+      [self _pucksForRing:ringIndex source:source];
   return index < pucks.count ? pucks[index][@"name"] : nil;
 }
 
 /// The response directions this puck's gesture actually has to satisfy.
 ///
-/// Built here rather than at each call site because the apply and the derive MUST
-/// stretch by the same set: they are inverses of each other, and a set that differs
-/// between them is exactly the disagreement that makes a puck spring away from
-/// where it was dropped. Same participation gate as both loops - this puck's
-/// controls, currently visible, with a declared origin.
+/// Built here rather than at each call site because the apply and the derive
+/// MUST stretch by the same set: they are inverses of each other, and a set
+/// that differs between them is exactly the disagreement that makes a puck
+/// spring away from where it was dropped. Same participation gate as both loops
+/// - this puck's controls, currently visible, with a declared origin.
 - (MirageSurfaceAxisSet)_axesForPuck:(NSString *)puckName
-                           responses:(NSDictionary<NSString *, NSValue *> *)responses
+                           responses:
+                               (NSDictionary<NSString *, NSValue *> *)responses
                             drivable:(NSSet<NSString *> *)drivable {
   MirageSurfaceAxisSet axes;
   memset(&axes, 0, sizeof(axes));
@@ -293,7 +321,7 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
     return;
   NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
   NSDictionary<NSString *, NSValue *> *responses =
-      MirageSurfaceResponsesForRing(source, [self _ringAtIndex:ringIndex]);
+      [self _responsesForRing:ringIndex source:source];
   double frac = [self _editFraction];
   NSString *puckName = [self _puckNameAtIndex:puckIndex
                                          ring:ringIndex
@@ -302,11 +330,11 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
     return;
   BOOL polar = MirageSurfaceResponsesArePolar(responses);
   NSSet<NSString *> *drivable = [self _drivableKeysIn:timeline fraction:frac];
-  // The rim has to mean full strength in every direction, so a cartesian gesture is
-  // stretched into the puck's own control basis before anything projects onto it -
-  // otherwise the directions between the axes are simply unreachable. A polar
-  // surface is left alone: its radius is a control's own deflection, not a
-  // direction to be normalised.
+  // The rim has to mean full strength in every direction, so a cartesian
+  // gesture is stretched into the puck's own control basis before anything
+  // projects onto it - otherwise the directions between the axes are simply
+  // unreachable. A polar surface is left alone: its radius is a control's own
+  // deflection, not a direction to be normalised.
   if (!polar)
     MirageSurfaceDiscToAxes(&position.x, &position.y,
                             [self _axesForPuck:puckName
@@ -319,7 +347,8 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
   for (NSUInteger i = 0; i < lanes.count; i++) {
     KKLane *lane = lanes[i];
     NSValue *boxed = lane.key.length ? responses[lane.key] : nil;
-    NSArray<NSNumber *> *start = lane.key.length ? _dragStartValues[lane.key] : nil;
+    NSArray<NSNumber *> *start =
+        lane.key.length ? _dragStartValues[lane.key] : nil;
     if (!boxed || !start.count)
       continue;
     if (![drivable containsObject:lane.key])
@@ -328,16 +357,17 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
     [boxed getValue:&r];
     if (!MirageResponseBelongsToPuck(r, puckName))
       continue; // another puck's control: this gesture is not for it
-    // No declared origin means there is no value a centred puck could stand for, so
-    // the control stays out of the gesture rather than drifting from wherever it
-    // happened to be. The derive skips it for the same reason.
+    // No declared origin means there is no value a centred puck could stand
+    // for, so the control stays out of the gesture rather than drifting from
+    // wherever it happened to be. The derive skips it for the same reason.
     if (!r.hasBase)
       continue;
     double magnitude;
     double move;
     if (polar) {
-      // Distance for `r:`, bearing for `a:`. A cartesian mapping on a polar surface
-      // is skipped rather than blended in - see MirageSurfaceResponsesArePolar.
+      // Distance for `r:`, bearing for `a:`. A cartesian mapping on a polar
+      // surface is skipped rather than blended in - see
+      // MirageSurfaceResponsesArePolar.
       if (fabs(r.r) > 0.0) {
         magnitude = r.r;
         move = MirageSurfaceCurveDelta(r, r.base, distance, magnitude);
@@ -348,8 +378,8 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
         continue;
       }
     } else {
-      // Project the puck position onto this control's response direction, then shape
-      // it through the curve so the rim reaches the control's real limit.
+      // Project the puck position onto this control's response direction, then
+      // shape it through the curve so the rim reaches the control's real limit.
       magnitude = hypot(r.x, r.y);
       if (magnitude < 1e-12)
         continue;
@@ -367,10 +397,11 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
     if (r.baseIsHue) {
       if (values.count < 3)
         continue;
-      // Rotate the colour's hue, preserving its lightness and colourfulness: the
-      // author asked for a hue response, not a different colour. Measured and
-      // rewritten in OKLAB, the space the ring is painted in - through HSV the
-      // swatch landed up to 30 degrees off the green the cursor was sitting on.
+      // Rotate the colour's hue, preserving its lightness and colourfulness:
+      // the author asked for a hue response, not a different colour. Measured
+      // and rewritten in OKLAB, the space the ring is painted in - through HSV
+      // the swatch landed up to 30 degrees off the green the cursor was sitting
+      // on.
       double L = 0.0, chroma = 0.0;
       MirageSurfaceOklabLCh(MAX(0.0, MIN(1.0, values[0].doubleValue)),
                             MAX(0.0, MIN(1.0, values[1].doubleValue)),
@@ -378,16 +409,17 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
                             &chroma, NULL);
       // On a wheel, the puck's BEARING IS THE HUE. Not an offset from the
       // control's default: the ring paints absolute hues, so adding the default
-      // rotated the whole wheel by whatever colour that default happened to be -
-      // point at green on a control defaulting to cyan and the swatch went magenta.
-      // Every colour control was skewed, and the ones defaulting near cyan read as
-      // exactly inverted, which is the "it moves the opposite way" this fixes.
-      // Dragging at a colour now produces that colour on every control.
+      // rotated the whole wheel by whatever colour that default happened to be
+      // - point at green on a control defaulting to cyan and the swatch went
+      // magenta. Every colour control was skewed, and the ones defaulting near
+      // cyan read as exactly inverted, which is the "it moves the opposite way"
+      // this fixes. Dragging at a colour now produces that colour on every
+      // control.
       //
-      // The `a:` magnitude has nothing to scale here and is ignored: a hue's range
-      // is the whole circle by definition, so the wheel already is the range.
-      // Lightness and chroma stay the swatch's own - the author asked for a hue
-      // response, not a different colour.
+      // The `a:` magnitude has nothing to scale here and is ignored: a hue's
+      // range is the whole circle by definition, so the wheel already is the
+      // range. Lightness and chroma stay the swatch's own - the author asked
+      // for a hue response, not a different colour.
       double hueDegrees =
           (polar && fabs(r.a) > 0.0) ? bearing : (r.base + move);
       double nr = 0.0, ng = 0.0, nb = 0.0;
@@ -397,8 +429,8 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
       values[2] = @(nb);
     } else {
       double next = r.base + move;
-      // Clamp to the control's own declared bounds, so a gesture can never push a
-      // control somewhere its slider could not go.
+      // Clamp to the control's own declared bounds, so a gesture can never push
+      // a control somewhere its slider could not go.
       NSArray<NSNumber *> *lo = lane.componentMin, *hi = lane.componentMax;
       if (lo.count)
         next = MAX(next, lo.firstObject.doubleValue);
@@ -420,9 +452,9 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
 
 // Derive where the puck must be to explain the controls as they stand.
 //
-// This is the direction that makes the relationship bi-directional: nothing here
-// writes anything, so hand-editing Threshold in the inspector moves the puck, and
-// the puck can never claim a position the controls do not support.
+// This is the direction that makes the relationship bi-directional: nothing
+// here writes anything, so hand-editing Threshold in the inspector moves the
+// puck, and the puck can never claim a position the controls do not support.
 - (void)_refreshPuck {
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline || !_circles.count)
@@ -430,17 +462,17 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
   NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
   [self _applySurfaceSpecIfChanged:source];
   // Resolved on every refresh rather than once at present: the directive is
-  // normally typed with the panel already open, and a `visibleby=` choice can be
-  // switched while it is.
+  // normally typed with the panel already open, and a `visibleby=` choice can
+  // be switched while it is.
   BOOL canPick = [self _hasDrivablePicksIn:timeline source:source];
   _pickColorButton.hidden = !canPick;
   if (!canPick && _pickingColor)
     [self _disarmPicking];
-  // Present whenever the shader subscribes anything at all, but only ENABLED when
-  // the handle you last touched has a subscriber of its own: a click that would
-  // write nothing is a click the button has to refuse before you spend it, and
-  // hiding it instead would make the button appear and vanish as you move between
-  // handles on the same wheel.
+  // Present whenever the shader subscribes anything at all, but only ENABLED
+  // when the handle you last touched has a subscriber of its own: a click that
+  // would write nothing is a click the button has to refuse before you spend
+  // it, and hiding it instead would make the button appear and vanish as you
+  // move between handles on the same wheel.
   _pickSourceButton.hidden = !canPick;
   BOOL canPickActive =
       canPick && [self _picksForActivePuckIn:timeline source:source].count > 0;
@@ -448,9 +480,9 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
   if (!canPickActive && _pickingSource)
     [self _disarmPicking];
   [self _refreshHeaderButtonTitlesIn:timeline source:source];
-  // Nothing measured, nothing to say. A sentence left over from a reference that is
-  // gone - the shader changed its ring, the pick was dropped - would describe a
-  // problem that may well have been fixed since.
+  // Nothing measured, nothing to say. A sentence left over from a reference
+  // that is gone - the shader changed its ring, the pick was dropped - would
+  // describe a problem that may well have been fixed since.
   MirageSurfaceCircleView *hueCircle = [self _hueCircle];
   if (!hueCircle.castAvailable ||
       _pickDeclaration == MirageMemoryColorNeutral || _pickButton.hidden)
@@ -463,17 +495,18 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
   for (NSUInteger i = 0; i < [self _ringCount] && i < _circles.count; i++) {
     MirageSurfaceCircleView *circle = _circles[i];
     NSDictionary<NSString *, NSValue *> *responses =
-        MirageSurfaceResponsesForRing(source, [self _ringAtIndex:i]);
+        [self _responsesForRing:i source:source];
     if (!responses.count) {
       circle.xAxisLive = NO;
       circle.yAxisLive = NO;
       circle.pucks = @[ [MirageSurfacePuck new] ];
       continue;
     }
-    // Liveness is a property of the DECLARED mapping, not of which lanes happened
-    // to resolve this tick. Deriving it from the samples meant one unresolvable
-    // control made its whole axis read as dead, which is what dimmed the Cool/Warm
-    // labels and crosshair even though the shader mapped them.
+    // Liveness is a property of the DECLARED mapping, not of which lanes
+    // happened to resolve this tick. Deriving it from the samples meant one
+    // unresolvable control made its whole axis read as dead, which is what
+    // dimmed the Cool/Warm labels and crosshair even though the shader mapped
+    // them.
     BOOL polar = MirageSurfaceResponsesArePolar(responses);
     BOOL xLive = polar, yLive = polar;
     for (NSValue *boxed in responses.allValues) {
@@ -487,10 +520,10 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
     circle.polarAxes = polar;
     NSMutableArray<MirageSurfacePuck *> *pucks = [NSMutableArray array];
     for (NSDictionary<NSString *, NSString *> *spec in
-         MirageSurfacePucksForRing(source, [self _ringAtIndex:i])) {
+         [self _pucksForRing:i source:source]) {
       MirageSurfacePuck *puck = [MirageSurfacePuck new];
       puck.name = spec[@"name"] ?: @"";
-      puck.icon = MirageSurfaceIconNamed(spec[@"symbol"]);
+      MirageApplyPuckGlyph(puck, spec);
       puck.trackRadius = (CGFloat)[spec[@"track"] doubleValue];
       puck.position = [self _derivePositionForPuck:puck.name
                                           timeline:timeline
@@ -510,16 +543,17 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
 // Derive one puck's position from ITS controls alone.
 //
 // Split out per puck rather than fitting everything at once: two pucks are two
-// independent gestures that happen to share a circle, so mixing their controls into
-// one fit would put both of them at the average of the corrections.
+// independent gestures that happen to share a circle, so mixing their controls
+// into one fit would put both of them at the average of the corrections.
 - (NSPoint)_derivePositionForPuck:(NSString *)puckName
                          timeline:(KKTimeline *)timeline
-                        responses:(NSDictionary<NSString *, NSValue *> *)responses
+                        responses:
+                            (NSDictionary<NSString *, NSValue *> *)responses
                          drivable:(NSSet<NSString *> *)drivable
                             polar:(BOOL)polar
                          fraction:(double)frac {
-  NSMutableData *samples =
-      [NSMutableData dataWithLength:sizeof(MirageSurfaceSample) * responses.count];
+  NSMutableData *samples = [NSMutableData
+      dataWithLength:sizeof(MirageSurfaceSample) * responses.count];
   MirageSurfaceSample *buf = samples.mutableBytes;
   int n = 0;
   MirageSurfacePolarFit fit = {0.0, 0, 0.0, 0.0, 0};
@@ -528,8 +562,8 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
     if (!boxed)
       continue;
     // Same gate as the write side, or the puck would derive from controls the
-    // gesture cannot move - it would sit somewhere the visible pair never put it
-    // and snap the moment you touched it.
+    // gesture cannot move - it would sit somewhere the visible pair never put
+    // it and snap the moment you touched it.
     if (![drivable containsObject:lane.key])
       continue;
     MirageSurfaceResponse r;
@@ -548,9 +582,9 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
     buf[n].ry = r.y;
     double delta;
     if (r.baseIsHue) {
-      // A colour lane's value is rgba, and its response is a hue rotation, so the
-      // delta is an ANGLE - measured the short way round, or a hue just past the
-      // wrap point would throw the fit to the far side of the circle.
+      // A colour lane's value is rgba, and its response is a hue rotation, so
+      // the delta is an ANGLE - measured the short way round, or a hue just
+      // past the wrap point would throw the fit to the far side of the circle.
       if (values.count < 3)
         continue;
       // Oklab, the same measurement the apply side writes with, or the puck
@@ -563,9 +597,10 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
       if (hue < 0.0)
         continue; // desaturated: a rotation would be unobservable
       if (polar && fabs(r.a) > 0.0) {
-        // The apply side puts the hue AT the bearing, so the derive reads it back
-        // the same way: the colour's own hue is the bearing, with no default
-        // subtracted out. Wrapped to -180..180 because a bearing is a direction.
+        // The apply side puts the hue AT the bearing, so the derive reads it
+        // back the same way: the colour's own hue is the bearing, with no
+        // default subtracted out. Wrapped to -180..180 because a bearing is a
+        // direction.
         MirageSurfacePolarAddAngle(&fit, fmod(hue + 540.0, 360.0) - 180.0);
         continue;
       }
@@ -574,9 +609,9 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
       delta = values.firstObject.doubleValue - r.base;
     }
     if (polar) {
-      // Distance and bearing are observed separately, then recombined: there is no
-      // linear system to solve, because a radial control says nothing about the
-      // angle and an angular one says nothing about the distance.
+      // Distance and bearing are observed separately, then recombined: there is
+      // no linear system to solve, because a radial control says nothing about
+      // the angle and an angular one says nothing about the distance.
       if (fabs(r.r) > 0.0)
         MirageSurfacePolarAddRadius(
             &fit, MirageSurfaceCurveDeflection(r, r.base, delta, r.r));
@@ -584,13 +619,13 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
         MirageSurfacePolarAddAngle(&fit, MirageSurfaceAngleForDelta(r, delta));
       continue;
     }
-    // Feed the fit a DEFLECTION, not a raw delta: the response curve is cubic, so a
-    // linear fit on raw deltas would put the puck in the wrong place everywhere
-    // except dead centre and the rim.
+    // Feed the fit a DEFLECTION, not a raw delta: the response curve is cubic,
+    // so a linear fit on raw deltas would put the puck in the wrong place
+    // everywhere except dead centre and the rim.
     double magnitude = hypot(r.x, r.y);
     buf[n].delta = MirageSurfaceCurveDeflection(r, r.base, delta, magnitude);
-    // The fit's rows are already normalised by magnitude, so the observation has to
-    // be in the same currency - deflection is, by construction.
+    // The fit's rows are already normalised by magnitude, so the observation
+    // has to be in the same currency - deflection is, by construction.
     buf[n].delta *= magnitude;
     n++;
   }
@@ -599,10 +634,11 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r,
     MirageSurfacePolarResolve(fit, &px, &py);
   } else {
     MirageSurfaceDerivePuck(buf, n, &px, &py);
-    // The fit answers in the CONTROL BASIS the apply side stretched into, and the
-    // circle draws in the disc. Squeezed back through the same axes, so a control
-    // pair sitting at both extremes derives to the rim rather than off the edge of
-    // the wheel - and so the puck lands exactly where the drag put it.
+    // The fit answers in the CONTROL BASIS the apply side stretched into, and
+    // the circle draws in the disc. Squeezed back through the same axes, so a
+    // control pair sitting at both extremes derives to the rim rather than off
+    // the edge of the wheel - and so the puck lands exactly where the drag put
+    // it.
     MirageSurfaceAxesToDisc(&px, &py,
                             [self _axesForPuck:puckName
                                      responses:responses

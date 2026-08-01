@@ -117,8 +117,26 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// reselect). Return the full lane set for the given shader/code source. Used
 /// by generators whose lanes are declared in the shader (e.g. a `// #color`
 /// directive). Not set == the lane set is fixed at init.
+///
+/// `timeline` is the one the templates must be derived AGAINST, for a host
+/// whose lane set is a function of the project as well as of the source -
+/// Mirage's `#slots` groups stand for one lane set per stamped instance, and
+/// the instances live in the timeline. Pass nil to mean "whatever you are
+/// showing", which is what the internal code-commit path does: a commit changes
+/// the source under a timeline that is already current. A caller deriving for a
+/// timeline that has NOT been applied yet - the pre-apply hook that has to fix
+/// the templates before the rows are filtered against them - passes it
+/// explicitly, or the derive answers about the timeline being replaced.
 @property(nonatomic, copy, nullable)
-    NSArray<KKLane *> * (^availableLanesProvider)(NSString *code);
+    NSArray<KKLane *> * (^availableLanesProvider)
+        (NSString *code, KKTimeline *_Nullable timeline);
+
+/// Swap in an available-lanes set directly: hold it, and rebuild the rows from
+/// it. What the code-commit re-derive does with the provider's answer, exposed
+/// so a host that called `availableLanesProvider` itself - with a timeline of
+/// its own choosing - can apply the result without going through a code commit
+/// that did not happen.
+- (void)applyAvailableLanes:(NSArray<KKLane *> *)lanes;
 
 /// When YES, a persisted lane whose key matches NO available-lane template is
 /// hidden from the rows. For a source-derived lane set (see

@@ -12,13 +12,14 @@
 #import "MirageAudioPool.h"
 #import "MirageCustomShader.h" // MirageCustomErrorShaderSource
 #import "MirageDirectives.h"
-#import "MirageFrameOffsets.h" // `// #frames` neighbour offsets
 #import "MirageExprMiniSet.h"     // // @osc custom-handling handles
+#import "MirageFrameOffsets.h"    // `// #frames` neighbour offsets
 #import "MirageOSCBlockRuntime.h" // rotate blocks feed the rotation set
 #import "MirageRenderUniforms.h"  // MirageMakeUniforms (shared with FCP render)
 #import "MirageTypes.h"
 #import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKSlotInstances.h> // slot lane keys + instance order
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <Metal/Metal.h>
 #import <math.h>
@@ -58,9 +59,15 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
     const MirageScalarProp *p = &props[i];
     if (p->isPoint || p->isMulti || p->fieldUnit[0] != 'p')
       continue;
-    if (p->poolOffset < 0 || p->poolOffset >= poolCount)
-      continue;
-    pool[p->poolOffset].x *= scale;
+    // A repeatable control is one vec4 PER INSTANCE; the dead slots are zero,
+    // and zero scales to zero, so the whole span goes through unconditionally.
+    int span = p->slotMax > 0 ? p->slotMax : 1;
+    for (int e = 0; e < span; e++) {
+      int off = p->poolOffset + e;
+      if (off < 0 || off >= poolCount)
+        continue;
+      pool[off].x *= scale;
+    }
   }
 }
 
@@ -95,7 +102,8 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   KKRotationOSCSet *_rotSet;
   MirageExprMiniSet *_exprSet;
   // Last logged `// #frames` bind state (declared count / first offset / pumped
-  // count), so the diagnostic fires on a change instead of once per drawn frame.
+  // count), so the diagnostic fires on a change instead of once per drawn
+  // frame.
   NSString *_neighborBindSignature;
   // Colour-matched neighbours, one entry per aux index. Same shape as the
   // _hiResTex / _pipelines caches: an ivar-held Metal object rebuilt only when
@@ -363,6 +371,13 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
 // (pointHandleSizeScale: the base's KKOSCAnchorDotScale default already
 // matches the dot family - no override needed.)
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
+  // A `// #slots` instance lane whose keyframes aren't stamped yet answers from
+  // the PROTOTYPE it was copied from, which is the control the key names. Every
+  // instance therefore starts at the shader's declared default rather than at
+  // super's @[@0], the same way a non-repeating control does.
+  NSString *slotControl = nil;
+  if (KKSlotParseLaneKey(label, NULL, NULL, &slotControl) && slotControl.length)
+    label = slotControl;
   // The plugin is Custom-only now; only the shared lanes have defaults here.
   if ([label isEqualToString:@"Speed"])
     return @[ @(KK_SHADER_GRAD_DEFAULT_SPEED) ];
@@ -820,9 +835,20 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
       ^NSArray<NSNumber *> *(NSString *label) {
     return [self valuesForLabel:label];
   };
+  // The same registry order the FCP render packs by, so the preview shows the
+  // instance the user is editing at the array element the shader reads.
+  KKTimeline *slotTimeline = self.timeline;
+  NSArray<NSString *> * (^slotInstances)(NSString *) =
+      ^NSArray<NSString *> *(NSString *groupName) {
+    return KKTimelineSlotInstanceIDs(slotTimeline, groupName);
+  };
   MirageShaderModel *poolModel = [MirageShaderModel modelForSource:image];
-  int colorPoolN = [poolModel fillColorPool:colorPool valuesForLabel:values];
-  colorPoolN = [poolModel fillScalarPool:colorPool valuesForLabel:values];
+  int colorPoolN = [poolModel fillColorPool:colorPool
+                             valuesForLabel:values
+                              slotInstances:slotInstances];
+  colorPoolN = [poolModel fillScalarPool:colorPool
+                          valuesForLabel:values
+                           slotInstances:slotInstances];
   MirageScaleMiniPixelProps(poolModel, colorPool, colorPoolN, W, H,
                             self.canvas.sourceMediaSize);
   // Sampled at the playhead's PROJECT time, pushed by the inspector - the same
@@ -838,6 +864,9 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   colorPoolN = MirageFillAudioPool(poolModel, colorPool, audioTimeSec, values);
   // `// #gradient` ramps last, so the three pools above keep their offsets.
   colorPoolN = [poolModel fillGradientPool:colorPool valuesForLabel:values];
+  // The injected `#slots` counts close the pool.
+  colorPoolN = [poolModel fillSlotCountPool:colorPool
+                              slotInstances:slotInstances];
   NSArray<NSNumber *> *transitionModeV =
       [self valuesForLabel:@"Transition Mode"];
   int transitionMode =

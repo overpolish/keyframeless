@@ -5,12 +5,14 @@
 
 // The GRAMMAR of the Grading surface: what a control's `surface=`, `puck=` and
 // `pick=` attributes say, how they are read out of a shader's directive
-// comments, and the colour measurements those readings depend on. The maths that
-// turns a parsed response into puck movement lives in MirageSurfaceAxes.h.
+// comments, and the colour measurements those readings depend on. The maths
+// that turns a parsed response into puck movement lives in MirageSurfaceAxes.h.
 //
-// This is the half that grows: a new surface attribute - the upcoming `#slots` -
-// is declared, parsed and gathered here, and nothing in the axis maths has to
-// know about it.
+// This is the half that grows: a new declaration reads out of the source here,
+// and nothing in the axis maths has to know about it. `#slots` - repeatable
+// groups of controls, whose members carry `puck={"Colour {n}", ...}` - is big
+// enough to own a file, so it sits in MirageSlots.h and is pulled in below,
+// which keeps one import for everything a shader may DECLARE.
 #pragma once
 
 #ifndef __METAL_VERSION__
@@ -18,32 +20,35 @@
 #import <Foundation/Foundation.h>
 #import <math.h>
 
-#import "MirageColorProps.h" // MirageParseHexColor
-#import "MirageOklab.h" // the shared sRGB / Oklab maths
+#import "MirageColorProps.h"        // MirageParseHexColor
 #import "MirageColorSurfaceProps.h" // MirageColorSurfaceRing, the ring marker
 #import "MirageDirectiveCommon.h"
+#import "MirageOklab.h" // the shared sRGB / Oklab maths
+#import "MirageSlots.h" // `#slots` - repeatable groups of controls
 
 // --- Polar axes ----------------------------------------------------------
 //
-// `x:`/`y:` are cartesian, which is right for two independent directions (warmer,
-// brighter) and wrong for a wheel. On a hue ring, saturation IS distance from the
-// centre and a hue shift IS rotation about it, so expressing them as a pair of
-// cartesian controls forces two mappings that do not mean what the ring is
-// painting. `r:` and `a:` say it directly:
+// `x:`/`y:` are cartesian, which is right for two independent directions
+// (warmer, brighter) and wrong for a wheel. On a hue ring, saturation IS
+// distance from the centre and a hue shift IS rotation about it, so expressing
+// them as a pair of cartesian controls forces two mappings that do not mean
+// what the ring is painting. `r:` and `a:` say it directly:
 //
 //     // #percent label="Saturation" min=0 max=200 default=100 surface="r:+40"
-//     // #float   label="Hue Shift"  min=-180 max=180 default=0 surface="a:+180"
+//     // #float   label="Hue Shift"  min=-180 max=180 default=0
+//     surface="a:+180"
 //
-// `r:` responds to the puck's DISTANCE from the centre, 0 at the middle and full
-// deflection at the rim, so the centre is always the control's declared default.
-// `a:` responds to its ANGLE, proportionally rather than through the curve: the
-// magnitude is the value at half a turn, so `a:+180` makes the puck's bearing the
-// hue offset directly. Angle has no rim to accelerate toward, and a hue is periodic
-// anyway, so a curve there would only make the wheel non-uniform.
+// `r:` responds to the puck's DISTANCE from the centre, 0 at the middle and
+// full deflection at the rim, so the centre is always the control's declared
+// default. `a:` responds to its ANGLE, proportionally rather than through the
+// curve: the magnitude is the value at half a turn, so `a:+180` makes the
+// puck's bearing the hue offset directly. Angle has no rim to accelerate
+// toward, and a hue is periodic anyway, so a curve there would only make the
+// wheel non-uniform.
 //
-// A surface is cartesian OR polar. Mixing is rejected rather than blended: the two
-// describe the same two degrees of freedom, so a shader declaring both is asking
-// for one gesture to mean two things.
+// A surface is cartesian OR polar. Mixing is rejected rather than blended: the
+// two describe the same two degrees of freedom, so a shader declaring both is
+// asking for one gesture to mean two things.
 
 /// One control's response to the puck, in the control's own units at full
 /// deflection. `present` is NO for a control with no `surface=`.
@@ -55,54 +60,59 @@ typedef struct {
   /// Response to the puck's bearing, in the control's units per half turn.
   double a;
   int present;
-  /// The control's `default=`, which is what a centred puck means. Read from the
-  /// same directive line: the author's declared origin, not whatever the control
-  /// happens to sit at now, or the puck would always derive to the centre.
+  /// The control's `default=`, which is what a centred puck means. Read from
+  /// the same directive line: the author's declared origin, not whatever the
+  /// control happens to sit at now, or the puck would always derive to the
+  /// centre.
   double base;
   int hasBase;
   /// YES when `base` is a HUE ANGLE in degrees, because the control is a colour
-  /// whose `default=` is a hex swatch. A colour's response is a hue rotation, so
-  /// its origin has to be an angle rather than a code value - without this a
-  /// colour control silently contributed nothing and its whole axis read as dead.
+  /// whose `default=` is a hex swatch. A colour's response is a hue rotation,
+  /// so its origin has to be an angle rather than a code value - without this a
+  /// colour control silently contributed nothing and its whole axis read as
+  /// dead.
   int baseIsHue;
-  /// The control's declared `min=` / `max=`, so the curve below knows how far it may
-  /// travel. `hasLimits` is NO when either is absent, which falls back to a plain
-  /// linear response rather than inventing a range.
+  /// The control's declared `min=` / `max=`, so the curve below knows how far
+  /// it may travel. `hasLimits` is NO when either is absent, which falls back
+  /// to a plain linear response rather than inventing a range.
   double minValue;
   double maxValue;
   int hasLimits;
-  /// Which puck drives this control, from `puck={"Shadows", "moon"}`. Empty means
-  /// the surface's single unnamed puck, which is what a one-puck shader gets
-  /// without saying anything.
+  /// Which puck drives this control, from `puck={"Shadows", "moon"}`. Empty
+  /// means the surface's single unnamed puck, which is what a one-puck shader
+  /// gets without saying anything.
   ///
   /// Named pucks are how one wheel carries several independent corrections - a
   /// three-way's shadows, midtones and highlights - without a mode control to
-  /// switch between them. They are NOT inferred from `group=`: a shader whose one
-  /// gesture spans several inspector groups (a bloom's Threshold, Bloom and Mist)
-  /// would otherwise be split into a puck per group.
+  /// switch between them. They are NOT inferred from `group=`: a shader whose
+  /// one gesture spans several inspector groups (a bloom's Threshold, Bloom and
+  /// Mist) would otherwise be split into a puck per group.
   char puck[48];
-  /// SF Symbol drawn inside that puck, from the second slot of `puck={}`. Optional:
-  /// with several pucks in a circle, the icon is the only thing that says which is
-  /// which, so a shader declaring more than one should give them all icons.
+  /// SF Symbol drawn inside that puck, from the second slot of `puck={}`.
+  /// Optional: with several pucks in a circle, the icon is the only thing that
+  /// says which is which, so a shader declaring more than one should give them
+  /// all icons.
   char puckSymbol[48];
-  /// `track=0.72`: pin this puck to a circle at that fraction of the radius, so the
-  /// drag is a rotation and nothing else. 0 leaves it free.
+  /// `track=0.72`: pin this puck to a circle at that fraction of the radius, so
+  /// the drag is a rotation and nothing else. 0 leaves it free.
   ///
-  /// For a puck whose controls are all angular, distance is not merely unused - it
-  /// is meaningless, and a handle that slides in and out while only its bearing does
-  /// anything invites the reading that the middle is "less". A track says what the
-  /// gesture actually is. Declared once per puck, on any of its controls.
+  /// For a puck whose controls are all angular, distance is not merely unused -
+  /// it is meaningless, and a handle that slides in and out while only its
+  /// bearing does anything invites the reading that the middle is "less". A
+  /// track says what the gesture actually is. Declared once per puck, on any of
+  /// its controls.
   double track;
-  /// Which ring this control is attached to, from the `hue` / `light` word at the
-  /// front of the value: `surface="light y:+1.5"`. `hasRing` is 0 for the
+  /// Which ring this control is attached to, from the `hue` / `light` word at
+  /// the front of the value: `surface="light y:+1.5"`. `hasRing` is 0 for the
   /// unmarked form.
   ///
-  /// A MARKER rather than position in the file, because the alternative - binding
-  /// each control to the nearest `#color-surface` above it - makes the ORDER of
-  /// the directives load-bearing, and directives are reordered all the time to
-  /// group the inspector. It would also have no failure mode: every control sits
-  /// under some surface, so a mis-aimed one would attach silently to the wrong
-  /// ring rather than saying so. The word is visible in the line that owns it.
+  /// A MARKER rather than position in the file, because the alternative -
+  /// binding each control to the nearest `#color-surface` above it - makes the
+  /// ORDER of the directives load-bearing, and directives are reordered all the
+  /// time to group the inspector. It would also have no failure mode: every
+  /// control sits under some surface, so a mis-aimed one would attach silently
+  /// to the wrong ring rather than saying so. The word is visible in the line
+  /// that owns it.
   int ring;
   int hasRing;
 } MirageSurfaceResponse;
@@ -117,9 +127,9 @@ typedef struct {
 /// Oklab 50 through the skin region), so a puck pointed at the ring's green
 /// landed on a different green than the one under the cursor. Anything that has
 /// to agree with the wheel wants MirageSurfaceOklabLCh below instead.
-static inline double MirageSurfaceHueDegreesWithSaturation(double r, double g,
-                                                           double b,
-                                                           double *outSaturation) {
+static inline double
+MirageSurfaceHueDegreesWithSaturation(double r, double g, double b,
+                                      double *outSaturation) {
   double mx = fmax(r, fmax(g, b)), mn = fmin(r, fmin(g, b));
   double c = mx - mn;
   if (outSaturation)
@@ -147,8 +157,8 @@ static inline double MirageSurfaceHueDegrees(double r, double g, double b) {
 // hue, and the shader templates rotate hue there too. Every colour measurement
 // on this surface - a `#color` control's `default=` origin, the swatch the puck
 // writes, the bearing the puck derives, the eyedropper's `pick=hue` - therefore
-// has to be Oklab as well, or the puck's bearing and the colour under it are two
-// different colours.
+// has to be Oklab as well, or the puck's bearing and the colour under it are
+// two different colours.
 //
 // Input and output are DISPLAY-ENCODED sRGB 0..1, because that is what colour
 // lanes and hex `default=` swatches hold. The sRGB transfer function is applied
@@ -185,13 +195,14 @@ static inline void MirageSurfaceOklabLCh(double r, double g, double b,
 
 /// The inverse: a display-encoded sRGB triple for an Oklab L, chroma and hue.
 ///
-/// Rec.709 is a triangle and Oklab is not, so most (L, C, h) requests are simply
-/// unreachable. Clamping the out-of-range channels is the cheap answer and the
-/// wrong one: it swings the hue that actually lands by 6 to 11 degrees, which is
-/// exactly the disagreement between wheel and swatch this whole space change
-/// exists to remove. So chroma is HALVED until the colour fits, holding the
-/// lightness and - the part that matters - the hue. Eight halvings reach 1/256th
-/// of the request, well past the point where anything is still visibly coloured.
+/// Rec.709 is a triangle and Oklab is not, so most (L, C, h) requests are
+/// simply unreachable. Clamping the out-of-range channels is the cheap answer
+/// and the wrong one: it swings the hue that actually lands by 6 to 11 degrees,
+/// which is exactly the disagreement between wheel and swatch this whole space
+/// change exists to remove. So chroma is HALVED until the colour fits, holding
+/// the lightness and - the part that matters - the hue. Eight halvings reach
+/// 1/256th of the request, well past the point where anything is still visibly
+/// coloured.
 static inline void MirageSurfaceEncodedForOklabLCh(double L, double C,
                                                    double hDeg, double *outR,
                                                    double *outG, double *outB) {
@@ -224,7 +235,8 @@ static inline double MirageSurfaceHueDelta(double from, double to) {
 /// Parse a control's `surface=` response. Accepts `x:` and `y:` terms in either
 /// order, signed, whitespace or comma separated: `"y:+30"`, `"x:-4 y:+12"`,
 /// `"y:12,x:-3"`.
-static inline MirageSurfaceResponse MirageParseSurfaceResponse(NSString *attrs) {
+static inline MirageSurfaceResponse
+MirageParseSurfaceResponse(NSString *attrs) {
   MirageSurfaceResponse r;
   memset(&r, 0, sizeof(r));
   NSString *value = MirageAttrString(attrs, @"surface");
@@ -240,9 +252,10 @@ static inline MirageSurfaceResponse MirageParseSurfaceResponse(NSString *attrs) 
   });
   for (NSTextCheckingResult *m in
        [termRe matchesInString:value
-                      options:0
-                        range:NSMakeRange(0, value.length)]) {
-    NSString *axis = [[value substringWithRange:[m rangeAtIndex:1]] lowercaseString];
+                       options:0
+                         range:NSMakeRange(0, value.length)]) {
+    NSString *axis =
+        [[value substringWithRange:[m rangeAtIndex:1]] lowercaseString];
     double amount = [value substringWithRange:[m rangeAtIndex:2]].doubleValue;
     if ([axis isEqualToString:@"x"])
       r.x = amount;
@@ -278,21 +291,22 @@ static inline MirageSurfaceResponse MirageParseSurfaceResponse(NSString *attrs) 
                                                : MirageColorSurfaceRingHue;
       r.hasRing = 1;
     }
-    // `puck={"Name", "symbol"}`, or the bare `puck="Name"`. Same braced-pair shape
-    // as `group=`, so there is one spelling for "a name and an icon" to learn.
+    // `puck={"Name", "symbol"}`, or the bare `puck="Name"`. Same braced-pair
+    // shape as `group=`, so there is one spelling for "a name and an icon" to
+    // learn.
     MirageParseNamedPairAttr(attrs, @"puck", r.puck, sizeof(r.puck),
                              r.puckSymbol, sizeof(r.puckSymbol));
-    // Clamped rather than rejected: a track outside the disc has no circle to draw,
-    // and one at the centre is a puck that cannot move at all.
+    // Clamped rather than rejected: a track outside the disc has no circle to
+    // draw, and one at the centre is a puck that cannot move at all.
     double track =
         MirageAttrDouble(attrs, @"\\btrack\\s*=\\s*([-+]?\\d*\\.?\\d+)", 0.0);
     if (track > 0.0)
       r.track = fmin(1.0, fmax(0.1, track));
     const double kNoBase = -1.0e300;
-    double lo = MirageAttrDouble(attrs, @"\\bmin\\s*=\\s*([-+]?\\d*\\.?\\d+)",
-                                 kNoBase);
-    double hi = MirageAttrDouble(attrs, @"\\bmax\\s*=\\s*([-+]?\\d*\\.?\\d+)",
-                                 kNoBase);
+    double lo =
+        MirageAttrDouble(attrs, @"\\bmin\\s*=\\s*([-+]?\\d*\\.?\\d+)", kNoBase);
+    double hi =
+        MirageAttrDouble(attrs, @"\\bmax\\s*=\\s*([-+]?\\d*\\.?\\d+)", kNoBase);
     if (lo != kNoBase && hi != kNoBase && hi > lo) {
       r.minValue = lo;
       r.maxValue = hi;
@@ -328,7 +342,8 @@ static inline MirageSurfaceResponse MirageParseSurfaceResponse(NSString *attrs) 
 /// every other Mirage directive resolves its control.
 static inline NSDictionary<NSString *, NSValue *> *
 MirageSurfaceResponsesForSource(NSString *source) {
-  NSMutableDictionary<NSString *, NSValue *> *out = [NSMutableDictionary dictionary];
+  NSMutableDictionary<NSString *, NSValue *> *out =
+      [NSMutableDictionary dictionary];
   if (!source.length)
     return out;
   static NSRegularExpression *dirRe;
@@ -348,8 +363,8 @@ MirageSurfaceResponsesForSource(NSString *source) {
   });
   NSArray<NSTextCheckingResult *> *dirs =
       [dirRe matchesInString:source
-                    options:0
-                      range:NSMakeRange(0, source.length)];
+                     options:0
+                       range:NSMakeRange(0, source.length)];
   for (NSUInteger i = 0; i < dirs.count; i++) {
     NSTextCheckingResult *dm = dirs[i];
     NSString *attrs = [source substringWithRange:[dm rangeAtIndex:1]];
@@ -361,22 +376,23 @@ MirageSurfaceResponsesForSource(NSString *source) {
         (i + 1 < dirs.count) ? dirs[i + 1].range.location : source.length;
     NSTextCheckingResult *um =
         [uniRe firstMatchInString:source
-                         options:0
-                           range:NSMakeRange(after, limit - after)];
+                          options:0
+                            range:NSMakeRange(after, limit - after)];
     if (!um)
       continue;
     NSString *name = [source substringWithRange:[um rangeAtIndex:1]];
-    out[name] = [NSValue valueWithBytes:&r objCType:@encode(MirageSurfaceResponse)];
+    out[name] = [NSValue valueWithBytes:&r
+                               objCType:@encode(MirageSurfaceResponse)];
   }
   return out;
 }
 
 /// YES when `r` is attached to `ring`.
 ///
-/// `dual` is NO for a shader declaring a single `#color-surface`, where there is
-/// nothing to disambiguate and every mapping belongs to the one surface whether
-/// or not it names a ring. That is what keeps a one-ring shader parsing exactly
-/// as it did before the marker existed.
+/// `dual` is NO for a shader declaring a single `#color-surface`, where there
+/// is nothing to disambiguate and every mapping belongs to the one surface
+/// whether or not it names a ring. That is what keeps a one-ring shader parsing
+/// exactly as it did before the marker existed.
 static inline BOOL MirageSurfaceResponseOnRing(MirageSurfaceResponse r,
                                                MirageColorSurfaceRing ring,
                                                BOOL dual) {
@@ -403,19 +419,21 @@ MirageSurfaceResponsesForRing(NSString *source, MirageColorSurfaceRing ring) {
   return out;
 }
 
-/// The surface's pucks, in the order their first control appears in the source, as
-/// `@{@"name": ..., @"symbol": ...}`. A shader with no `puck=` anywhere gets one
-/// entry with an empty name: the single unnamed puck, so callers have one code path.
+/// The surface's pucks, in the order their first control appears in the source,
+/// as
+/// `@{@"name": ..., @"symbol": ...}`. A shader with no `puck=` anywhere gets
+/// one entry with an empty name: the single unnamed puck, so callers have one
+/// code path.
 ///
 /// Ordered by first appearance rather than by name, and derived from the source
 /// rather than from the responses dictionary, because a dictionary's order is
-/// arbitrary and the pucks' order decides which one a click lands on and how they
-/// are drawn. Shadows, Midtones, Highlights should stay in the order the author
-/// wrote them.
+/// arbitrary and the pucks' order decides which one a click lands on and how
+/// they are drawn. Shadows, Midtones, Highlights should stay in the order the
+/// author wrote them.
 ///
-/// `filterRing` restricts the list to one ring's controls, which is what a shader
-/// declaring both rings needs: each circle draws its own handles. Passing NO
-/// gathers every puck in the shader.
+/// `filterRing` restricts the list to one ring's controls, which is what a
+/// shader declaring both rings needs: each circle draws its own handles.
+/// Passing NO gathers every puck in the shader.
 static inline NSArray<NSDictionary<NSString *, NSString *> *> *
 MirageSurfacePucksForSourceFiltered(NSString *source,
                                     MirageColorSurfaceRing ring,
@@ -432,8 +450,8 @@ MirageSurfacePucksForSourceFiltered(NSString *source,
                              error:nil];
   for (NSTextCheckingResult *m in
        [dirRe matchesInString:source
-                     options:0
-                       range:NSMakeRange(0, source.length)]) {
+                      options:0
+                        range:NSMakeRange(0, source.length)]) {
     NSString *attrs = [source substringWithRange:[m rangeAtIndex:1]];
     MirageSurfaceResponse r = MirageParseSurfaceResponse(attrs);
     if (!r.present)
@@ -444,10 +462,10 @@ MirageSurfacePucksForSourceFiltered(NSString *source,
     NSString *symbol = @(r.puckSymbol) ?: @"";
     NSString *track = r.track > 0.0 ? [@(r.track) stringValue] : @"";
     if ([seen containsObject:name]) {
-      // A puck's icon and track are properties of the PUCK, but they are written on
-      // one of its controls, and there is no reason that has to be the first. Fill
-      // in whichever slot is still empty rather than making declaration order load-
-      // bearing.
+      // A puck's icon and track are properties of the PUCK, but they are
+      // written on one of its controls, and there is no reason that has to be
+      // the first. Fill in whichever slot is still empty rather than making
+      // declaration order load- bearing.
       for (NSUInteger i = 0; i < out.count; i++) {
         if (![out[i][@"name"] isEqualToString:name])
           continue;
@@ -470,8 +488,8 @@ MirageSurfacePucksForSourceFiltered(NSString *source,
 
 static inline NSArray<NSDictionary<NSString *, NSString *> *> *
 MirageSurfacePucksForSource(NSString *source) {
-  return MirageSurfacePucksForSourceFiltered(
-      source, MirageColorSurfaceRingPlain, NO);
+  return MirageSurfacePucksForSourceFiltered(source,
+                                             MirageColorSurfaceRingPlain, NO);
 }
 
 /// One ring's pucks. A single-surface shader has one ring and every puck is on
@@ -505,10 +523,12 @@ typedef NS_ENUM(NSInteger, MirageSurfaceRingBindingError) {
   MirageSurfaceRingBindingErrorUnknown,
 };
 
-/// The first control whose `surface=` cannot be attached to a ring, named by its
-/// `label=` and falling back to its uniform, or nil when every mapping resolves.
-static inline NSString *MirageFirstBadSurfaceRingBinding(
-    NSString *source, MirageSurfaceRingBindingError *outKind) {
+/// The first control whose `surface=` cannot be attached to a ring, named by
+/// its `label=` and falling back to its uniform, or nil when every mapping
+/// resolves.
+static inline NSString *
+MirageFirstBadSurfaceRingBinding(NSString *source,
+                                 MirageSurfaceRingBindingError *outKind) {
   if (outKind)
     *outKind = MirageSurfaceRingBindingErrorNone;
   NSArray<NSNumber *> *rings = MirageColorSurfaceRingsForSource(source);
@@ -527,8 +547,8 @@ static inline NSString *MirageFirstBadSurfaceRingBinding(
                              error:nil];
   NSArray<NSTextCheckingResult *> *dirs =
       [dirRe matchesInString:source
-                    options:0
-                      range:NSMakeRange(0, source.length)];
+                     options:0
+                       range:NSMakeRange(0, source.length)];
   for (NSUInteger i = 0; i < dirs.count; i++) {
     NSString *attrs = [source substringWithRange:[dirs[i] rangeAtIndex:1]];
     MirageSurfaceResponse r = MirageParseSurfaceResponse(attrs);
@@ -557,8 +577,8 @@ static inline NSString *MirageFirstBadSurfaceRingBinding(
         (i + 1 < dirs.count) ? dirs[i + 1].range.location : source.length;
     NSTextCheckingResult *um =
         [uniRe firstMatchInString:source
-                         options:0
-                           range:NSMakeRange(after, limit - after)];
+                          options:0
+                            range:NSMakeRange(after, limit - after)];
     return um ? [source substringWithRange:[um rangeAtIndex:1]] : @"?";
   }
   return nil;
@@ -566,16 +586,27 @@ static inline NSString *MirageFirstBadSurfaceRingBinding(
 
 // --- `pick=`: the eyedropper ---------------------------------------------
 //
-// What a control receives when the Color panel's eyedropper samples the picture:
+// What a control receives when the Color panel's eyedropper samples the
+// picture:
 //
 //     // #float label="Target Hue" min=-180 max=180 default=0 pick=hue
 //     // #color label="Key"                                   pick=color
 //
 // Deliberately NOT part of `surface=`. A picked colour is not a gesture on the
-// wheel - it is a measurement of the footage - so a control can subscribe to the
-// eyedropper without also being dragged by the puck, and one that does both is
-// simply declaring two things. Parsing it separately is what keeps them from
+// wheel - it is a measurement of the footage - so a control can subscribe to
+// the eyedropper without also being dragged by the puck, and one that does both
+// is simply declaring two things. Parsing it separately is what keeps them from
 // having to know about each other.
+//
+// Luma comes in two kinds because a control's value lives in one of two light
+// spaces and only the shader knows which. `luma` is Rec.709 luma of the
+// DISPLAY-ENCODED probe, which is the number the scope and the ring show and
+// what a threshold compared against encoded pixels wants. `luma-linear` decodes
+// the probe first and weights the LINEAR components, which is what a control
+// consumed as light wants - a contrast pivot in `pivot * pow(c / pivot, k)`
+// among them. The gap is not small: a face sampled at display 0.55 is linear
+// 0.26, so a pivot fed the display number sits about a stop high and the
+// contrast rotation happens around the wrong grey.
 
 typedef NS_ENUM(NSInteger, MirageSurfacePickKind) {
   MirageSurfacePickKindNone = 0,
@@ -583,11 +614,12 @@ typedef NS_ENUM(NSInteger, MirageSurfacePickKind) {
   MirageSurfacePickKindSaturation,
   MirageSurfacePickKindLuma,
   MirageSurfacePickKindColor,
+  MirageSurfacePickKindLumaLinear,
 };
 
-/// Parse a `pick=` attribute. An unrecognised value is None rather than an error:
-/// the control simply does not subscribe, which is the same thing a typo in any
-/// other directive attribute costs.
+/// Parse a `pick=` attribute. An unrecognised value is None rather than an
+/// error: the control simply does not subscribe, which is the same thing a typo
+/// in any other directive attribute costs.
 static inline MirageSurfacePickKind MirageParseSurfacePick(NSString *attrs) {
   NSString *value = [MirageAttrWord(attrs, @"pick") lowercaseString];
   if (!value.length)
@@ -598,6 +630,8 @@ static inline MirageSurfacePickKind MirageParseSurfacePick(NSString *attrs) {
     return MirageSurfacePickKindSaturation;
   if ([value isEqualToString:@"luma"])
     return MirageSurfacePickKindLuma;
+  if ([value isEqualToString:@"luma-linear"])
+    return MirageSurfacePickKindLumaLinear;
   if ([value isEqualToString:@"color"])
     return MirageSurfacePickKindColor;
   return MirageSurfacePickKindNone;
@@ -630,8 +664,8 @@ MirageSurfacePicksForSource(NSString *source) {
   });
   NSArray<NSTextCheckingResult *> *dirs =
       [dirRe matchesInString:source
-                    options:0
-                      range:NSMakeRange(0, source.length)];
+                     options:0
+                       range:NSMakeRange(0, source.length)];
   for (NSUInteger i = 0; i < dirs.count; i++) {
     NSTextCheckingResult *dm = dirs[i];
     NSString *attrs = [source substringWithRange:[dm rangeAtIndex:1]];
@@ -652,15 +686,15 @@ MirageSurfacePicksForSource(NSString *source) {
   return out;
 }
 
-/// The puck each control names, keyed by uniform name, whether or not the control
-/// also declares a `surface=`.
+/// The puck each control names, keyed by uniform name, whether or not the
+/// control also declares a `surface=`.
 ///
 /// `puck=` is the HANDLE'S IDENTITY, and belonging to a handle is not the same
-/// claim as responding to where that handle sits. A `pick=` target is exactly the
-/// control that needs to say the first without the second: it is written by a
-/// click on the footage, not dragged, so it has no response to declare - but a
-/// three-slot shader still has to be able to say WHICH slot it belongs to, or one
-/// click fills every slot with the same colour.
+/// claim as responding to where that handle sits. A `pick=` target is exactly
+/// the control that needs to say the first without the second: it is written by
+/// a click on the footage, not dragged, so it has no response to declare - but
+/// a three-slot shader still has to be able to say WHICH slot it belongs to, or
+/// one click fills every slot with the same colour.
 ///
 /// The parsed response carries `puck` too, but only for a control that declared
 /// terms, so it cannot answer this on its own.
@@ -687,8 +721,8 @@ MirageSurfacePuckNamesForSource(NSString *source) {
   });
   NSArray<NSTextCheckingResult *> *dirs =
       [dirRe matchesInString:source
-                    options:0
-                      range:NSMakeRange(0, source.length)];
+                     options:0
+                       range:NSMakeRange(0, source.length)];
   for (NSUInteger i = 0; i < dirs.count; i++) {
     NSTextCheckingResult *dm = dirs[i];
     NSString *attrs = [source substringWithRange:[dm rangeAtIndex:1]];
@@ -711,12 +745,12 @@ MirageSurfacePuckNamesForSource(NSString *source) {
   return out;
 }
 
-/// YES when any control in `responses` declares a polar axis, which makes the whole
-/// surface polar: `r:`/`a:` and `x:`/`y:` describe the same two degrees of freedom,
-/// so the caller honours the polar mappings and skips the cartesian ones rather
-/// than letting one gesture mean two things.
-static inline BOOL MirageSurfaceResponsesArePolar(
-    NSDictionary<NSString *, NSValue *> *responses) {
+/// YES when any control in `responses` declares a polar axis, which makes the
+/// whole surface polar: `r:`/`a:` and `x:`/`y:` describe the same two degrees
+/// of freedom, so the caller honours the polar mappings and skips the cartesian
+/// ones rather than letting one gesture mean two things.
+static inline BOOL
+MirageSurfaceResponsesArePolar(NSDictionary<NSString *, NSValue *> *responses) {
   for (NSValue *boxed in responses.allValues) {
     MirageSurfaceResponse r;
     [boxed getValue:&r];

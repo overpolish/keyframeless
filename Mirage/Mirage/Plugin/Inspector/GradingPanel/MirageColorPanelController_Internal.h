@@ -23,17 +23,16 @@ static const CGFloat kReadoutFontSize = 11.0;
 FOUNDATION_EXPORT NSString *_Nullable MirageDeclarationSentence(
     MirageMemoryColor kind, NSPoint cast);
 FOUNDATION_EXPORT NSString *_Nonnull MirageReadoutPlaceholder(void);
-FOUNDATION_EXPORT BOOL
-MirageResponseBelongsToPuck(MirageSurfaceResponse r,
-                            NSString *_Nullable puckName);
+FOUNDATION_EXPORT BOOL MirageResponseBelongsToPuck(
+    MirageSurfaceResponse r, NSString *_Nullable puckName);
 FOUNDATION_EXPORT KKMiniViewerView *_Nullable MirageFindMiniViewer(
     NSView *_Nullable root);
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// A button that answers the first click, since the panel it sits in never becomes
-/// key: an ordinary NSButton spends that click asking for focus it cannot get, so
-/// the eyedropper would need pressing twice.
+/// A button that answers the first click, since the panel it sits in never
+/// becomes key: an ordinary NSButton spends that click asking for focus it
+/// cannot get, so the eyedropper would need pressing twice.
 @interface _MirageFirstMouseButton : NSButton
 /// Set to make this a press-and-hold button: called YES on the press and NO on
 /// the release, instead of firing an action once per click. Leave nil for the
@@ -50,19 +49,19 @@ NS_ASSUME_NONNULL_BEGIN
   /// The fraction the popover reported at open. A fallback only - see
   /// -_editFraction, which is what everything actually reads.
   double _openFraction;
-  /// Control values as they stood when the drag began, keyed by lane key. The puck
-  /// writes absolute positions, so these are not what the new values are computed
-  /// from - they supply the "before" number in the readout, and a colour's own
-  /// saturation and brightness while only its hue is being driven.
+  /// Control values as they stood when the drag began, keyed by lane key. The
+  /// puck writes absolute positions, so these are not what the new values are
+  /// computed from - they supply the "before" number in the readout, and a
+  /// colour's own saturation and brightness while only its hue is being driven.
   NSDictionary<NSString *, NSArray<NSNumber *> *> *_dragStartValues;
   /// YES between onDragBegin and its onDragEnd. The host wraps those in an undo
   /// group, and FCP RAISES from FFChannelAction lockChannels if a second group
   /// opens inside the first - so this is a structural guard, not bookkeeping: a
   /// begin can never fire twice without an intervening end.
   BOOL _writeGroupOpen;
-  /// YES while a puck drag is in progress. Separate from _writeGroupOpen because
-  /// the panel's other writes (recentre, eyedropper) open the same group without
-  /// being a gesture that can lose its mouse-up.
+  /// YES while a puck drag is in progress. Separate from _writeGroupOpen
+  /// because the panel's other writes (recentre, eyedropper) open the same
+  /// group without being a gesture that can lose its mouse-up.
   BOOL _puckDragActive;
   NSUInteger _puckDragIndex;
   /// Which declared surface the open drag belongs to, so the log names the ring
@@ -79,14 +78,15 @@ NS_ASSUME_NONNULL_BEGIN
   /// add a ring under an open panel, and rebuilding the hierarchy there would
   /// tear down the very view a latched drag is still holding.
   NSArray<MirageSurfaceCircleView *> *_circles;
-  /// The container both circles live in. Sized by -_applyPanelLayout, which is the
-  /// only thing in this panel that sets a frame.
+  /// The container both circles live in. Sized by -_applyPanelLayout, which is
+  /// the only thing in this panel that sets a frame.
   NSView *_well;
   NSView *_body;
   KKPanelDragHandleView *_header;
   KKPaddedScrollView *_readoutScroll;
   NSStackView *_readoutStack;
-  /// Right edge of the panel title, which the comparison icons are laid out from.
+  /// Right edge of the panel title, which the comparison icons are laid out
+  /// from.
   CGFloat _titleRightEdge;
   NSTextField *_readoutHint;
   NSButton *_pickButton;
@@ -94,6 +94,17 @@ NS_ASSUME_NONNULL_BEGIN
   /// Arms the click-to-pick gesture: one click in the preview aims the ACTIVE
   /// puck's `pick=` controls at whatever colour was clicked.
   NSButton *_pickSourceButton;
+  /// Adds an instance of the shader's `#slots` group, and removes the selected
+  /// one. Hidden entirely for a shader that declares no repeatable group, which
+  /// is every shader written before the directive existed.
+  NSButton *_addSlotButton;
+  NSButton *_removeSlotButton;
+  /// Which of the in-well row's three buttons were showing when the panel was
+  /// last laid out, as a bitmask. The row's HEIGHT is a function of that set,
+  /// and the well and the panel are sized around it - so the set changing is a
+  /// re-layout rather than a re-frame, while the refresh that computes it runs
+  /// on every sampled frame. Starts at -1: no mask, not "all hidden".
+  NSInteger _wellRowMask;
   /// Before/after comparison, both driven straight into the mini viewer's own
   /// session view state. Hidden whenever the preview reports it has no ungraded
   /// frame to compare against.
@@ -101,42 +112,46 @@ NS_ASSUME_NONNULL_BEGIN
   _MirageFirstMouseButton *_beforeButton;
   /// Armed: the next click in the mini viewer picks the reference patch.
   BOOL _picking;
-  /// What the next picked patch is declared to be. An ivar rather than a default:
-  /// it is a statement about THIS shot, so a fresh popover starts at Neutral rather
-  /// than silently measuring a face against grass someone sampled last week.
+  /// What the next picked patch is declared to be. An ivar rather than a
+  /// default: it is a statement about THIS shot, so a fresh popover starts at
+  /// Neutral rather than silently measuring a face against grass someone
+  /// sampled last week.
   MirageMemoryColor _pickDeclaration;
-  /// The plain-language reading of the current declared pick, or nil. Held so it can
-  /// be CLEARED - a sentence describing a cast that has since been corrected is
-  /// worse than no sentence at all.
+  /// The plain-language reading of the current declared pick, or nil. Held so
+  /// it can be CLEARED - a sentence describing a cast that has since been
+  /// corrected is worse than no sentence at all.
   NSString *_declarationSentence;
-  /// Armed: the next click picks a colour for the shader's `pick=` controls. Only
-  /// one of the two can be armed - they consume the same click and mean different
-  /// things by it, so arming either disarms the other.
+  /// Armed: the next click picks a colour for the shader's `pick=` controls.
+  /// Only one of the two can be armed - they consume the same click and mean
+  /// different things by it, so arming either disarms the other.
   BOOL _pickingColor;
-  /// A colour pick that has been clicked but not yet measured. The patch is read
-  /// out of the next rendered frame, which may not have arrived when the click did.
+  /// A colour pick that has been clicked but not yet measured. The patch is
+  /// read out of the next rendered frame, which may not have arrived when the
+  /// click did.
   BOOL _pendingColorPick;
-  /// A measured pick whose write has been scheduled but not performed yet. A second
-  /// pick cannot be clicked in that window, but the sampler can satisfy the same
-  /// pending pick twice if a frame lands between the two, and two writes racing into
-  /// one action scope is the shape of the crash this defers around.
+  /// A measured pick whose write has been scheduled but not performed yet. A
+  /// second pick cannot be clicked in that window, but the sampler can satisfy
+  /// the same pending pick twice if a frame lands between the two, and two
+  /// writes racing into one action scope is the shape of the crash this defers
+  /// around.
   BOOL _pickWriteInFlight;
   /// Armed: the next click in the preview reads the SOURCE pixel under it and
-  /// aims the active puck's `pick=` controls at that colour. A third armed state
-  /// rather than a mode on the eyedropper, since the three consume the same click
-  /// and mean different things by it - arming any one disarms the others.
+  /// aims the active puck's `pick=` controls at that colour. A third armed
+  /// state rather than a mode on the eyedropper, since the three consume the
+  /// same click and mean different things by it - arming any one disarms the
+  /// others.
   BOOL _pickingSource;
   id _pickMonitor;
   id _pickGlobalMonitor;
   /// While armed, the pointer over the preview says so. The mini viewer's own
-  /// cursor rects never fire for it inside a ViewBridge popover, so the cursor is
-  /// pushed from the same monitor stream every other gesture in this panel is
-  /// driven by.
+  /// cursor rects never fire for it inside a ViewBridge popover, so the cursor
+  /// is pushed from the same monitor stream every other gesture in this panel
+  /// is driven by.
   id _pickCursorMonitor;
   id _pickCursorGlobalMonitor;
-  /// Escape disarms. Local and global for the reason the click monitors are both:
-  /// a popover this panel does not own gets the key events, and neither monitor
-  /// alone sees the whole stream.
+  /// Escape disarms. Local and global for the reason the click monitors are
+  /// both: a popover this panel does not own gets the key events, and neither
+  /// monitor alone sees the whole stream.
   id _pickKeyMonitor;
   id _pickKeyGlobalMonitor;
   MirageScopeSampler *_sampler;
@@ -174,12 +189,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_applySurfaceSpecIfChanged:(NSString *)source;
 - (void)_pushSurfaceSpec;
 - (void)_resolveRingsFromLanes;
-- (_MirageFirstMouseButton *)_headerIconButtonNamed:(NSString *)symbol
-                                              label:(NSString *)label
-                                             action:(nullable SEL)action;
+- (_MirageFirstMouseButton *)_iconButtonNamed:(NSString *)symbol
+                                        label:(NSString *)label
+                                       action:(nullable SEL)action;
 - (_MirageFirstMouseButton *)_headerButtonWithAction:(SEL)action;
 - (void)_layoutHeaderButtons;
 - (KKFloatingPanel *)_ensurePanel;
+@end
+
+// The strip of buttons inside the well: what it is made of, how tall it is and
+// where its buttons sit. Implemented in MirageColorPanelController+WellRow.m.
+@interface MirageColorPanelController (WellRow)
+- (void)_buildWellRowInWell:(NSView *)well;
+- (CGFloat)_wellRowHeight;
+- (void)_layoutWellRowInRect:(NSRect)row;
 @end
 
 // The three armed picks, their monitors and the writes they schedule.
@@ -235,10 +258,33 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_refreshPuck;
 - (NSPoint)_derivePositionForPuck:(NSString *)puckName
                          timeline:(KKTimeline *)timeline
-                        responses:(NSDictionary<NSString *, NSValue *> *)responses
+                        responses:
+                            (NSDictionary<NSString *, NSValue *> *)responses
                          drivable:(NSSet<NSString *> *)drivable
                             polar:(BOOL)polar
                          fraction:(double)frac;
+@end
+
+// `#slots`: the crossing from what the source declares to what this project has
+// stamped, and the add/remove pair that changes it. Implemented in
+// MirageColorPanelController+Slots.m.
+@interface MirageColorPanelController (Slots)
+- (NSDictionary<NSString *, NSValue *> *)_responsesForRing:(NSUInteger)ringIndex
+                                                    source:(NSString *)source;
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)
+    _pucksForRing:(NSUInteger)ringIndex
+           source:(NSString *)source;
+- (NSDictionary<NSString *, NSNumber *> *)_picksInSource:(NSString *)source;
+- (NSDictionary<NSString *, NSString *> *)_puckNamesInSource:(NSString *)source;
+- (nullable NSString *)_addableSlotGroupInSource:(NSString *)source;
+- (nullable NSDictionary<NSString *, NSString *> *)_activeSlotPuckInSource:
+    (NSString *)source;
+- (void)_selectSlotPuckForInstance:(nullable NSString *)instanceID
+                            source:(NSString *)source;
+- (void)_addSlotInstance:(nullable id)sender;
+- (void)_removeSlotInstance:(nullable id)sender;
+- (void)_refreshSlotButtonsIn:(nullable KKTimeline *)timeline
+                       source:(NSString *)source;
 @end
 
 // What the readout says: the rows, the empty state and the declaration

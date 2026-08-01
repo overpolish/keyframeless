@@ -97,8 +97,9 @@ static NSString *const kMiragePassthroughSource =
 // The delivered effect-clip tile whose mediaTime is nearest `wantSeconds`, or
 // nil when nothing lands strictly inside `tolerance` (INFINITY accepts the
 // nearest tile at any distance).
-static FxImageTile *MirageTileNearestMediaTime(
-    NSArray<FxImageTile *> *sourceImages, double wantSeconds, double tolerance) {
+static FxImageTile *
+MirageTileNearestMediaTime(NSArray<FxImageTile *> *sourceImages,
+                           double wantSeconds, double tolerance) {
   FxImageTile *best = nil;
   double bestDelta = tolerance;
   for (FxImageTile *tile in sourceImages) {
@@ -175,8 +176,8 @@ NSArray *MirageNeighborFrameTextures(
 - (NSArray *)gammaMatchNeighbors:(NSArray *)neighbors
                           decode:(BOOL)decode
                           device:(id<MTLDevice>)device
-                          encode:(void (^__autoreleasing *)(id<MTLCommandBuffer>))
-                                     outEncode {
+                          encode:(void (^__autoreleasing *)(
+                                     id<MTLCommandBuffer>))outEncode {
   if (outEncode)
     *outEncode = nil;
   NSUInteger n = neighbors.count;
@@ -191,12 +192,11 @@ NSArray *MirageNeighborFrameTextures(
       continue;
     }
     id<MTLTexture> src = entry;
-    id<MTLTexture> dst =
-        [self reusableGammaDestinationForKey:MirageGammaDestNeighbor0 +
-                                             (NSInteger)i
-                                      device:device
-                                       width:src.width
-                                      height:src.height];
+    id<MTLTexture> dst = [self
+        reusableGammaDestinationForKey:MirageGammaDestNeighbor0 + (NSInteger)i
+                                device:device
+                                 width:src.width
+                                height:src.height];
     if (!dst) {
       // Allocation unavailable: bind the source unconverted, which is what the
       // allocating helper returns in the same situation.
@@ -291,10 +291,10 @@ MirageGammaSetupBlock(NSArray *pairs, BOOL decode,
 }
 
 // Builds a MirageSinglePassDraw for `effectiveSource`. `linearDst` (float dest)
-// triggers the gamma-encode of the linear sources - PLANNED once here and shared
-// across all samples, with `outSetup` carrying the encoding to whatever command
-// buffer the caller is about to render on (nil when nothing needs converting).
-// Returns nil if even the error-pattern pipeline fails.
+// triggers the gamma-encode of the linear sources - PLANNED once here and
+// shared across all samples, with `outSetup` carrying the encoding to whatever
+// command buffer the caller is about to render on (nil when nothing needs
+// converting). Returns nil if even the error-pattern pipeline fails.
 - (nullable MirageSinglePassDraw)
     _singlePassDrawForSource:(NSString *)effectiveSource
             destinationImage:(FxImageTile *)destinationImage
@@ -328,9 +328,8 @@ MirageGammaSetupBlock(NSArray *pairs, BOOL decode,
   id<MTLTexture> transparentTex = tr.declaredChannelMask && transitionMode != 0
                                       ? KKCustomTransparentTexture(device)
                                       : nil;
-  id<MTLTexture> rawEffect =
-      [MirageCurrentFrameTile(sourceImages, renderTime)
-          metalTextureForDevice:device];
+  id<MTLTexture> rawEffect = [MirageCurrentFrameTile(sourceImages, renderTime)
+      metalTextureForDevice:device];
   id<MTLTexture> rawFrom =
       [KKImageTileForParameterID(sourceImages, kParamFromImage)
           metalTextureForDevice:device];
@@ -356,9 +355,9 @@ MirageGammaSetupBlock(NSArray *pairs, BOOL decode,
   BOOL convertSources = decodeSources || (linearDst && !colorTransform);
   // PLANNED, not encoded: each conversion used to be its own command buffer
   // with a commit and a blocking wait, and that scheduling latency - not the
-  // work, which measures under a tenth of a millisecond - was most of the render
-  // callback. The pairs are encoded later onto the render's own command buffer,
-  // where Metal orders them ahead of the draw that reads them.
+  // work, which measures under a tenth of a millisecond - was most of the
+  // render callback. The pairs are encoded later onto the render's own command
+  // buffer, where Metal orders them ahead of the draw that reads them.
   NSMutableArray *convertPairs = [NSMutableArray array];
   if (convertSources && (rawSrc || rawTo) &&
       KKGammaPipelineAvailable(device, decodeSources)) {
@@ -586,14 +585,15 @@ MirageGammaSetupBlock(NSArray *pairs, BOOL decode,
 // neighbours instead of clamping every one of them to the current frame.
 //
 // RAW like the source slot, not gamma-converted: the feed writes whatever it is
-// handed through one encoding, and the mini renderer then applies to a neighbour
-// exactly the treatment it applies to iChannel0. Converting here would put the
-// neighbours one encode ahead of the frame they trail, which is the same colour
-// shift the FCP render path takes care to avoid.
+// handed through one encoding, and the mini renderer then applies to a
+// neighbour exactly the treatment it applies to iChannel0. Converting here
+// would put the neighbours one encode ahead of the frame they trail, which is
+// the same colour shift the FCP render path takes care to avoid.
 //
 // An offset FCP could not deliver falls back to the CURRENT frame, matching the
-// render's edge-of-clip clamp, so the pumped count always equals the directive's
-// count and the consumer never has to guess which offset is missing.
+// render's edge-of-clip clamp, so the pumped count always equals the
+// directive's count and the consumer never has to guess which offset is
+// missing.
 - (void)_publishMiniViewerNeighbors:(FxImageTile *)destinationImage
                        sourceImages:(NSArray<FxImageTile *> *)sourceImages
                          renderTime:(CMTime)renderTime
@@ -675,9 +675,15 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
     const MirageScalarProp *p = &props[i];
     if (p->isPoint || p->isMulti || p->fieldUnit[0] != 'p')
       continue;
-    if (p->poolOffset < 0 || p->poolOffset >= poolCount)
-      continue;
-    pool[p->poolOffset].x *= scale;
+    // A repeatable control is one vec4 PER INSTANCE; the dead slots are zero,
+    // and zero scales to zero, so the whole span goes through unconditionally.
+    int span = p->slotMax > 0 ? p->slotMax : 1;
+    for (int e = 0; e < span; e++) {
+      int off = p->poolOffset + e;
+      if (off < 0 || off >= poolCount)
+        continue;
+      pool[off].x *= scale;
+    }
   }
 }
 

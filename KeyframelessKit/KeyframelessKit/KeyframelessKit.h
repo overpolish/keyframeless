@@ -125,6 +125,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKSliderRowView.h>
+#import <KeyframelessKit/KKSlotInstances.h>
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSonarTicket.h>
 #import <KeyframelessKit/KKSpatialCurve.h>

@@ -10,7 +10,7 @@
 #import "KKGLSLTranspiler.h" // MirageMotionBlurDefaultsOnForSource
 #import "MirageCategory.h"
 #import "MirageColorSurfaceProps.h" // #color-surface opt-in
-#import "MirageDirectives.h" // #color / #float ... default parsing
+#import "MirageDirectives.h"        // #color / #float ... default parsing
 #import "MirageInspectorView+Guides.h"
 #import "MirageInspectorView_Private.h"
 #import "MirageLocalCatalog.h"
@@ -19,7 +19,9 @@
 #import "MirageThumbnailRenderer.h"
 #import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import <KeyframelessKit/KKCurveDefaults.h>
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKScopedDefaults.h>
+#import <KeyframelessKit/KKSlotInstances.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimingGuide.h>
 @import KKCommunity;
@@ -194,8 +196,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
         };
     _colorPanelController = [[MirageColorPanelController alloc]
         initWithLanesView:self.basicLanesView];
-    // The puck writes real controls, so it persists through the same chain as any
-    // other edit, and brackets its drag so the burst collapses to one undo entry.
+    // The puck writes real controls, so it persists through the same chain as
+    // any other edit, and brackets its drag so the burst collapses to one undo
+    // entry.
     _colorPanelController.onTimelineMutated = ^(KKTimeline *updated) {
       __strong typeof(weak) s = weak;
       if (s.onTimelineMutated)
@@ -576,25 +579,82 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   return YES;
 }
 
+// A `#slots` instance count is the OTHER thing the lane set is a function of,
+// and it moves without the source moving: undo, redo, a preset apply and an
+// AI merge all arrive as a timeline blob whose registry disagrees with the
+// templates currently in the rows. The panel's own +/- paths re-derive
+// explicitly; nothing else did, so an undone removal put the instance's lanes
+// back in the timeline while `hidesLanesWithoutTemplate` filtered its rows
+// out - a handle on the wheel with no controls under it.
+//
+// BEFORE super, unlike the source-change re-wire in -applyTimeline:. That
+// filter runs inside -[KKTimelineInspectorView applyTimeline:], against the
+// templates it holds AT THAT MOMENT, so templates re-derived afterwards would
+// arrive one apply too late - and an undo does not necessarily produce a second
+// apply. A source change is already handled pre-filter by the base class's own
+// re-derive; a slots change is invisible to it, since the code is identical.
+//
+// Derived against the INCOMING timeline, and not by faking a code commit.
+// Both halves of that matter:
+//
+//  * the provider's default is the lanes view's live timeline, which pre-super
+//    is still the one the undo is replacing. Deriving against it stamps
+//    templates for the instance count that was just reverted - re-deriving to
+//    exactly the wrong answer, which is why the first version of this logged
+//    the trigger and changed nothing;
+//  * `onCodeCommitted` means the SOURCE changed, and here it is identical to
+//    the character. Its other subscribers are all source-derived: the OSC
+//    checklist would be re-wired to a compound set that cannot have moved
+//    (`oscCompoundsForShaderSource:` never reads the timeline), and the
+//    `#motionblur` handler would clear persisted state this undo never
+//    touched. So the lanes are applied directly instead.
+//
+// Answers the instance this change restored, if it restored one. Resolved
+// here, where both signatures are in hand, and spent after super - the handle
+// it names does not exist until the panel has rebuilt its pucks from the new
+// registry.
+- (NSString *)_slotRegistryChangedForTimeline:(KKTimeline *)timeline
+                                    effective:(NSString *)effective {
+  NSString *slotSignature = KKSlotRegistrySignature(timeline);
+  if ([slotSignature isEqualToString:(_lastSlotSignature ?: @"")] ||
+      !self.availableLanesProvider)
+    return nil;
+  NSArray<KKLane *> *lanes = self.availableLanesProvider(effective, timeline);
+  [self applyAvailableLanes:lanes];
+  // Read back rather than storing what was measured: deriving brings a group
+  // this project has never registered up to its declared default, IN this
+  // timeline, so the registry just derived from is the post-stamp one.
+  NSString *derived = KKSlotRegistrySignature(timeline);
+  NSString *restoredGroup = nil;
+  NSString *restoredInstance =
+      KKSlotFirstAddedInstance(_lastSlotSignature, derived, &restoredGroup);
+  _lastSlotSignature = [derived copy];
+  return restoredInstance;
+}
+
 - (void)applyTimeline:(KKTimeline *)timeline {
-  [super applyTimeline:timeline];
-  _miniViewerRenderer.timeline = timeline;
-  [self _syncCurveDefaultsScope:timeline];
-  // Refresh this clip's reference-menu thumbnail when its look changes.
-  [self _scheduleThumbnailBake];
-  // Re-wire the source-derived OSC set (the cog checklist) whenever the
-  // effective shader source changes - the SAME re-wire a code-editor commit /
-  // browser load does (via onCodeCommitted). Mirrors -shaderSourceFromTimeline:
-  // exactly: a present-with-code Mirage lane uses its code, otherwise the baked
-  // default. A guide seed drops the code lane => the default => its OSC
-  // controls (Center/Scale) load, so the cog isn't stuck on the previous clip's
-  // set.
+  // Mirrors -shaderSourceFromTimeline: exactly: a present-with-code Mirage lane
+  // uses its code, otherwise the baked default. A guide seed drops the code
+  // lane, so it resolves to the default.
   NSString *effective = MirageCustomDefaultShaderSource();
   for (KKLane *l in timeline.lanes)
     if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
       effective = l.codeString;
       break;
     }
+  BOOL sourceChanged =
+      ![effective isEqualToString:(_lastEffectiveShaderSource ?: @"")];
+
+  NSString *restoredInstance =
+      sourceChanged
+          ? nil
+          : [self _slotRegistryChangedForTimeline:timeline effective:effective];
+
+  [super applyTimeline:timeline];
+  _miniViewerRenderer.timeline = timeline;
+  [self _syncCurveDefaultsScope:timeline];
+  // Refresh this clip's reference-menu thumbnail when its look changes.
+  [self _scheduleThumbnailBake];
   MirageColorSurfaceSpace surfaceSpace = MirageColorSurfaceSpaceInvalid;
   MirageColorSurfaceError surfaceError = MirageColorSurfaceErrorNone;
   BOOL wantsSurface =
@@ -602,7 +662,17 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
       surfaceError == MirageColorSurfaceErrorNone;
   _colorPanelController.surfaceEnabled = wantsSurface;
   [_colorPanelController timelineDidChange];
-  if (![effective isEqualToString:(_lastEffectiveShaderSource ?: @"")]) {
+  // Now that the refresh above has rebuilt the handles from the new registry,
+  // the restored one exists and can be selected. Only an ADDITION gets here -
+  // the panel's own +/- already place their selection, and a removal has
+  // nothing to select, so its neighbour fallback stands.
+  if (restoredInstance.length)
+    [_colorPanelController selectSlotInstance:restoredInstance];
+  // Re-wire the source-derived OSC set (the cog checklist) whenever the
+  // effective shader source changes - the SAME re-wire a code-editor commit /
+  // browser load does (via onCodeCommitted), so the cog isn't stuck on the
+  // previous clip's set.
+  if (sourceChanged) {
     _lastEffectiveShaderSource = [effective copy];
     // Route through the lanes view's code-commit block (not just the plugin's
     // onCodeCommitted): it re-derives the available-lane set from the source
@@ -613,6 +683,12 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     void (^commit)(NSString *) = self.basicLanesView.onCodeCommitted;
     if (commit)
       commit(effective);
+    // Read back for the same reason the slots trigger does, off the timeline
+    // THIS derive stamped into: the commit above runs post-super and hands the
+    // provider no timeline, so it derived against - and stamped into - the
+    // lanes view's live one, which by now is the applied timeline.
+    _lastSlotSignature = [KKSlotRegistrySignature(
+        self.basicLanesView.currentTimeline ?: timeline) copy];
     // A uniform that just became a POSITION OSC (osc=position) can't be
     // expression-driven - its value is authored by the on-screen editable
     // path. Strip any stale link expression a prior `osc=point` (or none) left

@@ -9,6 +9,7 @@
 // Type's Mirage lanes + the colour swatches). Extracted from Plugin+CustomUI.m
 // (which just returns MirageBuildAvailableLanes()). One function, cohesive.
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKSlotInstances.h>
 #import <KeyframelessKit/KKSonarTicket.h>
 #import <KeyframelessKit/KKSpectrogram.h>
 #import <KeyframelessKit/KKTimeline.h>
@@ -20,8 +21,10 @@
 #import "MirageDirectiveCatalog.h" // directive + GLSL autocomplete
 #import "MirageDirectiveVocab.h" // MirageDirectiveValueKeywords (highlight set)
 #import "MirageDirectives.h"
-#import "MirageLocalized.h"        // RLoc
-#import "MirageSurfaceResponse.h"  // `#color-surface` ring validation
+#import "MirageLocalized.h"       // RLoc
+#import "MirageSlotBudget.h"      // `#slots` pool budget at max instances
+#import "MirageSlotLanes.h"       // `#slots` prototype -> instance stamping
+#import "MirageSurfaceResponse.h" // `#color-surface` ring validation
 
 // --- Dynamic colour lanes ------------------------------------------------
 // A shader declares colour properties by annotating standalone uniforms:
@@ -752,8 +755,9 @@ MirageAppendAudioLanes(NSMutableArray<KKLane *> *lanes, NSString *source,
 }
 
 static inline NSArray<KKLane *> *
-MirageBuildAvailableLanesForSource(NSString *shaderSource,
-                                   NSDictionary<NSString *, id> *tickets) {
+MirageBuildAvailableLanesForSourceStamped(NSString *shaderSource,
+                                          NSDictionary<NSString *, id> *tickets,
+                                          KKTimeline *timeline) {
   // Lanes are BUILT in a convenient order and REORDERED by group at the end
   // (see the bucketing pass before the return, which is what actually decides
   // top-to-bottom order). Users can reorder further in the inspector.
@@ -1123,6 +1127,106 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                                   @"undeclared ring error."),
                              badBinding];
       }
+      // `// #slots`: a group of controls the user instances at runtime. Every
+      // rule here is about an instance being TELLABLE APART from its
+      // neighbours - the group's name, the `{n}` in each control's label and
+      // puck - because the failure otherwise is silent: two identical rows, or
+      // one puck being dragged by two instances.
+      MirageSlotsDirectiveError slotsError = MirageSlotsDirectiveErrorNone;
+      NSString *slotsDetail = nil;
+      MirageSlotGroupsForSource(activeTemplateSource, &slotsError,
+                                &slotsDetail);
+      switch (slotsError) {
+      case MirageSlotsDirectiveErrorNone:
+        break;
+      case MirageSlotsDirectiveErrorUnclosed:
+        return RLoc(@"`#slots` needs a `// #slots-end` to close the group",
+                    @"Mirage unclosed slots block error.");
+      case MirageSlotsDirectiveErrorUnopened:
+        return RLoc(@"`#slots-end` has no `#slots` block to close",
+                    @"Mirage unopened slots-end error.");
+      case MirageSlotsDirectiveErrorNested:
+        return RLoc(@"`#slots` blocks can't be nested - close one before "
+                    @"opening the next",
+                    @"Mirage nested slots block error.");
+      case MirageSlotsDirectiveErrorName:
+        return RLoc(@"`#slots` needs name=\"...\", using letters, numbers and "
+                    @"spaces",
+                    @"Mirage slots name error.");
+      case MirageSlotsDirectiveErrorDuplicateName:
+        return [NSString
+            stringWithFormat:RLoc(@"Two `#slots` groups named \"%@\": give "
+                                  @"each group its own name",
+                                  @"Mirage duplicate slots name error."),
+                             slotsDetail ?: @""];
+      case MirageSlotsDirectiveErrorMax:
+        return [NSString
+            stringWithFormat:RLoc(@"`#slots` needs max=1 to %d, the most "
+                                  @"instances a group can have",
+                                  @"Mirage slots max error."),
+                             KK_SHADER_MAX_SLOT_INSTANCES];
+      case MirageSlotsDirectiveErrorCount:
+        return [NSString
+            stringWithFormat:RLoc(@"Slot group \"%@\": min= and default= must "
+                                  @"be 0 to max=, and default can't be below "
+                                  @"min=",
+                                  @"Mirage slots count error."),
+                             slotsDetail ?: @""];
+      case MirageSlotsDirectiveErrorPlaceholder:
+        return [NSString
+            stringWithFormat:RLoc(@"Control \"%@\": a control inside `#slots` "
+                                  @"needs {n} in its label and puck name",
+                                  @"Mirage slots missing-placeholder error."),
+                             slotsDetail ?: @""];
+      case MirageSlotsDirectiveErrorPuckName:
+        return [NSString
+            stringWithFormat:RLoc(@"Control \"%@\": a puck inside `#slots` "
+                                  @"needs a name with {n} in it",
+                                  @"Mirage slots empty-puck-name error."),
+                             slotsDetail ?: @""];
+      case MirageSlotsDirectiveErrorStrayPlaceholder:
+        return RLoc(@"`{n}` only means something inside a `#slots` block",
+                    @"Mirage stray slots placeholder error.");
+      }
+      // What the pool can repeat at all. A ramp, an audio binding and an
+      // arrayed colour are each one pool entry with a shape of their own, so an
+      // instance of one is not a copy but a second name for the same value:
+      // every row in the inspector would edit the one ramp. Rejected where it
+      // is written rather than left to be discovered.
+      MirageSlotRepeatKind repeatKind = MirageSlotRepeatKindNone;
+      NSString *unrepeatable =
+          MirageFirstUnrepeatableSlotControl(activeTemplateSource, &repeatKind);
+      if (unrepeatable.length)
+        return [NSString
+            stringWithFormat:RLoc(@"Control \"%@\": #gradient, #audio and "
+                                  @"colour arrays can't repeat - declare them "
+                                  @"outside the #slots block",
+                                  @"Mirage unrepeatable slots control error."),
+                             unrepeatable];
+      // The pool, counted with every group FULL. A group is `max=` real
+      // controls the moment the user presses "+", so a shader that fits only
+      // while its groups are small is one that breaks on a click - and the
+      // break is silent, since the pool simply stops taking controls.
+      int slotScalars = 0, slotColors = 0;
+      switch (MirageSlotsControlBudget(activeTemplateSource, &slotScalars,
+                                       &slotColors)) {
+      case MirageSlotBudgetKindNone:
+        break;
+      case MirageSlotBudgetKindScalar:
+        return [NSString
+            stringWithFormat:RLoc(@"With every `#slots` group full this shader "
+                                  @"asks for %d controls, and %d is the limit "
+                                  @"- lower a max= or drop a control",
+                                  @"Mirage slots scalar-pool budget error."),
+                             slotScalars, KK_SHADER_MAX_SCALAR_PROPS];
+      case MirageSlotBudgetKindColor:
+        return [NSString
+            stringWithFormat:RLoc(@"With every `#slots` group full this shader "
+                                  @"asks for %d colours, and %d is the limit - "
+                                  @"lower a max= or drop a colour",
+                                  @"Mirage slots colour-pool budget error."),
+                             slotColors, KK_SHADER_MAX_COLOR_PROPS];
+      }
     }
     // Duplicate directive LABELS are allowed - the lane identity is the
     // uniform name, so two controls may share a display name (the link-bus
@@ -1394,6 +1498,13 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   MirageAppendColorLanes(lanes, shaderSource);
   MirageAppendGradientLanes(lanes, shaderSource);
 
+  // Every control inside a `// #slots` block built above is a prototype. Turn
+  // each one into the instances this project actually has, before the grouping
+  // pass - so the stamped rows are bucketed by their own group like any other
+  // lane. A build with no timeline keeps the prototypes (see MirageStampSlot-
+  // Lanes), and a source with no block never enters it at all.
+  MirageStampSlotLanes(lanes, shaderSource, timeline);
+
   // Group order: the three groups that are not the shader's to name lead, in a
   // fixed order, then the shader's own groups in the order it declares them.
   // Groups are otherwise discovered first-seen from this array, which would
@@ -1439,9 +1550,50 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   return ordered;
 }
 
+// Prototypes-only entry: what a piece of GLSL DECLARES, with every `#slots`
+// block left as the one prototype set it is written as. For every caller
+// answering a question about the source rather than about a project - the
+// editor's validator, the autocomplete, the OSC block sync.
+static inline NSArray<KKLane *> *
+MirageBuildAvailableLanesForSource(NSString *shaderSource,
+                                   NSDictionary<NSString *, id> *tickets) {
+  return MirageBuildAvailableLanesForSourceStamped(shaderSource, tickets, nil);
+}
+
 // Back-compat entry: the default-shader lane set. Source-specific dynamic lanes
 // only appear when the default shader itself declares a directive.
 static inline NSArray<KKLane *> *MirageBuildAvailableLanes(void) {
   return MirageBuildAvailableLanesForSource(MirageCustomDefaultShaderSource(),
                                             nil);
+}
+
+/// The prototype lanes of one `#slots` group, in build order.
+///
+/// What the panel hands the kit to stamp a new instance from. Derived from the
+/// prototypes-only lane set rather than from a second parse of the source, so
+/// an instance is by construction a copy of exactly the lanes the group would
+/// have built - defaults, bounds, units and all.
+static inline NSArray<KKLane *> *
+MirageSlotPrototypeLanesForGroup(NSString *shaderSource, NSString *groupName,
+                                 NSDictionary<NSString *, id> *tickets) {
+  NSMutableArray<KKLane *> *out = [NSMutableArray array];
+  if (!shaderSource.length || !groupName.length)
+    return out;
+  NSArray<NSValue *> *groups =
+      MirageSlotGroupsForSource(shaderSource, NULL, NULL);
+  NSInteger wanted = -1;
+  for (NSUInteger i = 0; i < groups.count; i++)
+    if ([@(MirageSlotsGroupValue(groups[i]).name) isEqualToString:groupName])
+      wanted = (NSInteger)i;
+  if (wanted < 0)
+    return out;
+  NSDictionary<NSString *, NSNumber *> *byUniform =
+      MirageSlotGroupIndexByUniform(shaderSource);
+  for (KKLane *lane in MirageBuildAvailableLanesForSource(shaderSource,
+                                                          tickets)) {
+    NSNumber *owner = MirageSlotGroupIndexForLaneKey(lane.key, byUniform, NULL);
+    if (owner && owner.integerValue == wanted)
+      [out addObject:lane];
+  }
+  return out;
 }

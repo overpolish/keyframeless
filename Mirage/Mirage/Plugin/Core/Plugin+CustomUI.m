@@ -210,6 +210,15 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
       source.length ? source : MirageCustomDefaultShaderSource(), tickets);
 }
 
++ (NSArray<KKLane *> *)
+    availableLanesForShaderSource:(NSString *)source
+                     audioTickets:(NSDictionary<NSString *, id> *)tickets
+                         timeline:(KKTimeline *)timeline {
+  return MirageBuildAvailableLanesForSourceStamped(
+      source.length ? source : MirageCustomDefaultShaderSource(), tickets,
+      timeline);
+}
+
 // The current shader source from a timeline's "Mirage" code lane (the baked
 // default when absent/empty), for deriving the source-aware lane set.
 + (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline {
@@ -217,6 +226,13 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
     if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeString.length)
       return l.codeString;
   return MirageCustomDefaultShaderSource();
+}
+
++ (NSArray<KKLane *> *)slotPrototypeLanesForShaderSource:(NSString *)source
+                                                   group:(NSString *)groupName {
+  return MirageSlotPrototypeLanesForGroup(
+      source.length ? source : MirageCustomDefaultShaderSource(), groupName,
+      nil);
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
@@ -310,9 +326,14 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
           // group) from the current shader source, so a shader's `// #color`
           // directive surfaces its swatches + palette generator.
           shaderSrc = [MiragePlugin shaderSourceFromTimeline:timeline];
+          // Timeline-aware: a `// #slots` group's controls are prototypes, and
+          // the rows are one set per registered instance. A group this project
+          // has never seen is brought up to its declared default here, which is
+          // what a fresh apply and a pre-`#slots` project both look like.
           available =
               [MiragePlugin availableLanesForShaderSource:shaderSrc
-                                             audioTickets:self.audioTickets];
+                                             audioTickets:self.audioTickets
+                                                 timeline:timeline];
           KKInspectorPersistedState *st = ctx.persistedState;
           MirageInspectorView *v = [[MirageInspectorView alloc]
                  initWithAPIManager:self.apiManager
@@ -340,10 +361,26 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
           // code-commit callback, outside any action scope, where the param
           // APIs return nil.
           __weak __typeof(self) weakLaneSelf = self;
-          v.availableLanesProvider = ^NSArray<KKLane *> *(NSString *code) {
+          __weak MirageInspectorView *weakLaneView = v;
+          v.availableLanesProvider =
+              ^NSArray<KKLane *> *(NSString *code, KKTimeline *against) {
+            // Never the one captured above: a code commit that adds a
+            // `// #slots` block has to stamp its default instances into the
+            // timeline the user is editing.
+            //
+            // The caller's timeline wins when it hands one over. It does so
+            // exactly when it is deriving for a timeline that has not been
+            // applied yet - an undo restoring a slot instance - where the lanes
+            // view is still holding the timeline being replaced, and deriving
+            // against that would answer about the instance count the undo just
+            // reverted. Otherwise the live one, which is what a code commit
+            // means by "now".
+            KKTimeline *stamp =
+                against ?: weakLaneView.basicLanesView.currentTimeline;
             return [MiragePlugin
                 availableLanesForShaderSource:code
-                                 audioTickets:weakLaneSelf.audioTickets];
+                                 audioTickets:weakLaneSelf.audioTickets
+                                     timeline:stamp];
           };
           return v;
         }];
@@ -607,10 +644,9 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
                     // static playhead; a fresh nonce on the scratch param
                     // forces the clean re-render immediately.
                     [weakSelf
-                        kkInParamAction:^(
-                            id<FxParameterRetrievalAPI_v6> getAPI,
-                            id<FxParameterSettingAPI_v5> setAPI,
-                            CMTime actionTime) {
+                        kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                                          id<FxParameterSettingAPI_v5> setAPI,
+                                          CMTime actionTime) {
                           KKWriteCustomParamString(setAPI,
                                                    [[NSUUID UUID] UUIDString],
                                                    kParamRenderNudge);

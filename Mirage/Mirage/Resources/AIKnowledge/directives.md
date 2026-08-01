@@ -11,6 +11,7 @@ A Custom shader can expose its own **inspector controls** and **on-screen contro
 - **Spatial controls:** `#point` (a draggable position handle). Add `osc` to a value control for an on-screen ring, box, or rotation ring that edits the same lane.
 - **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep; `#frames` delivers the source clip at other frames.
 - **Grading:** `#color-surface` opts the shader into the inspector's Color panel - a scope you can drag - and `surface=` maps a control onto its puck.
+- **Repeatable:** `#slots` ... `#slots-end` wraps a group of controls the user adds and removes copies of, numbered with `{n}`.
 - **Template type:** every Image shader requires exactly one `#template generator|filter|layout|transition|color-transform` directive.
 - **Built-ins:** `#speed`, `#seed`, `#grain` opt into engine controls and stand alone (no uniform).
 - Attributes tune each one: `label=`, `min=` / `max=`, `default=`, `group=` (which inspector group it lands in), and `osc=` place the on-screen control. The rest of this doc details every kind.
@@ -25,7 +26,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 **Rules that always hold:**
 
 - The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, `transition`, or `color-transform`. This drives browser classification and runtime input behavior.
-- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The whole-shader directives (`#speed` / `#seed` / `#grain` / `#template` / `#alpha` / `#motionblur` / `#frames` / `#color-surface`) are the exception: they annotate nothing and stand on their own line.
+- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The whole-shader directives (`#speed` / `#seed` / `#grain` / `#template` / `#alpha` / `#motionblur` / `#frames` / `#color-surface` / `#slots` / `#slots-end`) are the exception: they annotate nothing and stand on their own line.
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
@@ -82,6 +83,7 @@ Values are compared after rounding, matching choice indices and integer controls
 | `#template`      | _(none)_           | no separate control                              | declares `generator`, `filter`, `layout`, or `transition`; transition adds the shared coverage pills |
 | `#color-surface` | _(none)_           | the Color panel (a draggable scope)              | nothing directly - controls opt in with `surface=`                                                   |
 | `#frames`        | _(none)_           | no separate control                              | the source clip at other frames: `iNeighborAt(i, uv)`, `iNeighborCount`, `iNeighborOffset(i)`        |
+| `#slots`         | _(none)_           | repeats the controls it wraps, per instance      | each uniform inside becomes `[max]`, plus an injected `u<Name>Count`                                 |
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
 
@@ -574,7 +576,18 @@ The marker is optional on a shader with **one** surface, because there is only o
 uniform float uShadowRC;
 ```
 
-Pucks are **not** inferred from `group=`: one gesture often spans several inspector groups (a bloom's Threshold, Bloom and Mist), which grouping would split into a puck each. The symbol is optional but effectively required once there is more than one puck, since the icon is the only thing saying which handle is which.
+Pucks are **not** inferred from `group=`: one gesture often spans several inspector groups (a bloom's Threshold, Bloom and Mist), which grouping would split into a puck each. The second slot is what tells one handle from another, so it is optional but effectively required once there is more than one puck.
+
+The second slot is an SF Symbol name **or literal text**. It is looked up as a symbol first; anything macOS does not know as one is drawn as text inside the handle, so `puck={"Shadows", "S"}` gives a handle marked S without hunting for a symbol shaped like the letter. At most **two characters** are drawn, and a longer string keeps its first two: a handle is nine points across and a third character would read as a smudge. A mistyped symbol name is therefore visible as itself rather than silently leaving a blank handle.
+
+```glsl
+// #float label="Lift" puck={"Shadows", "S"} min=-100 max=100 default=0 surface="y:+40"
+uniform float uLift;
+```
+
+Leave the slot out and the handle takes a **default** mark: an instance of a repeatable group shows its own number, and any other puck - including the single unnamed one a shader with `surface=` but no `puck=` gets - shows `G`. Both are defaults only, and an authored symbol or text always wins.
+
+A puck can also be **one per instance** of a repeatable group - a wheel the user adds another handle to - by naming it with the instance placeholder, `puck={"Colour {n}", "{n}.circle"}`. See "Repeatable groups: `#slots`" below.
 
 ### Rotation-only pucks: `track=`
 
@@ -593,25 +606,83 @@ For a **hue-valued** control - a `#color` swatch driven through an angular `a:` 
 
 ### Sampling from the footage: `pick=`
 
-`pick=hue` | `pick=saturation` | `pick=luma` | `pick=color` on a control subscribes it to the panel's **eyedropper**. When the current shader declares at least one `pick=` on a currently-visible control, the Color panel shows an eyedropper, and clicking the footage in the mini-viewer samples a small patch and writes the chosen property of that colour into **every subscribed control at once, in one undo step**.
+`pick=hue` | `pick=saturation` | `pick=luma` | `pick=luma-linear` | `pick=color` on a control subscribes it to the panel's **eyedropper**. When the current shader declares at least one `pick=` on a currently-visible control, the Color panel shows an eyedropper, and clicking the footage in the mini-viewer samples a small patch and writes the chosen property of that colour into **every subscribed control at once, in one undo step**.
 
 ```glsl
-// #percent label="Pivot" min=1 max=99 default=18 pick=luma
+// #percent label="Pivot" min=1 max=99 default=18 pick=luma-linear
 uniform float uPivot;
 ```
 
-| `pick=`      | What lands in the control                                                                                                                                                     |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hue`        | the hue as the grading wheel measures it, in degrees, wrapped to -180..180 when the control's `min=` is negative and 0..360 otherwise. A neutral or grey patch writes nothing |
-| `saturation` | 0..1, the patch's colourfulness as a fraction of the most colourful thing Rec.709 shows, multiplied by 100 for a percent-range control                                        |
-| `luma`       | Rec.709 luma, with the same scaling                                                                                                                                           |
-| `color`      | the sampled RGB into a `#color` control's swatch                                                                                                                              |
+| `pick=`       | What lands in the control                                                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hue`         | the hue as the grading wheel measures it, in degrees, wrapped to -180..180 when the control's `min=` is negative and 0..360 otherwise. A neutral or grey patch writes nothing |
+| `saturation`  | 0..1, the patch's colourfulness as a fraction of the most colourful thing Rec.709 shows, multiplied by 100 for a percent-range control                                        |
+| `luma`        | Rec.709 luma of the **display-coded** sample, with the same scaling. The brightness the scope and the light ring show                                                         |
+| `luma-linear` | the same weights on the sample **decoded to linear light**, with the same scaling                                                                                             |
+| `color`       | the sampled RGB into a `#color` control's swatch                                                                                                                              |
+
+**Which luma:** read the line in your shader that consumes the value. If it is compared against `texture(iChannel0, uv)` or any other still-encoded pixel - a highlight threshold, a key's minimum brightness - use `pick=luma`, because both sides of that comparison are code values. If it is used as light, after a `toLinear()` and before the re-encode - a contrast pivot in `pivot * pow(c / pivot, k)`, an exposure reference, a linear mix weight - use `pick=luma-linear`. The difference is not a rounding: a face sampled at display `0.55` is `0.26` of the light, so a pivot fed the display number sits about a stop above the grey the user clicked and rotates the picture around the wrong tone. Both write the same 0..1 range and take the same percent scaling, so the choice is only ever about which space the number is read in.
 
 Beside the eyedropper, the panel offers **Set from clip**. It arms one click in the preview, and that click aims only the **active puck's** subscribers - the handle you last touched - at the colour under it, all in one undo step. The colour is read from the original clip rather than from the graded result, so re-picking the same pixel does not walk the value as the grade moves it. Escape, clicking the button again, or the click itself disarms.
 
 Scoping is by `puck=`, which a `pick=` control may declare on its own without a `surface=`: `puck=` names the handle a control belongs to, and `surface=` only says how it responds to being dragged. In a shader that names pucks, a `pick=` control naming none is skipped by Set from clip - it has not said which handle it belongs to, and writing it from every handle would fill all of them with the same colour. The eyedropper still writes it, since that gesture is deliberately shader-wide. A shader that names no puck at all has one unnamed handle every control belongs to, so both buttons reach everything.
 
 `pick=` works with or without a `surface=` mapping on the same control, and it never affects the puck layout. Use it where the control's value genuinely **is** a property of a colour in the frame - a hue to key, a mid-grey pivot, a light's tint. It is the wrong tool for a gate or a threshold that the click should fall inside: writing the clicked pixel's own saturation into a minimum-saturation control excludes half of what was just clicked.
+
+## Repeatable groups: `#slots`
+
+Some controls come in **an unknown number**. A shader that tints three lights, or keys four hues, or draws N shapes cannot say how many the user wants, and declaring eight of everything up front fills the inspector with seven rows that do nothing. `// #slots` declares the controls for **one** of them, and the user adds and removes copies at runtime:
+
+```glsl
+// #slots name="Colour" max=8 default=1 min=0
+// #color label="New Colour {n}" puck={"Colour {n}", "{n}.circle"} pick=hue
+uniform vec4 uNewColour;
+
+// #percent label="Strength {n}" min=0 max=100 default=50
+uniform float uNewStrength;
+// #slots-end
+```
+
+`#slots` opens the block and `#slots-end` closes it, both standing alone on their own line like `#template` or `#frames`. **Exactly** the controls between them belong to the group, and they repeat **together**: adding an instance adds a swatch, its strength and its own puck, because that trio is what the user thinks of as one colour.
+
+| Attribute  | Required | What it says                                                                                      |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `name=`    | yes      | what one instance is called. It heads the instance and keys its lanes, so no two groups share one |
+| `max=`     | yes      | the hard ceiling, 1 to 16. Every instance is a live lane set and a slice of the render pool       |
+| `default=` | no       | instances a fresh apply starts with, 0 to `max` (1 when absent)                                   |
+| `min=`     | no       | instances the panel refuses to delete below, 0 to `max` (0 when absent)                           |
+
+`max=` is a budget, not a formality: the pool is finite, so the ceiling is declared rather than discovered by the tenth instance quietly not rendering. Set it to the most the effect is actually worth having.
+
+### `{n}`, the instance number
+
+`{n}` is where the instance's number goes, counting from **1**. It is legal in `label=`, in `group=`, and in both slots of `puck={"Name", "symbol"}` - which is what makes `puck={"Colour {n}", "{n}.circle"}` give instance 3 its own handle, drawn with the `3.circle` symbol. Writing `puck="Colour {n}"` with no symbol at all reaches the same place through the default: an instance with nothing declared is marked with its number.
+
+Inside a block it is **required** on every control's `label=`, and on the `puck=` name when there is one. That is not tidiness: two instances whose rows both read "New Colour" are two rows the user cannot tell apart, and two pucks sharing a name are **one** puck being dragged by both instances. Writing `puck=` with no readable name is rejected for the same reason - an unnamed handle is one handle, so the collapse would arrive through the front door. Omit `puck=` entirely if the controls are meant to share the surface's single unnamed puck. Outside a block `{n}` is rejected, since there is no instance number to put there and it would otherwise reach the inspector as literal text.
+
+The editor reports the whole set: an unclosed `#slots`, a `#slots-end` with nothing open, a nested `#slots`, a missing or malformed `name=` / `max=`, a `default=` or `min=` outside `0..max` (or a `default=` below `min=`), two groups sharing a name, a control inside a block with no `{n}`, a `puck=` inside a block with no name, a `#gradient`, an `#audio` or an arrayed `#color` inside a block, and a `{n}` outside every block.
+
+A shader may declare **several** groups - lights and gradients are two different things to have several of - as long as each has its own name. Nesting is not allowed: an instance count that is the product of two counts has no name a row could carry.
+
+### What the shader receives
+
+This is the contract, and it is worth reading before writing the block: inside a block you declare **plain scalar uniforms**, exactly as you would anywhere else, and the compiler turns each one into an **array of `max`** and injects **one count** for the group. The example above reaches the shader as:
+
+```glsl
+uniform vec4  uNewColour[8];    // one per instance
+uniform float uNewStrength[8];
+uniform int   uColourCount;     // injected: how many are live this frame
+```
+
+The count is named from `name=` - its letters and digits, each word capitalised, as `u<Name>Count` - and it belongs to the **block**, not to any one uniform: every control in the group appears and disappears together, so one count is the whole answer. Loop over it:
+
+```glsl
+vec3 tint = vec3(0.0);
+for (int i = 0; i < uColourCount; i++)
+    tint += uNewColour[i].rgb * uNewStrength[i];
+```
+
+Slots past the count are **zero**, so bound the loop by the count and never by `max` - a deleted instance leaves a black swatch and a zero strength behind it, not the value it had. And declare **single** uniforms inside a block: a control that is already an array (a `#color` palette, an `#audio` binding, a `#gradient` ramp) carries its own count and belongs outside the block rather than being arrayed twice.
 
 ## Worked example
 

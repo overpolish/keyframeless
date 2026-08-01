@@ -85,6 +85,13 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
             @"Take control of transparency, to mask part of "
             @"the frame so a lower clip shows through.",
             @"#alpha"),
+          E(@"#slots", @"#slots",
+            @"Start a group of controls the user can add and remove copies "
+            @"of, like a list of colours. Name it, cap it with max=, and "
+            @"write {n} wherever a control inside says which copy it is.",
+            @"#slots name=\""),
+          E(@"#slots-end", @"#slots-end",
+            @"End the repeatable group opened by #slots.", @"#slots-end"),
           E(@"@osc", @"@osc", @"A draggable on-screen handle for a value.",
             @"@osc "),
         ],
@@ -120,6 +127,11 @@ MirageDirectiveAttributeKeys(void) {
             @"Map a colour array to a multiple-choice control's options.",
             @"optionsby="),
           E(@"default", @"default=", @"Starting value.", @"default="),
+          E(@"name", @"name=\"\"",
+            @"#slots: what one copy of the group is called, e.g. "
+            @"name=\"Colour\". It heads every instance and keys its lanes, so "
+            @"two groups can't share one.",
+            @"name=\""),
           E(@"space", @"space=",
             @"The colour space this shader's maths works in, so the Grading "
             @"panel measures it correctly.",
@@ -148,11 +160,16 @@ MirageDirectiveAttributeKeys(void) {
             @"track="),
           E(@"pick", @"pick=",
             @"Feed this control from the Color panel's eyedropper: pick=hue, "
-            @"pick=saturation, pick=luma or pick=color. Sampling the picture "
-            @"writes that property of the sampled colour here - the hue in "
-            @"this control's own convention, saturation and luma as 0..1 or as "
-            @"percent when the declared max says so, and the colour itself "
-            @"into a #color swatch. Independent of surface=: a control can "
+            @"pick=saturation, pick=luma, pick=luma-linear or pick=color. "
+            @"Sampling the picture writes that property of the sampled colour "
+            @"here - the hue in this control's own convention, saturation and "
+            @"luma as 0..1 or as percent when the declared max says so, and "
+            @"the "
+            @"colour itself into a #color swatch. pick=luma is the brightness "
+            @"the scope shows, display-coded. pick=luma-linear is the same "
+            @"weights on linear light, for a value the shader consumes as "
+            @"light "
+            @"such as a contrast pivot. Independent of surface=: a control can "
             @"take the eyedropper without being on the puck.",
             @"pick="),
           E(@"ring", @"ring=",
@@ -284,19 +301,43 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     v = [NSSet setWithArray:@[
-      @"true",         @"false",      @"yes",      @"no",
+      @"true",
+      @"false",
+      @"yes",
+      @"no",
       @"none", // booleans / off
-      @"point",        @"position",   @"ring",     @"box",
-      @"rotate",                                           // primitives / kinds
-      @"dot",          @"square",     @"hollow",   @"arc", // point styles
-      @"skipsnapping", @"lockaspect", @"dropdown", @"multiple", // bare flags
-      @"percent",      @"int",        @"px", // #multi units/modifiers
-      @"accumulate",   @"native",     @"off",      @"on", // #motionblur modes
-      @"generator",    @"filter",     @"layout",   @"transition",
-      @"color-transform",  // templates
-      @"linear-rec709",    // #color-surface space=
-      @"plain",            // #color-surface ring=
-      @"light",            @"hue"
+      @"point",
+      @"position",
+      @"ring",
+      @"box",
+      @"rotate", // primitives / kinds
+      @"dot",
+      @"square",
+      @"hollow",
+      @"arc", // point styles
+      @"skipsnapping",
+      @"lockaspect",
+      @"dropdown",
+      @"multiple", // bare flags
+      @"percent",
+      @"int",
+      @"px", // #multi units/modifiers
+      @"accumulate",
+      @"native",
+      @"off",
+      @"on", // #motionblur modes
+      @"generator",
+      @"filter",
+      @"layout",
+      @"transition",
+      @"color-transform", // templates
+      @"linear-rec709",   // #color-surface space=
+      @"plain",           // #color-surface ring=
+      @"light",
+      @"hue",
+      @"saturation",
+      @"luma",
+      @"luma-linear" // pick=
     ]];
   });
   return v;
@@ -805,6 +846,34 @@ MirageValueEnumForKey(NSString *key) {
             @"A hue wheel, with the frame's colour as a vectorscope cloud "
             @"inside it.",
             @"hue"),
+        ],
+        kVAR);
+  if ([k isEqualToString:@"pick"])
+    return Colored(
+        @[
+          E(@"hue", @"hue",
+            @"The sampled hue in degrees, in this control's own convention.",
+            @"hue"),
+          E(@"saturation", @"saturation",
+            @"How colourful the sample is, as a fraction of the most colourful "
+            @"thing Rec.709 shows.",
+            @"saturation"),
+          E(@"luma", @"luma",
+            @"The sample's brightness as the scope shows it, display-coded. "
+            @"For "
+            @"a control compared against the picture's own pixel values, like "
+            @"a "
+            @"highlight threshold.",
+            @"luma"),
+          E(@"luma-linear", @"luma-linear",
+            @"The same brightness measured in linear light. For a control the "
+            @"shader consumes as light, like a contrast pivot: a face sampled "
+            @"at 0.55 is 0.26 of the light, and feeding the display number to "
+            @"a "
+            @"pivot puts it about a stop high.",
+            @"luma-linear"),
+          E(@"color", @"color",
+            @"The sampled colour itself, into a #color swatch.", @"color"),
         ],
         kVAR);
   if ([k isEqualToString:@"body"])

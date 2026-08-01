@@ -5,11 +5,12 @@
 
 #import <Foundation/Foundation.h>
 
-#import "MirageColorSurfaceProps.h"
 #import "MirageColorProps.h"
+#import "MirageColorSurfaceProps.h"
 #import "MirageDirectiveCommon.h"
 #import "MirageFrameOffsets.h"
 #import "MirageScalarParse.h"
+#import "MirageSlotBudget.h"
 #import "MirageSurfaceResponse.h"
 #import "MirageTemplateType.h"
 
@@ -18,6 +19,18 @@ static void KKRequire(BOOL condition, NSString *message) {
     return;
   NSLog(@"FAIL: %@", message);
   exit(1);
+}
+
+/// One named-pair parse, reported as "name|symbol" with the caller's untouched
+/// defaults spelled out. Absent and empty are different answers here, which is
+/// the whole point of the attribute.
+static NSString *KKPair(NSString *attrs, NSString *key) {
+  char name[64] = {0}, symbol[64] = {0};
+  strncpy(name, "-", sizeof(name) - 1);
+  strncpy(symbol, "-", sizeof(symbol) - 1);
+  MirageParseNamedPairAttr(attrs, key, name, sizeof(name), symbol,
+                           sizeof(symbol));
+  return [NSString stringWithFormat:@"%s|%s", name, symbol];
 }
 
 int main(void) {
@@ -33,6 +46,70 @@ int main(void) {
               @"ignores quoted and prefixed flow words");
     KKRequire(MirageAttrHasBareFlag(@" flow flowgate=-30", @"flow"),
               @"recognises flow alongside prefixed attributes");
+
+    // The braced pair, whose body used to be read as "up to the first `}`".
+    // A `{n}` placeholder lives INSIDE the quotes, so that scan ended at the
+    // placeholder's own brace and returned nothing at all - no error, just a
+    // control that had lost its puck.
+    KKRequire([KKPair(@" puck={\"Colour {n}\", \"{n}.circle\"}", @"puck")
+                  isEqualToString:@"Colour {n}|{n}.circle"],
+              @"a placeholder in both slots of a braced pair survives");
+    KKRequire([KKPair(@" puck={\"Colour {N}\", \"circle\"}", @"puck")
+                  isEqualToString:@"Colour {N}|circle"],
+              @"and the shouted spelling reads the same way");
+    KKRequire([KKPair(@" label=\"New Colour {n}\" "
+                      @"puck={\"Colour {n}\", \"{n}.circle\"} pick=hue",
+                      @"puck") isEqualToString:@"Colour {n}|{n}.circle"],
+              @"the documented #slots line parses as documented");
+    KKRequire([KKPair(@" group={\"Set {n}\", \"{n}.square\"}", @"group")
+                  isEqualToString:@"Set {n}|{n}.square"],
+              @"group= shares the parse, so it shares the fix");
+
+    // Every shape that already worked, pinned byte for byte.
+    KKRequire([KKPair(@" puck=\"Hue\"", @"puck") isEqualToString:@"Hue|-"],
+              @"the bare quoted form names no symbol");
+    KKRequire([KKPair(@" puck={\"Hue\"}", @"puck") isEqualToString:@"Hue|-"],
+              @"the braced single form is the same answer");
+    KKRequire([KKPair(@" puck={\"Hue\", \"moon\"}", @"puck")
+                  isEqualToString:@"Hue|moon"] &&
+                  [KKPair(@" puck={ \"Hue\" , \"moon\" }", @"puck")
+                      isEqualToString:@"Hue|moon"] &&
+                  [KKPair(@" puck  =  {\"Hue\", \"moon\"} extra=1", @"puck")
+                      isEqualToString:@"Hue|moon"],
+              @"the plain braced pair is unchanged, whitespace and all");
+    KKRequire([KKPair(@" group={\"Options\", \"gear\"}", @"group")
+                  isEqualToString:@"Options|gear"],
+              @"and so is a plain group pair");
+    KKRequire([KKPair(@" puck={\"a, b\", \"moon\"}", @"puck")
+                  isEqualToString:@"a, b|moon"],
+              @"a comma inside the name is part of the name");
+    KKRequire(
+        [KKPair(@" puck={\"a\",\"b\",\"c\"}", @"puck") isEqualToString:@"a|b"],
+        @"a third string is ignored rather than fatal");
+    KKRequire([KKPair(@" nopuck={\"Hue\"}", @"puck") isEqualToString:@"-|-"],
+              @"a longer key ending in the one asked for is not it");
+    KKRequire([KKPair(@" label=\"puck={x}\"", @"puck") isEqualToString:@"-|-"],
+              @"an attribute named inside a quoted label is not written");
+    KKRequire(
+        [KKPair(@" puck={}", @"puck") isEqualToString:@"-|-"] &&
+            [KKPair(@" puck={\"\"}", @"puck") isEqualToString:@"-|-"] &&
+            [KKPair(@" puck=\"\"", @"puck") isEqualToString:@"-|-"] &&
+            [KKPair(@" puck={Options}", @"puck") isEqualToString:@"-|-"] &&
+            [KKPair(@" puck={\"a\"", @"puck") isEqualToString:@"-|-"] &&
+            [KKPair(@" puck={\"unterminated}", @"puck") isEqualToString:@"-|-"],
+        @"an empty or malformed value leaves the caller's default alone");
+    KKRequire(
+        [KKPair(@" puck={\"\", \"moon\"}", @"puck") isEqualToString:@"-|moon"],
+        @"an empty name with a symbol keeps the symbol");
+
+    KKRequire(MirageAttrHasKey(@" puck={\"a\", \"b\"}", @"puck") &&
+                  MirageAttrHasKey(@" puck  = \"\"", @"puck") &&
+                  MirageAttrHasKey(@" puck={n}", @"puck"),
+              @"a key is written whether or not its value can be read");
+    KKRequire(!MirageAttrHasKey(@" label=\"puck=x\"", @"puck") &&
+                  !MirageAttrHasKey(@" nopuck=\"a\"", @"puck") &&
+                  !MirageAttrHasKey(@" pick=hue", @"puck"),
+              @"and not written by a quoted label or a longer key");
 
     MirageTemplateDirectiveError templateError =
         MirageTemplateDirectiveErrorNone;
@@ -93,12 +170,12 @@ int main(void) {
                   space == MirageColorSurfaceSpaceLinearRec709 &&
                   surfaceError == MirageColorSurfaceErrorNone,
               @"opts in with a bare directive, defaulting the space");
-    KKRequire(MirageColorSurfaceForSource(
-                  @"// #color-surface space=linear-rec709\n", &space,
-                  &surfaceError) &&
-                  space == MirageColorSurfaceSpaceLinearRec709 &&
-                  surfaceError == MirageColorSurfaceErrorNone,
-              @"reads the hyphenated space value whole");
+    KKRequire(
+        MirageColorSurfaceForSource(@"// #color-surface space=linear-rec709\n",
+                                    &space, &surfaceError) &&
+            space == MirageColorSurfaceSpaceLinearRec709 &&
+            surfaceError == MirageColorSurfaceErrorNone,
+        @"reads the hyphenated space value whole");
     KKRequire(MirageColorSurfaceForSource(@"// #color-surface space=acescg\n",
                                           &space, &surfaceError) &&
                   space == MirageColorSurfaceSpaceInvalid &&
@@ -133,12 +210,12 @@ int main(void) {
     KKRequire(MirageColorSurfaceRingForSource(dualSurface) ==
                   MirageColorSurfaceRingHue,
               @"the single-ring accessor still answers with the first");
-    KKRequire(MirageColorSurfaceDeclaresRing(dualSurface,
-                                             MirageColorSurfaceRingLight) &&
-                  !MirageColorSurfaceDeclaresRing(
-                      @"// #color-surface ring=hue\n",
-                      MirageColorSurfaceRingLight),
-              @"asks whether a ring is declared, not which one came first");
+    KKRequire(
+        MirageColorSurfaceDeclaresRing(dualSurface,
+                                       MirageColorSurfaceRingLight) &&
+            !MirageColorSurfaceDeclaresRing(@"// #color-surface ring=hue\n",
+                                            MirageColorSurfaceRingLight),
+        @"asks whether a ring is declared, not which one came first");
     KKRequire(MirageColorSurfaceForSource(@"// #color-surface ring=hue\n"
                                           @"// #color-surface ring=hue\n",
                                           &space, &surfaceError) &&
@@ -168,14 +245,13 @@ int main(void) {
         @"// #color-surface ring=hue\n"
         @"// #color-surface ring=light xaxis=\"Flat,Punchy\" "
         @"yaxis=\"Darker,Brighter\"\n";
-    KKRequire(!MirageColorSurfaceAxisLabelsAtIndex(dualLabelled, 0, @"xaxis") &&
-                  [MirageColorSurfaceAxisLabelsAtIndex(dualLabelled, 1,
-                                                       @"xaxis")[1]
-                      isEqualToString:@"Punchy"] &&
-                  [MirageColorSurfaceAxisLabelsAtIndex(dualLabelled, 1,
-                                                       @"yaxis")[0]
-                      isEqualToString:@"Darker"],
-              @"each surface carries its own axis labels");
+    KKRequire(
+        !MirageColorSurfaceAxisLabelsAtIndex(dualLabelled, 0, @"xaxis") &&
+            [MirageColorSurfaceAxisLabelsAtIndex(dualLabelled, 1, @"xaxis")[1]
+                isEqualToString:@"Punchy"] &&
+            [MirageColorSurfaceAxisLabelsAtIndex(dualLabelled, 1, @"yaxis")[0]
+                isEqualToString:@"Darker"],
+        @"each surface carries its own axis labels");
 
     // Attaching a control to a ring. The marker is a bare word at the front of
     // the value, so the term scanner never sees it and an unmarked control
@@ -188,26 +264,27 @@ int main(void) {
               @"reads the ring marker without disturbing the terms");
     MirageSurfaceResponse markedHue =
         MirageParseSurfaceResponse(@" default=0 surface=\"hue x:+31 y:+17\"");
-    KKRequire(markedHue.hasRing && markedHue.ring == MirageColorSurfaceRingHue &&
+    KKRequire(markedHue.hasRing &&
+                  markedHue.ring == MirageColorSurfaceRingHue &&
                   markedHue.x == 31.0 && markedHue.y == 17.0,
               @"the marker may sit in front of a two-term response");
     MirageSurfaceResponse unmarked =
         MirageParseSurfaceResponse(@" default=0 surface=\"x:+31 y:+17\"");
     KKRequire(!unmarked.hasRing && unmarked.x == 31.0 && unmarked.y == 17.0,
               @"an unmarked response names no ring and parses unchanged");
-    KKRequire(MirageSurfaceResponseOnRing(unmarked, MirageColorSurfaceRingHue,
-                                          NO) &&
-                  MirageSurfaceResponseOnRing(unmarked,
-                                              MirageColorSurfaceRingLight, NO),
-              @"with one surface declared, every mapping belongs to it");
-    KKRequire(!MirageSurfaceResponseOnRing(unmarked, MirageColorSurfaceRingHue,
-                                           YES),
-              @"with two declared, an unmarked mapping belongs to neither");
-    KKRequire(MirageSurfaceResponseOnRing(marked, MirageColorSurfaceRingLight,
-                                          YES) &&
-                  !MirageSurfaceResponseOnRing(marked,
-                                               MirageColorSurfaceRingHue, YES),
-              @"a marked mapping belongs to the ring it names and no other");
+    KKRequire(
+        MirageSurfaceResponseOnRing(unmarked, MirageColorSurfaceRingHue, NO) &&
+            MirageSurfaceResponseOnRing(unmarked, MirageColorSurfaceRingLight,
+                                        NO),
+        @"with one surface declared, every mapping belongs to it");
+    KKRequire(
+        !MirageSurfaceResponseOnRing(unmarked, MirageColorSurfaceRingHue, YES),
+        @"with two declared, an unmarked mapping belongs to neither");
+    KKRequire(
+        MirageSurfaceResponseOnRing(marked, MirageColorSurfaceRingLight, YES) &&
+            !MirageSurfaceResponseOnRing(marked, MirageColorSurfaceRingHue,
+                                         YES),
+        @"a marked mapping belongs to the ring it names and no other");
 
     NSString *dualControls =
         @"// #color-surface ring=hue\n"
@@ -223,8 +300,9 @@ int main(void) {
         @"uniform float uContrast;\n";
     NSDictionary<NSString *, NSValue *> *hueRing =
         MirageSurfaceResponsesForRing(dualControls, MirageColorSurfaceRingHue);
-    NSDictionary<NSString *, NSValue *> *lightRing = MirageSurfaceResponsesForRing(
-        dualControls, MirageColorSurfaceRingLight);
+    NSDictionary<NSString *, NSValue *> *lightRing =
+        MirageSurfaceResponsesForRing(dualControls,
+                                      MirageColorSurfaceRingLight);
     KKRequire(hueRing.count == 1 && hueRing[@"uRedCyan"],
               @"the wheel gets only the controls aimed at it");
     KKRequire(lightRing.count == 2 && lightRing[@"uExposure"] &&
@@ -232,13 +310,12 @@ int main(void) {
               @"the tonal circle gets only the controls aimed at it");
     KKRequire(MirageSurfaceResponsesForSource(dualControls).count == 3,
               @"the unfiltered scan still sees every mapping");
-    KKRequire(MirageSurfacePucksForRing(dualControls,
-                                        MirageColorSurfaceRingHue)
-                      .count == 1 &&
-                  MirageSurfacePucksForRing(dualControls,
-                                            MirageColorSurfaceRingLight)
-                          .count == 1,
-              @"each ring gets its own single unnamed puck");
+    KKRequire(
+        MirageSurfacePucksForRing(dualControls, MirageColorSurfaceRingHue)
+                    .count == 1 &&
+            MirageSurfacePucksForRing(dualControls, MirageColorSurfaceRingLight)
+                    .count == 1,
+        @"each ring gets its own single unnamed puck");
 
     // A single-surface shader is untouched by all of it: no marker needed, and
     // the ring filter still hands over everything.
@@ -247,13 +324,13 @@ int main(void) {
         @"// #float label=\"Red / Cyan\" min=-100 max=100 default=0 "
         @"surface=\"x:+31 y:+17\"\n"
         @"uniform float uRedCyan;\n";
-    KKRequire(MirageSurfaceResponsesForRing(singleControls,
-                                            MirageColorSurfaceRingHue)
-                      .count == 1 &&
-                  MirageSurfaceResponsesForRing(singleControls,
-                                                MirageColorSurfaceRingLight)
-                          .count == 1,
-              @"one surface means one ring, and every mapping is on it");
+    KKRequire(
+        MirageSurfaceResponsesForRing(singleControls, MirageColorSurfaceRingHue)
+                    .count == 1 &&
+            MirageSurfaceResponsesForRing(singleControls,
+                                          MirageColorSurfaceRingLight)
+                    .count == 1,
+        @"one surface means one ring, and every mapping is on it");
 
     // Misattachment is an editor error, never a silent no-op.
     MirageSurfaceRingBindingError binding = MirageSurfaceRingBindingErrorNone;
@@ -269,25 +346,26 @@ int main(void) {
         @"// #float label=\"Exposure\" min=-5 max=5 default=0 "
         @"surface=\"y:+1.5\"\n"
         @"uniform float uExposure;\n";
-    KKRequire([MirageFirstBadSurfaceRingBinding(unnamedUnderTwo, &binding)
-                      isEqualToString:@"Exposure"] &&
-                  binding == MirageSurfaceRingBindingErrorUnnamed,
-              @"with two rings, an unmarked mapping names the control at fault");
+    KKRequire(
+        [MirageFirstBadSurfaceRingBinding(unnamedUnderTwo, &binding)
+            isEqualToString:@"Exposure"] &&
+            binding == MirageSurfaceRingBindingErrorUnnamed,
+        @"with two rings, an unmarked mapping names the control at fault");
     NSString *aimedAtNothing =
         @"// #color-surface ring=hue\n"
         @"// #float label=\"Exposure\" min=-5 max=5 default=0 "
         @"surface=\"light y:+1.5\"\n"
         @"uniform float uExposure;\n";
     KKRequire([MirageFirstBadSurfaceRingBinding(aimedAtNothing, &binding)
-                      isEqualToString:@"Exposure"] &&
+                  isEqualToString:@"Exposure"] &&
                   binding == MirageSurfaceRingBindingErrorUnknown,
               @"a marker naming an undeclared ring is reported, not dropped");
     KKRequire([MirageFirstBadSurfaceRingBinding(
-                   @"// #color-surface ring=hue\n"
-                   @"// #float min=-5 max=5 default=0 "
-                   @"surface=\"light y:+1.5\"\n"
-                   @"uniform float uExposure;\n",
-                   &binding) isEqualToString:@"uExposure"],
+                  @"// #color-surface ring=hue\n"
+                  @"// #float min=-5 max=5 default=0 "
+                  @"surface=\"light y:+1.5\"\n"
+                  @"uniform float uExposure;\n",
+                  &binding) isEqualToString:@"uExposure"],
               @"an unlabelled control is named by its uniform");
 
     // The reason the boundary fix above had to land first: #color-surface and
@@ -296,8 +374,8 @@ int main(void) {
     KKRequire(MirageParseColorProps(@"// #color-surface\nuniform vec4 uTint;\n",
                                     &colorProp, 1, NULL) == 0,
               @"#color-surface is not a #color control");
-    KKRequire(!MirageColorSurfaceForSource(@"// #color label=\"Tint\"\n", &space,
-                                           &surfaceError),
+    KKRequire(!MirageColorSurfaceForSource(@"// #color label=\"Tint\"\n",
+                                           &space, &surfaceError),
               @"#color is not a #color-surface opt-in");
 
     MirageSurfaceResponse r = MirageParseSurfaceResponse(@" surface=\"y:+30\"");
@@ -338,8 +416,8 @@ int main(void) {
               @"round trips the puck, leaving the unmapped axis at zero");
 
     // Normalisation: a wide-ranged control must not outvote a narrow one. Both
-    // agree the puck is at 0.5, and a raw fit would still be pulled by the pixel
-    // control's much larger absolute delta.
+    // agree the puck is at 0.5, and a raw fit would still be pulled by the
+    // pixel control's much larger absolute delta.
     MirageSurfaceSample scaled[2] = {{0.0, 4.0, 2.0}, {0.0, 120.0, 60.0}};
     KKRequire(MirageSurfaceDerivePuck(scaled, 2, &dx, &dy) &&
                   fabs(dy - 0.5) < 1e-9,
@@ -357,15 +435,17 @@ int main(void) {
                   fabs(dx - 0.5) < 1e-9 && fabs(dy + 0.5) < 1e-9,
               @"derives both axes independently");
 
-    // The response curve: author magnitude sets the centre slope, the rim reaches the
-    // control's declared limit, and it inverts.
+    // The response curve: author magnitude sets the centre slope, the rim
+    // reaches the control's declared limit, and it inverts.
     MirageSurfaceResponse curve = MirageParseSurfaceResponse(
         @" min=0 max=150 default=45 surface=\"y:+30\"");
-    KKRequire(curve.hasLimits && curve.minValue == 0.0 && curve.maxValue == 150.0,
+    KKRequire(curve.hasLimits && curve.minValue == 0.0 &&
+                  curve.maxValue == 150.0,
               @"parses the control's limits for the response curve");
     double atRim = MirageSurfaceCurveDelta(curve, 45.0, 1.0, 30.0);
-    KKRequire(fabs(atRim - 105.0) < 1e-9,
-              @"full deflection reaches the control's max, not just the magnitude");
+    KKRequire(
+        fabs(atRim - 105.0) < 1e-9,
+        @"full deflection reaches the control's max, not just the magnitude");
     double atRimDown = MirageSurfaceCurveDelta(curve, 45.0, -1.0, 30.0);
     KKRequire(fabs(atRimDown + 45.0) < 1e-9,
               @"full deflection downward reaches the control's min");
@@ -377,29 +457,31 @@ int main(void) {
       double back = MirageSurfaceCurveDeflection(curve, 45.0, d, 30.0);
       KKRequire(fabs(back - u) < 1e-3, @"the response curve round trips");
     }
-    // An inverted mapping: the puck going up drives the control DOWN, so the rims
-    // are its min and max the other way round. Both must land exactly on a limit,
-    // or the control pins short of the rim in one direction and overshoots in the
-    // other.
+    // An inverted mapping: the puck going up drives the control DOWN, so the
+    // rims are its min and max the other way round. Both must land exactly on a
+    // limit, or the control pins short of the rim in one direction and
+    // overshoots in the other.
     MirageSurfaceResponse inverted = MirageParseSurfaceResponse(
         @" min=0 max=100 default=58 surface=\"y:-12\"");
     KKRequire(fabs(MirageSurfaceCurveDelta(inverted, 58.0, 1.0, -12.0) + 58.0) <
                   1e-9,
               @"an inverted control reaches its min at the top of the circle");
-    KKRequire(fabs(MirageSurfaceCurveDelta(inverted, 58.0, -1.0, -12.0) - 42.0) <
-                  1e-9,
-              @"an inverted control reaches its max at the bottom, not past it");
+    KKRequire(
+        fabs(MirageSurfaceCurveDelta(inverted, 58.0, -1.0, -12.0) - 42.0) <
+            1e-9,
+        @"an inverted control reaches its max at the bottom, not past it");
     for (double u = -0.95; u <= 0.95; u += 0.15) {
       double d = MirageSurfaceCurveDelta(inverted, 58.0, u, -12.0);
       double back = MirageSurfaceCurveDeflection(inverted, 58.0, d, -12.0);
-      KKRequire(fabs(back - u) < 1e-3, @"an inverted response curve round trips");
+      KKRequire(fabs(back - u) < 1e-3,
+                @"an inverted response curve round trips");
     }
 
     MirageSurfaceResponse noLimits =
         MirageParseSurfaceResponse(@" default=0 surface=\"x:+60\"");
     KKRequire(!noLimits.hasLimits &&
-                  fabs(MirageSurfaceCurveDelta(noLimits, 0.0, 0.5, 60.0) - 30.0) <
-                      1e-9,
+                  fabs(MirageSurfaceCurveDelta(noLimits, 0.0, 0.5, 60.0) -
+                       30.0) < 1e-9,
               @"no declared range stays linear");
 
     // Polar axes: distance drives `r:`, bearing drives `a:`.
@@ -407,10 +489,11 @@ int main(void) {
         @" min=0 max=200 default=100 surface=\"r:+40\"");
     KKRequire(radial.present && fabs(radial.r - 40.0) < 1e-9 && radial.x == 0.0,
               @"parses a radial response");
-    KKRequire(fabs(MirageSurfaceCurveDelta(radial, 100.0, 1.0, radial.r) - 100.0) <
-                  1e-9,
+    KKRequire(fabs(MirageSurfaceCurveDelta(radial, 100.0, 1.0, radial.r) -
+                   100.0) < 1e-9,
               @"the rim reaches a radial control's max");
-    KKRequire(fabs(MirageSurfaceCurveDelta(radial, 100.0, 0.0, radial.r)) < 1e-9,
+    KKRequire(fabs(MirageSurfaceCurveDelta(radial, 100.0, 0.0, radial.r)) <
+                  1e-9,
               @"the centre is a radial control's default");
 
     MirageSurfaceResponse angular = MirageParseSurfaceResponse(
@@ -443,15 +526,16 @@ int main(void) {
     KKRequire(!MirageSurfacePolarResolve(empty, &polarX, &polarY),
               @"nothing observed derives nothing");
 
-    KKRequire(MirageSurfaceResponsesArePolar(@{
-                @"uSat" : [NSValue valueWithBytes:&radial
-                                         objCType:@encode(MirageSurfaceResponse)]
-              }),
-              @"one polar control makes the surface polar");
+    KKRequire(
+        MirageSurfaceResponsesArePolar(@{
+          @"uSat" : [NSValue valueWithBytes:&radial
+                                   objCType:@encode(MirageSurfaceResponse)]
+        }),
+        @"one polar control makes the surface polar");
     KKRequire(!MirageSurfaceResponsesArePolar(@{
-                @"uBloom" : [NSValue valueWithBytes:&curve
-                                           objCType:@encode(MirageSurfaceResponse)]
-              }),
+      @"uBloom" : [NSValue valueWithBytes:&curve
+                                 objCType:@encode(MirageSurfaceResponse)]
+    }),
               @"a cartesian-only surface stays cartesian");
 
     // Named pucks: several independent handles sharing one circle.
@@ -470,50 +554,54 @@ int main(void) {
     KKRequire(unnamed.puck[0] == 0,
               @"no puck= leaves the response on the single unnamed puck");
 
-    NSString *twoPucks =
-        @"// #float label=\"A\" default=0 surface=\"x:+40\" "
-        @"puck={\"Shadows\", \"moon\"}\n"
-        @"uniform float uA;\n"
-        @"// #float label=\"B\" default=0 surface=\"y:+40\" "
-        @"puck={\"Shadows\", \"moon\"}\n"
-        @"uniform float uB;\n"
-        @"// #float label=\"C\" default=0 surface=\"x:+40\" "
-        @"puck={\"Highlights\", \"sun.max\"}\n"
-        @"uniform float uC;\n";
+    NSString *twoPucks = @"// #float label=\"A\" default=0 surface=\"x:+40\" "
+                         @"puck={\"Shadows\", \"moon\"}\n"
+                         @"uniform float uA;\n"
+                         @"// #float label=\"B\" default=0 surface=\"y:+40\" "
+                         @"puck={\"Shadows\", \"moon\"}\n"
+                         @"uniform float uB;\n"
+                         @"// #float label=\"C\" default=0 surface=\"x:+40\" "
+                         @"puck={\"Highlights\", \"sun.max\"}\n"
+                         @"uniform float uC;\n";
     NSArray<NSDictionary<NSString *, NSString *> *> *pucks =
         MirageSurfacePucksForSource(twoPucks);
-    KKRequire(pucks.count == 2, @"one entry per distinct puck, not per control");
+    KKRequire(pucks.count == 2,
+              @"one entry per distinct puck, not per control");
     KKRequire([pucks[0][@"name"] isEqualToString:@"Shadows"] &&
                   [pucks[0][@"symbol"] isEqualToString:@"moon"] &&
                   [pucks[1][@"name"] isEqualToString:@"Highlights"],
               @"pucks keep the order the author declared them in");
-    KKRequire(MirageSurfacePucksForSource(@"// #float label=\"A\" default=0 "
-                                          @"surface=\"x:+40\"\nuniform float uA;")
-                      .count == 1 &&
-                  [MirageSurfacePucksForSource(@"")[0][@"name"] isEqualToString:@""],
-              @"a shader with no puck= still reports one unnamed puck");
+    KKRequire(
+        MirageSurfacePucksForSource(@"// #float label=\"A\" default=0 "
+                                    @"surface=\"x:+40\"\nuniform float uA;")
+                    .count == 1 &&
+            [MirageSurfacePucksForSource(@"")[0][@"name"] isEqualToString:@""],
+        @"a shader with no puck= still reports one unnamed puck");
 
     // A tracked puck: pinned to a circle so the gesture is a rotation only.
     MirageSurfaceResponse tracked = MirageParseSurfaceResponse(
         @" min=-180 max=180 default=0 surface=\"a:+180\" track=0.75");
     KKRequire(fabs(tracked.track - 0.75) < 1e-9, @"parses a track radius");
-    KKRequire(MirageParseSurfaceResponse(@" default=0 surface=\"a:+180\"").track ==
-                  0.0,
-              @"no track= leaves the puck free");
-    KKRequire(MirageParseSurfaceResponse(
-                  @" default=0 surface=\"a:+180\" track=4").track == 1.0 &&
-                  MirageParseSurfaceResponse(
-                      @" default=0 surface=\"a:+180\" track=0.01").track == 0.1,
-              @"a track outside the disc is clamped, not rejected");
+    KKRequire(
+        MirageParseSurfaceResponse(@" default=0 surface=\"a:+180\"").track ==
+            0.0,
+        @"no track= leaves the puck free");
+    KKRequire(
+        MirageParseSurfaceResponse(@" default=0 surface=\"a:+180\" track=4")
+                    .track == 1.0 &&
+            MirageParseSurfaceResponse(
+                @" default=0 surface=\"a:+180\" track=0.01")
+                    .track == 0.1,
+        @"a track outside the disc is clamped, not rejected");
 
-    // The track may be declared on any of the puck's controls, not just the first.
-    NSString *lateTrack =
-        @"// #float label=\"A\" default=0 surface=\"a:+180\" "
-        @"puck={\"Target\", \"eyedropper\"}\n"
-        @"uniform float uA;\n"
-        @"// #float label=\"B\" default=0 surface=\"a:+90\" "
-        @"puck={\"Target\", \"eyedropper\"} track=0.8\n"
-        @"uniform float uB;\n";
+    // The track may be declared on any of the puck's controls, not just the
+    // first.
+    NSString *lateTrack = @"// #float label=\"A\" default=0 surface=\"a:+180\" "
+                          @"puck={\"Target\", \"eyedropper\"}\n"
+                          @"uniform float uA;\n"
+                          @"// #float label=\"B\" default=0 surface=\"a:+90\" "
+                          @"puck={\"Target\", \"eyedropper\"} track=0.8\n"
+                          @"uniform float uB;\n";
     NSArray<NSDictionary<NSString *, NSString *> *> *late =
         MirageSurfacePucksForSource(lateTrack);
     KKRequire(late.count == 1 && [late[0][@"track"] doubleValue] == 0.8,
@@ -527,6 +615,9 @@ int main(void) {
         @"uniform float uSat;\n"
         @"// #float label=\"Luma\" min=0 max=1 default=0.5 pick=luma\n"
         @"uniform float uLuma;\n"
+        @"// #percent label=\"Pivot\" min=1 max=99 default=18 "
+        @"pick=luma-linear\n"
+        @"uniform float uPivot;\n"
         @"// #color label=\"Key\" default=#ff0000 pick=color\n"
         @"uniform vec4 uKey;\n"
         @"// #float label=\"Nope\" default=0 pick=chroma\n"
@@ -536,22 +627,38 @@ int main(void) {
         @"// #float label=\"Orphan\" default=0 pick=hue\n";
     NSDictionary<NSString *, NSNumber *> *picks =
         MirageSurfacePicksForSource(pickSource);
-    KKRequire(picks.count == 4, @"maps only the controls that subscribed");
+    KKRequire(picks.count == 5, @"maps only the controls that subscribed");
     KKRequire(picks[@"uHue"].integerValue == MirageSurfacePickKindHue &&
                   picks[@"uSat"].integerValue ==
                       MirageSurfacePickKindSaturation &&
                   picks[@"uLuma"].integerValue == MirageSurfacePickKindLuma &&
                   picks[@"uKey"].integerValue == MirageSurfacePickKindColor,
               @"keys each kind by its uniform name");
-    KKRequire(!picks[@"uNope"], @"an unrecognised pick= value subscribes to nothing");
-    KKRequire(!picks[@"uPlain"], @"a control with no pick= subscribes to nothing");
-    KKRequire(!picks[@"uOrphan"] && picks.count == 4,
+    // The hyphen has to survive the value parser, or `luma-linear` arrives as
+    // `luma` and the control quietly gets the display number it was moved off.
+    KKRequire(picks[@"uPivot"].integerValue == MirageSurfacePickKindLumaLinear,
+              @"luma-linear parses whole rather than truncating at the hyphen");
+    KKRequire(MirageParseSurfacePick(@"pick=luma") ==
+                      MirageSurfacePickKindLuma &&
+                  MirageParseSurfacePick(@"pick=luma-linear") ==
+                      MirageSurfacePickKindLumaLinear,
+              @"the two luma kinds stay distinct");
+    KKRequire(
+        MirageParseSurfacePick(@"pick=luma-lin") == MirageSurfacePickKindNone &&
+            MirageParseSurfacePick(@"pick=linear") == MirageSurfacePickKindNone,
+        @"a near-miss spelling subscribes to nothing rather than to luma");
+    KKRequire(!picks[@"uNope"],
+              @"an unrecognised pick= value subscribes to nothing");
+    KKRequire(!picks[@"uPlain"],
+              @"a control with no pick= subscribes to nothing");
+    KKRequire(!picks[@"uOrphan"] && picks.count == 5,
               @"a pick= directive with no uniform after it is ignored");
 
     // The two attributes are independent: declaring both must leave each parse
     // reading exactly what it would have read alone.
     NSString *bothSource =
-        @"// #float label=\"Hue\" min=-180 max=180 default=0 surface=\"a:+180\" "
+        @"// #float label=\"Hue\" min=-180 max=180 default=0 "
+        @"surface=\"a:+180\" "
         @"pick=hue puck={\"Target\", \"eyedropper\"}\n"
         @"uniform float uBoth;\n"
         @"// #float label=\"Only Pick\" min=0 max=1 default=0 pick=luma\n"
@@ -578,14 +685,17 @@ int main(void) {
     double hue = MirageSurfaceHueDegreesWithSaturation(0.5, 0.25, 0.25, &sat);
     KKRequire(fabs(hue) < 1e-9 && fabs(sat - 0.5) < 1e-9,
               @"reports a hue and its saturation together");
-    KKRequire(MirageSurfaceHueDegreesWithSaturation(0.4, 0.4, 0.4, &sat) < 0.0 &&
+    KKRequire(MirageSurfaceHueDegreesWithSaturation(0.4, 0.4, 0.4, &sat) <
+                      0.0 &&
                   fabs(sat) < 1e-9,
               @"a neutral patch has no hue and no saturation");
 
     // Oklab: the space the grading wheel paints in, and now the only space any
     // colour on the surface is measured or written in.
-    const double lchTrip[][3] = {{0.78, 0.58, 0.47}, {0.20, 0.55, 0.30},
-                                 {0.90, 0.90, 0.10}, {0.35, 0.35, 0.80},
+    const double lchTrip[][3] = {{0.78, 0.58, 0.47},
+                                 {0.20, 0.55, 0.30},
+                                 {0.90, 0.90, 0.10},
+                                 {0.35, 0.35, 0.80},
                                  {0.50, 0.50, 0.50}};
     for (size_t i = 0; i < sizeof(lchTrip) / sizeof(*lchTrip); i++) {
       double L = 0.0, C = 0.0, h = -1.0;
@@ -622,8 +732,7 @@ int main(void) {
     MirageSurfaceEncodedForOklabLCh(0.62, 0.30, 200.0, &tr, &tg, &tb);
     double tightC = 0.0, tightH = -1.0;
     MirageSurfaceOklabLCh(tr, tg, tb, NULL, &tightC, &tightH);
-    KKRequire(fabs(MirageSurfaceHueDelta(200.0, tightH)) < 0.5 &&
-                  tightC < 0.30,
+    KKRequire(fabs(MirageSurfaceHueDelta(200.0, tightH)) < 0.5 && tightC < 0.30,
               @"an unreachable chroma is halved away, not clamped off-hue");
 
     // The number that proves the space actually changed: a skin tone measures
@@ -653,7 +762,8 @@ int main(void) {
               @"which is a different angle from the HSV one it used to be");
 
     // Disc <-> the controls' axes. The screen-aligned cases below are the
-    // regression guard: the generalised stretch has to reduce exactly to the old
+    // regression guard: the generalised stretch has to reduce exactly to the
+    // old
     // `|p| / max(|px|, |py|)` when the axes are at 0 and 90 degrees.
     MirageSurfaceAxisSet screenAxes;
     memset(&screenAxes, 0, sizeof(screenAxes));
@@ -665,8 +775,8 @@ int main(void) {
     KKRequire(screenAxes.count == 2,
               @"a parallel control and a dead one add no axis");
 
-    // The round trip has to be exact, or a puck would creep every time the derive
-    // fed a position back into the display.
+    // The round trip has to be exact, or a puck would creep every time the
+    // derive fed a position back into the display.
     const double roundTrip[][2] = {{1.0, 0.0},   {0.0, -1.0},  {0.7, 0.7},
                                    {-0.5, 0.25}, {0.31, -0.9}, {0.0, 0.0}};
     for (size_t i = 0; i < sizeof(roundTrip) / sizeof(*roundTrip); i++) {
@@ -681,8 +791,9 @@ int main(void) {
     MirageSurfaceDiscToAxes(&ax, &ay, screenAxes);
     KKRequire(fabs(ax - 0.6) < 1e-9 && fabs(ay) < 1e-9,
               @"a point on an axis is left where it is");
-    // The whole point: the rim at 45 degrees has to land on the corner, so a pair of
-    // perpendicular controls can both reach their limits from one gesture.
+    // The whole point: the rim at 45 degrees has to land on the corner, so a
+    // pair of perpendicular controls can both reach their limits from one
+    // gesture.
     const double diagonal[][2] = {{M_SQRT1_2, M_SQRT1_2},
                                   {-M_SQRT1_2, M_SQRT1_2},
                                   {M_SQRT1_2, -M_SQRT1_2},
@@ -702,11 +813,11 @@ int main(void) {
       previous = mx;
     }
 
-    // Rotated axes: the Grade and Ranges templates point Red/Cyan at 29 degrees and
-    // Green/Magenta at 142, and the screen-basis stretch projected 1.36 onto the
-    // 29-degree axis from a drag to the screen diagonal - 36 percent past full
-    // deflection. The write clamped, the derive read the clamp back as a full
-    // deflection, and the puck sprang inward on release.
+    // Rotated axes: the Grade and Ranges templates point Red/Cyan at 29 degrees
+    // and Green/Magenta at 142, and the screen-basis stretch projected 1.36
+    // onto the 29-degree axis from a drag to the screen diagonal - 36 percent
+    // past full deflection. The write clamped, the derive read the clamp back
+    // as a full deflection, and the puck sprang inward on release.
     MirageSurfaceAxisSet hueAxes;
     memset(&hueAxes, 0, sizeof(hueAxes));
     MirageSurfaceAxisSetAdd(&hueAxes, 35.0, 19.0);  // 28.5 degrees
@@ -716,7 +827,8 @@ int main(void) {
     MirageSurfaceAxisSetAdd(&singleAxis, 35.0, 19.0);
     MirageSurfaceAxisSet noAxes;
     memset(&noAxes, 0, sizeof(noAxes));
-    const MirageSurfaceAxisSet sets[] = {screenAxes, hueAxes, singleAxis, noAxes};
+    const MirageSurfaceAxisSet sets[] = {screenAxes, hueAxes, singleAxis,
+                                         noAxes};
     for (size_t s = 0; s < sizeof(sets) / sizeof(*sets); s++) {
       MirageSurfaceAxisSet axes = sets[s];
       double worstProjection = 0.0;
@@ -727,8 +839,7 @@ int main(void) {
         MirageSurfaceDiscToAxes(&qx, &qy, axes);
         double strongest = 0.0;
         for (int i = 0; i < axes.count; i++)
-          strongest =
-              fmax(strongest, fabs(qx * axes.x[i] + qy * axes.y[i]));
+          strongest = fmax(strongest, fabs(qx * axes.x[i] + qy * axes.y[i]));
         worstProjection = fmax(worstProjection, strongest);
         // At the rim the STRONGEST-affected control has to sit at exactly full
         // deflection: any less and the corner is unreachable, any more and the
@@ -844,6 +955,369 @@ int main(void) {
     KKRequire(frames.count == 0 &&
                   framesError == MirageFramesDirectiveErrorNone,
               @"does not read #frames-per-second as #frames");
+
+    // `// #slots`: a group of controls declared once and instanced at runtime.
+    MirageSlotsDirectiveError slotsError = MirageSlotsDirectiveErrorNone;
+    NSString *slotsDetail = nil;
+    NSString *oneGroup =
+        @"// #template generator\n"
+        @"// #slots name=\"Colour\" max=8 default=2 min=1\n"
+        @"// #color label=\"New Colour {n}\" puck={\"Colour {n}\", "
+        @"\"{n}.circle\"} pick=hue\n"
+        @"uniform vec4 uNewColour;\n"
+        @"// #float label=\"Strength {n}\" min=0 max=1 default=0.5\n"
+        @"uniform float uNewStrength;\n"
+        @"// #slots-end\n"
+        @"void mainImage(out vec4 O, in vec2 fc) { O = vec4(0.0); }\n";
+    NSArray<NSValue *> *groups =
+        MirageSlotGroupsForSource(oneGroup, &slotsError, &slotsDetail);
+    KKRequire(groups.count == 1 && slotsError == MirageSlotsDirectiveErrorNone,
+              @"parses one #slots block");
+    MirageSlotsGroup g0 = MirageSlotsGroupValue(groups[0]);
+    KKRequire([@(g0.name) isEqualToString:@"Colour"] && g0.maxCount == 8 &&
+                  g0.defaultCount == 2 && g0.minCount == 1,
+              @"reads name, max, default and min");
+    KKRequire(g0.bodyRange.length > 0 &&
+                  NSMaxRange(g0.bodyRange) < NSMaxRange(g0.range),
+              @"the body is the controls, inside the block's own range");
+    NSDictionary<NSString *, NSNumber *> *byUniform =
+        MirageSlotGroupIndexByUniform(oneGroup);
+    KKRequire(byUniform.count == 2 &&
+                  byUniform[@"uNewColour"].integerValue == 0 &&
+                  byUniform[@"uNewStrength"].integerValue == 0,
+              @"both controls resolve to the group that repeats them");
+    KKRequire(MirageSlotGroupIndexForLocation(
+                  groups, [oneGroup rangeOfString:@"#float"].location) == 0 &&
+                  MirageSlotGroupIndexForLocation(
+                      groups, [oneGroup rangeOfString:@"#template"].location) ==
+                      -1,
+              @"membership answers by source location too");
+
+    // Defaults: `default=` absent starts at one instance, `min=` at none.
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Layer\" max=4\n"
+                                       @"// #float label=\"Size {n}\"\n"
+                                       @"uniform float uSize;\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    g0 = MirageSlotsGroupValue(groups.firstObject);
+    KKRequire(groups.count == 1 && g0.defaultCount == 1 && g0.minCount == 0,
+              @"an unstated default is one instance and an unstated min none");
+
+    // Two groups are legal: a shader may repeat more than one thing.
+    NSString *twoGroups = @"// #slots name=\"Colour\" max=4\n"
+                          @"// #color label=\"Colour {n}\"\n"
+                          @"uniform vec4 uColour;\n"
+                          @"// #slots-end\n"
+                          @"// #slots name=\"Light\" max=3 default=0\n"
+                          @"// #point label=\"Light {n}\" osc=point\n"
+                          @"uniform vec2 uLight;\n"
+                          @"// #slots-end\n";
+    groups = MirageSlotGroupsForSource(twoGroups, &slotsError, &slotsDetail);
+    KKRequire(groups.count == 2 && slotsError == MirageSlotsDirectiveErrorNone,
+              @"two groups are two groups, not a nesting error");
+    KKRequire(
+        [@(MirageSlotsGroupValue(groups[1]).name) isEqualToString:@"Light"] &&
+            MirageSlotsGroupValue(groups[1]).defaultCount == 0,
+        @"the second group keeps its own name and counts");
+    byUniform = MirageSlotGroupIndexByUniform(twoGroups);
+    KKRequire(byUniform[@"uColour"].integerValue == 0 &&
+                  byUniform[@"uLight"].integerValue == 1,
+              @"each control belongs to the block it sits in");
+
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=4\n"
+                                       @"// #color label=\"Colour {n}\"\n"
+                                       @"uniform vec4 uColour;\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorUnclosed,
+              @"an unclosed block is an error, not an open-ended group");
+
+    groups = MirageSlotGroupsForSource(@"// #slots-end\n", &slotsError,
+                                       &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorUnopened,
+              @"#slots-end with nothing open is an error");
+
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"A\" max=4\n"
+                                       @"// #slots name=\"B\" max=2\n"
+                                       @"// #slots-end\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorNested &&
+                  [slotsDetail isEqualToString:@"B"],
+              @"nesting is rejected and names the inner group");
+
+    groups = MirageSlotGroupsForSource(@"// #slots max=4\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 && slotsError == MirageSlotsDirectiveErrorName,
+              @"a group with no name has nothing to key its lanes on");
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour!\" max=4\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 && slotsError == MirageSlotsDirectiveErrorName,
+              @"a name outside the lane-key charset is rejected");
+
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\"\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 && slotsError == MirageSlotsDirectiveErrorMax,
+              @"max is required - the pool budget is finite");
+    groups = MirageSlotGroupsForSource(
+        [NSString stringWithFormat:@"// #slots name=\"Colour\" max=%d\n"
+                                   @"// #slots-end\n",
+                                   KK_SHADER_MAX_SLOT_INSTANCES + 1],
+        &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 && slotsError == MirageSlotsDirectiveErrorMax,
+              @"one instance past the cap is rejected");
+    groups = MirageSlotGroupsForSource(
+        [NSString stringWithFormat:@"// #slots name=\"Colour\" max=%d\n"
+                                   @"// #slots-end\n",
+                                   KK_SHADER_MAX_SLOT_INSTANCES],
+        &slotsError, &slotsDetail);
+    KKRequire(groups.count == 1 && slotsError == MirageSlotsDirectiveErrorNone,
+              @"accepts exactly the cap");
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=0\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 && slotsError == MirageSlotsDirectiveErrorMax,
+              @"a group that can never have an instance is not a group");
+
+    groups = MirageSlotGroupsForSource(
+        @"// #slots name=\"Colour\" max=4 default=5\n// #slots-end\n",
+        &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 && slotsError == MirageSlotsDirectiveErrorCount,
+              @"a default above max is rejected");
+    groups = MirageSlotGroupsForSource(
+        @"// #slots name=\"Colour\" max=4 min=5\n// #slots-end\n", &slotsError,
+        &slotsDetail);
+    KKRequire(groups.count == 0 && slotsError == MirageSlotsDirectiveErrorCount,
+              @"a min above max is rejected");
+    groups = MirageSlotGroupsForSource(
+        @"// #slots name=\"Colour\" max=4 min=3 default=1\n// #slots-end\n",
+        &slotsError, &slotsDetail);
+    KKRequire(
+        groups.count == 0 && slotsError == MirageSlotsDirectiveErrorCount,
+        @"a default the panel would refuse to delete down to is rejected");
+
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=4\n"
+                                       @"// #slots-end\n"
+                                       @"// #slots name=\"colour\" max=2\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorDuplicateName,
+              @"two groups may not share a name, whatever its case");
+
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=4\n"
+                                       @"// #color label=\"Colour\"\n"
+                                       @"uniform vec4 uColour;\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorPlaceholder &&
+                  [slotsDetail isEqualToString:@"Colour"],
+              @"a label with no {n} would collide across instances");
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=4\n"
+                                       @"// #color\n"
+                                       @"uniform vec4 uColour;\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorPlaceholder &&
+                  [slotsDetail isEqualToString:@"uColour"],
+              @"a control with no label at all is named by its uniform");
+    groups = MirageSlotGroupsForSource(
+        @"// #slots name=\"Colour\" max=4\n"
+        @"// #color label=\"Colour {n}\" puck={\"Colour\", \"moon\"}\n"
+        @"uniform vec4 uColour;\n"
+        @"// #slots-end\n",
+        &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorPlaceholder,
+              @"a shared puck name would make every instance one handle");
+    groups = MirageSlotGroupsForSource(
+        @"// #slots name=\"Colour\" max=4\n"
+        @"// #color label=\"New Colour {n}\" "
+        @"puck={\"Colour {n}\", \"{n}.circle\"} pick=hue\n"
+        @"uniform vec4 uColour;\n"
+        @"// #slots-end\n",
+        &slotsError, &slotsDetail);
+    KKRequire(groups.count == 1 && slotsError == MirageSlotsDirectiveErrorNone,
+              @"a per-instance puck, named and drawn by its number, is legal");
+    // An unnamed puck used to pass the placeholder rule by being EMPTY rather
+    // than by being distinct - which is the collapse the rule exists to stop,
+    // arrived at through the front door.
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=4\n"
+                                       @"// #color label=\"Colour {n}\" "
+                                       @"puck={\"\", \"{n}.circle\"}\n"
+                                       @"uniform vec4 uColour;\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorPuckName &&
+                  [slotsDetail isEqualToString:@"Colour {n}"],
+              @"a puck written with no name is every instance's one handle");
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=4\n"
+                                       @"// #color label=\"Colour {n}\" "
+                                       @"puck={Colour}\n"
+                                       @"uniform vec4 uColour;\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorPuckName,
+              @"and so is one written in a shape the parse cannot read");
+    // Outside a block the same line is fine: there is one handle by design, so
+    // an unnamed puck is the shader's single unnamed puck, not a collision.
+    groups = MirageSlotGroupsForSource(@"// #color label=\"Colour\" "
+                                       @"puck={\"\", \"moon\"}\n"
+                                       @"uniform vec4 uColour;\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorNone &&
+                  slotsDetail == nil,
+              @"an unnamed puck outside every block is the unnamed puck");
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=4\n"
+                                       @"// #speed\n"
+                                       @"// #color label=\"Colour {n}\"\n"
+                                       @"uniform vec4 uColour;\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(
+        groups.count == 1 && slotsError == MirageSlotsDirectiveErrorNone,
+        @"a standalone directive declares no control, so it needs no {n}");
+
+    groups = MirageSlotGroupsForSource(@"// #float label=\"Size {n}\"\n"
+                                       @"uniform float uSize;\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorStrayPlaceholder &&
+                  [slotsDetail isEqualToString:@"#float"],
+              @"{n} outside every block has no instance number to carry");
+
+    KKRequire(
+        [MirageSlotsSubstitute(@"New Colour {n}", 3)
+            isEqualToString:@"New Colour 3"] &&
+            [MirageSlotsSubstitute(@"{n}.circle", 2)
+                isEqualToString:@"2.circle"] &&
+            [MirageSlotsSubstitute(@"{N} of {n}", 1) isEqualToString:@"1 of 1"],
+        @"substitutes the instance number, in either spelling");
+    KKRequire(MirageSlotsHasPlaceholder(@"Colour {n}") &&
+                  !MirageSlotsHasPlaceholder(@"Colour n"),
+              @"the placeholder is the braced form only");
+    KKRequire([MirageSlotsCountUniformName("Colour")
+                  isEqualToString:@"uColourCount"] &&
+                  [MirageSlotsCountUniformName("new colour")
+                      isEqualToString:@"uNewColourCount"],
+              @"the injected count uniform is named from the group");
+
+    // The shape of every shader written before `#slots` existed: no block, no
+    // groups, no error, and nothing else about it read differently.
+    NSString *legacy = @"// #template filter\n"
+                       @"// #color-surface ring=light\n"
+                       @"// #float label=\"Amount\" min=0 max=2 default=0.5 "
+                       @"surface=\"y:+30\"\n"
+                       @"uniform float uAmount;\n";
+    groups = MirageSlotGroupsForSource(legacy, &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorNone &&
+                  slotsDetail == nil,
+              @"a shader with no #slots declares no groups and no error");
+    KKRequire(MirageSlotGroupIndexByUniform(legacy).count == 0 &&
+                  MirageSlotGroupIndexForLocation(@[], 0) == -1,
+              @"and nothing belongs to a group that isn't there");
+    KKRequire(
+        MirageParseSurfaceResponse(@" default=0.5 surface=\"y:+30\"").present,
+        @"the surface grammar around it is unchanged");
+
+    // Kinds the pool cannot repeat. Each one would otherwise be a single value
+    // wearing an instance's row.
+    MirageSlotRepeatKind repeatKind = MirageSlotRepeatKindNone;
+    NSString *unrepeatable =
+        MirageFirstUnrepeatableSlotControl(@"// #slots name=\"Colour\" max=4\n"
+                                           @"// #gradient label=\"Ramp {n}\"\n"
+                                           @"uniform vec4 uRamp;\n"
+                                           @"// #slots-end\n",
+                                           &repeatKind);
+    KKRequire([unrepeatable isEqualToString:@"Ramp {n}"] &&
+                  repeatKind == MirageSlotRepeatKindGradient,
+              @"a #gradient inside a block is one ramp, not one per instance");
+    unrepeatable =
+        MirageFirstUnrepeatableSlotControl(@"// #slots name=\"Band\" max=4\n"
+                                           @"// #audio label=\"Band {n}\"\n"
+                                           @"uniform float uBand[8];\n"
+                                           @"// #slots-end\n",
+                                           &repeatKind);
+    KKRequire([unrepeatable isEqualToString:@"Band {n}"] &&
+                  repeatKind == MirageSlotRepeatKindAudio,
+              @"and an #audio binding is one binding");
+    unrepeatable = MirageFirstUnrepeatableSlotControl(
+        @"// #slots name=\"Colour\" max=4\n"
+        @"// #color label=\"Palette {n}\" min=1 max=8 default=4\n"
+        @"uniform vec4 uPalette[8];\n"
+        @"// #slots-end\n",
+        &repeatKind);
+    KKRequire([unrepeatable isEqualToString:@"Palette {n}"] &&
+                  repeatKind == MirageSlotRepeatKindColorArray,
+              @"a colour that is already an array cannot be arrayed again");
+    unrepeatable = MirageFirstUnrepeatableSlotControl(oneGroup, &repeatKind);
+    KKRequire(unrepeatable == nil && repeatKind == MirageSlotRepeatKindNone,
+              @"a plain #color and a #float repeat perfectly well");
+    unrepeatable =
+        MirageFirstUnrepeatableSlotControl(@"// #gradient label=\"Ramp\"\n"
+                                           @"uniform vec4 uRamp;\n"
+                                           @"// #audio label=\"Music\"\n"
+                                           @"uniform float uMusic[8];\n",
+                                           &repeatKind);
+    KKRequire(unrepeatable == nil,
+              @"and outside every block they are ordinary controls");
+
+    // The pool budget: a group is counted at its CEILING, because that is what
+    // the user can reach with the plus button.
+    int budgetScalars = 0, budgetColors = 0;
+    KKRequire(MirageSlotsControlBudget(legacy, &budgetScalars, &budgetColors) ==
+                      MirageSlotBudgetKindNone &&
+                  budgetScalars == 0 && budgetColors == 0,
+              @"a shader with no group is left to the plain control count");
+    KKRequire(
+        MirageSlotsControlBudget(oneGroup, &budgetScalars, &budgetColors) ==
+                MirageSlotBudgetKindNone &&
+            budgetScalars == 8 && budgetColors == 8,
+        @"one control of each kind, times the group's max of eight");
+    NSString *fatGroup = @"// #slots name=\"Layer\" max=16\n"
+                         @"// #float label=\"A {n}\"\n"
+                         @"uniform float uA;\n"
+                         @"// #float label=\"B {n}\"\n"
+                         @"uniform float uB;\n"
+                         @"// #float label=\"C {n}\"\n"
+                         @"uniform float uC;\n"
+                         @"// #float label=\"D {n}\"\n"
+                         @"uniform float uD;\n"
+                         @"// #float label=\"E {n}\"\n"
+                         @"uniform float uE;\n"
+                         @"// #slots-end\n";
+    KKRequire(
+        MirageSlotsControlBudget(fatGroup, &budgetScalars, &budgetColors) ==
+                MirageSlotBudgetKindScalar &&
+            budgetScalars == 80,
+        @"five controls at sixteen instances overflows the scalar pool");
+    NSString *fatColors = @"// #slots name=\"Colour\" max=16\n"
+                          @"// #color label=\"Colour {n}\"\n"
+                          @"uniform vec4 uColour;\n"
+                          @"// #slots-end\n";
+    KKRequire(
+        MirageSlotsControlBudget(fatColors, &budgetScalars, &budgetColors) ==
+                MirageSlotBudgetKindColor &&
+            budgetColors == 16,
+        @"and sixteen colours overflows the colour pool");
+    // The count is a CEILING, not a reading of any one project: nothing here
+    // has a timeline, and the answer is the same either way.
+    KKRequire(
+        MirageSlotsControlBudget(twoGroups, &budgetScalars, &budgetColors) ==
+                MirageSlotBudgetKindNone &&
+            budgetColors == 4 && budgetScalars == 3,
+        @"two groups each count at their own max");
   }
   return 0;
 }

@@ -39,6 +39,7 @@
 				Math/Timing/KKEasing.h,
 				Math/Timing/KKMotionLean.h,
 				Math/Timing/KKScopedDefaults.h,
+				Math/Timing/KKSlotInstances.h,
 				Math/Timing/KKTimeline.h,
 				Math/Timing/KKTimelineAIMerge.h,
 				Math/Timing/KKTimingCompat.h,

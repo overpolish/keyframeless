@@ -5,15 +5,15 @@
 
 #pragma once
 
-#import "Plugin.h"
 #import "MirageInspectorView.h"
+#import "Plugin.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @class KKPlayheadPoller;
 
 @interface MiragePlugin ()
-/// Covariant re-type of the KKPlugin base property (one storage, @dynamic in the
-/// implementation).
+/// Covariant re-type of the KKPlugin base property (one storage, @dynamic in
+/// the implementation).
 @property(nonatomic, weak, nullable) MirageInspectorView *inspectorView;
 // miniViewerFeed + miniDragUndoStarted now live on the KKPlugin base.
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
@@ -29,9 +29,10 @@
 /// Holds `MirageFeedbackSet` values (see MirageFeedbackSet.h).
 @property(nonatomic, strong, nullable) NSMutableDictionary *feedbackSets;
 /// waitUntilCompleted calls made during render callbacks by anything other than
-/// the kit helper. ONE mandatory wait per callback is the architecture, on every
-/// path; a non-zero value names a path that reintroduced a second round trip.
-/// Reported by the `[RenderGuard] STRAY WAITS` line and cleared when it emits.
+/// the kit helper. ONE mandatory wait per callback is the architecture, on
+/// every path; a non-zero value names a path that reintroduced a second round
+/// trip. Reported by the `[RenderGuard] STRAY WAITS` line and cleared when it
+/// emits.
 @property(nonatomic) NSInteger renderStrayWaitsSnapshot;
 @property(nonatomic) NSInteger renderStrayWaitsRestore;
 @property(nonatomic) NSInteger renderStrayWaitsBlurDrain;
@@ -76,9 +77,26 @@ NS_ASSUME_NONNULL_BEGIN
     availableLanesForShaderSource:(NSString *)source
                      audioTickets:
                          (nullable NSDictionary<NSString *, id> *)tickets;
+/// As above, with the timeline whose `#slots` registry says how many instances
+/// of each repeatable group exist. Every control inside a `// #slots` block is
+/// a PROTOTYPE, so this is the only entry that returns the real rows for one -
+/// pass nil (the entries above) where the question is about the source rather
+/// than about a project, and the prototypes come back instead.
+///
+/// A group the timeline has never registered is brought up to the declared
+/// `default=` here, which mutates `timeline` in place.
++ (NSArray<KKLane *> *)
+    availableLanesForShaderSource:(NSString *)source
+                     audioTickets:
+                         (nullable NSDictionary<NSString *, id> *)tickets
+                         timeline:(nullable KKTimeline *)timeline;
 /// The current shader source from a timeline's "Mirage" code lane (baked
 /// default when absent).
 + (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline;
+/// The PROTOTYPE lanes of one `// #slots` group: the lane set one instance of
+/// it is a copy of. What a caller stamping a new instance hands the kit.
++ (NSArray<KKLane *> *)slotPrototypeLanesForShaderSource:(NSString *)source
+                                                   group:(NSString *)groupName;
 /// The OSC-visibility compound groups (empty for now - the legacy Origin /
 /// Scale / Rotation controls are gone pending shader-exposed OSCs). Single
 /// source of truth: createView wires these and parameterChanged refreshes from

@@ -740,6 +740,22 @@ FOUNDATION_EXPORT NSSet<NSString *> *KKConditionalVisibleLaneKeys(
 /// alphabetical after them. nil/empty == fully alphabetical (the default).
 @property(nonatomic, copy, nullable) NSArray<NSString *> *paramOrder;
 
+/// Repeatable lane groups: `{groupName: [instanceID, ...]}`. A host declares a
+/// group of controls ONCE (Mirage's `#slots`, and one day Canvas's layers) and
+/// the user adds / removes INSTANCES of it at runtime; this registry is the
+/// only record of which instances exist and in what order.
+///
+/// The array order IS the display order - an instance's user-facing number is
+/// its 1-based position, so reordering renumbers without touching a single lane
+/// key or keypose. IDs are opaque short strings (see KKSlotInstances.h); the
+/// lanes they own are found by key prefix, never by scanning labels.
+///
+/// nil / absent = no groups at all, which is every timeline written before this
+/// existed. Optional on purpose: a non-optional addition here would rewrite
+/// (and has once wiped) blobs that predate the field.
+@property(nonatomic, copy, nullable)
+    NSDictionary<NSString *, NSArray<NSString *> *> *slotGroups;
+
 + (instancetype)timeline;
 
 @end

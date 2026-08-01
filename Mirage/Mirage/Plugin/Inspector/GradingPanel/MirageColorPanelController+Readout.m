@@ -14,21 +14,22 @@
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 
+#import "MirageColorPanelController_Internal.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageLocalized.h"
 #import "MirageScopeSampler.h"
 #import "MirageSurfaceCircleView.h"
 #import "MirageSurfaceResponse.h"
 #import "Plugin_Private.h" // +shaderSourceFromTimeline:
-#import "MirageColorPanelController_Internal.h"
 
 /// The ring's name for a readout heading, used only where two rings would
 /// otherwise be indistinguishable.
 static NSString *MirageRingLabel(MirageColorSurfaceRing ring) {
   switch (ring) {
   case MirageColorSurfaceRingHue:
-    return RLoc(@"Hue", @"Color panel readout heading naming the hue ring, when "
-                        @"a shader declares both rings.");
+    return RLoc(@"Hue",
+                @"Color panel readout heading naming the hue ring, when "
+                @"a shader declares both rings.");
   case MirageColorSurfaceRingLight:
     return RLoc(@"Light", @"Color panel readout heading naming the light ring, "
                           @"when a shader declares both rings.");
@@ -40,20 +41,20 @@ static NSString *MirageRingLabel(MirageColorSurfaceRing ring) {
 }
 
 /// Error size, in the cast's own -1..1 space, at which the readout stops saying
-/// "slightly" and says "clearly". 0.35 of full scale is about 0.028 in Oklab a/b -
-/// the point where a cast stops being something you have to look for.
+/// "slightly" and says "clearly". 0.35 of full scale is about 0.028 in Oklab
+/// a/b - the point where a cast stops being something you have to look for.
 static const double kDeclarationClearError = 0.35;
 
 /// What the readout says about a declared patch, in words anybody can act on.
 ///
-/// Deliberately not a number and never an angle: the reading exists so that someone
-/// who does not know what a hue is can tell that the faces are wrong and which way.
-/// Each declaration therefore gets the two words that describe the two ways off its
-/// own line, and one of two strengths.
+/// Deliberately not a number and never an angle: the reading exists so that
+/// someone who does not know what a hue is can tell that the faces are wrong
+/// and which way. Each declaration therefore gets the two words that describe
+/// the two ways off its own line, and one of two strengths.
 ///
-/// The word comes from the side of the region's centre line the error falls on. An
-/// error that is purely a matter of colourfulness leans neither way and takes
-/// whichever word its residual suggests, which is the honest limit of a
+/// The word comes from the side of the region's centre line the error falls on.
+/// An error that is purely a matter of colourfulness leans neither way and
+/// takes whichever word its residual suggests, which is the honest limit of a
 /// deliberately hue-only vocabulary.
 NSString *MirageDeclarationSentence(MirageMemoryColor kind, NSPoint cast) {
   double size = hypot(cast.x, cast.y);
@@ -65,56 +66,63 @@ NSString *MirageDeclarationSentence(MirageMemoryColor kind, NSPoint cast) {
   switch (kind) {
   case MirageMemoryColorSkin:
     if (size < 1e-9)
-      return RLoc(@"Skin looks right.",
-                  @"Color panel readout: the sampled skin needs no correction.");
+      return RLoc(
+          @"Skin looks right.",
+          @"Color panel readout: the sampled skin needs no correction.");
     if (forward)
-      return clearly ? RLoc(@"Skin is clearly too yellow.",
-                            @"Color panel readout: the sampled skin is well too "
-                            @"yellow.")
-                     : RLoc(@"Skin is slightly too yellow.",
-                            @"Color panel readout: the sampled skin is a little "
-                            @"too yellow.");
-    return clearly ? RLoc(@"Skin is clearly too pink.",
-                          @"Color panel readout: the sampled skin is well too "
-                          @"pink.")
-                   : RLoc(@"Skin is slightly too pink.",
-                          @"Color panel readout: the sampled skin is a little too "
-                          @"pink.");
+      return clearly
+                 ? RLoc(@"Skin is clearly too yellow.",
+                        @"Color panel readout: the sampled skin is well too "
+                        @"yellow.")
+                 : RLoc(@"Skin is slightly too yellow.",
+                        @"Color panel readout: the sampled skin is a little "
+                        @"too yellow.");
+    return clearly
+               ? RLoc(@"Skin is clearly too pink.",
+                      @"Color panel readout: the sampled skin is well too "
+                      @"pink.")
+               : RLoc(@"Skin is slightly too pink.",
+                      @"Color panel readout: the sampled skin is a little too "
+                      @"pink.");
   case MirageMemoryColorFoliage:
     if (size < 1e-9)
       return RLoc(@"Foliage looks right.",
                   @"Color panel readout: the sampled grass or leaves need no "
                   @"correction.");
     if (forward)
-      return clearly ? RLoc(@"Foliage is clearly too blue.",
-                            @"Color panel readout: the sampled grass or leaves are "
-                            @"well too blue.")
-                     : RLoc(@"Foliage is slightly too blue.",
-                            @"Color panel readout: the sampled grass or leaves are "
-                            @"a little too blue.");
-    return clearly ? RLoc(@"Foliage is clearly too yellow.",
-                          @"Color panel readout: the sampled grass or leaves are "
-                          @"well too yellow.")
-                   : RLoc(@"Foliage is slightly too yellow.",
-                          @"Color panel readout: the sampled grass or leaves are a "
-                          @"little too yellow.");
+      return clearly
+                 ? RLoc(@"Foliage is clearly too blue.",
+                        @"Color panel readout: the sampled grass or leaves are "
+                        @"well too blue.")
+                 : RLoc(@"Foliage is slightly too blue.",
+                        @"Color panel readout: the sampled grass or leaves are "
+                        @"a little too blue.");
+    return clearly
+               ? RLoc(@"Foliage is clearly too yellow.",
+                      @"Color panel readout: the sampled grass or leaves are "
+                      @"well too yellow.")
+               : RLoc(@"Foliage is slightly too yellow.",
+                      @"Color panel readout: the sampled grass or leaves are a "
+                      @"little too yellow.");
   case MirageMemoryColorSky:
     if (size < 1e-9)
       return RLoc(@"Sky looks right.",
                   @"Color panel readout: the sampled sky needs no correction.");
     if (forward)
-      return clearly ? RLoc(@"Sky is clearly too purple.",
-                            @"Color panel readout: the sampled sky is well too "
-                            @"purple.")
-                     : RLoc(@"Sky is slightly too purple.",
-                            @"Color panel readout: the sampled sky is a little too "
-                            @"purple.");
-    return clearly ? RLoc(@"Sky is clearly too green.",
-                          @"Color panel readout: the sampled sky is well too "
-                          @"green.")
-                   : RLoc(@"Sky is slightly too green.",
-                          @"Color panel readout: the sampled sky is a little too "
-                          @"green.");
+      return clearly
+                 ? RLoc(@"Sky is clearly too purple.",
+                        @"Color panel readout: the sampled sky is well too "
+                        @"purple.")
+                 : RLoc(@"Sky is slightly too purple.",
+                        @"Color panel readout: the sampled sky is a little too "
+                        @"purple.");
+    return clearly
+               ? RLoc(@"Sky is clearly too green.",
+                      @"Color panel readout: the sampled sky is well too "
+                      @"green.")
+               : RLoc(@"Sky is slightly too green.",
+                      @"Color panel readout: the sampled sky is a little too "
+                      @"green.");
   case MirageMemoryColorNeutral:
     break;
   }
@@ -129,8 +137,8 @@ NSString *MirageReadoutPlaceholder(void) {
 }
 
 /// A number in the units of the control it belongs to. Precision follows the
-/// control's declared range: `%.0f` is right for a 0-150 percent and useless for a
-/// -1..1 float, where every row would read `0 → 0`.
+/// control's declared range: `%.0f` is right for a 0-150 percent and useless
+/// for a -1..1 float, where every row would read `0 → 0`.
 static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
   double span = r.hasLimits ? fabs(r.maxValue - r.minValue) : 0.0;
   if (span >= 50.0 || span == 0.0)
@@ -138,10 +146,10 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
   return [NSString stringWithFormat:span >= 5.0 ? @"%.1f" : @"%.2f", value];
 }
 
-/// One line of the readout: the control's name on the left, its current value on the
-/// right, so the value column lines up down the list instead of ragging with the
-/// length of each name. A row with no value is a heading - the puck the list belongs
-/// to.
+/// One line of the readout: the control's name on the left, its current value
+/// on the right, so the value column lines up down the list instead of ragging
+/// with the length of each name. A row with no value is a heading - the puck
+/// the list belongs to.
 @interface _MirageReadoutRow : NSView
 - (void)setName:(NSString *)name value:(nullable NSString *)value;
 @end
@@ -161,10 +169,10 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
     [self addSubview:_name];
 
     _value = [NSTextField labelWithString:@""];
-    // Monospaced digits so the numbers do not jitter sideways as they change under
-    // a live drag, which is the whole time this readout is being read.
+    // Monospaced digits so the numbers do not jitter sideways as they change
+    // under a live drag, which is the whole time this readout is being read.
     _value.font = [NSFont monospacedDigitSystemFontOfSize:kReadoutFontSize
-                                                  weight:NSFontWeightRegular];
+                                                   weight:NSFontWeightRegular];
     _value.alignment = NSTextAlignmentRight;
     _value.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:_value];
@@ -176,8 +184,9 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
       [_name.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
       [_value.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
       [_value.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-      [_name.trailingAnchor constraintLessThanOrEqualToAnchor:_value.leadingAnchor
-                                                    constant:-KKPaddingSM],
+      [_name.trailingAnchor
+          constraintLessThanOrEqualToAnchor:_value.leadingAnchor
+                                   constant:-KKPaddingSM],
     ]];
   }
   return self;
@@ -186,8 +195,8 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
 - (void)setName:(NSString *)name value:(NSString *)value {
   _name.stringValue = name ?: @"";
   // A heading carries the puck's name and no number, and is set apart by weight
-  // rather than by a separator: at 11pt in a 56pt box, a rule costs more room than
-  // it earns.
+  // rather than by a separator: at 11pt in a 56pt box, a rule costs more room
+  // than it earns.
   BOOL heading = value == nil;
   _name.font = heading ? [NSFont systemFontOfSize:kReadoutFontSize
                                            weight:NSFontWeightSemibold]
@@ -202,10 +211,11 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
 
 @implementation MirageColorPanelController (Readout)
 
-// One row per control the gesture moved. Rows are reused across ticks rather than
-// rebuilt: this runs on every drag event, and tearing down a stack view's children
-// at that rate makes the readout flicker as it re-lays out.
-- (void)_setReadoutRows:(NSArray<NSDictionary<NSString *, NSString *> *> *)rows {
+// One row per control the gesture moved. Rows are reused across ticks rather
+// than rebuilt: this runs on every drag event, and tearing down a stack view's
+// children at that rate makes the readout flicker as it re-lays out.
+- (void)_setReadoutRows:
+    (NSArray<NSDictionary<NSString *, NSString *> *> *)rows {
   if (!_readoutStack)
     return;
   _readoutHint.hidden = rows.count > 0;
@@ -223,15 +233,17 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
   [rows enumerateObjectsUsingBlock:^(NSDictionary<NSString *, NSString *> *r,
                                      NSUInteger i, BOOL *stop) {
     [(_MirageReadoutRow *)self->_readoutStack.views[i] setName:r[@"name"]
-                                                        value:r[@"value"]];
+                                                         value:r[@"value"]];
   }];
 }
 
-/// Put the declaration's reading in the readout's empty state, or take it back out.
+/// Put the declaration's reading in the readout's empty state, or take it back
+/// out.
 ///
-/// The empty state rather than a row of its own: it is a sentence about the frame,
-/// not a control the puck drives, and the readout is only ever empty when there is
-/// no gesture to describe - which is exactly when a measurement is worth reading.
+/// The empty state rather than a row of its own: it is a sentence about the
+/// frame, not a control the puck drives, and the readout is only ever empty
+/// when there is no gesture to describe - which is exactly when a measurement
+/// is worth reading.
 - (void)_setDeclarationSentence:(NSString *)sentence {
   if (sentence == _declarationSentence ||
       [sentence isEqualToString:_declarationSentence])
@@ -243,14 +255,15 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
 // The active puck's controls and what they currently read.
 //
 // Not a record of the last gesture: the puck writes absolute values now and the
-// inspector's own sliders track it live, so a before/after was showing one number
-// you could already see beside a baseline that was only ever "whatever it held when
-// you grabbed it". What the sliders cannot say is WHICH controls the handle you are
-// holding drives - they may be in a collapsed group, or belong to the other puck -
-// and that is what this answers.
+// inspector's own sliders track it live, so a before/after was showing one
+// number you could already see beside a baseline that was only ever "whatever
+// it held when you grabbed it". What the sliders cannot say is WHICH controls
+// the handle you are holding drives - they may be in a collapsed group, or
+// belong to the other puck - and that is what this answers.
 - (void)_refreshReadout {
   KKTimeline *timeline = _lanesView.currentTimeline;
-  NSString *source = timeline ? [MiragePlugin shaderSourceFromTimeline:timeline] : nil;
+  NSString *source =
+      timeline ? [MiragePlugin shaderSourceFromTimeline:timeline] : nil;
   if (!source.length) {
     [self _setReadoutRows:@[]];
     return;
@@ -280,7 +293,7 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
       [NSMutableArray array];
   for (NSUInteger i = 0; i < ringCount; i++) {
     NSDictionary<NSString *, NSValue *> *responses =
-        MirageSurfaceResponsesForRing(source, [self _ringAtIndex:i]);
+        [self _responsesForRing:i source:source];
     NSString *puckName = puckNames[i];
     if (!responses.count)
       continue;
@@ -300,10 +313,9 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
       // A colour control has no single number to print - its response is a hue
       // rotation, and the swatch in the inspector says it better than a degree
       // would.
-      NSString *text = r.baseIsHue
-                           ? nil
-                           : MirageReadoutNumber(values.firstObject.doubleValue,
-                                                 r);
+      NSString *text =
+          r.baseIsHue ? nil
+                      : MirageReadoutNumber(values.firstObject.doubleValue, r);
       if (!text)
         continue;
       [block addObject:@{@"name" : lane.label ?: lane.key, @"value" : text}];

@@ -787,6 +787,18 @@ static const size_t kKKLaneFieldCount =
   c.lanes = [[NSArray alloc] initWithArray:_lanes copyItems:YES];
   c.groups = [[NSArray alloc] initWithArray:_groups copyItems:YES];
   c.paramOrder = _paramOrder;
+  // -copy on a dictionary is shallow, and a caller that handed us a mutable
+  // array would otherwise see its edits leak into the copy. Rebuild the inner
+  // arrays so a copied timeline is genuinely independent.
+  if (_slotGroups) {
+    NSMutableDictionary<NSString *, NSArray<NSString *> *> *g =
+        [NSMutableDictionary dictionaryWithCapacity:_slotGroups.count];
+    [_slotGroups enumerateKeysAndObjectsUsingBlock:^(
+                     NSString *name, NSArray<NSString *> *ids, BOOL *stop) {
+      g[name] = [ids copy];
+    }];
+    c.slotGroups = g;
+  }
   return c;
 }
 
@@ -834,6 +846,10 @@ static NSDictionary *KKTimelineUpgradeRootFromVersion(NSDictionary *root,
   } mutableCopy];
   if (timeline.paramOrder.count)
     root[@"paramOrder"] = timeline.paramOrder;
+  // Omitted entirely when empty, so a timeline with no repeatable groups is
+  // byte-identical to one written before the field existed.
+  if (timeline.slotGroups.count)
+    root[@"slotGroups"] = timeline.slotGroups;
   NSError *err;
   NSData *data = [NSJSONSerialization dataWithJSONObject:root
                                                  options:0
@@ -898,6 +914,28 @@ static NSDictionary *KKTimelineUpgradeRootFromVersion(NSDictionary *root,
       if ([label isKindOfClass:[NSString class]])
         [order addObject:label];
     timeline.paramOrder = order;
+  }
+
+  // Tolerant read: anything that isn't a string->[string] map is dropped rather
+  // than trusted, because a malformed registry would orphan real lanes.
+  NSDictionary *slotsDict = root[@"slotGroups"];
+  if ([slotsDict isKindOfClass:[NSDictionary class]]) {
+    NSMutableDictionary<NSString *, NSArray<NSString *> *> *groups =
+        [NSMutableDictionary dictionaryWithCapacity:slotsDict.count];
+    for (id name in slotsDict) {
+      if (![name isKindOfClass:[NSString class]])
+        continue;
+      id rawIDs = slotsDict[name];
+      if (![rawIDs isKindOfClass:[NSArray class]])
+        continue;
+      NSMutableArray<NSString *> *ids = [NSMutableArray array];
+      for (id one in (NSArray *)rawIDs)
+        if ([one isKindOfClass:[NSString class]] && ((NSString *)one).length)
+          [ids addObject:one];
+      groups[name] = ids;
+    }
+    if (groups.count)
+      timeline.slotGroups = groups;
   }
 
   return timeline;

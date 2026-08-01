@@ -14,6 +14,7 @@
 #import <string.h>
 
 #import "MirageDirectiveCommon.h"
+#import "MirageSlots.h"
 #import "MirageTypes.h"
 
 /// Default swatch palette (sRGB + alpha) seeding fresh colour lanes and filling
@@ -48,6 +49,14 @@ typedef struct MirageColorProp {
   int defaultCount; // count lane default
   int poolOffset;   // first vec4 index in the colour pool (see
                     // KK_SHADER_COLOR_POOL)
+  // Set when the declaration sits inside a `// #slots` block: the uniform
+  // reaches the shader as `vec4 name[slotMax]` and takes slotMax pool vec4s,
+  // one per instance in registry order. 0 for the ordinary case. A `#color`
+  // ARRAY inside a block is not slotted (it is already an array with its own
+  // count) - validation rejects it rather than arraying it twice.
+  int slotMax;
+  int slotGroupIndex;
+  char slotGroup[48];
   // Author-supplied default swatches from `default="#hex,#hex,..."`
   // (sRGB+alpha, like kMirageDefaultPalette). When hasDefColors is 0 the
   // built-in palette is used, preserving the old behaviour. These seed the
@@ -164,6 +173,8 @@ static inline int MirageParseColorProps(NSString *source,
       [dirRe matchesInString:source
                      options:0
                        range:NSMakeRange(0, source.length)];
+  NSDictionary<NSString *, NSValue *> *slotBindings =
+      MirageSlotBindingsByUniform(source);
   for (int di = 0; di < (int)dirs.count && n < maxProps; di++) {
     NSTextCheckingResult *dm = dirs[di];
     NSString *attrs = [source substringWithRange:[dm rangeAtIndex:1]];
@@ -187,12 +198,22 @@ static inline int MirageParseColorProps(NSString *source,
       N = 1;
     if (N > KK_SHADER_MAX_COLORS)
       N = KK_SHADER_MAX_COLORS;
-    int slots = isArray ? N + 1 : 1; // array adds a count-meta vec4
+    MirageSlotBinding slot = MirageSlotBindingValue(slotBindings[nm]);
+    // A repeatable swatch costs its group's CEILING, not its live count: the
+    // block layout is compiled once and every instance the user may add has to
+    // already have a home in it.
+    int slotMax = (!isArray && slot.maxCount > 0) ? slot.maxCount : 0;
+    int slots = isArray ? N + 1 : (slotMax > 0 ? slotMax : 1);
     if (pool + slots > KK_SHADER_COLOR_POOL)
       break; // pool full - drop the rest
 
     MirageColorProp p;
     memset(&p, 0, sizeof(p));
+    if (slotMax > 0) {
+      p.slotMax = slotMax;
+      p.slotGroupIndex = slot.groupIndex;
+      strncpy(p.slotGroup, slot.groupName, sizeof(p.slotGroup) - 1);
+    }
     strncpy(p.name, nm.UTF8String ?: "", sizeof(p.name) - 1);
     NSTextCheckingResult *lm = [[NSRegularExpression
         regularExpressionWithPattern:@"\\blabel\\s*=\\s*\"([^\"]*)\""

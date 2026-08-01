@@ -11172,6 +11172,972 @@
           }
         }
       }
+    },
+    "Feed this control from the Color panel's eyedropper: pick=hue, pick=saturation, pick=luma, pick=luma-linear or pick=color. Sampling the picture writes that property of the sampled colour here - the hue in this control's own convention, saturation and luma as 0..1 or as percent when the declared max says so, and the colour itself into a #color swatch. pick=luma is the brightness the scope shows, display-coded. pick=luma-linear is the same weights on linear light, for a value the shader consumes as light such as a contrast pivot. Independent of surface=: a control can take the eyedropper without being on the puck.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Steuerelement von der Pipette des Farbfensters speisen: pick=hue, pick=saturation, pick=luma, pick=luma-linear oder pick=color. Beim Abtasten des Bildes wird die betreffende Eigenschaft der abgetasteten Farbe hier eingetragen - der Farbton in der Konvention dieses Steuerelements, Sättigung und Luma als 0..1 oder als Prozentwert, wenn das angegebene Maximum das nahelegt, und die Farbe selbst in ein #color-Feld. pick=luma ist die Helligkeit, die das Messinstrument anzeigt, displaycodiert. pick=luma-linear verwendet dieselbe Gewichtung auf linearem Licht, für einen Wert, den der Shader als Licht verarbeitet, etwa einen Kontrastdrehpunkt. Unabhängig von surface=: ein Steuerelement kann die Pipette nutzen, ohne am Puck zu hängen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alimenta este control desde el cuentagotas del panel de color: pick=hue, pick=saturation, pick=luma, pick=luma-linear o pick=color. Al muestrear la imagen se escribe aquí esa propiedad del color muestreado: el tono en la convención propia de este control, la saturación y la luma como 0..1 o como porcentaje cuando el máximo declarado así lo indica, y el color mismo en una muestra #color. pick=luma es el brillo que muestra el vectorscopio, codificado para pantalla. pick=luma-linear usa los mismos pesos sobre luz lineal, para un valor que el sombreador consume como luz, como un pivote de contraste. Independiente de surface=: un control puede recibir el cuentagotas sin estar en el puck."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alimente ce réglage depuis la pipette de la fenêtre Couleur : pick=hue, pick=saturation, pick=luma, pick=luma-linear ou pick=color. L'échantillonnage de l'image écrit ici la propriété correspondante de la couleur prélevée - la teinte selon la convention du réglage, la saturation et la luma en 0..1 ou en pourcentage lorsque le maximum déclaré l'indique, et la couleur elle-même dans un échantillon #color. pick=luma est la luminosité que montre la courbe, codée pour l'affichage. pick=luma-linear applique les mêmes pondérations à la lumière linéaire, pour une valeur que le shader consomme comme de la lumière, tel un pivot de contraste. Indépendant de surface= : un réglage peut recevoir la pipette sans être sur le palet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコントロールをカラーパネルのスポイトから設定します: pick=hue、pick=saturation、pick=luma、pick=luma-linear、pick=color。画面をサンプリングすると、その色の該当プロパティがここに書き込まれます。色相はこのコントロール自身の表記で、彩度とルーマは 0..1、宣言された最大値が示す場合はパーセントで、色そのものは #color のスウォッチに入ります。pick=luma はスコープが示す明るさで、ディスプレイ符号化された値です。pick=luma-linear は同じ重み付けをリニア光に適用し、シェーダーが光として扱う値（コントラストのピボットなど）に使います。surface= とは独立していて、パックに乗っていなくてもスポイトを受け取れます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 컨트롤을 컬러 패널의 스포이트로 채웁니다: pick=hue, pick=saturation, pick=luma, pick=luma-linear 또는 pick=color. 화면을 샘플링하면 샘플 색상의 해당 속성이 여기에 기록됩니다. 색조는 이 컨트롤 자체의 표기로, 채도와 루마는 0..1로, 선언된 최댓값이 그렇게 말하면 퍼센트로, 색상 자체는 #color 견본에 들어갑니다. pick=luma는 스코프가 보여 주는 밝기이며 디스플레이로 인코딩된 값입니다. pick=luma-linear는 같은 가중치를 선형 광에 적용하며, 셰이더가 빛으로 사용하는 값(대비 피벗 등)에 씁니다. surface=와는 무관해서 퍽에 올라가 있지 않아도 스포이트를 받을 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用“颜色”面板的吸管为该控件取值：pick=hue、pick=saturation、pick=luma、pick=luma-linear 或 pick=color。对画面取样后，所取颜色的对应属性会写入这里：色相按该控件自身的约定，饱和度和亮度为 0..1，若声明的最大值表明是百分比则按百分比，颜色本身写入 #color 色板。pick=luma 是示波器显示的亮度，为显示编码值。pick=luma-linear 用同样的权重计算线性光，适用于着色器当作光来使用的数值，例如对比度支点。它与 surface= 相互独立：控件无需位于操纵点上也能接收吸管。"
+          }
+        }
+      }
+    },
+    "How colourful the sample is, as a fraction of the most colourful thing Rec.709 shows.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie farbig die Probe ist, als Anteil des Farbigsten, was Rec.709 zeigen kann."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuán colorida es la muestra, como fracción de lo más colorido que Rec.709 puede mostrar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le degré de coloration du prélèvement, en fraction de la couleur la plus vive que Rec.709 peut montrer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サンプルの色の鮮やかさを、Rec.709 が表示できる最も鮮やかな色に対する比率で。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "샘플이 얼마나 화려한지를 Rec.709가 보여 줄 수 있는 가장 화려한 색에 대한 비율로 나타냅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取样的鲜艳程度，以 Rec.709 能显示的最鲜艳颜色为分母的比例。"
+          }
+        }
+      }
+    },
+    "The same brightness measured in linear light. For a control the shader consumes as light, like a contrast pivot: a face sampled at 0.55 is 0.26 of the light, and feeding the display number to a pivot puts it about a stop high.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieselbe Helligkeit, in linearem Licht gemessen. Für ein Steuerelement, das der Shader als Licht verarbeitet, etwa einen Kontrastdrehpunkt: ein bei 0,55 abgetastetes Gesicht entspricht 0,26 des Lichts, und der Displaywert setzt den Drehpunkt rund eine Blende zu hoch."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El mismo brillo medido en luz lineal. Para un control que el sombreador consume como luz, por ejemplo un pivote de contraste: un rostro muestreado en 0,55 es 0,26 de la luz, y pasar el número de pantalla a un pivote lo sitúa cerca de un paso demasiado alto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La même luminosité mesurée en lumière linéaire. Pour un réglage que le shader consomme comme de la lumière, tel un pivot de contraste : un visage prélevé à 0,55 vaut 0,26 de la lumière, et donner la valeur d'affichage au pivot le place environ un diaphragme trop haut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同じ明るさをリニア光で測った値です。コントラストのピボットのように、シェーダーが光として扱うコントロール向けです。0.55 でサンプリングした顔は光では 0.26 にあたり、ディスプレイの数値をピボットに渡すと約 1 段高くなります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "같은 밝기를 선형 광에서 측정한 값입니다. 대비 피벗처럼 셰이더가 빛으로 사용하는 컨트롤에 씁니다. 0.55에서 샘플링한 얼굴은 빛으로는 0.26이며, 디스플레이 값을 피벗에 넣으면 약 한 스톱 높아집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一亮度以线性光衡量。适用于着色器当作光来使用的控件，例如对比度支点：在 0.55 处取样的人脸相当于 0.26 的光量，把显示数值交给支点会高出约一档。"
+          }
+        }
+      }
+    },
+    "The sample's brightness as the scope shows it, display-coded. For a control compared against the picture's own pixel values, like a highlight threshold.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Helligkeit der Probe, wie das Messinstrument sie zeigt, displaycodiert. Für ein Steuerelement, das mit den Pixelwerten des Bildes selbst verglichen wird, etwa ein Lichter-Schwellenwert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El brillo de la muestra tal como lo muestra el vectorscopio, codificado para pantalla. Para un control que se compara con los propios valores de píxel de la imagen, como un umbral de altas luces."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La luminosité du prélèvement telle que la courbe l'affiche, codée pour l'affichage. Pour un réglage comparé aux valeurs de pixels de l'image elle-même, comme un seuil de hautes lumières."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スコープが示すサンプルの明るさで、ディスプレイ符号化された値です。ハイライトのしきい値のように、画面自身のピクセル値と比較されるコントロール向けです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스코프가 보여 주는 샘플의 밝기이며 디스플레이로 인코딩된 값입니다. 하이라이트 임계값처럼 화면 자체의 픽셀 값과 비교되는 컨트롤에 씁니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示波器显示的取样亮度，为显示编码值。适用于与画面自身像素值比较的控件，例如高光阈值。"
+          }
+        }
+      }
+    },
+    "The sampled colour itself, into a #color swatch.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die abgetastete Farbe selbst, in ein #color-Feld."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El color muestreado en sí, en una muestra #color."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La couleur prélevée elle-même, dans un échantillon #color."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サンプリングした色そのものを #color のスウォッチに。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "샘플링한 색상 자체를 #color 견본에 넣습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取样颜色本身，写入 #color 色板。"
+          }
+        }
+      }
+    },
+    "The sampled hue in degrees, in this control's own convention.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der abgetastete Farbton in Grad, in der Konvention dieses Steuerelements."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tono muestreado en grados, en la convención propia de este control."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La teinte prélevée en degrés, selon la convention de ce réglage."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サンプリングした色相を度数で、このコントロール自身の表記で。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "샘플링한 색조를 도 단위로, 이 컨트롤 자체의 표기로 기록합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取样得到的色相，以度为单位，按该控件自身的约定。"
+          }
+        }
+      }
+    },
+    "Slot group \"%@\": min= and default= must be 0 to max=, and default can't be below min=": {
+      "comment": "Mirage slots count error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slot-Gruppe „%@“: min= und default= müssen zwischen 0 und max= liegen, und default darf nicht unter min= liegen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grupo de slots «%@»: min= y default= deben ir de 0 a max=, y default no puede ser menor que min="
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groupe de slots « %@ » : min= et default= doivent aller de 0 à max=, et default ne peut pas être inférieur à min="
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スロットグループ「%@」: min= と default= は 0〜max= の範囲で、default は min= を下回れません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "슬롯 그룹 \"%@\": min=과 default=는 0에서 max= 사이여야 하며 default는 min=보다 작을 수 없습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "插槽组“%@”：min= 与 default= 必须在 0 到 max= 之间，且 default 不能小于 min="
+          }
+        }
+      }
+    },
+    "Control \"%@\": #gradient, #audio and colour arrays can't repeat - declare them outside the #slots block": {
+      "comment": "Mirage unrepeatable slots control error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regler „%@“: #gradient, #audio und Farb-Arrays lassen sich nicht wiederholen - deklariere sie außerhalb des #slots-Blocks"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: #gradient, #audio y los arrays de color no se pueden repetir: decláralos fuera del bloque #slots"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commande « %@ » : #gradient, #audio et les tableaux de couleurs ne peuvent pas se répéter : déclarez-les hors du bloc #slots"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: #gradient、#audio、カラー配列は繰り返せません。#slots ブロックの外で宣言してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": #gradient, #audio, 색상 배열은 반복할 수 없습니다. #slots 블록 밖에서 선언하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：#gradient、#audio 和颜色数组无法重复，请在 #slots 块之外声明它们"
+          }
+        }
+      }
+    },
+    "Add another %@ and aim it at a color in the preview.": {
+      "comment": "Tooltip for the Color panel's add-instance button. %@ is the group's name, like Colour.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge ein weiteres %@ hinzu und richte es auf eine Farbe in der Vorschau."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade otro %@ y apúntalo a un color de la vista previa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez un autre %@ et visez une couleur dans l'aperçu."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ をもう 1 つ追加して、プレビュー内の色に合わせます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 을(를) 하나 더 추가하고 미리보기의 색상에 맞춥니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再添加一个 %@，并让它对准预览中的颜色。"
+          }
+        }
+      }
+    },
+    "Remove": {
+      "comment": "Color panel button that removes the selected instance of the shader's repeatable group of controls.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제거"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除"
+          }
+        }
+      }
+    },
+    "Control \"%@\": a puck inside `#slots` needs a name with {n} in it": {
+      "comment": "Mirage slots empty-puck-name error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerung „%@“: ein Puck in `#slots` braucht einen Namen mit {n} darin"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: un puck dentro de `#slots` necesita un nombre con {n}"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : un puck dans `#slots` a besoin d'un nom contenant {n}"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: `#slots` 内のパックには {n} を含む名前が必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": `#slots` 안의 퍽에는 {n}이 들어간 이름이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：`#slots` 内的控制柄需要一个包含 {n} 的名称"
+          }
+        }
+      }
+    },
+    "`#slots-end` has no `#slots` block to close": {
+      "comment": "Mirage unopened slots-end error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots-end` hat keinen `#slots`-Block zum Schließen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots-end` no tiene ningún bloque `#slots` que cerrar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots-end` ne ferme aucun bloc `#slots`"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots-end` に対応する `#slots` ブロックがありません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots-end`가 닫을 `#slots` 블록이 없습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots-end` 没有可结束的 `#slots` 块"
+          }
+        }
+      }
+    },
+    "Remove %@.": {
+      "comment": "Tooltip for the Color panel's remove-instance button. %@ is the handle's name, like Colour 3.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ entfernen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer %@."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ を削除します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 을(를) 제거합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除 %@。"
+          }
+        }
+      }
+    },
+    "`#slots` needs name=\"...\", using letters, numbers and spaces": {
+      "comment": "Mirage slots name error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` braucht name=\"...\" aus Buchstaben, Ziffern und Leerzeichen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` necesita name=\"...\" con letras, números y espacios"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` a besoin de name=\"...\", avec des lettres, des chiffres et des espaces"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` には英数字とスペースからなる name=\"...\" が必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots`에는 문자, 숫자, 공백으로 된 name=\"...\"이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` 需要 name=\"...\"，仅可使用字母、数字和空格"
+          }
+        }
+      }
+    },
+    "Add": {
+      "comment": "Color panel button that adds another instance of the shader's repeatable group of controls.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinzufügen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加"
+          }
+        }
+      }
+    },
+    "Two `#slots` groups named \"%@\": give each group its own name": {
+      "comment": "Mirage duplicate slots name error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwei `#slots`-Gruppen heißen „%@“: gib jeder Gruppe einen eigenen Namen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dos grupos `#slots` se llaman «%@»: da a cada grupo su propio nombre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deux groupes `#slots` s’appellent « %@ » : donnez à chaque groupe son propre nom"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」という `#slots` グループが 2 つあります。それぞれに別の名前を付けてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"%@\" 이름의 `#slots` 그룹이 두 개입니다. 그룹마다 고유한 이름을 지정하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有两个名为“%@”的 `#slots` 组：请为每个组取不同的名称"
+          }
+        }
+      }
+    },
+    "Control \"%@\": a control inside `#slots` needs {n} in its label and puck name": {
+      "comment": "Mirage slots missing-placeholder error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerung „%@“: eine Steuerung in `#slots` braucht {n} in Label und Puck-Namen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: un control dentro de `#slots` necesita {n} en su etiqueta y en el nombre de su puck"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : un contrôle dans `#slots` a besoin de {n} dans son label et dans le nom de son puck"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: `#slots` 内のコントロールはラベルとパック名に {n} が必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": `#slots` 안의 컨트롤은 레이블과 퍽 이름에 {n}이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：`#slots` 内的控件需要在标签和控制柄名称中包含 {n}"
+          }
+        }
+      }
+    },
+    "With every `#slots` group full this shader asks for %d controls, and %d is the limit - lower a max= or drop a control": {
+      "comment": "Mirage slots scalar-pool budget error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit allen `#slots`-Gruppen voll verlangt dieser Shader %d Regler, und %d ist das Limit - senke ein max= oder entferne einen Regler"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con cada grupo `#slots` lleno, este sombreador pide %d controles, y el límite es %d: reduce un max= o elimina un control"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avec chaque groupe `#slots` au complet, ce shader demande %d commandes, et la limite est %d : réduisez un max= ou supprimez une commande"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべての `#slots` グループを上限まで使うと、このシェーダーは %d 個のコントロールを要求します。上限は %d 個です。max= を下げるかコントロールを減らしてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 `#slots` 그룹을 채우면 이 셰이더는 컨트롤 %d개를 요구하며, 한도는 %d개입니다. max= 를 낮추거나 컨트롤을 줄이세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当每个 `#slots` 组都填满时，此着色器需要 %d 个控件，上限为 %d 个：请降低 max= 或删除一个控件"
+          }
+        }
+      }
+    },
+    "With every `#slots` group full this shader asks for %d colours, and %d is the limit - lower a max= or drop a colour": {
+      "comment": "Mirage slots colour-pool budget error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit allen `#slots`-Gruppen voll verlangt dieser Shader %d Farben, und %d ist das Limit - senke ein max= oder entferne eine Farbe"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con cada grupo `#slots` lleno, este sombreador pide %d colores, y el límite es %d: reduce un max= o elimina un color"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avec chaque groupe `#slots` au complet, ce shader demande %d couleurs, et la limite est %d : réduisez un max= ou supprimez une couleur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべての `#slots` グループを上限まで使うと、このシェーダーは %d 色を要求します。上限は %d 色です。max= を下げるか色を減らしてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 `#slots` 그룹을 채우면 이 셰이더는 색상 %d개를 요구하며, 한도는 %d개입니다. max= 를 낮추거나 색상을 줄이세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当每个 `#slots` 组都填满时，此着色器需要 %d 种颜色，上限为 %d 种：请降低 max= 或删除一种颜色"
+          }
+        }
+      }
+    },
+    "`{n}` only means something inside a `#slots` block": {
+      "comment": "Mirage stray slots placeholder error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`{n}` bedeutet nur innerhalb eines `#slots`-Blocks etwas"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`{n}` solo tiene sentido dentro de un bloque `#slots`"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`{n}` n’a de sens qu’à l’intérieur d’un bloc `#slots`"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`{n}` は `#slots` ブロックの中でのみ意味を持ちます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`{n}`은 `#slots` 블록 안에서만 의미가 있습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`{n}` 仅在 `#slots` 块内有意义"
+          }
+        }
+      }
+    },
+    "`#slots` needs max=1 to %d, the most instances a group can have": {
+      "comment": "Mirage slots max error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` braucht max=1 bis %d, so viele Instanzen kann eine Gruppe höchstens haben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` necesita max=1 a %d, el máximo de instancias que puede tener un grupo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` a besoin de max=1 à %d, le nombre maximal d’instances d’un groupe"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` には max=1〜%d が必要です。グループが持てるインスタンスの上限です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots`에는 max=1에서 %d까지가 필요합니다. 그룹이 가질 수 있는 최대 인스턴스 수입니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` 需要 max=1 到 %d，这是一个组最多可有的实例数"
+          }
+        }
+      }
+    },
+    "`#slots` needs a `// #slots-end` to close the group": {
+      "comment": "Mirage unclosed slots block error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` braucht ein `// #slots-end`, um die Gruppe zu schließen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` necesita un `// #slots-end` que cierre el grupo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` a besoin d’un `// #slots-end` pour fermer le groupe"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` にはグループを閉じる `// #slots-end` が必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots`에는 그룹을 닫는 `// #slots-end`가 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` 需要一条 `// #slots-end` 来结束该组"
+          }
+        }
+      }
+    },
+    "`#slots` blocks can't be nested - close one before opening the next": {
+      "comment": "Mirage nested slots block error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots`-Blöcke lassen sich nicht verschachteln - schließe einen, bevor du den nächsten öffnest"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los bloques `#slots` no se pueden anidar: cierra uno antes de abrir el siguiente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les blocs `#slots` ne peuvent pas être imbriqués - fermez-en un avant d’ouvrir le suivant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` ブロックは入れ子にできません。次を開く前に閉じてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` 블록은 중첩할 수 없습니다. 다음을 열기 전에 하나를 닫으세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#slots` 块不能嵌套 - 先结束一个再开始下一个"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

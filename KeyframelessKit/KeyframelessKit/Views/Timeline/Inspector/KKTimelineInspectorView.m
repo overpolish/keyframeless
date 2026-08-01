@@ -352,12 +352,13 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     KKTimelineInspectorView *strong = weak;
     if (!strong)
       return;
+    // nil timeline: a commit changes the SOURCE under a timeline that is
+    // already the one on screen, so the provider's own live copy is the right
+    // one to derive against.
     if (strong.availableLanesProvider) {
-      NSArray<KKLane *> *lanes = strong.availableLanesProvider(code);
-      if (lanes) {
-        strong->_availableLanes = [lanes copy];
-        [strong->_basicView updateAvailableLanes:lanes];
-      }
+      NSArray<KKLane *> *lanes = strong.availableLanesProvider(code, nil);
+      if (lanes)
+        [strong applyAvailableLanes:lanes];
     }
     // Let a host with a source-derived OSC set re-wire its visibility checklist
     // to the new element set (the lane re-derive above doesn't touch OSC
@@ -579,6 +580,13 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     _onGuideTabChanged(tab);
 }
 
+- (void)applyAvailableLanes:(NSArray<KKLane *> *)lanes {
+  if (!lanes)
+    return;
+  _availableLanes = [lanes copy];
+  [_basicView updateAvailableLanes:lanes];
+}
+
 - (void)applyTimeline:(KKTimeline *)timeline {
   // Re-derive source-declared lanes from the timeline's code lane, so a shader
   // SWAP / undo updates the lane set the same as a live directive edit (which
@@ -593,11 +601,12 @@ const CGFloat kMBCheckboxTrailing = 23.0;
       }
     if (![code isEqualToString:(_lastDerivedCode ?: @"")]) {
       _lastDerivedCode = [code copy];
-      NSArray<KKLane *> *lanes = _availableLanesProvider(code);
-      if (lanes) {
-        _availableLanes = [lanes copy];
-        [_basicView updateAvailableLanes:lanes];
-      }
+      // The INCOMING timeline, not the one still on screen: the rows are about
+      // to be filtered against whatever this returns, and the timeline being
+      // replaced is not what they are being filtered for.
+      NSArray<KKLane *> *lanes = _availableLanesProvider(code, timeline);
+      if (lanes)
+        [self applyAvailableLanes:lanes];
     }
   }
   // `label` is NOT serialized, so a timeline that has round-tripped through the

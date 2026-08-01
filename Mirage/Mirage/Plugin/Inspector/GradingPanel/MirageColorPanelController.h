@@ -33,9 +33,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) BOOL surfaceEnabled;
 
 /// Persist a timeline the puck has edited, and bracket a drag so its burst of
-/// writes collapses into ONE undo entry. Wired by the inspector to the same chain
-/// the mini-viewer handles use.
-@property(nonatomic, copy, nullable) void (^onTimelineMutated)(KKTimeline *updated);
+/// writes collapses into ONE undo entry. Wired by the inspector to the same
+/// chain the mini-viewer handles use.
+@property(nonatomic, copy, nullable) void (^onTimelineMutated)
+    (KKTimeline *updated);
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 
@@ -43,6 +44,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// -applyTimeline: so a recompile updates the ring and labels without the panel
 /// having to be closed and reopened.
 - (void)timelineDidChange;
+
+/// Make the handle belonging to `instanceID` the one the panel is talking
+/// about, for a `#slots` instance that arrived from OUTSIDE the panel.
+///
+/// The add and remove buttons place their own selection, because they know what
+/// they just did. An undo that restores a removed instance has the same claim
+/// on the selection and no way to say so - the instance comes back through the
+/// blob, and without this the handle reappears while a neighbour stays active,
+/// so the first thing the user has to do after un-deleting something is find it
+/// again. Call AFTER -timelineDidChange: the handle has to exist before it can
+/// be selected.
+- (void)selectSlotInstance:(NSString *)instanceID;
 
 /// Tear down observers and hide. Called from the inspector's dealloc, matching
 /// how the browser controller is retired.
