@@ -146,17 +146,62 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
   return [NSString stringWithFormat:span >= 5.0 ? @"%.1f" : @"%.2f", value];
 }
 
+/// The current value of a colour control, as a colour rather than as three
+/// numbers. Set-from-clip writes a whole colour in one click, and until this
+/// row existed the panel showed nothing at all for it - the click looked like
+/// it had missed.
+@interface _MirageSwatchView : NSView
+@property(nonatomic, strong, nullable) NSColor *swatchColor;
+@end
+
+@implementation _MirageSwatchView
+
+- (void)setSwatchColor:(NSColor *)swatchColor {
+  if (swatchColor == _swatchColor || [swatchColor isEqual:_swatchColor])
+    return;
+  _swatchColor = swatchColor;
+  self.needsDisplay = YES;
+}
+
+- (void)drawRect:(NSRect)dirty {
+  if (!_swatchColor)
+    return;
+  // Inset by half the border so the stroke lands ON the edge rather than
+  // straddling it, then snapped to the backing store: at 12pt a half-pixel
+  // rounded rect reads as a blurred smudge beside 11pt text.
+  NSRect box =
+      [self backingAlignedRect:NSInsetRect(self.bounds, KKBorderWidthXS * 0.5,
+                                           KKBorderWidthXS * 0.5)
+                       options:NSAlignAllEdgesNearest];
+  NSBezierPath *path = [NSBezierPath bezierPathWithRoundedRect:box
+                                                       xRadius:KKRadiusSM
+                                                       yRadius:KKRadiusSM];
+  [_swatchColor setFill];
+  [path fill];
+  // A hairline keeps a near-background colour (a white tint on a light panel)
+  // from disappearing into the row.
+  [[NSColor.labelColor colorWithAlphaComponent:0.25] setStroke];
+  path.lineWidth = KKBorderWidthXS;
+  [path stroke];
+}
+
+@end
+
 /// One line of the readout: the control's name on the left, its current value
 /// on the right, so the value column lines up down the list instead of ragging
 /// with the length of each name. A row with no value is a heading - the puck
-/// the list belongs to.
+/// the list belongs to - unless it carries a swatch, which is a colour control
+/// whose value is the colour itself.
 @interface _MirageReadoutRow : NSView
-- (void)setName:(NSString *)name value:(nullable NSString *)value;
+- (void)setName:(NSString *)name
+          value:(nullable NSString *)value
+         swatch:(nullable NSColor *)swatch;
 @end
 
 @implementation _MirageReadoutRow {
   NSTextField *_name;
   NSTextField *_value;
+  _MirageSwatchView *_swatch;
 }
 
 - (instancetype)init {
@@ -177,6 +222,13 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
     _value.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:_value];
 
+    _swatch = [_MirageSwatchView new];
+    _swatch.translatesAutoresizingMaskIntoConstraints = NO;
+    _swatch.hidden = YES;
+    [self addSubview:_swatch];
+
+    // The swatch and the number both sit in the value column, never at once:
+    // a colour control has no number to print, and a numeric one no colour.
     [NSLayoutConstraint activateConstraints:@[
       [_name.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_name.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
@@ -187,17 +239,28 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
       [_name.trailingAnchor
           constraintLessThanOrEqualToAnchor:_value.leadingAnchor
                                    constant:-KKPaddingSM],
+      [_swatch.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+      [_swatch.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_swatch.widthAnchor constraintEqualToConstant:KKIconSizeSM],
+      [_swatch.heightAnchor constraintEqualToConstant:KKIconSizeSM],
+      [_name.trailingAnchor
+          constraintLessThanOrEqualToAnchor:_swatch.leadingAnchor
+                                   constant:-KKPaddingSM],
     ]];
   }
   return self;
 }
 
-- (void)setName:(NSString *)name value:(NSString *)value {
+- (void)setName:(NSString *)name
+          value:(NSString *)value
+         swatch:(NSColor *)swatch {
   _name.stringValue = name ?: @"";
+  _swatch.swatchColor = swatch;
+  _swatch.hidden = swatch == nil;
   // A heading carries the puck's name and no number, and is set apart by weight
   // rather than by a separator: at 11pt in a 56pt box, a rule costs more room
   // than it earns.
-  BOOL heading = value == nil;
+  BOOL heading = value == nil && swatch == nil;
   _name.font = heading ? [NSFont systemFontOfSize:kReadoutFontSize
                                            weight:NSFontWeightSemibold]
                        : [NSFont systemFontOfSize:kReadoutFontSize];
@@ -214,8 +277,7 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
 // One row per control the gesture moved. Rows are reused across ticks rather
 // than rebuilt: this runs on every drag event, and tearing down a stack view's
 // children at that rate makes the readout flicker as it re-lays out.
-- (void)_setReadoutRows:
-    (NSArray<NSDictionary<NSString *, NSString *> *> *)rows {
+- (void)_setReadoutRows:(NSArray<NSDictionary<NSString *, id> *> *)rows {
   if (!_readoutStack)
     return;
   _readoutHint.hidden = rows.count > 0;
@@ -230,10 +292,11 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
                                     constant:-2 * KKPaddingSM]
         .active = YES;
   }
-  [rows enumerateObjectsUsingBlock:^(NSDictionary<NSString *, NSString *> *r,
+  [rows enumerateObjectsUsingBlock:^(NSDictionary<NSString *, id> *r,
                                      NSUInteger i, BOOL *stop) {
     [(_MirageReadoutRow *)self->_readoutStack.views[i] setName:r[@"name"]
-                                                         value:r[@"value"]];
+                                                         value:r[@"value"]
+                                                        swatch:r[@"swatch"]];
   }];
 }
 
@@ -250,6 +313,46 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
     return;
   _declarationSentence = [sentence copy];
   _readoutHint.stringValue = sentence ?: MirageReadoutPlaceholder();
+}
+
+/// A row per `pick=color` control the ACTIVE puck's eyedropper writes, showing
+/// the colour it currently holds.
+///
+/// Set-from-clip writes a whole colour in one click, and a colour has no number
+/// the numeric rows above could print - so the panel used to answer that click
+/// with nothing moving at all, on a shader whose tint is the entire point. The
+/// same subscriber set the click itself resolves is asked here, so the rows are
+/// exactly what a click would land on rather than every colour the shader
+/// declares.
+- (NSArray<NSDictionary<NSString *, id> *> *)
+    _colorPickRowsIn:(KKTimeline *)timeline
+              source:(NSString *)source
+            fraction:(double)frac
+              listed:(NSSet<NSString *> *)listed {
+  NSDictionary<NSString *, NSNumber *> *picks =
+      [self _picksForActivePuckIn:timeline source:source];
+  if (!picks.count)
+    return @[];
+  NSMutableArray<NSDictionary<NSString *, id> *> *rows = [NSMutableArray array];
+  for (KKLane *lane in timeline.lanes) {
+    NSNumber *kind = lane.key.length ? picks[lane.key] : nil;
+    if (!kind || kind.integerValue != MirageSurfacePickKindColor)
+      continue;
+    if ([listed containsObject:lane.key])
+      continue; // already carried a number above, so it is not a colour row
+    NSArray<NSNumber *> *values = [self _valuesForLane:lane fraction:frac];
+    if (values.count < 3)
+      continue;
+    // [r, g, b, a] in sRGB 0..1, the space every colour lane is stored in and
+    // the shader linearises out of. Alpha is the author's, so it is shown.
+    NSColor *color = [NSColor
+        colorWithSRGBRed:values[0].doubleValue
+                   green:values[1].doubleValue
+                    blue:values[2].doubleValue
+                   alpha:values.count > 3 ? values[3].doubleValue : 1.0];
+    [rows addObject:@{@"name" : lane.label ?: lane.key, @"swatch" : color}];
+  }
+  return rows;
 }
 
 // The active puck's controls and what they currently read.
@@ -289,15 +392,15 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
       if ([puckNames[i] isEqualToString:puckNames[j]])
         nameRings = YES;
   }
-  NSMutableArray<NSDictionary<NSString *, NSString *> *> *rows =
-      [NSMutableArray array];
+  NSMutableArray<NSDictionary<NSString *, id> *> *rows = [NSMutableArray array];
+  NSMutableSet<NSString *> *listed = [NSMutableSet set];
   for (NSUInteger i = 0; i < ringCount; i++) {
     NSDictionary<NSString *, NSValue *> *responses =
         [self _responsesForRing:i source:source];
     NSString *puckName = puckNames[i];
     if (!responses.count)
       continue;
-    NSMutableArray<NSDictionary<NSString *, NSString *> *> *block =
+    NSMutableArray<NSDictionary<NSString *, id> *> *block =
         [NSMutableArray array];
     for (KKLane *lane in timeline.lanes) {
       NSValue *boxed = lane.key.length ? responses[lane.key] : nil;
@@ -319,6 +422,7 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
       if (!text)
         continue;
       [block addObject:@{@"name" : lane.label ?: lane.key, @"value" : text}];
+      [listed addObject:lane.key];
     }
     if (!block.count)
       continue;
@@ -330,6 +434,10 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
       [rows addObject:@{@"name" : heading}];
     [rows addObjectsFromArray:block];
   }
+  [rows addObjectsFromArray:[self _colorPickRowsIn:timeline
+                                            source:source
+                                          fraction:frac
+                                            listed:listed]];
   [self _setReadoutRows:rows.count > 1 ? rows : @[]];
 }
 

@@ -76,6 +76,7 @@ static const double kRingMaxStop = 5.0;
 - (void)dealloc {
   [self _endPuckDragReason:@"dealloc"];
   [self _disarmPicking];
+  [self _dropShortcutMonitors];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   _measuredMini.onProcessedFrameReady = nil;
   _measuredMini.onCompareStateChanged = nil;
@@ -173,6 +174,10 @@ static const double kRingMaxStop = 5.0;
   [panel showBesideCard:card ofWindow:_parentWindow];
   [self _refreshPuck];
   [self _startSampling];
+  // After the sampling starts, not before: a fresh preview makes
+  // -_startSampling tear the previous one down, and the shortcuts installed
+  // ahead of it would go with it.
+  [self _installShortcutMonitors];
 }
 
 // Split the preview: graded left of the divider, ungraded right of it.
@@ -213,6 +218,193 @@ static const double kRingMaxStop = 5.0;
   _beforeButton.contentTintColor = (available && mini.compareBypassing)
                                        ? NSColor.accentMatchingHost
                                        : NSColor.secondaryLabelColor;
+}
+
+// The three compare keys, live for as long as the panel is on screen.
+//
+// ONE monitor, and a LOCAL one, because a shortcut that fires without also
+// being consumed is worse than no shortcut: M flipped the matte AND reached
+// FCP, which took it as "add marker" - and B and S went the same way to the
+// blade and the host's own bindings. Only a local monitor can return nil, and
+// only a local monitor sees a key at all when this process holds the keyboard.
+//
+// What puts it there is the inspector's -miniGrabsKeyFocusOnClick, the same
+// opt-in Canvas makes so a bare Delete removes a layer rather than the effect:
+// a click in the preview makes the popover key, and from then on FCP delivers
+// the letter here first. That is the house answer to this exact problem and it
+// is reused rather than re-invented - see KKMiniViewerView's own note on why a
+// GLOBAL monitor can only watch a key go past on its way to the host.
+//
+// So there is no global monitor here any more. It was the observe-only half of
+// a pair, it could never swallow anything, and keeping it would have meant two
+// paths for one key - which is also what the timestamp de-duplication in the
+// handler existed to paper over.
+//
+// Installed once the panel is actually showing and dropped the moment it is
+// not, so a letter typed anywhere in FCP with no Color panel up is nobody's
+// business but FCP's.
+- (void)_installShortcutMonitors {
+  if (_shortcutMonitor)
+    return;
+  __weak typeof(self) weak = self;
+  NSEventMask keys = NSEventMaskKeyDown | NSEventMaskKeyUp;
+  _shortcutMonitor = [NSEvent
+      addLocalMonitorForEventsMatchingMask:keys
+                                   handler:^NSEvent *(NSEvent *e) {
+                                     __strong typeof(weak) s = weak;
+                                     if (s && [s _handleShortcutEvent:e])
+                                       return nil; // ours: don't also type it
+                                     return e;
+                                   }];
+}
+
+- (void)_dropShortcutMonitors {
+  MirageDropMonitor(&_shortcutMonitor);
+  // A bypass the keyboard is holding cannot survive the monitors that would
+  // release it: the key-up would arrive with nothing listening and leave the
+  // preview permanently ungraded.
+  [self _releaseKeyBypass];
+}
+
+- (void)_releaseKeyBypass {
+  if (!_bypassHeldByKey)
+    return;
+  _bypassHeldByKey = NO;
+  [self _setCompareBypass:NO];
+}
+
+// One bare letter each: B holds the bypass the way the button does, S flips the
+// split, M flips the shader's selection switch.
+//
+// Every gate here is about NOT taking a key that was meant for something else.
+// The panel has to be on screen; a modifier means the user is reaching for a
+// command, not a compare; a text object having focus means they are typing;
+// and a latched drag or an open write group means a gesture is mid-flight, so a
+// second write would land inside the first one's undo group. In each of those
+// the event is returned untouched rather than consumed. Escape is not ours at
+// all, so Set from clip still disarms on it exactly as before.
+- (BOOL)_handleShortcutEvent:(NSEvent *)event {
+  NSString *ch = event.charactersIgnoringModifiers.lowercaseString;
+  if (event.type == NSEventTypeKeyUp) {
+    // Nothing else here is press-and-hold, so a key-up is only ever the end of
+    // one - and it is honoured whatever the gates say now, since what it ends
+    // began when they all passed.
+    if (!_bypassHeldByKey || ![ch isEqualToString:@"b"])
+      return NO;
+    [self _releaseKeyBypass];
+    return YES;
+  }
+  if (!_panel.isVisible)
+    return NO;
+  NSEventModifierFlags mods =
+      event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+  if (mods & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
+              NSEventModifierFlagOption | NSEventModifierFlagShift |
+              NSEventModifierFlagFunction))
+    return NO;
+  if (MirageTextEditingInProgress())
+    return NO;
+  if (_puckDragActive || _writeGroupOpen)
+    return NO;
+  NSButton *button = nil;
+  if ([ch isEqualToString:@"b"])
+    button = _beforeButton;
+  else if ([ch isEqualToString:@"s"])
+    button = _splitButton;
+  else if ([ch isEqualToString:@"m"])
+    button = _selectionButton;
+  // A key whose button this shader does not offer is not this panel's key.
+  if (!button || button.hidden)
+    return NO;
+  // Held keys repeat. The press is consumed either way - it is ours - but only
+  // the first one does anything, or a leaned-on S would strobe the preview.
+  if (event.isARepeat)
+    return YES;
+  if (button == _beforeButton) {
+    _bypassHeldByKey = YES;
+    [self _setCompareBypass:YES];
+  } else if (button == _splitButton) {
+    [self _toggleCompareSplit:nil];
+  } else {
+    [self _toggleShowSelection:nil];
+  }
+  return YES;
+}
+
+// Whether this shader offers a selection switch at all. The DECLARATION alone,
+// with no lane to look for: the control is panel-owned session state now, so
+// there never is one.
+- (BOOL)_declaresSelectionToggleIn:(NSString *)source {
+  return MirageSurfaceSelectionToggleForSource(source).length > 0;
+}
+
+// Present only for a shader that declares the switch, and tinted from the
+// PANEL'S OWN state.
+//
+// That state is an ivar and not a lane, which is the whole change: this button
+// answers "what am I looking at", exactly as Before and Split do, and those
+// were never parameters. As a parameter it spent an undo entry per press - so
+// stepping back through a grade walked through every glance at the matte - and
+// it persisted, so a project reopened later came up showing a grey diagnostic
+// instead of the shot.
+//
+// Nothing to reconcile, either. There is no inspector checkbox and no keyframe
+// for this any more, so the ivar cannot disagree with a second version of the
+// truth the way a remembered flag beside a lane would have.
+- (void)_refreshSelectionButtonIn:(KKTimeline *)timeline
+                           source:(NSString *)source {
+  _selectionButton.hidden = ![self _declaresSelectionToggleIn:source];
+  if (_selectionButton.hidden)
+    return;
+  _selectionButton.contentTintColor = _showSelectionActive
+                                          ? NSColor.accentMatchingHost
+                                          : NSColor.secondaryLabelColor;
+}
+
+// Flip the switch: NO write, no write group, no undo entry, nothing persisted.
+//
+// Just the ivar and a push into the preview, which is the same shape the
+// active-key feed has and the same shape Split has. The two pushes go through
+// one re-assert so neither can be left behind by a path that clears overrides.
+- (void)_toggleShowSelection:(id)sender {
+  KKTimeline *timeline = _lanesView.currentTimeline;
+  NSString *source =
+      timeline ? [MiragePlugin shaderSourceFromTimeline:timeline] : @"";
+  if (![self _declaresSelectionToggleIn:source])
+    return;
+  _showSelectionActive = !_showSelectionActive;
+  [self _pushPreviewOverrides];
+  [self _refreshSelectionButtonIn:timeline source:source];
+}
+
+/// YES when `responder` is a text object that would have taken the keystroke.
+/// A field editor answers for whichever control it is currently serving, so
+/// NSTextField, NSSearchField and the code editor are all one test.
+static BOOL MirageRespondsAsEditor(NSResponder *responder) {
+  return [responder isKindOfClass:[NSText class]] &&
+         ((NSText *)responder).isEditable;
+}
+
+/// YES when something in this process is taking typed text.
+///
+/// The three shortcuts are BARE letters, so this is the whole reason they are
+/// safe: the code editor, the shader browser's search field and every inspector
+/// text field are one keystroke away from the panel, and a stray "s" splitting
+/// the preview instead of landing in the source would be unforgivable.
+///
+/// The key window is asked first and taken as the answer when there is one. A
+/// popover in the ViewBridge process routinely leaves an editable text view as
+/// some other window's first responder long after that window stopped receiving
+/// keys, so scanning every window unconditionally would disable the shortcuts
+/// for the rest of the session.
+static BOOL MirageTextEditingInProgress(void) {
+  NSWindow *key = NSApp.keyWindow;
+  if (key)
+    return MirageRespondsAsEditor(key.firstResponder);
+  for (NSWindow *window in NSApp.windows)
+    if (window.isVisible && MirageRespondsAsEditor(window.firstResponder))
+      return YES;
+  return NO;
 }
 
 // Which mapped controls the puck may touch: the ones the inspector is currently
@@ -269,6 +461,16 @@ static const double kRingMaxStop = 5.0;
 /// the override is fraction-keyed, and a renderer parked on another keypose
 /// would answer about a moment this puck is not showing.
 - (NSArray<NSNumber *> *)_valuesForLane:(KKLane *)lane fraction:(double)frac {
+  // An open puck drag is the panel's own in-flight value, and it wins outright.
+  // It writes once, on mouse-up, so the committed timeline holds the position
+  // the drag STARTED from for the whole gesture - reading it here would freeze
+  // the readout and spring the derived puck back to where it was grabbed. Not
+  // routed through the renderer's override for this: that one is fraction-keyed
+  // against the RENDERER's edit fraction, and this panel asks at its own.
+  NSArray<NSNumber *> *dragging =
+      lane.key.length ? _liveDragValues[lane.key] : nil;
+  if (dragging.count)
+    return dragging;
   KKMiniViewerRenderer *mini =
       (KKMiniViewerRenderer *)_lanesView.miniViewerDelegate;
   if (lane.key.length && [mini isKindOfClass:[KKMiniViewerRenderer class]] &&
@@ -374,6 +576,7 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
 
 - (void)_stopSampling {
   [self _disarmPicking];
+  [self _dropShortcutMonitors];
   _measuredMini.onProcessedFrameReady = nil;
   // Cleared before the bypass is dropped, so releasing it can't call back into
   // a panel that is already tearing down. A bypass still held when the popover
@@ -512,7 +715,11 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   [self _endPuckDragReason:@"the popover closed"];
   [self _stopSampling];
   // A declaration is a statement about the shot being graded, so it does not
-  // outlive the popover it was made in.
+  // outlive the popover it was made in. Nor does the matte: it is what you were
+  // looking at while you worked, and the next session starts on the picture -
+  // the same reason the mini's own split and bypass come back off, theirs by
+  // being torn down with the view.
+  _showSelectionActive = NO;
   _pickDeclaration = MirageMemoryColorNeutral;
   [self _setDeclarationSentence:nil];
   _parentWindow = nil;

@@ -49,6 +49,12 @@ static const CGFloat kSaveCategoryListMaxBody = 168.0;
   NSString *n = name ?: @"";
   if ([_saveNameField.stringValue isEqualToString:n])
     return; // don't disturb an in-progress edit with an identical re-apply
+  // Nor a live one with a different value: this is now re-applied on every
+  // timeline apply so a template change updates the name, and an apply landing
+  // mid-type would take the caret and the half-typed name with it. The commit
+  // on blur is what puts the typed name back on the lane.
+  if (_saveNameField.currentEditor)
+    return;
   _saveNameField.stringValue = n;
   _saveButton.enabled =
       [n stringByTrimmingCharactersInSet:NSCharacterSet

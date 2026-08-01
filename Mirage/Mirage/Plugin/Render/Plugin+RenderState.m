@@ -8,6 +8,7 @@
 #import "MirageDirectives.h"
 #import "MirageInspectorView.h"
 #import "MirageStateBlob.h"
+#import "MirageSurfaceResponse.h" // MirageSurfacePreviewOwnedKeys
 #import "Plugin+Render_Internal.h"
 #import <KeyframelessKit/KKLog.h>
 
@@ -98,8 +99,22 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
       shaderLane.codeString.length
           ? shaderLane.codeString
           : (shaderLane ? nil : MirageCustomDefaultShaderSource());
+  // The controls the Color panel owns read their DECLARED DEFAULT here and
+  // nothing else, whatever the timeline happens to contain.
+  //
+  // Not merely tidy - it is what keeps a project made before these became
+  // session state from being stuck. Such a project may still carry a
+  // `uShowSelection` lane sitting at true, and the catalog no longer builds a
+  // template for it, so `hidesLanesWithoutTemplate` drops the ROW while the
+  // lane stays in the blob. Without this the render would keep reading that
+  // true and Final Cut would show a grey matte with no control anywhere to turn
+  // it off. Returning nothing falls through to the prop's own default in
+  // MirageScalarPoolValue, which is the off the author declared.
+  NSSet<NSString *> *panelOwned = MirageSurfacePreviewOwnedKeys(shaderSrc);
   NSArray<NSNumber *> * (^values)(NSString *) =
       ^NSArray<NSNumber *> *(NSString *label) {
+    if (label.length && [panelOwned containsObject:label])
+      return @[];
     return MirageLaneValuesAtFraction(timeline, label, frac, timelineSec,
                                       durSec);
   };

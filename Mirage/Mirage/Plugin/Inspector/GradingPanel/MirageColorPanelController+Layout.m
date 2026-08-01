@@ -39,6 +39,18 @@ static const CGFloat kReadoutHeight = 56.0;
 /// boxes that happen to touch.
 static const CGFloat kRingGap = KKPaddingLG;
 
+/// A tooltip with the key that also works it, as " (B)".
+///
+/// Composed here rather than written into each localized sentence: the letter
+/// is the physical key, so it is the same in every language, and folding it
+/// into the translations would put seven copies of one keyboard fact in the
+/// catalog for a translator to keep in step.
+static NSString *MirageWithShortcut(NSString *tooltip, NSString *key) {
+  if (!tooltip.length || !key.length)
+    return tooltip;
+  return [NSString stringWithFormat:@"%@ (%@)", tooltip, key];
+}
+
 /// One circle's height, taken from what a single-ring panel has left after the
 /// header, the readout and the well's own inset.
 static CGFloat MirageRingCircleHeight(void) {
@@ -329,7 +341,7 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
   CGFloat height = 18.0;
   CGFloat y = (kHeaderHeight - height) * 0.5;
   CGFloat left = _titleRightEdge + KKPaddingMD;
-  for (NSButton *button in @[ _beforeButton, _splitButton ]) {
+  for (NSButton *button in @[ _beforeButton, _splitButton, _selectionButton ]) {
     if (!button || button.hidden)
       continue;
     button.frame = NSMakeRect(left, y, height, height);
@@ -424,10 +436,11 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
                                       @"preview: the graded frame on the "
                                       @"left, the original on the right.")
                 action:@selector(_toggleCompareSplit:)];
-  split.toolTip = RLoc(
-      @"Show the graded frame beside the original. Drag the divider in the "
-      @"preview to move the split.",
-      @"Tooltip for the Color panel's split-preview toggle.");
+  split.toolTip = MirageWithShortcut(
+      RLoc(@"Show the graded frame beside the original. Drag the divider in "
+           @"the preview to move the split.",
+           @"Tooltip for the Color panel's split-preview toggle."),
+      @"S");
   split.hidden = YES;
   [header addSubview:split];
   _splitButton = split;
@@ -438,15 +451,37 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
                                        @"the frame without the effect "
                                        @"applied.")
                 action:NULL];
-  before.toolTip =
+  before.toolTip = MirageWithShortcut(
       RLoc(@"Hold to see the frame without this effect.",
-           @"Tooltip for the Color panel's hold-to-bypass button.");
+           @"Tooltip for the Color panel's hold-to-bypass button."),
+      @"B");
   before.hidden = YES;
   before.onHoldChanged = ^(BOOL held) {
     [weakHeader _setCompareBypass:held];
   };
   [header addSubview:before];
   _beforeButton = before;
+
+  // The shader's own selection switch, in the cluster because that is where the
+  // hand already is: keying is a loop of look at the matte, move a slider, look
+  // again. It is the one button here that writes a control, so it is present
+  // only for a shader that declares `preview=selection` and it tints from the
+  // LANE rather than from a flag of its own - the inspector's checkbox and an
+  // undo move the same value, and a remembered state would disagree with both.
+  NSButton *selection = [self
+      _iconButtonNamed:@"circle.dashed"
+                 label:RLoc(@"Show Selection",
+                            @"Color panel button that shows the shader's "
+                            @"selection - its matte - instead of the graded "
+                            @"picture.")
+                action:@selector(_toggleShowSelection:)];
+  selection.toolTip = MirageWithShortcut(
+      RLoc(@"Show this shader's selection instead of the graded picture.",
+           @"Tooltip for the Color panel's show-selection toggle."),
+      @"M");
+  selection.hidden = YES;
+  [header addSubview:selection];
+  _selectionButton = selection;
   [body addSubview:header];
 
   // The readout of what the puck just changed, in the shared scroll container

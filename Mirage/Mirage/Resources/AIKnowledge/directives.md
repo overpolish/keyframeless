@@ -629,6 +629,34 @@ Scoping is by `puck=`, which a `pick=` control may declare on its own without a 
 
 `pick=` works with or without a `surface=` mapping on the same control, and it never affects the puck layout. Use it where the control's value genuinely **is** a property of a colour in the frame - a hue to key, a mid-grey pivot, a light's tint. It is the wrong tool for a gate or a threshold that the click should fall inside: writing the clicked pixel's own saturation into a minimum-saturation control excludes half of what was just clicked.
 
+### Panel-owned preview controls: `preview=`
+
+Two markers hand a control to the Color panel. A marked control is **session state, not a parameter**: it gets **no inspector row**, it is never keyframed, and nothing about it is written to the project. The shader declares the uniform so the panel has something to drive; the panel drives it straight into its own preview.
+
+```glsl
+// #bool label="Show Selection" group={"Finish", "switch.2"} default=false preview=selection
+uniform bool uShowSelection;
+
+// #choice label="Preview Key" group={"Finish", "switch.2"} options="All,1,2,3,4,5,6" default=0 preview=active-key
+uniform int uPreviewKey;
+```
+
+`preview=selection` names the switch that shows the shader's **selection** - the matte a qualifier keys - instead of the graded result. The panel offers it as a third icon beside Before and Split with the shortcut **M**, because tuning a key means flicking it constantly.
+
+`preview=active-key` names the control that says **which** key that matte is about: `0` for all of them, `n` for the nth instance of the repeatable group. You never touch it - the panel feeds it the handle you last touched, so the matte follows the puck you are holding. Declare it outside the `#slots` block; its `options=` exist to give the numbering meaning, not as a menu anyone sees.
+
+**Why they are not parameters.** Both answer "what am I looking at right now", which is the question Before and Split answer, and those were never parameters either. As rows they cost three things that all read as bugs: a press spent an **undo entry**, so stepping back through a grade walked through every glance at the matte; the value **persisted**, so a project reopened weeks later came up showing a grey diagnostic instead of the shot; and the key one was a slider over a **ceiling** with nothing to do with how many keys were live.
+
+**What the shader sees when the panel is not driving it: your declared default** - in the mini preview and in Final Cut's viewer alike, because no lane exists to say otherwise. So author them **off** (`default=false`, option `0`) and the diagnostic never reaches a render. This also means the matte is a thing you see while grading and never a thing you ship.
+
+Guard the key comparison against a **stale value** - the panel can only ever feed a live key, but a project made before this was session state may still carry an old stored one, and an out-of-range key would match nothing and show an empty matte:
+
+```glsl
+int previewKey = uPreviewKey > uKeyCount ? 0 : uPreviewKey;
+```
+
+Kinds are fixed: `preview=selection` on a `#bool` over a `uniform bool`, `preview=active-key` on a `#choice` over a `uniform int`. The marker anywhere else - a different directive kind, or a uniform that disagrees with it - is ignored the way a mistyped `pick=` is, so a typo costs the feature quietly rather than failing a compile. Declare each once; the first in the source wins.
+
 ## Repeatable groups: `#slots`
 
 Some controls come in **an unknown number**. A shader that tints three lights, or keys four hues, or draws N shapes cannot say how many the user wants, and declaring eight of everything up front fills the inspector with seven rows that do nothing. `// #slots` declares the controls for **one** of them, and the user adds and removes copies at runtime:

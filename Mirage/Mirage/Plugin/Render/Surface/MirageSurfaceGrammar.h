@@ -686,6 +686,193 @@ MirageSurfacePicksForSource(NSString *source) {
   return out;
 }
 
+// --- `preview=`: the controls the Color panel OWNS -----------------------
+//
+// Two markers, one idea. A marked control is PANEL SESSION STATE: it has no
+// inspector row, it is never keyframed, and nothing about it is written to the
+// project. The shader declares the uniform so the panel has something to drive,
+// and the panel drives it straight into the preview.
+//
+//     // #bool label="Show Selection" preview=selection
+//     uniform bool uShowSelection;
+//
+//     // #choice label="Preview Key" options="All,1,2,3" preview=active-key
+//     uniform int uPreviewKey;
+//
+// `preview=selection` names the switch that shows the shader's SELECTION - the
+// matte a qualifier keys - instead of the graded result. `preview=active-key`
+// names the control that says WHICH key that matte is about: 0 for all of them,
+// n for the nth instance of the repeatable group.
+//
+// Why they are not parameters. Both answer "what am I looking at right now",
+// which is the question Before and Split answer, and those were never
+// parameters either. Making them rows cost three things that all read as bugs:
+// a press spent an undo entry, so stepping back through a grade walked through
+// the times you glanced at the matte; the value persisted, so a project
+// reopened weeks later came up showing a grey diagnostic instead of the shot;
+// and the key one was a slider over a ceiling that had nothing to do with how
+// many keys were live. Session state has none of those, and the key one needs
+// no control at all - the matte follows the puck you are holding.
+//
+// What the shader sees when the panel is not driving it: the DECLARED DEFAULT,
+// in the mini preview and in Final Cut's viewer alike, because no lane exists
+// to say otherwise. So author them off - `default=false`, option 0 - and the
+// diagnostic never appears in a render.
+//
+// One of each per shader. A second declaration is ignored rather than rejected:
+// the panel has one button and one active handle, and the first control in the
+// source is the one it drives.
+//
+// The marker on the wrong KIND is ignored the way a mistyped `pick=` is: the
+// panel drives a specific widget from each, and there is no reading of
+// `preview=selection` on a float, or of `preview=active-key` on a colour, that
+// says what it would do.
+
+typedef NS_ENUM(NSInteger, MirageSurfacePreviewKind) {
+  MirageSurfacePreviewKindNone = 0,
+  /// `preview=selection`: this switch renders the matte instead of the result.
+  MirageSurfacePreviewKindSelection,
+  /// `preview=active-key`: this integer says WHICH key the matte shows, with
+  /// zero meaning all of them.
+  MirageSurfacePreviewKindActiveKey,
+};
+
+/// Parse a `preview=` attribute. An unrecognised value is None, matching what a
+/// typo in `pick=` costs: the control simply does not claim anything.
+static inline MirageSurfacePreviewKind
+MirageParseSurfacePreview(NSString *attrs) {
+  NSString *value = [MirageAttrWord(attrs, @"preview") lowercaseString];
+  if ([value isEqualToString:@"selection"])
+    return MirageSurfacePreviewKindSelection;
+  if ([value isEqualToString:@"active-key"])
+    return MirageSurfacePreviewKindActiveKey;
+  return MirageSurfacePreviewKindNone;
+}
+
+/// The uniform under the first control that declares `preview=<want>`, is of
+/// `expectDirective` kind, and sits over a `uniform expectUniform`, or nil.
+///
+/// One walk for both markers, because they answer the same question about
+/// different words and a second copy would be a second place for the
+/// wrong-kind rule to drift. That rule: the marker on a control of any other
+/// kind - and on a directive whose uniform disagrees with it - is IGNORED
+/// rather than an error, the way a mistyped `pick=` is. The panel drives a
+/// specific widget from each, and there is no reading of `preview=selection` on
+/// a float, or of `preview=active-key` on a colour, that says what it would do.
+///
+/// The directive kind and the uniform type are two parameters rather than one
+/// because they genuinely differ: `#choice` is delivered to the shader as an
+/// `int`, so the control that says WHICH key is a choice above an integer.
+static inline NSString *MirageSurfacePreviewControlForSource(
+    NSString *source, MirageSurfacePreviewKind want, NSString *expectDirective,
+    NSString *expectUniform) {
+  if (!source.length)
+    return nil;
+  static NSRegularExpression *dirRe;
+  static NSRegularExpression *uniRe;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    dirRe = [NSRegularExpression
+        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#([A-Za-z_][\\w-]*)"
+                                     @"([^\\n]*)$"
+                             options:0
+                               error:nil];
+    uniRe = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"\\buniform\\s+(float|int|vec2|vec3|vec4|bool)\\s+(\\w+)"
+                             options:0
+                               error:nil];
+  });
+  NSArray<NSTextCheckingResult *> *dirs =
+      [dirRe matchesInString:source
+                     options:0
+                       range:NSMakeRange(0, source.length)];
+  for (NSUInteger i = 0; i < dirs.count; i++) {
+    NSTextCheckingResult *dm = dirs[i];
+    NSString *kind =
+        [[source substringWithRange:[dm rangeAtIndex:1]] lowercaseString];
+    NSString *attrs = [source substringWithRange:[dm rangeAtIndex:2]];
+    if (MirageParseSurfacePreview(attrs) != want)
+      continue;
+    if (![kind isEqualToString:expectDirective])
+      continue;
+    NSUInteger after = NSMaxRange(dm.range);
+    NSUInteger limit =
+        (i + 1 < dirs.count) ? dirs[i + 1].range.location : source.length;
+    NSTextCheckingResult *um =
+        [uniRe firstMatchInString:source
+                          options:0
+                            range:NSMakeRange(after, limit - after)];
+    if (!um)
+      continue;
+    // The DECLARED type as well as the directive kind, so `// #bool ...
+    // preview=selection` over a `uniform float` is ignored too - the pair
+    // disagreeing is the same mistake as the marker being on the wrong kind.
+    if (![[source substringWithRange:[um rangeAtIndex:1]]
+            isEqualToString:expectUniform])
+      continue;
+    return [source substringWithRange:[um rangeAtIndex:2]];
+  }
+  return nil;
+}
+
+/// The uniform name of the shader's selection switch - which is also its lane
+/// key - or nil when the shader declares none.
+///
+/// Only a BOOLEAN control can be it, and the marker on anything else is ignored
+/// rather than an error. The panel's button is a two-state toggle: there is no
+/// reading of `preview=selection` on a float that says what the button would
+/// write, so the honest answer is that the shader declared nothing the panel
+/// can show. That keeps a mistyped marker costing exactly what a mistyped
+/// `pick=` costs - the feature quietly does not appear - instead of failing a
+/// compile over a control the render does not care about.
+static inline NSString *
+MirageSurfaceSelectionToggleForSource(NSString *source) {
+  return MirageSurfacePreviewControlForSource(
+      source, MirageSurfacePreviewKindSelection, @"bool", @"bool");
+}
+
+/// The uniform name of the shader's active-key control - which is also its lane
+/// key - or nil when the shader declares none.
+///
+/// A `#choice` and nothing else, for the reason only a `#bool` can be the
+/// selection switch: the marker names a control the panel DRIVES, and it has to
+/// know what shape it is driving. "Which key" is an enumeration - All, then one
+/// entry per live key - not a quantity, so a slider was wrong twice over: it
+/// offered a range instead of a set, and its range was the declared ceiling
+/// rather than the keys that exist. The pill the kit already renders for a
+/// choice is the shape, and the catalog trims its options to the live count.
+///
+/// So the marker on an `#int` is now IGNORED rather than an error, exactly like
+/// the marker on any other kind - the same cost a mistyped `pick=` pays.
+///
+/// One per shader, first in the source wins: there is one active handle.
+static inline NSString *
+MirageSurfaceActiveKeyControlForSource(NSString *source) {
+  // `choice` over `int`: a #choice is delivered to the shader as an integer.
+  return MirageSurfacePreviewControlForSource(
+      source, MirageSurfacePreviewKindActiveKey, @"choice", @"int");
+}
+
+/// Every uniform the Color panel OWNS - the union of the two markers - so the
+/// lane catalog can leave them out and the render can ignore anything an older
+/// project stored for them.
+///
+/// This is the whole of "panel-owned" as far as the rest of the code is
+/// concerned: a name in here has no row, no keyframes and no stored value, and
+/// whatever it reads is whatever the panel is pushing at that moment.
+static inline NSSet<NSString *> *
+MirageSurfacePreviewOwnedKeys(NSString *source) {
+  NSMutableSet<NSString *> *out = [NSMutableSet set];
+  NSString *selection = MirageSurfaceSelectionToggleForSource(source);
+  if (selection.length)
+    [out addObject:selection];
+  NSString *activeKey = MirageSurfaceActiveKeyControlForSource(source);
+  if (activeKey.length)
+    [out addObject:activeKey];
+  return out;
+}
+
 /// The puck each control names, keyed by uniform name, whether or not the
 /// control also declares a `surface=`.
 ///

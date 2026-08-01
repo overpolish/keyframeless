@@ -12138,6 +12138,90 @@
           }
         }
       }
+    },
+    "Show Selection": {
+      "comment": "Color panel button that shows the shader's selection - its matte - instead of the graded picture.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auswahl anzeigen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar selección"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher la sélection"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択範囲を表示"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택 영역 표시"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示选区"
+          }
+        }
+      }
+    },
+    "Show this shader's selection instead of the graded picture.": {
+      "comment": "Tooltip for the Color panel's show-selection toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt die Auswahl dieses Shaders anstelle des bearbeiteten Bildes."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra la selección de este shader en lugar de la imagen ya corregida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiche la sélection de ce shader au lieu de l'image étalonnée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グレーディング後の映像ではなく、このシェーダーの選択範囲を表示します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보정된 화면 대신 이 셰이더의 선택 영역을 표시합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示该着色器的选区，而不是调色后的画面。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

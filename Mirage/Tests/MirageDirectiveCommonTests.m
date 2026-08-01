@@ -1318,6 +1318,173 @@ int main(void) {
                 MirageSlotBudgetKindNone &&
             budgetColors == 4 && budgetScalars == 3,
         @"two groups each count at their own max");
+
+    // `preview=selection`: which switch the Color panel puts beside Before and
+    // Split.
+    KKRequire(MirageParseSurfacePreview(@" label=\"Show Selection\" "
+                                        @"preview=selection") ==
+                  MirageSurfacePreviewKindSelection,
+              @"the selection marker parses");
+    KKRequire(MirageParseSurfacePreview(@" preview=matte") ==
+                  MirageSurfacePreviewKindNone,
+              @"an unrecognised preview value claims nothing");
+    KKRequire(MirageParseSurfacePreview(@" label=\"Show Selection\"") ==
+                  MirageSurfacePreviewKindNone,
+              @"and no marker at all claims nothing");
+
+    NSString *markedSource = @"// #float label=\"Amount\" default=1\n"
+                             @"uniform float uAmount;\n"
+                             @"// #bool label=\"Show Selection\" default=false "
+                             @"preview=selection\n"
+                             @"uniform bool uShowSelection;\n";
+    KKRequire([MirageSurfaceSelectionToggleForSource(markedSource)
+                  isEqualToString:@"uShowSelection"],
+              @"the lookup finds the marked switch's uniform");
+
+    // The whole reason the marker exists: the panel must never guess from the
+    // wording, which is one of many and is translated in the templates' prose.
+    NSString *labelledOnly =
+        @"// #bool label=\"Show Selection\" default=false\n"
+        @"uniform bool uShowSelection;\n";
+    KKRequire(!MirageSurfaceSelectionToggleForSource(labelledOnly),
+              @"a label that says so is not a declaration");
+    KKRequire(!MirageSurfaceSelectionToggleForSource(@""),
+              @"and an empty source declares nothing");
+
+    // Pinned: the marker on anything but a boolean is IGNORED, the way a
+    // mistyped `pick=` is. The panel's button is two-state, so there is no
+    // reading of it on a float that says what pressing it would write.
+    NSString *onAFloat = @"// #float label=\"Amount\" min=0 max=1 default=1 "
+                         @"preview=selection\n"
+                         @"uniform float uAmount;\n";
+    KKRequire(!MirageSurfaceSelectionToggleForSource(onAFloat),
+              @"the marker on a non-bool control is ignored");
+    NSString *disagreeing = @"// #bool label=\"Show Selection\" "
+                            @"preview=selection\n"
+                            @"uniform float uShowSelection;\n";
+    KKRequire(!MirageSurfaceSelectionToggleForSource(disagreeing),
+              @"and a bool directive over a float uniform is ignored too");
+
+    // One panel, one button: the first marked switch in the source wins rather
+    // than the last one parsed.
+    NSString *twice = @"// #bool label=\"Key\" preview=selection\n"
+                      @"uniform bool uKey;\n"
+                      @"// #bool label=\"Matte\" preview=selection\n"
+                      @"uniform bool uMatte;\n";
+    KKRequire(
+        [MirageSurfaceSelectionToggleForSource(twice) isEqualToString:@"uKey"],
+        @"the first marked switch is the one the panel drives");
+
+    // A directive with no uniform after it resolves to nothing, matching every
+    // other attribute in this grammar.
+    NSString *dangling = @"// #bool label=\"Show Selection\" "
+                         @"preview=selection\n";
+    KKRequire(!MirageSurfaceSelectionToggleForSource(dangling),
+              @"a marker with no uniform under it resolves to nothing");
+
+    // `preview=active-key`: which key of a slotted qualifier the matte shows.
+    // The same nine questions, because it is the same grammar with a different
+    // word and a different kind - and the wrong-kind rule is the one worth
+    // pinning twice.
+    KKRequire(MirageParseSurfacePreview(@" label=\"Preview Key\" "
+                                        @"preview=active-key") ==
+                  MirageSurfacePreviewKindActiveKey,
+              @"the active-key marker parses");
+    KKRequire(MirageParseSurfacePreview(@" preview=activekey") ==
+                  MirageSurfacePreviewKindNone,
+              @"and the hyphen is part of the word");
+
+    NSString *keyedSource =
+        @"// #float label=\"Amount\" default=1\n"
+        @"uniform float uAmount;\n"
+        @"// #choice label=\"Preview Key\" "
+        @"options=\"All,1,2\" default=0 preview=active-key\n"
+        @"uniform int uPreviewKey;\n";
+    KKRequire([MirageSurfaceActiveKeyControlForSource(keyedSource)
+                  isEqualToString:@"uPreviewKey"],
+              @"the lookup finds the marked choice's uniform");
+    KKRequire(!MirageSurfaceSelectionToggleForSource(keyedSource),
+              @"and the two markers do not answer for each other");
+
+    NSString *keyLabelledOnly = @"// #choice label=\"Preview Key\" "
+                                @"options=\"All,1,2\" default=0\n"
+                                @"uniform int uPreviewKey;\n";
+    KKRequire(!MirageSurfaceActiveKeyControlForSource(keyLabelledOnly),
+              @"a label that says so is not a declaration");
+    KKRequire(!MirageSurfaceActiveKeyControlForSource(@""),
+              @"and an empty source declares nothing");
+
+    // A CHOICE and nothing else. "Which key" is a set, not a quantity: the
+    // panel drives a pill whose options the catalog trims to the live instance
+    // count, and there is no reading of the marker on a slider that says how
+    // many pills to draw. So an #int now costs exactly what a mistyped `pick=`
+    // costs - the feature quietly does not appear.
+    NSString *keyOnAnInt = @"// #int label=\"Preview Key\" min=0 max=6 "
+                           @"preview=active-key\n"
+                           @"uniform int uPreviewKey;\n";
+    KKRequire(!MirageSurfaceActiveKeyControlForSource(keyOnAnInt),
+              @"the marker on an #int is ignored - the pill is the shape");
+    NSString *keyOnABool = @"// #bool label=\"Preview Key\" "
+                           @"preview=active-key\n"
+                           @"uniform bool uPreviewKey;\n";
+    KKRequire(!MirageSurfaceActiveKeyControlForSource(keyOnABool),
+              @"and so is the marker on a switch");
+    // The pair still has to agree, and for a choice the pair is `#choice` over
+    // a `uniform int` - a choice IS delivered to the shader as an integer.
+    NSString *keyDisagreeing = @"// #choice label=\"Preview Key\" "
+                               @"options=\"All,1\" preview=active-key\n"
+                               @"uniform float uPreviewKey;\n";
+    KKRequire(!MirageSurfaceActiveKeyControlForSource(keyDisagreeing),
+              @"a choice directive over a float uniform is ignored too");
+
+    // One panel, one active handle: the first marked control wins.
+    NSString *keyTwice = @"// #choice label=\"Key\" options=\"All,1\" "
+                         @"preview=active-key\n"
+                         @"uniform int uKey;\n"
+                         @"// #choice label=\"Other\" options=\"All,1\" "
+                         @"preview=active-key\n"
+                         @"uniform int uOther;\n";
+    KKRequire([MirageSurfaceActiveKeyControlForSource(keyTwice)
+                  isEqualToString:@"uKey"],
+              @"the first marked choice is the one the panel drives");
+
+    NSString *keyDangling = @"// #choice label=\"Preview Key\" "
+                            @"options=\"All,1\" preview=active-key\n";
+    KKRequire(!MirageSurfaceActiveKeyControlForSource(keyDangling),
+              @"a marker with no uniform under it resolves to nothing");
+
+    // Both markers together are what the catalog leaves out of the lane set and
+    // the render ignores any stored value for. The union, so one lookup answers
+    // "is this control the panel's".
+    NSString *markedPair =
+        @"// #bool label=\"Show Selection\" preview=selection\n"
+        @"uniform bool uShowSelection;\n"
+        @"// #choice label=\"Preview Key\" options=\"All,1\" "
+        @"preview=active-key\n"
+        @"uniform int uPreviewKey;\n"
+        @"// #float label=\"Amount\" default=1\n"
+        @"uniform float uAmount;\n";
+    NSSet<NSString *> *owned = MirageSurfacePreviewOwnedKeys(markedPair);
+    KKRequire(owned.count == 2 && [owned containsObject:@"uShowSelection"] &&
+                  [owned containsObject:@"uPreviewKey"],
+              @"markedPair marked uniforms are panel-owned");
+    KKRequire(![owned containsObject:@"uAmount"],
+              @"and an ordinary control is not");
+
+    // A shader declaring neither owns nothing, which is what makes every
+    // template written before this feature behave exactly as it did: no lane is
+    // dropped and no stored value is ignored.
+    KKRequire(MirageSurfacePreviewOwnedKeys(
+                  @"// #float label=\"Amount\"\nuniform float uAmount;\n")
+                      .count == 0,
+              @"a shader with no markers owns nothing");
+    KKRequire(MirageSurfacePreviewOwnedKeys(@"").count == 0,
+              @"and neither does an empty source");
+
+    // A marker on the wrong kind is ignored here too, so a typo cannot silently
+    // delete a real control's row.
+    KKRequire(MirageSurfacePreviewOwnedKeys(onAFloat).count == 0,
+              @"a mistyped marker claims no control");
   }
   return 0;
 }

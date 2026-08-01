@@ -29,7 +29,7 @@ static const unsigned short kEscapeKeyCode = 53;
 /// Remove an event monitor and forget it, tolerating one that was never
 /// installed. Six of them arm and disarm together, and a teardown that misses
 /// one leaves the panel eating clicks nobody armed it for.
-static void MirageDropMonitor(__strong id *slot) {
+void MirageDropMonitor(__strong id *slot) {
   if (!slot || !*slot)
     return;
   [NSEvent removeMonitor:*slot];
@@ -591,6 +591,11 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   // refreshed from here rather than from its own pass over both.
   [self _refreshSlotButtonsIn:timeline source:source];
   [self _refreshCompareButtons];
+  // Same pass, same two facts: whether the shader declares a selection switch
+  // and where that switch currently stands. Refreshed from here so an inspector
+  // checkbox, a keyframe or an undo moving the lane relights the button without
+  // anything having to notice that it did.
+  [self _refreshSelectionButtonIn:timeline source:source];
   [self _layoutHeaderButtons];
   // The in-well row is the one part of this panel whose PRESENCE moves the well
   // and the panel around it, so it is re-laid-out when its button set changes

@@ -902,6 +902,29 @@ MirageBuildAvailableLanesForSourceStamped(NSString *shaderSource,
   // the shader, in whatever group each one asks for.
   MirageAppendScalarLanes(lanes, shaderSource);
 
+  // Except the ones the Color panel owns. A `preview=` control is SESSION
+  // STATE - what you are looking at this minute - so it gets no row, no
+  // keyframes and nothing in the blob, exactly like Before and Split. Dropped
+  // here rather than never built, so the one rule lives beside the build it
+  // qualifies instead of inside the scalar walk that knows nothing about the
+  // panel.
+  //
+  // The uniform is still DECLARED, so it still has a pool slot: the shader
+  // reads its own `default=` everywhere nobody is driving it (Final Cut's
+  // viewer, always) and the panel's live override in the preview it is driving.
+  // Unconditional - the prototype builds want this too, since "what controls
+  // does this source offer the user" has the same answer with or without a
+  // timeline.
+  NSSet<NSString *> *panelOwned = MirageSurfacePreviewOwnedKeys(shaderSource);
+  if (panelOwned.count) {
+    NSMutableArray<KKLane *> *kept =
+        [NSMutableArray arrayWithCapacity:lanes.count];
+    for (KKLane *l in lanes)
+      if (!l.key.length || ![panelOwned containsObject:l.key])
+        [kept addObject:l];
+    [lanes setArray:kept];
+  }
+
   // Dynamic audio bindings (`// #audio`): a dropdown of Sonar's published
   // analyses per declared spectrum uniform.
   MirageAppendAudioLanes(lanes, shaderSource, tickets);

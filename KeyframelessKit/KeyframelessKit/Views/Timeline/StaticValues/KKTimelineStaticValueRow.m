@@ -1718,6 +1718,11 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
       } else {
         [_codeEditor applyExternalText:lane.codeString ?: @""];
       }
+      // The save-bar name too. Loading a template rewrites BOTH the code and
+      // the name it is saved under, and without this the field kept whatever
+      // name the row was built with - so switching templates left the previous
+      // one's name sitting over the new one's code.
+      _codeEditor.saveName = lane.codeSaveName ?: @"";
     }
     _locked = lane.locked;
     self.alphaValue = _locked ? 0.5 : 1.0;

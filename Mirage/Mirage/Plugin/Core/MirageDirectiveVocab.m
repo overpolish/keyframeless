@@ -172,6 +172,18 @@ MirageDirectiveAttributeKeys(void) {
             @"such as a contrast pivot. Independent of surface=: a control can "
             @"take the eyedropper without being on the puck.",
             @"pick="),
+          E(@"preview", @"preview=",
+            @"Hand this control to the Color panel as SESSION STATE: no "
+            @"inspector row, no keyframes, nothing saved. preview=selection "
+            @"marks a #bool as the switch that shows this shader's selection "
+            @"(the matte) instead of the graded result - the panel puts it "
+            @"beside Before and Split. preview=active-key marks a #choice that "
+            @"says WHICH key the matte is about (option 0 = all, n = the nth "
+            @"instance); the panel feeds it the handle you last touched, so "
+            @"you never set it. Everywhere the panel is not driving them, "
+            @"including Final Cut's viewer, they read your default= - so "
+            @"declare them off. First one declared wins.",
+            @"preview="),
           E(@"ring", @"ring=",
             @"#color-surface: what the circle's outline paints - plain, light "
             @"or hue. It doubles as the scope, so pick the one your axes are "
@@ -337,7 +349,9 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"hue",
       @"saturation",
       @"luma",
-      @"luma-linear" // pick=
+      @"luma-linear", // pick=
+      @"selection",   // preview=
+      @"active-key"
     ]];
   });
   return v;
@@ -874,6 +888,23 @@ MirageValueEnumForKey(NSString *key) {
             @"luma-linear"),
           E(@"color", @"color",
             @"The sampled colour itself, into a #color swatch.", @"color"),
+        ],
+        kVAR);
+  if ([k isEqualToString:@"preview"])
+    return Colored(
+        @[
+          E(@"selection", @"selection",
+            @"This #bool shows the selection - the matte - instead of the "
+            @"graded result. Panel session state: no row, no keyframes, "
+            @"nothing saved. The Color panel offers it beside Before and "
+            @"Split.",
+            @"selection"),
+          E(@"active-key", @"active-key",
+            @"This #choice says WHICH key the selection shows: option 0 for "
+            @"all of them, option n for the nth instance of the repeatable "
+            @"group. Panel session state with no row - the Color panel feeds "
+            @"it the handle you last touched, so the matte follows the puck.",
+            @"active-key"),
         ],
         kVAR);
   if ([k isEqualToString:@"body"])

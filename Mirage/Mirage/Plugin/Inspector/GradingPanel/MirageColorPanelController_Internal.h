@@ -27,6 +27,11 @@ FOUNDATION_EXPORT BOOL MirageResponseBelongsToPuck(
     MirageSurfaceResponse r, NSString *_Nullable puckName);
 FOUNDATION_EXPORT KKMiniViewerView *_Nullable MirageFindMiniViewer(
     NSView *_Nullable root);
+/// Remove an event monitor and forget it, tolerating one that was never
+/// installed. Defined in +Picking.m, which owns most of them - the keyboard
+/// shortcuts in the core file arm and disarm their pair the same way, and a
+/// second copy of three lines would only be a second thing to keep in step.
+FOUNDATION_EXPORT void MirageDropMonitor(__strong id _Nullable *_Nullable slot);
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -110,6 +115,23 @@ NS_ASSUME_NONNULL_BEGIN
   /// frame to compare against.
   NSButton *_splitButton;
   _MirageFirstMouseButton *_beforeButton;
+  /// The shader's `preview=selection` switch, in the same cluster and behaving
+  /// exactly like its two neighbours: it drives the preview and writes nothing.
+  /// Hidden entirely for a shader that declares no such switch.
+  NSButton *_selectionButton;
+  /// Whether the matte is showing, for THIS panel session. Not a lane and not
+  /// persisted - it says what is on screen right now, the way
+  /// `compareSplitEnabled` does, and it resets when the popover closes.
+  BOOL _showSelectionActive;
+  /// B, S and M, watched LOCALLY only - a global monitor cannot consume, and a
+  /// shortcut FCP also acts on is worse than none. The inspector's
+  /// -miniGrabsKeyFocusOnClick is what makes the local one see them at all.
+  id _shortcutMonitor;
+  /// YES while the B key - rather than the mouse - is holding the bypass on.
+  /// The key-up that would release it can be delivered to another application,
+  /// so this is what lets every teardown path drop a bypass the keyboard put on
+  /// without also cancelling one the mouse is still holding.
+  BOOL _bypassHeldByKey;
   /// Armed: the next click in the mini viewer picks the reference patch.
   BOOL _picking;
   /// What the next picked patch is declared to be. An ivar rather than a
@@ -158,14 +180,45 @@ NS_ASSUME_NONNULL_BEGIN
   __weak KKMiniViewerView *_measuredMini;
   NSTimeInterval _lastSampleTime;
   BOOL _samplePending;
+  /// When the previous puck-drag tick started, so the log reports the rate the
+  /// gesture is actually managing rather than only the cost of one write.
+  /// The timeline the LAST tick of the open drag computed, held until the drag
+  /// ends and it becomes the gesture's one write. Nil when nothing has moved,
+  /// so a drag that never left the spot commits nothing at all.
+  KKTimeline *_pendingPuckCommit;
+  /// What that same tick would have committed, keyed by lane. Read by
+  /// -_valuesForLane: so the readout, the derive and the preview are all
+  /// describing the position under the cursor rather than the one the timeline
+  /// still holds. Dropped with the renderer's overrides when the drag ends.
+  NSDictionary<NSString *, NSArray<NSNumber *> *> *_liveDragValues;
+  /// The preview overrides as they currently stand in the renderer - the key
+  /// number, whether the matte is showing, and the fraction they were keyed at.
+  /// Nil for "nothing pushed".
+  ///
+  /// Not a cache of a value that lives elsewhere: it is the record of what was
+  /// asserted, and it exists so the assert can be a no-op when nothing moved.
+  /// Pushing sets the preview needing display, and the push site runs on every
+  /// sampled frame - which is itself driven by frames - so an unconditional
+  /// push would be a redraw loop that never settles.
+  NSNumber *_pushedActiveKey;
+  BOOL _pushedSelection;
+  double _pushedActiveKeyFraction;
 }
 
 - (void)_showIfPopoverOpen;
 - (void)_showIfPopoverOpenAttempt:(NSInteger)attempt;
 - (BOOL)_resolveSurfaceEnabledFromLanes;
-- (void)_toggleCompareSplit:(id)sender;
+- (void)_toggleCompareSplit:(nullable id)sender;
 - (void)_setCompareBypass:(BOOL)held;
 - (void)_refreshCompareButtons;
+- (void)_toggleShowSelection:(nullable id)sender;
+- (BOOL)_declaresSelectionToggleIn:(NSString *)source;
+- (void)_refreshSelectionButtonIn:(nullable KKTimeline *)timeline
+                           source:(NSString *)source;
+- (void)_installShortcutMonitors;
+- (void)_dropShortcutMonitors;
+- (void)_releaseKeyBypass;
+- (BOOL)_handleShortcutEvent:(NSEvent *)event;
 - (NSSet<NSString *> *)_drivableKeysIn:(KKTimeline *)timeline
                               fraction:(double)frac;
 - (double)_editFraction;
@@ -242,6 +295,12 @@ NS_ASSUME_NONNULL_BEGIN
                                ring:(NSUInteger)ringIndex;
 - (void)_beginWriteGroup:(NSString *)reason;
 - (void)_endWriteGroup:(NSString *)reason;
+- (void)_pushLivePreviewValues:
+    (NSDictionary<NSString *, NSArray<NSNumber *> *> *)values;
+- (void)_clearLivePreviewValues;
+- (void)_pushPreviewOverrides;
+- (NSInteger)_activeKeyNumber;
+- (void)_redrawPreview;
 - (void)_beginPuckDrag:(NSUInteger)puckIndex ring:(NSUInteger)ringIndex;
 - (void)_endPuckDragReason:(NSString *)reason;
 - (void)_endPuckDragReason:(NSString *)reason keepingRing:(NSUInteger)keepRing;
@@ -290,7 +349,7 @@ NS_ASSUME_NONNULL_BEGIN
 // What the readout says: the rows, the empty state and the declaration
 // sentence. Implemented in MirageColorPanelController+Readout.m.
 @interface MirageColorPanelController (Readout)
-- (void)_setReadoutRows:(NSArray<NSDictionary<NSString *, NSString *> *> *)rows;
+- (void)_setReadoutRows:(NSArray<NSDictionary<NSString *, id> *> *)rows;
 - (void)_setDeclarationSentence:(nullable NSString *)sentence;
 - (void)_refreshReadout;
 @end

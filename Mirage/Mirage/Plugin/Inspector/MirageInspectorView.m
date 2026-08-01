@@ -158,6 +158,15 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     _miniViewerRenderer.timeline =
         self.basicLanesView.currentTimeline ?: timeline;
     self.miniViewerDelegate = _miniViewerRenderer;
+    // Let the popover mini take key focus on click, the same opt-in Canvas
+    // makes for its bare Delete. It is what puts this process's window in the
+    // key position, and therefore what lets the Color panel's B, S and M reach
+    // a LOCAL key monitor - the only kind that can return nil and stop FCP
+    // seeing the letter too. Without it the panel's shortcuts fired from an
+    // observe-only global monitor: the matte flipped AND FCP took the M as
+    // "add marker". Focus is held only while in the mini, so clicking back into
+    // FCP hands the keyboard straight back and host shortcuts keep working.
+    self.miniGrabsKeyFocusOnClick = YES;
     self.miniViewerDescriptorPath = MirageMiniViewerDescriptorPath;
     self.miniViewerRequestPath = MirageMiniViewerRequestPath;
     self.managePopoverSpotlightLabel = @"Speed";

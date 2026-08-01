@@ -75,6 +75,10 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
 
 - (void)_focusLeftPanel:(NSNotification *)note {
   [self _endPuckDragReason:@"the app resigned active"];
+  // The key-up that would release a keyboard-held bypass has just gone to
+  // another application, so releasing it here is the same fix, for the same
+  // reason, as ending the drag above.
+  [self _releaseKeyBypass];
 }
 
 - (void)_windowResignedKey:(NSNotification *)note {
@@ -196,6 +200,140 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
     self.onDragEnd();
 }
 
+/// Show the values this tick just wrote in the preview, the way a constants
+/// slider drag already does.
+///
+/// The mini viewer renders the shader IN PROCESS, reading each uniform through
+/// the renderer's -valuesForLabel:, which prefers a live override over the
+/// committed timeline. The puck's own write leaves through the host - the whole
+/// timeline as JSON plus a render nudge, once per tick - and the picture under
+/// the cursor should not be a statement about whether that round trip has
+/// landed. Additive: the write itself is untouched, and the override is dropped
+/// the moment the drag ends, so the committed timeline takes over again.
+///
+/// Pushed at the RENDERER's own edit fraction, not the panel's: the override is
+/// fraction-keyed and only answers when the two agree, and it is the renderer
+/// that will be asked at draw time.
+- (void)_pushLivePreviewValues:
+    (NSDictionary<NSString *, NSArray<NSNumber *> *> *)values {
+  KKMiniViewerRenderer *renderer =
+      (KKMiniViewerRenderer *)_lanesView.miniViewerDelegate;
+  if (![renderer isKindOfClass:[KKMiniViewerRenderer class]])
+    return;
+  double fraction = renderer.editFraction;
+  for (NSString *key in values)
+    [renderer setLiveValues:values[key] forLabel:key atFraction:fraction];
+  [self _redrawPreview];
+}
+
+/// Assert BOTH of the panel's preview overrides: whether the matte is showing,
+/// and which key it is about.
+///
+/// Overrides and nothing else. These two answer "what am I looking at", which
+/// changes on every click and is not a decision about the shot - so writing
+/// them would spend an undo entry per glance, and a project reopened tomorrow
+/// would come up showing a grey diagnostic instead of the shot. Neither has a
+/// lane to write to any more: the catalog leaves a `preview=` control out of
+/// the lane set entirely.
+///
+/// Which is also why nothing here checks that a lane EXISTS. The override
+/// channel is keyed by LABEL and consulted before any lane, and the shader
+/// model fills its uniform pool by walking the DECLARED uniforms - so a name
+/// with no lane still gets asked, still finds this override, and falls back to
+/// the author's `default=` when there is none. That fallback is what Final
+/// Cut's viewer renders, always: an override is mini-viewer-local, so the
+/// matte is a thing you see while you are grading and never a thing you ship.
+///
+/// One method for both, so every path that clears overrides has ONE call to
+/// make to put them back rather than a list to remember.
+///
+/// Idempotent: the record of what is asserted is compared first, because
+/// pushing marks the preview as needing display and this runs on every sampled
+/// frame - an unconditional push would be a redraw loop that never settles.
+- (void)_pushPreviewOverrides {
+  KKTimeline *timeline = _lanesView.currentTimeline;
+  if (!timeline)
+    return;
+  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *selectionKey = MirageSurfaceSelectionToggleForSource(source);
+  NSString *activeKey = MirageSurfaceActiveKeyControlForSource(source);
+  if (!selectionKey.length && !activeKey.length)
+    return;
+  KKMiniViewerRenderer *renderer =
+      (KKMiniViewerRenderer *)_lanesView.miniViewerDelegate;
+  double fraction = [renderer isKindOfClass:[KKMiniViewerRenderer class]]
+                        ? renderer.editFraction
+                        : 0.0;
+  NSInteger number = activeKey.length ? [self _activeKeyNumber] : 0;
+  BOOL showing = _showSelectionActive;
+  // The override is fraction-keyed and only answers when the renderer's own
+  // edit fraction agrees, so a playhead move needs a fresh push even at the
+  // same values - which is why the fraction is part of what "already asserted"
+  // means.
+  if (_pushedActiveKey && _pushedActiveKey.integerValue == number &&
+      _pushedSelection == showing &&
+      fabs(_pushedActiveKeyFraction - fraction) < 1e-9)
+    return;
+  _pushedActiveKey = @(number);
+  _pushedSelection = showing;
+  _pushedActiveKeyFraction = fraction;
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *push =
+      [NSMutableDictionary dictionary];
+  if (selectionKey.length)
+    push[selectionKey] = @[ @(showing ? 1.0 : 0.0) ];
+  if (activeKey.length)
+    push[activeKey] = @[ @(number) ];
+  [self _pushLivePreviewValues:push];
+}
+
+/// Which key the active handle belongs to: the instance's own NUMBER, or zero
+/// for a handle that is not a slot instance at all.
+///
+/// The number comes off the expanded puck entry, which carries the INSTANCE it
+/// was stamped from - not the handle's position in the puck array. Those two
+/// disagree the moment a group puts more than one handle on a key, which is
+/// exactly what Qualifier does: "Key {n}" and "Key {n} Adjust" are two pucks of
+/// the same instance, so the array runs 0,1,2,3 across two keys while the
+/// numbers run 1,1,2,2. Reading the index would have shown key 2's matte while
+/// dragging key 1's second handle.
+///
+/// Zero is also the honest answer for a shader with no `#slots` at all: the
+/// marker is pointless there, every handle is the whole shader, and "all keys"
+/// is what the matte already shows.
+- (NSInteger)_activeKeyNumber {
+  NSString *source =
+      [MiragePlugin shaderSourceFromTimeline:_lanesView.currentTimeline];
+  NSDictionary<NSString *, NSString *> *entry =
+      [self _activeSlotPuckInSource:source];
+  return entry[@"number"] ? entry[@"number"].integerValue : 0;
+}
+
+- (void)_clearLivePreviewValues {
+  _liveDragValues = nil;
+  // -clearLiveValues drops EVERY override, the active key's among them, so the
+  // record of what is asserted has to go with it. Without this the re-push at
+  // each clear site would find its own number already recorded and skip - the
+  // matte would fall back to the union for the rest of the session.
+  _pushedActiveKey = nil;
+  KKMiniViewerRenderer *renderer =
+      (KKMiniViewerRenderer *)_lanesView.miniViewerDelegate;
+  if (![renderer isKindOfClass:[KKMiniViewerRenderer class]])
+    return;
+  [renderer clearLiveValues];
+  [self _redrawPreview];
+}
+
+/// The preview is a PAUSED Metal view, so it holds its last frame until someone
+/// marks it. Asked for by name rather than relying on the renderer's own
+/// `canvas` back-reference, which is whichever view last called into the
+/// delegate.
+- (void)_redrawPreview {
+  KKMiniViewerView *mini =
+      _measuredMini ?: MirageFindMiniViewer(_popoverContentView);
+  [mini setNeedsDisplay:YES];
+  [mini setHandlesNeedDisplay];
+}
+
 - (void)_beginPuckDrag:(NSUInteger)puckIndex ring:(NSUInteger)ringIndex {
   // A drag whose mouse-up went to another application never reached
   // -_endPuckDrag, so the view can hand us a second begin with the first still
@@ -204,6 +342,13 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   // latched on purpose.
   [self _endPuckDragReason:@"lost mouse-up - a new drag began"
                keepingRing:ringIndex];
+  // Before the capture below, which reads through -_valuesForLane: and would
+  // otherwise seed this drag from an override the previous one left behind.
+  [self _clearLivePreviewValues];
+  // A pending commit cannot survive into a new drag: the end above wrote it,
+  // and anything still here would be a timeline computed from a base this drag
+  // has already moved on from.
+  _pendingPuckCommit = nil;
   KKTimeline *timeline = _lanesView.currentTimeline;
   NSString *ring = MirageRingLogName([self _ringAtIndex:ringIndex]);
   if (!timeline) {
@@ -232,17 +377,28 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
             (unsigned long)puckIndex);
   [self _beginWriteGroup:[NSString stringWithFormat:@"%@ puck %lu drag", ring,
                                                     (unsigned long)puckIndex]];
+  // AFTER the capture above, which is why the clear near the top of this method
+  // could not simply spare this one override: the capture reads through
+  // -_valuesForLane: and has to start from the committed timeline. Re-asserted
+  // here instead, in the same event, so the matte never shows a frame of the
+  // union - and this is also the path a click that CHANGES the active handle
+  // takes, since the view sets activePuck before it calls back.
+  [self _pushPreviewOverrides];
 }
 
 - (void)_endPuckDragReason:(NSString *)reason {
   [self _endPuckDragReason:reason keepingRing:NSNotFound];
 }
 
-/// End an in-progress puck drag exactly once, whatever ended it. Called from
-/// the view's own drag-ended callback, from a new drag beginning while this one
-/// is still marked active, from the app or the panel losing focus, and from
-/// teardown - so a begin always has a matching end and the undo group never
-/// leaks.
+/// End an in-progress puck drag exactly once, whatever ended it, and make the
+/// position it reached real. Called from the view's own drag-ended callback,
+/// from a new drag beginning while this one is still marked active, from the
+/// app or the panel losing focus, from a slot or eyedropper write arriving, and
+/// from teardown - so a begin always has a matching end, the undo group never
+/// leaks, and no route out of a drag can lose the grade.
+///
+/// This is the ONLY place the puck writes, which is why every one of those
+/// routes already comes through here rather than each having to remember.
 ///
 /// The circles are unlatched whether or not a group was open: closing the group
 /// and leaving a view following the cursor is the half-fix that lets a drag on
@@ -258,10 +414,36 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   KKLogInfo(@"[Surface] %@ puck %lu drag ending (%@)",
             MirageRingLogName([self _ringAtIndex:_puckDragRing]),
             (unsigned long)_puckDragIndex, reason);
+  // The gesture's one write, INSIDE the group the begin opened - so the drag is
+  // one step back, exactly as when every tick wrote. Nil means the puck was
+  // pressed and released without moving: nothing to persist, and writing the
+  // timeline it already holds would spend an undo entry and a render on a
+  // gesture that changed nothing.
+  KKTimeline *pending = _pendingPuckCommit;
+  _pendingPuckCommit = nil;
+  if (pending && self.onTimelineMutated)
+    self.onTimelineMutated(pending);
   [self _endWriteGroup:reason];
+  // Refreshed BEFORE the overrides are dropped, so the derive cannot read a
+  // timeline the commit has not reached yet: the host write and the inspector's
+  // own -applyTimeline: both run inline above, so by now they agree, but a puck
+  // that springs to centre for one tick is the failure this ordering rules out
+  // rather than relies on.
   // Only while there is still a panel to refresh: this runs from -dealloc too.
   if (_panel.isVisible)
     [self _refreshPuck];
+  // Now the handover: the renderer reads the committed timeline from here on,
+  // which holds the numbers the overrides were carrying. Nothing can draw
+  // between the commit and this - both happen in the one event that ended the
+  // drag - so the preview never shows a frame of the pre-drag grade.
+  [self _clearLivePreviewValues];
+  // The handover above returns the DRAG'S values to the timeline, which holds
+  // them. It does not return the active key, which the timeline never held and
+  // never will - so that one override is re-asserted rather than handed back.
+  // Every route out of a drag comes through here, including the slot add, the
+  // slot remove and the eyedropper's write, so this is the one re-push those
+  // three need.
+  [self _pushPreviewOverrides];
 }
 
 // Write the controls the puck's POSITION implies.
@@ -343,6 +525,11 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   double distance = MIN(1.0, hypot(position.x, position.y));
   double bearing = atan2(position.y, position.x) * 180.0 / M_PI;
   NSMutableArray<KKLane *> *lanes = [timeline.lanes mutableCopy];
+  // Every lane this tick writes, for the preview. A puck moves the whole set of
+  // controls its handle is mapped to, so the picture only tracks the drag if
+  // all of them are pushed - one lane's worth would show a half-applied grade.
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *live =
+      [NSMutableDictionary dictionary];
   BOOL changed = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {
     KKLane *lane = lanes[i];
@@ -439,14 +626,36 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
       values[0] = @(next);
     }
     lanes[i] = KKLaneBySettingValuesAtIndex(lane, idx, values);
+    live[lane.key] = values;
     changed = YES;
   }
   if (!changed)
     return;
   KKTimeline *updated = [timeline copy];
   updated.lanes = lanes;
-  if (self.onTimelineMutated)
-    self.onTimelineMutated(updated);
+  // PREVIEW ONLY, per tick - the write waits for the mouse-up.
+  //
+  // The same bargain the constants sliders already strike, and for the same
+  // reason: a tick's write is the whole timeline as JSON plus a render nudge,
+  // through the host, on the main thread, and the picture the grade is judged
+  // by is rendered in THIS process from these very numbers. Paying for the
+  // round trip 60 times a second only bought a main viewer nobody is looking at
+  // while the puck is under the cursor.
+  //
+  // Safe to defer because the apply is ABSOLUTE: every tick recomputes each
+  // control from `_dragStartValues` and this position, never from the previous
+  // tick's result, so the last tick's timeline says everything all of them
+  // together would have. The base it recomputes from is stable for the same
+  // reason - with no write per tick, nothing echoes back into the lanes view
+  // mid-gesture, so `currentTimeline` stays the drag's starting point.
+  //
+  // The scope follows the preview for free: the sampler measures the preview's
+  // own processed texture on its command buffer's completion handler, already
+  // coalesced to kMinSampleInterval, so a fast drag cannot queue up a readback
+  // per tick.
+  _pendingPuckCommit = updated;
+  _liveDragValues = live;
+  [self _pushLivePreviewValues:live];
   [self _refreshReadout];
 }
 
@@ -537,6 +746,13 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
     circle.yAxisLive = yLive;
     circle.pucks = pucks;
   }
+  // The one place that catches everything else: this runs on every sampled
+  // frame while the panel is up, and on the panel showing, on every timeline
+  // apply, on -selectSlotInstance: (an undo putting a key back), and on both
+  // ends of the add/remove pair - which is every remaining way the active
+  // handle can change. Idempotent, so being the last statement of a method
+  // called sixty times a second costs a dictionary and a redraw request.
+  [self _pushPreviewOverrides];
   [self _refreshReadout];
 }
 
