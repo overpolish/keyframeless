@@ -8,6 +8,7 @@
 #import "MirageBrowserController.h"
 #import "MirageColorPanelController.h"
 #import "MirageInspectorView.h"
+#import "MirageMiniCompareControls.h"
 #import "MirageMiniViewerRenderer.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -21,6 +22,9 @@ NS_ASSUME_NONNULL_BEGIN
   MirageMiniViewerRenderer *_miniViewerRenderer;
   MirageBrowserController *_browserController;
   MirageColorPanelController *_colorPanelController;
+  /// Before / Split / Show Selection, on the mini viewer. Every template has
+  /// the preview, so unlike the panel this is built for all of them.
+  MirageMiniCompareControls *_compareControls;
   /// Where this clip starts in TIMELINE seconds (FCP's clock, timecode
   /// included), pushed from the render tick (the only place trims surface).
   /// Negative = not known yet.

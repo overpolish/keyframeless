@@ -629,9 +629,9 @@ Scoping is by `puck=`, which a `pick=` control may declare on its own without a 
 
 `pick=` works with or without a `surface=` mapping on the same control, and it never affects the puck layout. Use it where the control's value genuinely **is** a property of a colour in the frame - a hue to key, a mid-grey pivot, a light's tint. It is the wrong tool for a gate or a threshold that the click should fall inside: writing the clicked pixel's own saturation into a minimum-saturation control excludes half of what was just clicked.
 
-### Panel-owned preview controls: `preview=`
+### Preview-owned controls: `preview=`
 
-Two markers hand a control to the Color panel. A marked control is **session state, not a parameter**: it gets **no inspector row**, it is never keyframed, and nothing about it is written to the project. The shader declares the uniform so the panel has something to drive; the panel drives it straight into its own preview.
+Two markers hand a control to the inspector's preview. A marked control is **session state, not a parameter**: it gets **no inspector row**, it is never keyframed, and nothing about it is written to the project. The shader declares the uniform so the inspector has something to drive; it is driven straight into the mini viewer and nowhere else.
 
 ```glsl
 // #bool label="Show Selection" group={"Finish", "switch.2"} default=false preview=selection
@@ -641,13 +641,13 @@ uniform bool uShowSelection;
 uniform int uPreviewKey;
 ```
 
-`preview=selection` names the switch that shows the shader's **selection** - the matte a qualifier keys - instead of the graded result. The panel offers it as a third icon beside Before and Split with the shortcut **M**, because tuning a key means flicking it constantly.
+`preview=selection` names the switch that shows the shader's **selection** - the matte a qualifier keys - instead of the graded result. It appears as a third icon on the preview itself, beside Before and Split, with the shortcut **M**, because tuning a key means flicking it constantly. That row belongs to the mini viewer every template has, so the switch works in a plain filter with no `#color-surface` at all - a denoise, where before/after and the noise view are the whole job.
 
-`preview=active-key` names the control that says **which** key that matte is about: `0` for all of them, `n` for the nth instance of the repeatable group. You never touch it - the panel feeds it the handle you last touched, so the matte follows the puck you are holding. Declare it outside the `#slots` block; its `options=` exist to give the numbering meaning, not as a menu anyone sees.
+`preview=active-key` names the control that says **which** key that matte is about: `0` for all of them, `n` for the nth instance of the repeatable group. You never touch it - the Color panel feeds it the handle you last touched, so the matte follows the puck you are holding. Declare it outside the `#slots` block; its `options=` exist to give the numbering meaning, not as a menu anyone sees.
 
 **Why they are not parameters.** Both answer "what am I looking at right now", which is the question Before and Split answer, and those were never parameters either. As rows they cost three things that all read as bugs: a press spent an **undo entry**, so stepping back through a grade walked through every glance at the matte; the value **persisted**, so a project reopened weeks later came up showing a grey diagnostic instead of the shot; and the key one was a slider over a **ceiling** with nothing to do with how many keys were live.
 
-**What the shader sees when the panel is not driving it: your declared default** - in the mini preview and in Final Cut's viewer alike, because no lane exists to say otherwise. So author them **off** (`default=false`, option `0`) and the diagnostic never reaches a render. This also means the matte is a thing you see while grading and never a thing you ship.
+**What the shader sees when nothing is driving it: your declared default** - in the mini preview and in Final Cut's viewer alike, because no lane exists to say otherwise. So author them **off** (`default=false`, option `0`) and the diagnostic never reaches a render. This also means the matte is a thing you see while grading and never a thing you ship.
 
 Guard the key comparison against a **stale value** - the panel can only ever feed a live key, but a project made before this was session state may still carry an old stored one, and an out-of-range key would match nothing and show an empty matte:
 

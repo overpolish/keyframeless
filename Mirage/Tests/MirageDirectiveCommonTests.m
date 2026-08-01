@@ -1319,8 +1319,8 @@ int main(void) {
             budgetColors == 4 && budgetScalars == 3,
         @"two groups each count at their own max");
 
-    // `preview=selection`: which switch the Color panel puts beside Before and
-    // Split.
+    // `preview=selection`: which switch the preview's compare row puts beside
+    // Before and Split.
     KKRequire(MirageParseSurfacePreview(@" label=\"Show Selection\" "
                                         @"preview=selection") ==
                   MirageSurfacePreviewKindSelection,

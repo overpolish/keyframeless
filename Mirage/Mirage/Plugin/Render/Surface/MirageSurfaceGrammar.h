@@ -719,12 +719,19 @@ MirageSurfacePicksForSource(NSString *source) {
 // to say otherwise. So author them off - `default=false`, option 0 - and the
 // diagnostic never appears in a render.
 //
-// One of each per shader. A second declaration is ignored rather than rejected:
-// the panel has one button and one active handle, and the first control in the
-// source is the one it drives.
+// Where the switch appears: on the PREVIEW, in the row of icons that carries
+// Before and Split, which every template has - not in the Color panel, which
+// only a `#color-surface` shader gets. A denoise is nothing but its selection
+// and has no panel at all, so a marker the panel owned was dead text there.
+// The active key stays panel-fed: it follows the handle you are holding, and
+// handles are the panel's.
 //
-// The marker on the wrong KIND is ignored the way a mistyped `pick=` is: the
-// panel drives a specific widget from each, and there is no reading of
+// One of each per shader. A second declaration is ignored rather than rejected:
+// there is one button and one active handle, and the first control in the
+// source is the one they drive.
+//
+// The marker on the wrong KIND is ignored the way a mistyped `pick=` is: each
+// drives a specific widget, and there is no reading of
 // `preview=selection` on a float, or of `preview=active-key` on a colour, that
 // says what it would do.
 

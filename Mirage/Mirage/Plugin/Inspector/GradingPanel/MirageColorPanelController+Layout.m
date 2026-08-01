@@ -39,18 +39,6 @@ static const CGFloat kReadoutHeight = 56.0;
 /// boxes that happen to touch.
 static const CGFloat kRingGap = KKPaddingLG;
 
-/// A tooltip with the key that also works it, as " (B)".
-///
-/// Composed here rather than written into each localized sentence: the letter
-/// is the physical key, so it is the same in every language, and folding it
-/// into the translations would put seven copies of one keyboard fact in the
-/// catalog for a translator to keep in step.
-static NSString *MirageWithShortcut(NSString *tooltip, NSString *key) {
-  if (!tooltip.length || !key.length)
-    return tooltip;
-  return [NSString stringWithFormat:@"%@ (%@)", tooltip, key];
-}
-
 /// One circle's height, taken from what a single-ring panel has left after the
 /// header, the readout and the well's own inset.
 static CGFloat MirageRingCircleHeight(void) {
@@ -88,73 +76,6 @@ static CGFloat MiragePanelHeightForRingCount(NSUInteger count,
 /// Its own defaults field, and named for the panel rather than the plugin, so
 /// adding a second floating panel later cannot inherit this one's position.
 static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
-
-@implementation _MirageFirstMouseButton {
-  BOOL _holding;
-  id _holdMonitor;
-  id _holdGlobalMonitor;
-}
-
-- (BOOL)acceptsFirstMouse:(NSEvent *)event {
-  return YES;
-}
-
-// Press-and-hold, because "show me it without the effect" is a comparison you
-// make WHILE looking - the release matters as much as the press, and an
-// action-on-click button has no release to offer.
-//
-// The release is caught with monitors rather than -mouseUp:, for the same
-// reason the colour circle's drag is: this panel never becomes key, so the up
-// routinely arrives forwarded or global and the button's own tracking never
-// sees it. A missed release would leave the preview stuck showing the ungraded
-// frame.
-- (void)mouseDown:(NSEvent *)event {
-  if (!self.onHoldChanged) {
-    [super mouseDown:event];
-    return;
-  }
-  if (_holding)
-    return;
-  _holding = YES;
-  self.onHoldChanged(YES);
-  __weak _MirageFirstMouseButton *weak = self;
-  _holdMonitor =
-      [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp
-                                            handler:^NSEvent *(NSEvent *e) {
-                                              [weak _endHold];
-                                              return e;
-                                            }];
-  _holdGlobalMonitor =
-      [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp
-                                             handler:^(NSEvent *e) {
-                                               [weak _endHold];
-                                             }];
-}
-
-- (void)_endHold {
-  [self _removeHoldMonitors];
-  if (!_holding)
-    return;
-  _holding = NO;
-  if (self.onHoldChanged)
-    self.onHoldChanged(NO);
-}
-
-- (void)_removeHoldMonitors {
-  if (_holdMonitor) {
-    [NSEvent removeMonitor:_holdMonitor];
-    _holdMonitor = nil;
-  }
-  if (_holdGlobalMonitor) {
-    [NSEvent removeMonitor:_holdGlobalMonitor];
-    _holdGlobalMonitor = nil;
-  }
-}
-
-- (void)dealloc {
-  [self _removeHoldMonitors];
-}
-@end
 
 @implementation MirageColorPanelController (Layout)
 
@@ -291,62 +212,41 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
                                        shaderSourceFromTimeline:timeline]];
 }
 
-/// A text button for the header strip, right-aligned and sized to its own
-/// title.
+/// A panel button in the shared chrome style, right-aligned within its strip.
+/// Pass a nil `symbol` for the text buttons, whose title is set by the caller.
 ///
 /// Laid out by `-_layoutHeaderButtons`, not here: the write picker's title
 /// comes from whichever control the current shader points at it, so both widths
-/// change whenever the source does. An icon button, for the header strip or the
-/// in-well row. The name is not drawn, but it is what VoiceOver reads, so it
-/// stays localized rather than becoming a symbol name.
+/// change whenever the source does.
 - (_MirageFirstMouseButton *)_iconButtonNamed:(NSString *)symbol
                                         label:(NSString *)label
                                        action:(SEL)action {
-  _MirageFirstMouseButton *button = [self _headerButtonWithAction:action];
-  button.image = [NSImage imageWithSystemSymbolName:symbol
-                           accessibilityDescription:label];
-  button.imagePosition = NSImageOnly;
-  button.accessibilityLabel = label;
-  return button;
-}
-
-- (_MirageFirstMouseButton *)_headerButtonWithAction:(SEL)action {
   _MirageFirstMouseButton *button =
-      [_MirageFirstMouseButton buttonWithTitle:@"" target:self action:action];
-  button.bezelStyle = NSBezelStyleAccessoryBarAction;
-  button.bordered = NO;
-  button.font = [NSFont systemFontOfSize:kReadoutFontSize];
-  button.contentTintColor = NSColor.secondaryLabelColor;
+      MirageMakeIconButton(symbol, label, self, action);
   button.autoresizingMask = NSViewMinXMargin;
   return button;
 }
 
-/// Lay out the header strip: comparison icons follow the title on the LEFT, the
-/// samplers stay right-aligned.
+- (_MirageFirstMouseButton *)_headerButtonWithAction:(SEL)action {
+  return [self _iconButtonNamed:nil label:nil action:action];
+}
+
+/// Lay out the header strip: the samplers, right-aligned.
 ///
-/// The split is by what the buttons mean, not by what they look like. Before
-/// and Split are view controls - they change nothing about the grade and read
-/// the same in every shader, so an icon carries them and they sit with the
-/// title. The samplers write parameters and are named for the control they
-/// write, which changes with the source, so they keep their text and the right
-/// edge.
+/// They write parameters and are named for the control they write, which
+/// changes with the source, so they keep their text and the right edge.
 ///
-/// The three buttons that act on ONE HANDLE are not here at all: they moved
-/// into the well, above the ring they aim at (`-_layoutWellRowInRect:`). What
-/// stays is what is about the frame or about the shader as a whole.
+/// Nothing else is here. The three buttons that act on ONE HANDLE moved into
+/// the well, above the ring they aim at (`-_layoutWellRowInRect:`), and the
+/// three that act on the PREVIEW moved onto the preview itself - Before, Split
+/// and Show Selection belong to the mini viewer every template has, not to the
+/// panel only a `#color-surface` one gets.
 ///
 /// Re-run on every title change, since a text button's width is its content and
 /// a stale frame would leave the pair overlapping or adrift.
 - (void)_layoutHeaderButtons {
   CGFloat height = 18.0;
   CGFloat y = (kHeaderHeight - height) * 0.5;
-  CGFloat left = _titleRightEdge + KKPaddingMD;
-  for (NSButton *button in @[ _beforeButton, _splitButton, _selectionButton ]) {
-    if (!button || button.hidden)
-      continue;
-    button.frame = NSMakeRect(left, y, height, height);
-    left += height + KKPaddingXS;
-  }
   CGFloat right = kPanelWidth - KKPaddingMD;
   for (NSButton *button in @[ _pickButton, _pickColorButton ]) {
     if (!button || button.hidden)
@@ -394,13 +294,9 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
   title.textColor = NSColor.secondaryLabelColor;
   NSSize titleSize = title.intrinsicContentSize;
   CGFloat titleHeight = ceil(titleSize.height);
-  // Sized to the word, not the strip: the comparison icons sit immediately
-  // after it, so the title's right edge is a layout anchor rather than free
-  // space.
   title.frame = NSMakeRect(KKPaddingMD + 2, (kHeaderHeight - titleHeight) * 0.5,
                            ceil(titleSize.width), titleHeight);
   [header addSubview:title];
-  _titleRightEdge = NSMaxX(title.frame);
 
   // Both pickers are TEXT, not dropper icons. Two droppers side by side were
   // indistinguishable and neither said what it did - and they do opposite
@@ -426,62 +322,6 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
   [header addSubview:pickColor];
   _pickColorButton = pickColor;
 
-  // Before/after, in the same text treatment as the pickers. Both are pure
-  // preview state - they change what the mini viewer DRAWS and nothing else, so
-  // neither writes a parameter, costs an undo step, or can reach a render.
-  __weak typeof(self) weakHeader = self;
-  NSButton *split = [self
-      _iconButtonNamed:@"rectangle.split.2x1"
-                 label:RLoc(@"Split", @"Color panel button that splits the "
-                                      @"preview: the graded frame on the "
-                                      @"left, the original on the right.")
-                action:@selector(_toggleCompareSplit:)];
-  split.toolTip = MirageWithShortcut(
-      RLoc(@"Show the graded frame beside the original. Drag the divider in "
-           @"the preview to move the split.",
-           @"Tooltip for the Color panel's split-preview toggle."),
-      @"S");
-  split.hidden = YES;
-  [header addSubview:split];
-  _splitButton = split;
-
-  _MirageFirstMouseButton *before = [self
-      _iconButtonNamed:@"eye"
-                 label:RLoc(@"Before", @"Color panel button held down to see "
-                                       @"the frame without the effect "
-                                       @"applied.")
-                action:NULL];
-  before.toolTip = MirageWithShortcut(
-      RLoc(@"Hold to see the frame without this effect.",
-           @"Tooltip for the Color panel's hold-to-bypass button."),
-      @"B");
-  before.hidden = YES;
-  before.onHoldChanged = ^(BOOL held) {
-    [weakHeader _setCompareBypass:held];
-  };
-  [header addSubview:before];
-  _beforeButton = before;
-
-  // The shader's own selection switch, in the cluster because that is where the
-  // hand already is: keying is a loop of look at the matte, move a slider, look
-  // again. It is the one button here that writes a control, so it is present
-  // only for a shader that declares `preview=selection` and it tints from the
-  // LANE rather than from a flag of its own - the inspector's checkbox and an
-  // undo move the same value, and a remembered state would disagree with both.
-  NSButton *selection = [self
-      _iconButtonNamed:@"circle.dashed"
-                 label:RLoc(@"Show Selection",
-                            @"Color panel button that shows the shader's "
-                            @"selection - its matte - instead of the graded "
-                            @"picture.")
-                action:@selector(_toggleShowSelection:)];
-  selection.toolTip = MirageWithShortcut(
-      RLoc(@"Show this shader's selection instead of the graded picture.",
-           @"Tooltip for the Color panel's show-selection toggle."),
-      @"M");
-  selection.hidden = YES;
-  [header addSubview:selection];
-  _selectionButton = selection;
   [body addSubview:header];
 
   // The readout of what the puck just changed, in the shared scroll container

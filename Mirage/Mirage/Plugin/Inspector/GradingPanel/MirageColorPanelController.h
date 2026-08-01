@@ -32,6 +32,28 @@ NS_ASSUME_NONNULL_BEGIN
 /// popover after launch.
 @property(nonatomic) BOOL surfaceEnabled;
 
+/// Whether the shader's selection - its matte - is showing in the preview.
+///
+/// PUSHED IN from the compare row that lives on the mini viewer, which owns the
+/// switch: every template has a preview, only a `#color-surface` one has this
+/// panel, and the switch matters most on the templates that never had it (a
+/// denoise is nothing but its selection). The panel holds a copy because the
+/// preview's overrides are asserted in ONE push that also carries the active
+/// key the pucks decide - see -reassertPreviewOverrides.
+@property(nonatomic) BOOL showSelectionActive;
+
+/// Assert the preview's overrides again. Idempotent, and cheap when nothing
+/// moved: the record of what is already asserted is compared first.
+///
+/// Called when something the overrides are keyed against moves without either
+/// of their values moving - the playhead above all, since the override only
+/// answers at the fraction it was pushed for.
+- (void)reassertPreviewOverrides;
+
+/// YES while a puck drag or a write group is open, so a bare-letter shortcut
+/// somewhere else in the inspector knows to keep its hands off the keyboard.
+@property(nonatomic, readonly) BOOL gestureInFlight;
+
 /// Persist a timeline the puck has edited, and bracket a drag so its burst of
 /// writes collapses into ONE undo entry. Wired by the inspector to the same
 /// chain the mini-viewer handles use.

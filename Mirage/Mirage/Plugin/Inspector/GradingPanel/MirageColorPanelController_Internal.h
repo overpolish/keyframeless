@@ -11,39 +11,22 @@
 
 #import "MirageColorPanelController.h"
 #import "MirageColorSurfaceProps.h"
+#import "MirageInspectorChrome.h"
 #import "MirageScopeSampler.h"
 #import "MirageSurfaceCircleView.h"
 #import "MirageSurfaceResponse.h"
 
 static const CGFloat kReadoutFontSize = 11.0;
 
-// Defined in +Readout.m, +PuckWrite.m and the core file respectively, and
-// exported rather than static because each of them is read from a category
-// that does not own it.
+// Defined in +Readout.m and +PuckWrite.m respectively, and exported rather than
+// static because each of them is read from a category that does not own it.
 FOUNDATION_EXPORT NSString *_Nullable MirageDeclarationSentence(
     MirageMemoryColor kind, NSPoint cast);
 FOUNDATION_EXPORT NSString *_Nonnull MirageReadoutPlaceholder(void);
 FOUNDATION_EXPORT BOOL MirageResponseBelongsToPuck(
     MirageSurfaceResponse r, NSString *_Nullable puckName);
-FOUNDATION_EXPORT KKMiniViewerView *_Nullable MirageFindMiniViewer(
-    NSView *_Nullable root);
-/// Remove an event monitor and forget it, tolerating one that was never
-/// installed. Defined in +Picking.m, which owns most of them - the keyboard
-/// shortcuts in the core file arm and disarm their pair the same way, and a
-/// second copy of three lines would only be a second thing to keep in step.
-FOUNDATION_EXPORT void MirageDropMonitor(__strong id _Nullable *_Nullable slot);
 
 NS_ASSUME_NONNULL_BEGIN
-
-/// A button that answers the first click, since the panel it sits in never
-/// becomes key: an ordinary NSButton spends that click asking for focus it
-/// cannot get, so the eyedropper would need pressing twice.
-@interface _MirageFirstMouseButton : NSButton
-/// Set to make this a press-and-hold button: called YES on the press and NO on
-/// the release, instead of firing an action once per click. Leave nil for the
-/// ordinary click behaviour every other header button wants.
-@property(nonatomic, copy, nullable) void (^onHoldChanged)(BOOL held);
-@end
 
 @interface MirageColorPanelController () {
 @package
@@ -90,9 +73,6 @@ NS_ASSUME_NONNULL_BEGIN
   KKPanelDragHandleView *_header;
   KKPaddedScrollView *_readoutScroll;
   NSStackView *_readoutStack;
-  /// Right edge of the panel title, which the comparison icons are laid out
-  /// from.
-  CGFloat _titleRightEdge;
   NSTextField *_readoutHint;
   NSButton *_pickButton;
   NSButton *_pickColorButton;
@@ -110,28 +90,15 @@ NS_ASSUME_NONNULL_BEGIN
   /// re-layout rather than a re-frame, while the refresh that computes it runs
   /// on every sampled frame. Starts at -1: no mask, not "all hidden".
   NSInteger _wellRowMask;
-  /// Before/after comparison, both driven straight into the mini viewer's own
-  /// session view state. Hidden whenever the preview reports it has no ungraded
-  /// frame to compare against.
-  NSButton *_splitButton;
-  _MirageFirstMouseButton *_beforeButton;
-  /// The shader's `preview=selection` switch, in the same cluster and behaving
-  /// exactly like its two neighbours: it drives the preview and writes nothing.
-  /// Hidden entirely for a shader that declares no such switch.
-  NSButton *_selectionButton;
-  /// Whether the matte is showing, for THIS panel session. Not a lane and not
+  /// Whether the matte is showing, for THIS popover session. Not a lane and not
   /// persisted - it says what is on screen right now, the way
   /// `compareSplitEnabled` does, and it resets when the popover closes.
+  ///
+  /// PUSHED IN, and owned by the mini viewer's compare row: the switch lives
+  /// with the preview, where every template has one, and the panel only
+  /// composes it with the active key (see -_pushPreviewOverrides, which asserts
+  /// both).
   BOOL _showSelectionActive;
-  /// B, S and M, watched LOCALLY only - a global monitor cannot consume, and a
-  /// shortcut FCP also acts on is worse than none. The inspector's
-  /// -miniGrabsKeyFocusOnClick is what makes the local one see them at all.
-  id _shortcutMonitor;
-  /// YES while the B key - rather than the mouse - is holding the bypass on.
-  /// The key-up that would release it can be delivered to another application,
-  /// so this is what lets every teardown path drop a bypass the keyboard put on
-  /// without also cancelling one the mouse is still holding.
-  BOOL _bypassHeldByKey;
   /// Armed: the next click in the mini viewer picks the reference patch.
   BOOL _picking;
   /// What the next picked patch is declared to be. An ivar rather than a
@@ -208,17 +175,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_showIfPopoverOpen;
 - (void)_showIfPopoverOpenAttempt:(NSInteger)attempt;
 - (BOOL)_resolveSurfaceEnabledFromLanes;
-- (void)_toggleCompareSplit:(nullable id)sender;
-- (void)_setCompareBypass:(BOOL)held;
-- (void)_refreshCompareButtons;
-- (void)_toggleShowSelection:(nullable id)sender;
-- (BOOL)_declaresSelectionToggleIn:(NSString *)source;
-- (void)_refreshSelectionButtonIn:(nullable KKTimeline *)timeline
-                           source:(NSString *)source;
-- (void)_installShortcutMonitors;
-- (void)_dropShortcutMonitors;
-- (void)_releaseKeyBypass;
-- (BOOL)_handleShortcutEvent:(NSEvent *)event;
 - (NSSet<NSString *> *)_drivableKeysIn:(KKTimeline *)timeline
                               fraction:(double)frac;
 - (double)_editFraction;
@@ -242,8 +198,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_applySurfaceSpecIfChanged:(NSString *)source;
 - (void)_pushSurfaceSpec;
 - (void)_resolveRingsFromLanes;
-- (_MirageFirstMouseButton *)_iconButtonNamed:(NSString *)symbol
-                                        label:(NSString *)label
+- (_MirageFirstMouseButton *)_iconButtonNamed:(nullable NSString *)symbol
+                                        label:(nullable NSString *)label
                                        action:(nullable SEL)action;
 - (_MirageFirstMouseButton *)_headerButtonWithAction:(SEL)action;
 - (void)_layoutHeaderButtons;

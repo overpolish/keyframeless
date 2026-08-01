@@ -75,10 +75,6 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
 
 - (void)_focusLeftPanel:(NSNotification *)note {
   [self _endPuckDragReason:@"the app resigned active"];
-  // The key-up that would release a keyboard-held bypass has just gone to
-  // another application, so releasing it here is the same fix, for the same
-  // reason, as ending the drag above.
-  [self _releaseKeyBypass];
 }
 
 - (void)_windowResignedKey:(NSNotification *)note {

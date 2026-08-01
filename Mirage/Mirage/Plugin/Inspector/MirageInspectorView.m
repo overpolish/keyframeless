@@ -224,6 +224,22 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
       if (s.onDragEnd)
         s.onDragEnd();
     };
+    // The compare row goes with the PREVIEW, not with the panel: a template
+    // with no `#color-surface` has no panel at all, and before/after is exactly
+    // what such a template (a denoise above all) is judged by. Its selection
+    // switch is asserted through the panel's one preview-override push, so the
+    // matte and the panel's active key can never contradict each other.
+    _compareControls = [[MirageMiniCompareControls alloc]
+        initWithLanesView:self.basicLanesView];
+    _compareControls.onSelectionChanged = ^(BOOL showing) {
+      __strong typeof(weak) s = weak;
+      if (s)
+        s->_colorPanelController.showSelectionActive = showing;
+    };
+    _compareControls.shortcutsSuppressed = ^BOOL {
+      __strong typeof(weak) s = weak;
+      return s ? s->_colorPanelController.gestureInFlight : NO;
+    };
     [self _bakeBuiltinThumbnails];
   }
   return self;
@@ -289,6 +305,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   [_browserController invalidate];
   [_colorPanelController invalidate];
+  [_compareControls invalidate];
 }
 
 // The code editor's save bar (a `codeSavable` lane) fired: persist the current
@@ -671,6 +688,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
       surfaceError == MirageColorSurfaceErrorNone;
   _colorPanelController.surfaceEnabled = wantsSurface;
   [_colorPanelController timelineDidChange];
+  // A recompile can add or drop `preview=selection` under an open popover, and
+  // the row's one shader-dependent button is a function of exactly that.
+  [_compareControls timelineDidChange];
   // Now that the refresh above has rebuilt the handles from the new registry,
   // the restored one exists and can be selected. Only an ADDITION gets here -
   // the panel's own +/- already place their selection, and a removal has
@@ -840,6 +860,12 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // to match the FCP render (frac * durSec); without it the preview crawls.
   _miniViewerRenderer.clipDurationSeconds = [self clipDurationSeconds];
   [self _pushAudioTimeToMiniViewer];
+  // The preview's overrides are keyed to the fraction they were pushed at, so a
+  // playhead move drops them until they are asserted again. With no Color panel
+  // open nothing else would: the panel re-asserts on every frame it samples,
+  // and a plain filter samples none. Idempotent, so this costs a comparison
+  // when the matte is not showing.
+  [_colorPanelController reassertPreviewOverrides];
 }
 
 - (void)_pushAudioTimeToMiniViewer {

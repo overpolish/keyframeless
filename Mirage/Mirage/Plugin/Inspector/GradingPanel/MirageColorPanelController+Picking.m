@@ -26,16 +26,6 @@
 /// a layout-dependent character.
 static const unsigned short kEscapeKeyCode = 53;
 
-/// Remove an event monitor and forget it, tolerating one that was never
-/// installed. Six of them arm and disarm together, and a teardown that misses
-/// one leaves the panel eating clicks nobody armed it for.
-void MirageDropMonitor(__strong id *slot) {
-  if (!slot || !*slot)
-    return;
-  [NSEvent removeMonitor:*slot];
-  *slot = nil;
-}
-
 /// The sampler button's title for what the patch is being declared to be.
 static NSString *MirageSampleTitle(MirageMemoryColor kind) {
   switch (kind) {
@@ -289,6 +279,12 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   NSPoint inView =
       [mini convertPoint:[mini.window convertPointFromScreen:screen]
                 fromView:nil];
+  // A click on the row of chrome the preview carries is that row's, not a
+  // reading of the pixel behind it. Left alone and still armed, so pressing
+  // Before mid-pick does what the button says and the next click in the picture
+  // still picks.
+  if (MiragePointInMiniChrome(mini, inView))
+    return NO;
   CGRect content = [mini contentRectInViewPoints];
   if (!NSPointInRect(inView, content))
     return NO; // clicked outside the image: leave the click alone and stay
@@ -590,12 +586,6 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   // holding - what the shader declares and what the project has - so it is
   // refreshed from here rather than from its own pass over both.
   [self _refreshSlotButtonsIn:timeline source:source];
-  [self _refreshCompareButtons];
-  // Same pass, same two facts: whether the shader declares a selection switch
-  // and where that switch currently stands. Refreshed from here so an inspector
-  // checkbox, a keyframe or an undo moving the lane relights the button without
-  // anything having to notice that it did.
-  [self _refreshSelectionButtonIn:timeline source:source];
   [self _layoutHeaderButtons];
   // The in-well row is the one part of this panel whose PRESENCE moves the well
   // and the panel around it, so it is re-laid-out when its button set changes

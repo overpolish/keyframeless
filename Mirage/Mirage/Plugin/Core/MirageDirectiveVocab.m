@@ -173,11 +173,12 @@ MirageDirectiveAttributeKeys(void) {
             @"take the eyedropper without being on the puck.",
             @"pick="),
           E(@"preview", @"preview=",
-            @"Hand this control to the Color panel as SESSION STATE: no "
+            @"Hand this control to the inspector as SESSION STATE: no "
             @"inspector row, no keyframes, nothing saved. preview=selection "
             @"marks a #bool as the switch that shows this shader's selection "
-            @"(the matte) instead of the graded result - the panel puts it "
-            @"beside Before and Split. preview=active-key marks a #choice that "
+            @"(the matte) instead of the graded result - it appears on the "
+            @"preview, beside Before and Split. preview=active-key marks a "
+            @"#choice that "
             @"says WHICH key the matte is about (option 0 = all, n = the nth "
             @"instance); the panel feeds it the handle you last touched, so "
             @"you never set it. Everywhere the panel is not driving them, "
@@ -895,9 +896,8 @@ MirageValueEnumForKey(NSString *key) {
         @[
           E(@"selection", @"selection",
             @"This #bool shows the selection - the matte - instead of the "
-            @"graded result. Panel session state: no row, no keyframes, "
-            @"nothing saved. The Color panel offers it beside Before and "
-            @"Split.",
+            @"graded result. Session state: no row, no keyframes, nothing "
+            @"saved. It appears on the preview, beside Before and Split.",
             @"selection"),
           E(@"active-key", @"active-key",
             @"This #choice says WHICH key the selection shows: option 0 for "
