@@ -72,9 +72,30 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// time (driven by the host's layer-list selection). No-op if no keypose
 /// popover is open.
 - (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey;
+/// The owners the OPEN keypose popover can edit: the layerKeys carrying a
+/// keypose at its time. Empty when no keypose popover is open, and when the
+/// lanes declare no owner at all (single-owner plugins - nothing to gate).
+///
+/// A host disables everything outside this set in its own owner switcher, so an
+/// owner with nothing at this time can't be selected into an empty editor -
+/// Canvas grays those rows in its layer list, Mirage its rack boxes.
+- (NSSet<NSString *> *)openKeyposePopoverLayerKeys;
 /// Host's selected layer (multi-owner), so a freshly-opened keypose popover
 /// scopes its params to that layer (nil => the first animated layer).
 @property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// Multi-owner keypose popovers: how a param of the popover's owner that does
+/// NOT participate in the clicked boundary / keypose is presented.
+///  - NO (default, Canvas): it keeps the "Animate" affordance - a message row
+///    whose button arms the property here. Canvas's layers are independently
+///    keyed, so arming one is a normal edit and the affordance is the
+///    documented way to reach it.
+///  - YES (Mirage's shader rack): it is dimmed + inert instead. A rack entry's
+///    keyposes are one co-timed set, so arming a property that has no keypose
+///    at this time is exactly the edit the rule forbids.
+/// Single-owner timelines keep their Animate rows either way, and neither the
+/// foreign-owner scoping nor the node-switcher eligibility is affected - those
+/// match Canvas already.
+@property(nonatomic) BOOL keyposeStrictCoTimed;
 /// Host hint (multi-owner): YES if SOME layer still has a constant param, so
 /// the Constants button stays available even when the selected layer is fully
 /// animated (open it, then pick the layer with constants in the panel).
@@ -276,6 +297,31 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, copy, nullable) void (^onStaticValueDragEnded)
     (NSString *label, NSArray<NSNumber *> *values);
 
+/// A host strip mounted inside the static-values popover, between the
+/// mini-viewer band and the parameter rows (Mirage's shader rack). The block is
+/// called once per popover CREATION - the popover owns the view it returns, and
+/// the strip is gone when the popover closes - so the host must hold its
+/// reference weakly and rebuild on the next call.
+///
+/// `staticValuesAccessoryHeight` is what the strip occupies: the popover grows
+/// by it rather than taking it out of the rows, so the parameter UI below is
+/// never clipped or overlapped. Both nil/0 by default - a host that sets
+/// neither gets the popover unchanged.
+@property(nonatomic, copy, nullable) NSView * (^staticValuesAccessoryProvider)
+    (void);
+@property(nonatomic) CGFloat staticValuesAccessoryHeight;
+
+/// Optional scope for the CONSTANTS editor only: return NO for a lane the
+/// constants popover should not list. The graphs, the Animated dropdown and
+/// every write path are untouched - the timeline still holds every lane under
+/// its full key, which is what lets the scope change without a write.
+///
+/// For a host whose one timeline carries several owners' controls at once and
+/// whose accessory strip picks between them (Mirage's shader rack: chained
+/// shaders, one selected). Read live on every call, so the host only has to
+/// re-drive the view when its selection moves. nil (the default) = no scoping.
+@property(nonatomic, copy, nullable) BOOL (^constantsLaneFilter)(KKLane *lane);
+
 /// Guide-only observation hooks, fired ALONGSIDE the functional callbacks (so
 /// they never clobber persistence / navigation). `renderModeChanged` fires when
 /// the boundary popover's render-mode pill switches mode;
@@ -369,6 +415,16 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 
 /// Open the static-values popover anchored to the given view.
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor;
+
+/// The owner a layer-navigable dropdown should open on, resolved against
+/// `lanes`: the host's LIVE selection (`constantsLaneFilter`) when it supplies
+/// one, else our stored `activeLayerKey`. nil = no owner resolved (every
+/// single-owner plugin), which leaves a nav on its first layer.
+///
+/// Public so the popovers the INSPECTOR owns - the on-screen-control visibility
+/// checklist and the parameter-order list - open on the same entry the Animated
+/// dropdown does, off the one resolution rather than a second guess at it.
+- (nullable NSString *)hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes;
 
 /// Present arbitrary `content` in a companion-capable popover (same keep-alive
 /// outside-click handling as the value popovers) and post the open/close

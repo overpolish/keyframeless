@@ -30,7 +30,7 @@
                                                     source:(NSString *)source {
   return MirageSlotExpandResponses(
       MirageSurfaceResponsesForRing(source, [self _ringAtIndex:ringIndex]),
-      source, _lanesView.currentTimeline);
+      source, [self _entryScopedRegistry]);
 }
 
 - (NSArray<NSDictionary<NSString *, NSString *> *> *)
@@ -38,18 +38,18 @@
            source:(NSString *)source {
   return MirageSlotExpandPucks(
       MirageSurfacePucksForRing(source, [self _ringAtIndex:ringIndex]), source,
-      _lanesView.currentTimeline);
+      [self _entryScopedRegistry]);
 }
 
 - (NSDictionary<NSString *, NSNumber *> *)_picksInSource:(NSString *)source {
   return MirageSlotExpandPicks(MirageSurfacePicksForSource(source), source,
-                               _lanesView.currentTimeline);
+                               [self _entryScopedRegistry]);
 }
 
 - (NSDictionary<NSString *, NSString *> *)_puckNamesInSource:
     (NSString *)source {
   return MirageSlotExpandPuckNames(MirageSurfacePuckNamesForSource(source),
-                                   source, _lanesView.currentTimeline);
+                                   source, [self _entryScopedRegistry]);
 }
 
 /// Whether this shader declares two circles, which is the only case where a
@@ -74,7 +74,13 @@
            [self _filtersByRing:source])) {
     NSInteger max = 0, min = 0;
     MirageSlotGroupLimits(source, group, &max, &min);
-    if ((NSInteger)KKTimelineSlotInstanceIDs(timeline, group).count < max)
+    // The registry is keyed per rack entry, so two links running the same
+    // template count their instances separately
+    // (MirageRackScopedSlotGroupName). The group NAME stays the shader's - it
+    // is what the source declared and what every expansion above speaks.
+    if ((NSInteger)KKTimelineSlotInstanceIDs(timeline,
+                                             [self _scopedSlotGroup:group])
+            .count < max)
       return group;
   }
   return nil;
@@ -144,7 +150,7 @@
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline)
     return;
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   NSString *group = [self _addableSlotGroupInSource:source];
   if (!group.length)
     return;
@@ -158,12 +164,13 @@
   // channel lock raises on a group opened inside one that never closed.
   [self _endPuckDragReason:@"a slot instance was added"];
   KKTimeline *updated = [timeline copy];
+  NSString *scoped = [self _scopedSlotGroup:group];
   NSString *instanceID =
-      KKTimelineStampSlotInstance(updated, group, prototypes);
+      KKTimelineStampSlotInstance(updated, scoped, prototypes);
   if (!instanceID.length)
     return;
-  KKLogInfo(@"[Slots] adding \"%@\" instance %@ (%lu now)", group, instanceID,
-            (unsigned long)KKTimelineSlotInstanceIDs(updated, group).count);
+  KKLogInfo(@"[Slots] adding \"%@\" instance %@ (%lu now)", scoped, instanceID,
+            (unsigned long)KKTimelineSlotInstanceIDs(updated, scoped).count);
   [self _beginWriteGroup:@"add slot instance"];
   if (self.onTimelineMutated)
     self.onTimelineMutated(updated);
@@ -189,7 +196,7 @@
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline)
     return;
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   NSDictionary<NSString *, NSString *> *entry =
       [self _activeSlotPuckInSource:source];
   NSString *group = entry[@"group"], *instanceID = entry[@"instance"];
@@ -197,7 +204,8 @@
     return;
   NSInteger max = 0, min = 0;
   MirageSlotGroupLimits(source, group, &max, &min);
-  NSArray<NSString *> *ids = KKTimelineSlotInstanceIDs(timeline, group);
+  NSString *scoped = [self _scopedSlotGroup:group];
+  NSArray<NSString *> *ids = KKTimelineSlotInstanceIDs(timeline, scoped);
   if ((NSInteger)ids.count <= min)
     return;
   // Where the selection lands: the instance before this one, or the one after
@@ -211,15 +219,15 @@
   KKTimeline *updated = [timeline copy];
   NSArray<KKLane *> *prototypes =
       [MiragePlugin slotPrototypeLanesForShaderSource:source group:group];
-  if (!KKTimelineRemoveSlotInstance(updated, group, instanceID))
+  if (!KKTimelineRemoveSlotInstance(updated, scoped, instanceID))
     return;
   // The survivors' stored labels are now numbered one too high. The catalog
   // re-renders them from the prototypes on the next build, but the timeline is
   // what the inspector draws in the meantime.
-  KKTimelineRestampSlotLabels(updated, group, prototypes);
-  KKLogInfo(@"[Slots] removing \"%@\" instance %@ (%lu left)", group,
+  KKTimelineRestampSlotLabels(updated, scoped, prototypes);
+  KKLogInfo(@"[Slots] removing \"%@\" instance %@ (%lu left)", scoped,
             instanceID,
-            (unsigned long)KKTimelineSlotInstanceIDs(updated, group).count);
+            (unsigned long)KKTimelineSlotInstanceIDs(updated, scoped).count);
   [self _disarmPicking];
   [self _beginWriteGroup:@"remove slot instance"];
   if (self.onTimelineMutated)
@@ -252,9 +260,9 @@
   if (active[@"group"].length) {
     NSInteger max = 0, min = 0;
     MirageSlotGroupLimits(source, active[@"group"], &max, &min);
-    removable =
-        (NSInteger)KKTimelineSlotInstanceIDs(timeline, active[@"group"]).count >
-        min;
+    removable = (NSInteger)KKTimelineSlotInstanceIDs(
+                    timeline, [self _scopedSlotGroup:active[@"group"]])
+                    .count > min;
   }
   _removeSlotButton.hidden = !removable;
   if (removable)

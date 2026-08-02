@@ -13,10 +13,13 @@
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
+#import <QuartzCore/QuartzCore.h>
 
+#import "Constants.h" // MirageCustomDefaultShaderSource
 #import "MirageColorPanelController_Internal.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageLocalized.h"
+#import "MirageRack.h" // entry ids, lane-key scope, scoped `#slots` groups
 #import "MirageScopeSampler.h"
 #import "MirageSurfaceCircleView.h"
 #import "MirageSurfaceResponse.h"
@@ -107,6 +110,29 @@ static const double kRingMaxStop = 5.0;
   return _puckDragActive || _writeGroupOpen;
 }
 
+- (void)setSelectedRackEntryID:(NSString *)entryID {
+  NSString *next = MirageRackEntryIDOrSentinel(entryID);
+  if ([next isEqualToString:MirageRackEntryIDOrSentinel(_selectedRackEntryID)])
+    return;
+  // A drag belongs to the entry it started on. Ending it here rather than
+  // letting it land on the new entry's lanes is the same rule the popover
+  // close applies.
+  [self _endPuckDragReason:@"the selected shader changed"];
+  _selectedRackEntryID = [next copy];
+  // Force the spec rebuild: the ring set is cached against the SOURCE it was
+  // built from, and two entries running the same template have the same source
+  // while meaning different lanes.
+  _lastSpecSource = nil;
+  KKLogInfo(@"[Surface] selected shader -> %@", next);
+  // Through the setter, so an entry with no `#color-surface` hides the panel
+  // and one that has it shows it - the same two branches a recompile takes.
+  self.surfaceEnabled = [self _resolveSurfaceEnabledFromLanes];
+  if (_surfaceEnabled && _panel.isVisible) {
+    [self _resolveRingsFromLanes];
+    [self _refreshPuck];
+  }
+}
+
 - (void)setSurfaceEnabled:(BOOL)surfaceEnabled {
   if (_surfaceEnabled == surfaceEnabled)
     return;
@@ -124,6 +150,63 @@ static const double kRingMaxStop = 5.0;
   }
 }
 
+- (NSString *)_entrySource:(KKTimeline *)timeline {
+  if (!timeline)
+    return MirageCustomDefaultShaderSource();
+  return [MiragePlugin shaderSourceFromTimeline:timeline
+                                   forRackEntry:_selectedRackEntryID];
+}
+
+- (NSString *)_bareKeyForLane:(KKLane *)lane {
+  if (!lane.key.length)
+    return nil;
+  NSString *owner = nil, *bare = nil;
+  MirageRackParseLaneKey(lane.key, &owner, &bare);
+  return
+      [owner isEqualToString:MirageRackEntryIDOrSentinel(_selectedRackEntryID)]
+          ? bare
+          : nil;
+}
+
+- (NSString *)_scopedSlotGroup:(NSString *)groupName {
+  return MirageRackScopedSlotGroupName(
+      MirageRackEntryIDOrSentinel(_selectedRackEntryID), groupName);
+}
+
+// The live timeline with the selected entry's `#slots` registry presented under
+// BARE group names.
+//
+// The grammar expansions (MirageSlotSurface.h) ask the registry "how many
+// instances of the group this source declares", and the source declares
+// `Colours` - the scope is the rack's, not the shader's. Re-keying the registry
+// once here means those helpers keep taking one timeline and answering in bare
+// keys, which is exactly the half of the boundary -_bareKeyForLane: works in.
+// Lanes are deliberately not carried: nothing downstream of this reads them.
+//
+// The sentinel's registry is already bare, so it is handed back untouched -
+// a project that has never been racked does not allocate a thing.
+- (KKTimeline *)_entryScopedRegistry {
+  KKTimeline *timeline = _lanesView.currentTimeline;
+  NSString *entryID = MirageRackEntryIDOrSentinel(_selectedRackEntryID);
+  if (!timeline || [entryID isEqualToString:kMirageRackSentinelEntryID])
+    return timeline;
+  NSMutableDictionary<NSString *, NSArray<NSString *> *> *bare =
+      [NSMutableDictionary dictionary];
+  [timeline.slotGroups
+      enumerateKeysAndObjectsUsingBlock:^(
+          NSString *group, NSArray<NSString *> *ids, BOOL *stop) {
+        if ([group isEqualToString:kMirageRackGroupName])
+          return; // the rack's own registry is not one of the shader's groups
+        NSString *owner = nil, *bareName = nil;
+        MirageRackParseLaneKey(group, &owner, &bareName);
+        if ([owner isEqualToString:entryID] && bareName.length)
+          bare[bareName] = ids;
+      }];
+  KKTimeline *view = [KKTimeline timeline];
+  view.slotGroups = bare;
+  return view;
+}
+
 // Read the opt-in straight from the lanes view's current timeline.
 //
 // The pushed -setSurfaceEnabled: cannot be relied on at popover-open time:
@@ -136,7 +219,7 @@ static const double kRingMaxStop = 5.0;
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline)
     return _surfaceEnabled; // nothing better to go on
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   MirageColorSurfaceSpace space = MirageColorSurfaceSpaceInvalid;
   MirageColorSurfaceError error = MirageColorSurfaceErrorNone;
   return MirageColorSurfaceForSource(source, &space, &error) &&
@@ -282,8 +365,11 @@ static const double kRingMaxStop = 5.0;
   // and the browser skips them for the same reason.
   NSString *kind = note.userInfo[@"kind"];
   if ([kind isEqualToString:@"manage"] || [kind isEqualToString:@"filter"] ||
-      [kind isEqualToString:@"osc"] || [kind isEqualToString:@"appliesTo"])
+      [kind isEqualToString:@"osc"] || [kind isEqualToString:@"appliesTo"]) {
+    KKLogDebug(@"[Panel] color attach kind=%@ -> skipped(structural popover)",
+               kind);
     return;
+  }
   NSWindow *popoverWindow = note.userInfo[@"window"];
   if (![popoverWindow isKindOfClass:[NSWindow class]])
     popoverWindow = nil;
@@ -292,16 +378,39 @@ static const double kRingMaxStop = 5.0;
   // the content view and resolve the window from it, rather than treating a
   // window-less open as "no popover" - that was why the first popover after
   // launch never got its panel.
-  if (!popoverWindow && !_popoverContentView)
+  if (!popoverWindow && !_popoverContentView) {
+    KKLogDebug(@"[Panel] color attach kind=%@ -> skipped(no window and no "
+               @"content view to wait on)",
+               kind);
     return;
+  }
   NSValue *cardVal = note.userInfo[@"contentRect"];
   _parentWindow = popoverWindow;
   _openCard = cardVal ? cardVal.rectValue
                       : (popoverWindow ? popoverWindow.frame : NSZeroRect);
   _openFraction = [note.userInfo[@"fraction"] doubleValue];
+  // Resolved and shown HERE, in the notification turn.
+  //
+  // This was deferred a tick to keep the directive parse and the panel build
+  // off the turn that puts the popover up, guarded on `_popoverContentView`
+  // still being the view captured above. The guard is unsound: the popover
+  // INSTANCE is reused across opens, so a same-anchor swap runs the outgoing
+  // popover's close callback around the incoming open - and -_popoverDidClose:
+  // nils `_popoverContentView` for whichever popover it is told about. One late
+  // close inside that one tick cancelled the show, and the panel silently never
+  // appeared again.
+  //
+  // Cheap enough to owe nothing to the defer: the directive parse is a
+  // fast-rejected regex, the ring spec is cached against the source it was
+  // built from, and -_showIfPopoverOpenAttempt: still waits (off this turn) for
+  // the popover window to be visible before anything is put on screen. The
+  // first scope measurement, which is the expensive half, stays deferred.
   // Resolve rather than trust the pushed flag: this is the path that runs
   // before -applyTimeline: ever has.
   _surfaceEnabled = [self _resolveSurfaceEnabledFromLanes];
+  KKLogDebug(@"[Panel] color attach kind=%@ -> %@", kind,
+             _surfaceEnabled ? @"shown"
+                             : @"skipped(shader declares no #color-surface)");
   [self _showIfPopoverOpen];
 }
 
@@ -342,7 +451,15 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   mini.onProcessedFrameReady = ^{
     [weak _frameReady];
   };
-  [self _sampleOnce]; // the frame already on screen shouldn't wait for the next
+  // The frame already on screen shouldn't wait for the next one - but it
+  // shouldn't be measured in the turn that is still putting the panel up
+  // either. Next tick: the popover gets the main thread back first.
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_measuredMini == mini)
+      [s _sampleOnce];
+  });
 }
 
 - (void)_stopSampling {
@@ -407,12 +524,24 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   // to the joyride guide, which would lose its "try zooming" step if this took
   // it.
   _sampler.visibleUVRect = MirageVisibleUVRectOfMini(mini);
-  MirageScopeReading *reading = [_sampler readTexture:graded
-                                               device:mini.device
-                                             binCount:kToneBinCount
-                                              minStop:kRingMinStop
-                                              maxStop:kRingMaxStop];
-  if (!reading.sampleCount)
+  // Asked for, not waited on. The measurement is a GPU blit plus a walk over
+  // tens of thousands of pixels, and it is driven by the preview's own frame
+  // callback - done synchronously it took a slice of the main thread out of
+  // every frame, right where the popover is trying to composite. The reading
+  // comes back on the main thread a beat later and lands exactly as it did.
+  __weak typeof(self) weak = self;
+  [_sampler readTextureAsync:graded
+                      device:mini.device
+                    binCount:kToneBinCount
+                     minStop:kRingMinStop
+                     maxStop:kRingMaxStop
+                  completion:^(MirageScopeReading *reading) {
+                    [weak _applyScopeReading:reading];
+                  }];
+}
+
+- (void)_applyScopeReading:(MirageScopeReading *)reading {
+  if (!reading.sampleCount || !_panel.isVisible)
     return;
   if (_pendingColorPick && reading.probedRGB.count >= 3) {
     _pendingColorPick = NO;
@@ -473,8 +602,7 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   if (!timeline)
     return;
   [self _selectSlotPuckForInstance:instanceID
-                            source:[MiragePlugin
-                                       shaderSourceFromTimeline:timeline]];
+                            source:[self _entrySource:timeline]];
   [self _refreshPuck];
 }
 

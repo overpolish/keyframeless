@@ -93,6 +93,13 @@ MirageColorSurfaceAttrLines(NSString *source) {
   NSMutableArray<NSString *> *out = [NSMutableArray array];
   if (!source.length)
     return out;
+  // Literal reject before the pattern. The directive spelling is mandatory, so
+  // a source that doesn't contain it cannot match, and a plain substring search
+  // is orders of magnitude cheaper than compiling a fresh NSRegularExpression
+  // and running it over the whole shader - which the browser gallery was doing
+  // once per catalogue entry, on the main thread, on every rebuild.
+  if ([source rangeOfString:@"#color-surface"].location == NSNotFound)
+    return out;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
           @"(?m)^[ \\t]*//[ \\t]*#color-surface(?![-\\w])([^\\n]*)$"

@@ -96,6 +96,38 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
   return out;
 }
 
+- (NSString *)entriesFingerprint {
+  NSURL *root = [NSURL fileURLWithPath:[self rootDirectory] isDirectory:YES];
+  NSArray<NSURLResourceKey> *keys =
+      @[ NSURLIsDirectoryKey, NSURLContentModificationDateKey ];
+  NSArray<NSURL *> *children = [[NSFileManager defaultManager]
+        contentsOfDirectoryAtURL:root
+      includingPropertiesForKeys:keys
+                         options:NSDirectoryEnumerationSkipsHiddenFiles
+                           error:nil];
+  NSMutableArray<NSString *> *parts =
+      [NSMutableArray arrayWithCapacity:children.count];
+  for (NSURL *url in children) {
+    NSNumber *isDir = nil;
+    [url getResourceValue:&isDir forKey:NSURLIsDirectoryKey error:nil];
+    if (!isDir.boolValue)
+      continue;
+    // Every write this catalog makes is atomic (write-temp + rename), which
+    // bumps the containing folder's date - so a save, a rename, an install and
+    // a delete all move the token even though none of them replaces the folder.
+    NSDate *modified = nil;
+    [url getResourceValue:&modified
+                   forKey:NSURLContentModificationDateKey
+                    error:nil];
+    [parts addObject:[NSString
+                         stringWithFormat:@"%@:%.6f", url.lastPathComponent,
+                                          modified
+                                              .timeIntervalSinceReferenceDate]];
+  }
+  [parts sortUsingSelector:@selector(compare:)];
+  return [parts componentsJoinedByString:@"\n"];
+}
+
 - (MirageCatalogEntry *)entryAtDirectory:(NSString *)dir {
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *metaPath = [dir stringByAppendingPathComponent:@"metadata.json"];
@@ -276,8 +308,7 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
   colorTransform.version = 1;
   colorTransform.folderPath = @"";
   colorTransform.builtin = YES;
-  colorTransform.sections =
-      @{@"Image" : MirageColorTransformShaderSource()};
+  colorTransform.sections = @{@"Image" : MirageColorTransformShaderSource()};
   colorTransform.thumbnail = sBuiltinThumbnails[@"Color Transform"];
 
   // The former standalone MagicMove plugin. `layout` like Frame: it reads the
@@ -404,6 +435,14 @@ static NSString *const kFavKey = @"MirageFavorites";
   else
     [favs addObject:entryID];
   [NSUserDefaults.standardUserDefaults setObject:favs forKey:kFavKey];
+}
+
+- (NSString *)favoritesFingerprint {
+  NSArray *favs = [NSUserDefaults.standardUserDefaults arrayForKey:kFavKey];
+  if (!favs.count)
+    return @"";
+  return [[favs sortedArrayUsingSelector:@selector(compare:)]
+      componentsJoinedByString:@","];
 }
 
 - (NSDictionary<NSString *, NSData *> *)publishFilesForEntry:

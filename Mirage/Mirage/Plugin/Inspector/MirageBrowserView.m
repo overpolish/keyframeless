@@ -47,6 +47,23 @@ static const CGFloat kHeaderH = 22.0;
   BOOL _renaming;     // a card is inline-editing; don't destroy it in a rebuild
   BOOL _needsRebuild; // a rebuild was requested while renaming
   CGFloat _cardW, _cardH; // computed per rebuild (2-column 50/50 split)
+  BOOL _rebuildScheduled; // a coalesced drain is already on the main queue
+  CFTimeInterval _rebuildDeadline; // when that drain is due
+  NSUInteger _rebuildGeneration;   // only the newest scheduled drain does work
+  BOOL _dirtyWhileHidden; // asked to rebuild with the panel ordered out
+  /// Everything the laid-out gallery is a function of, as of the last build.
+  /// An equal signature means the cards on screen ARE the cards a rebuild would
+  /// produce, so the rebuild is skipped outright - see -_contentSignature...
+  NSString *_builtSignature;
+  /// Last parse of the on-disk catalogue, with the fingerprint it was parsed
+  /// at. Re-reading every metadata.json, every .glsl and every preview is what
+  /// a rebuild actually spends its time on, and nothing has usually changed.
+  NSArray<MirageCatalogEntry *> *_localEntries;
+  NSString *_localFingerprint;
+  /// entryID -> declares `// #color-surface`. A pure function of the entry's
+  /// source, so it only has to survive as long as the parse above does: the
+  /// whole cache is dropped with it whenever the catalogue moves.
+  NSMutableDictionary<NSString *, NSNumber *> *_colorSurfaceByID;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -56,6 +73,7 @@ static const CGFloat kHeaderH = 22.0;
   _cards = [NSMutableArray array];
   _community = @[];
   _communityThumbnails = [NSMutableDictionary dictionary];
+  _colorSurfaceByID = [NSMutableDictionary dictionary];
   _query = @"";
 
   _title = [NSTextField labelWithString:RLoc(@"Shaders", @"Browser title.")];
@@ -219,7 +237,7 @@ static const CGFloat kHeaderH = 22.0;
       [s->_categoryFilter addObject:ids[index]];
     else
       [s->_categoryFilter removeObject:ids[index]];
-    [s _rebuildAll];
+    [s _setNeedsRebuild];
   };
   return pills;
 }
@@ -250,22 +268,133 @@ static const CGFloat kHeaderH = 22.0;
   [self _reloadForcingRefresh:NO];
 }
 
+// How long the gallery will wait for the community fetch before drawing itself
+// without it. This is a DEADLINE, not a fixed grace: the fetch completion
+// pulls the drain in (see -_setNeedsRebuildAfterDelay:), so a cache-hot answer
+// - a couple of main-queue turns out of KKCommunity's 15-minute cache - gets
+// ONE build with the full content in it.
+//
+// A fixed 50ms grace did not do that. The completion's MainActor hops landed
+// after it, so the first open built twice: locals plus a spinner nobody ever
+// saw, then the whole gallery again ~200ms later. The deadline only expires
+// for a fetch that is genuinely going to the network, which is the one case
+// where showing the local half early (spinner and all) is worth a second
+// build.
+static const NSTimeInterval kCommunityDeadline = 0.35;
+
 - (void)_reloadForcingRefresh:(BOOL)forceRefresh {
   _fetching = YES; // show the inline loader until the fetch returns
-  [self _rebuildAll];
   [self _fetchCommunity:forceRefresh];
+  // An explicit Refresh bypasses the TTL cache, so it IS a network trip: draw
+  // the spinner now rather than sitting silent for the deadline.
+  [self _setNeedsRebuildAfterDelay:(forceRefresh ? 0.0 : kCommunityDeadline)];
 }
 
 - (void)refreshLocal {
-  [self _rebuildAll];
+  // A local mutation the fingerprint might not see (nothing in this process
+  // writes the catalogue non-atomically today, but this is the one call that
+  // KNOWS the catalogue just changed - it shouldn't depend on that).
+  _localEntries = nil;
+  _localFingerprint = nil;
+  _builtSignature = nil;
+  [self _setNeedsRebuild];
 }
 
-// Does this entry's Image shader declare `// #color-surface`? nil entry (a remote
-// card whose source has not been downloaded) is NO rather than unknown: it still
-// filters by its published category, and gains the surface once installed.
-static BOOL MirageBrowserDeclaresColorSurface(
-    MirageCatalogEntry *_Nullable entry) {
-  return MirageColorSurfaceForSource(entry.sections[@"Image"], NULL, NULL);
+// Coalesce every rebuild request onto one drain. Requests arrive in bursts -
+// the open's reload, the community completion, a keystroke in the search field
+// - and each one used to rebuild the whole gallery synchronously.
+- (void)_setNeedsRebuild {
+  [self _setNeedsRebuildAfterDelay:0.0];
+}
+
+// Requests coalesce onto the EARLIEST outstanding drain. A request due no
+// sooner than the pending one rides it out; an earlier one supersedes it, and
+// the superseded block no-ops when its own timer fires (dispatch_after can't be
+// cancelled, so the generation counter is what retires it).
+//
+// The earlier-wins half is what collapses the open into one build: the reload
+// arms the community deadline, and the fetch completion - due immediately -
+// pulls that same drain forward instead of being swallowed by it and then
+// building a second time.
+- (void)_setNeedsRebuildAfterDelay:(NSTimeInterval)delay {
+  CFTimeInterval due = CACurrentMediaTime() + delay;
+  if (_rebuildScheduled && due >= _rebuildDeadline)
+    return;
+  _rebuildScheduled = YES;
+  _rebuildDeadline = due;
+  NSUInteger generation = ++_rebuildGeneration;
+  __weak typeof(self) weak = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        __strong typeof(weak) s = weak;
+        if (!s || s->_rebuildGeneration != generation)
+          return;
+        s->_rebuildScheduled = NO;
+        [s _rebuildAll];
+      });
+}
+
+// The parsed catalogue, reused while the folder is untouched. `-entries` reads
+// and JSON-decodes a metadata.json, every .glsl section and a preview image per
+// entry, then stats each folder to sort - all on the main thread.
+- (NSArray<MirageCatalogEntry *> *)_catalogEntriesForFingerprint:
+    (NSString *)fingerprint {
+  if (_localEntries && [fingerprint isEqualToString:_localFingerprint])
+    return _localEntries;
+  _localFingerprint = [fingerprint copy];
+  _localEntries = [[MirageLocalCatalog shared] entries];
+  [_colorSurfaceByID removeAllObjects];
+  return _localEntries;
+}
+
+// Width the cards are laid out against. Read the same way by the signature and
+// by the build, so a gallery built before the panel had a layout (width 0) is
+// never mistaken for the one the laid-out panel wants.
+- (CGFloat)_documentWidth {
+  CGFloat width = NSWidth(_doc.bounds);
+  return width > 0 ? width : NSWidth(_well.bounds);
+}
+
+// Everything the built gallery is a function of, in one comparable token: the
+// catalogue, the favourites, the fetched community list, the filters and the
+// width the cards are sized to. Built-ins are constant, and community
+// thumbnails arrive by patching the live cards rather than by rebuilding, so
+// neither belongs here.
+- (NSString *)_contentSignatureForFingerprint:(NSString *)fingerprint {
+  NSMutableString *sig = [NSMutableString string];
+  [sig appendFormat:@"w=%.0f q=%@ fav=%d fetch=%d\n", [self _documentWidth],
+                    _query ?: @"", (int)_favoritesOnly, (int)_fetching];
+  [sig appendFormat:@"cats=%@\n",
+                    [[[_categoryFilter allObjects]
+                        sortedArrayUsingSelector:@selector(compare:)]
+                        componentsJoinedByString:@","]];
+  [sig appendFormat:@"stars=%@\n",
+                    [[MirageLocalCatalog shared] favoritesFingerprint]];
+  [sig appendFormat:@"local=%@\n", fingerprint];
+  for (_MirageBrowserItem *r in _community)
+    [sig appendFormat:@"c=%@|%ld|%@|%@|%@\n", r.entryID ?: @"",
+                      (long)r.communityEntry.version, r.name ?: @"",
+                      r.author ?: @"", r.category ?: @""];
+  return sig;
+}
+
+// Does this entry's Image shader declare `// #color-surface`? nil entry (a
+// remote card whose source has not been downloaded) is NO rather than unknown:
+// it still filters by its published category, and gains the surface once
+// installed.
+- (BOOL)_declaresColorSurface:(MirageCatalogEntry *_Nullable)entry {
+  if (!entry)
+    return NO;
+  NSString *key = entry.entryID;
+  NSNumber *cached = key.length ? _colorSurfaceByID[key] : nil;
+  if (cached)
+    return cached.boolValue;
+  BOOL declares =
+      MirageColorSurfaceForSource(entry.sections[@"Image"], NULL, NULL);
+  if (key.length)
+    _colorSurfaceByID[key] = @(declares);
+  return declares;
 }
 
 - (BOOL)_matches:(_MirageBrowserItem *)it {
@@ -297,11 +426,38 @@ static BOOL MirageBrowserDeclaresColorSurface(
     _needsRebuild = YES;
     return;
   }
-  NSArray<MirageCatalogEntry *> *saved = [[[MirageLocalCatalog shared] entries]
-      sortedArrayUsingComparator:^NSComparisonResult(MirageCatalogEntry *a,
-                                                     MirageCatalogEntry *b) {
-        return [a.name localizedCaseInsensitiveCompare:b.name];
-      }];
+  // Nobody is looking at it. The panel is ordered out (a popover kind that
+  // carries no browser, or a catalogue change while it is away), and building
+  // cards into a hidden window is main-thread time spent on nothing. Remember
+  // that it owes a rebuild and pay it when the panel is next shown.
+  if (!self.window.isVisible) {
+    _dirtyWhileHidden = YES;
+    KKLogDebug(@"[Panel] browser gallery rebuild deferred: panel window %@",
+               self.window ? @"not visible yet" : @"not attached yet");
+    return;
+  }
+  _dirtyWhileHidden = NO;
+  NSString *fingerprint = [[MirageLocalCatalog shared] entriesFingerprint];
+  NSString *signature = [self _contentSignatureForFingerprint:fingerprint];
+  // The cards on screen already ARE what this build would produce. The panel
+  // re-attaches and reloads on EVERY popover open, so with an untouched
+  // catalogue this is the common case, and the whole point of the caches below
+  // it: reusing the parse still rebuilt every card view, which is where the
+  // ~200ms per open actually went.
+  if (_builtSignature && [signature isEqualToString:_builtSignature])
+    return;
+  [self _rebuildAllNowForFingerprint:fingerprint];
+  [self layoutSubtreeIfNeeded];
+  _builtSignature = [signature copy];
+}
+
+- (void)_rebuildAllNowForFingerprint:(NSString *)fingerprint {
+  NSArray<MirageCatalogEntry *> *saved =
+      [[self _catalogEntriesForFingerprint:fingerprint]
+          sortedArrayUsingComparator:^NSComparisonResult(
+              MirageCatalogEntry *a, MirageCatalogEntry *b) {
+            return [a.name localizedCaseInsensitiveCompare:b.name];
+          }];
 
   // Split local: installed community (offline) vs user custom.
   NSMutableDictionary<NSString *, MirageCatalogEntry *> *installedByID =
@@ -323,7 +479,7 @@ static BOOL MirageBrowserDeclaresColorSurface(
     it.name = e.name;
     it.author = e.author;
     it.category = e.category;
-    it.colorSurface = MirageBrowserDeclaresColorSurface(e);
+    it.colorSurface = [self _declaresColorSurface:e];
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
     if ([self _matches:it])
@@ -339,9 +495,10 @@ static BOOL MirageBrowserDeclaresColorSurface(
     // An installed copy is the authority (it may be a newer publish than the
     // last fetch); otherwise the remote's.
     it.category = inst ? inst.category : r.category;
-    // Only an installed copy carries its source. A remote-only card still filters by
-    // its published category, and picks the surface up once installed.
-    it.colorSurface = MirageBrowserDeclaresColorSurface(inst);
+    // Only an installed copy carries its source. A remote-only card still
+    // filters by its published category, and picks the surface up once
+    // installed.
+    it.colorSurface = [self _declaresColorSurface:inst];
     it.communityEntry = r.communityEntry;
     if (inst) {
       it.kind = _MirageItemInstalled;
@@ -368,7 +525,7 @@ static BOOL MirageBrowserDeclaresColorSurface(
     it.name = inst.name;
     it.author = inst.author;
     it.category = inst.category;
-    it.colorSurface = MirageBrowserDeclaresColorSurface(inst);
+    it.colorSurface = [self _declaresColorSurface:inst];
     it.thumbnail = inst.thumbnail;
     it.localEntry = inst;
     if ([self _matches:it])
@@ -383,7 +540,7 @@ static BOOL MirageBrowserDeclaresColorSurface(
     it.name = e.name;
     it.author = e.author;
     it.category = e.category;
-    it.colorSurface = MirageBrowserDeclaresColorSurface(e);
+    it.colorSurface = [self _declaresColorSurface:e];
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
     if ([self _matches:it])
@@ -398,9 +555,7 @@ static BOOL MirageBrowserDeclaresColorSurface(
   [_cards removeAllObjects];
   _hovered = nil;
 
-  CGFloat width = NSWidth(_doc.bounds);
-  if (width <= 0)
-    width = NSWidth(_well.bounds);
+  CGFloat width = [self _documentWidth];
   // Two columns that split the width 50/50 (cards fill, no big right margin).
   const NSInteger cols = 2;
   _cardW = floor((width - (cols + 1) * kCardGap) / cols);
@@ -510,7 +665,7 @@ static BOOL MirageBrowserDeclaresColorSurface(
                                 [s _loadCommunityThumbnail:e];
                               }
                               s->_community = items;
-                              [s _rebuildAll];
+                              [s _setNeedsRebuild];
                             }];
 }
 
@@ -542,6 +697,11 @@ static BOOL MirageBrowserDeclaresColorSurface(
   }
   if (!self.window)
     return;
+  // It owes a rebuild from while it was away (a catalogue change with the panel
+  // ordered out). The panel's own attach reloads on every show, so this is only
+  // the first-window case - but the gallery must never come back stale.
+  if (_dirtyWhileHidden)
+    [self _setNeedsRebuild];
   __weak typeof(self) weak = self;
   _mouseMonitor =
       [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
@@ -574,7 +734,7 @@ static BOOL MirageBrowserDeclaresColorSurface(
 - (void)controlTextDidChange:(NSNotification *)note {
   if (note.object == _search) {
     _query = _search.stringValue ?: @"";
-    [self _rebuildAll];
+    [self _setNeedsRebuild];
   }
 }
 
@@ -606,7 +766,7 @@ static BOOL MirageBrowserDeclaresColorSurface(
       _favoritesOnly ? [NSColor warning] : [NSColor tertiaryLabelColor];
   _favFilter.image =
       [self _headerIcon:(_favoritesOnly ? @"star.fill" : @"star")];
-  [self _rebuildAll];
+  [self _setNeedsRebuild];
 }
 
 - (void)dealloc {
@@ -635,15 +795,13 @@ static BOOL MirageBrowserDeclaresColorSurface(
 }
 - (void)cardToggleFavorite:(_MirageCard *)card {
   [[MirageLocalCatalog shared] toggleFavorite:card.item.entryID];
-  [self _rebuildAll];
+  [self _setNeedsRebuild];
 }
 - (void)card:(_MirageCard *)card didBeginRename:(BOOL)renaming {
   _renaming = renaming;
   if (!renaming && _needsRebuild) {
     _needsRebuild = NO;
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self _rebuildAll];
-    });
+    [self _setNeedsRebuild];
   }
 }
 // Download = install the community shader locally for offline use (a
@@ -688,7 +846,7 @@ static BOOL MirageBrowserDeclaresColorSurface(
                                                        version:e.version
                                                       sections:sections
                                                    previewJPEG:preview];
-               [weak _rebuildAll];
+               [weak refreshLocal];
              }];
 }
 

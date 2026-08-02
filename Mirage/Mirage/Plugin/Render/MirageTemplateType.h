@@ -51,11 +51,22 @@ MirageTemplateTypeForSource(NSString *source,
     return MirageTemplateTypeInvalid;
   }
 
-  NSRegularExpression *expression =
-      [NSRegularExpression regularExpressionWithPattern:
-                               @"(?m)^[ \\t]*//[ \\t]*#template(?![-\\w])(.*)$"
-                                                options:0
-                                                  error:nil];
+  // Substring fast-reject, then a once-compiled pattern: the rack strip asks
+  // this once per ENTRY on every refresh, and compiling the expression cost
+  // more than the whole rest of the parse.
+  if ([source rangeOfString:@"#template"].location == NSNotFound) {
+    if (outError)
+      *outError = MirageTemplateDirectiveErrorMissing;
+    return MirageTemplateTypeInvalid;
+  }
+  static NSRegularExpression *expression;
+  static dispatch_once_t onceTemplate;
+  dispatch_once(&onceTemplate, ^{
+    expression = [[NSRegularExpression alloc]
+        initWithPattern:@"(?m)^[ \\t]*//[ \\t]*#template(?![-\\w])(.*)$"
+                options:0
+                  error:nil];
+  });
   NSArray<NSTextCheckingResult *> *matches =
       [expression matchesInString:source
                           options:0

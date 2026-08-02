@@ -43,6 +43,21 @@ extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
 /// else -> a one-time constant eval); the viewer evaluates it live.
 @property(nonatomic, readonly) NSString *centerSource;
 @property(nonatomic, readonly) NSString *binds; // bound lane label
+/// SHADER RACK: `binds` scoped to the entry this runtime was built for -
+/// `~Rack#<id>.<binds>`, or `binds` verbatim for the sentinel. The key the
+/// TIMELINE stores this control's lane under.
+///
+/// Separate from `binds` rather than a rewrite of it because `binds` is also
+/// the EXPRESSION VARIABLE name the compiled forward/inverse resolve the bound
+/// value by (`-_varsForBound:…` matches it against the shader's own uniform
+/// identifier). Rewriting it would make every authored expression that names
+/// its own uniform fail to resolve. So: `binds` for expression identity,
+/// `laneKey` for lane identity.
+@property(nonatomic, readonly) NSString *laneKey;
+/// `name` scoped the same way - the OSC-checklist element key, and what
+/// `kkOSCElementVisible:` gates on. Scoping it is what makes hiding a handle
+/// on one rack entry not hide the same-named handle on another.
+@property(nonatomic, readonly) NSString *elementKey;
 @property(nonatomic, readonly)
     NSString *styleName; // "hollow"/"square"/"dot"/""
 @property(nonatomic, readonly) NSString *cursorName; // hover-cursor name
@@ -105,6 +120,15 @@ extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
 + (NSArray<MirageOSCBlockRuntime *> *)runtimesForSource:(NSString *)src
                                                   lanes:(NSArray<KKLane *> *)
                                                             lanes;
+
+/// As above, naming the rack entry `src` belongs to, so every runtime carries
+/// that entry's `laneKey` / `elementKey`. nil or the sentinel id gives byte-for
+/// -byte the same runtimes the two-argument form does - which is what every
+/// pre-rack project has.
++ (NSArray<MirageOSCBlockRuntime *> *)
+    runtimesForSource:(NSString *)src
+                lanes:(NSArray<KKLane *> *)lanes
+          rackEntryID:(nullable NSString *)entryID;
 
 /// Bound value in EXPR units from raw lane values (÷divisor, `fieldCount`
 /// comps).

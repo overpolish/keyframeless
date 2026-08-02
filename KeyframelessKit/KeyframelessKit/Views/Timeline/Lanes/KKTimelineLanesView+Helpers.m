@@ -34,6 +34,15 @@
 }
 @end
 
+BOOL KKSearchFieldBlurOnCommit(NSControl *control, SEL selector) {
+  if (selector == @selector(insertNewline:) ||
+      selector == @selector(cancelOperation:)) {
+    [control.window makeFirstResponder:nil];
+    return YES;
+  }
+  return NO;
+}
+
 @implementation _KKSearchField {
   id _outsideClickMon; // blurs the field on an outside click while editing
 }

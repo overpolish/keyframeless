@@ -30,8 +30,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Rebuild from the shader source (parse + compile via MirageOSCBlockRuntime).
 /// Cheap string-compare no-op when unchanged. `lanes` seed a first write.
+///
+/// `entryID` is the shader-rack entry the source belongs to, so every runtime
+/// carries that entry's lane / element keys. It is part of the no-op compare
+/// too: two entries running one template have identical source while binding
+/// different lanes. nil / the sentinel is what an unracked project has.
 - (void)syncWithSource:(nullable NSString *)src
-                 lanes:(NSArray<KKLane *> *)lanes;
+                 lanes:(NSArray<KKLane *> *)lanes
+           rackEntryID:(nullable NSString *)entryID;
 
 /// `@{@"center", @"style", @"alpha"}` bundles for the active POINT handles.
 /// Forward -miniViewer:extraFixedGlyphsForContentRect: here.

@@ -3613,6 +3613,48 @@
         }
       }
     },
+    "Enabled": {
+      "comment": "Mirage rack entry on/off lane.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiviert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有効"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사용"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用"
+          }
+        }
+      }
+    },
     "Filter": {
       "comment": "Mirage category: processes the clip.",
       "extractionState": "manual",
@@ -5289,6 +5331,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "自然对数。"
+          }
+        }
+      }
+    },
+    "No keypose at the current frame": {
+      "comment": "Mirage rack: tooltip on a grayed shader box while a keypose popover is open on a time that shader has no keypose at.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Keypose im aktuellen Frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin keypose en el fotograma actual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune keypose sur l’image actuelle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在のフレームにキーポーズがありません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 프레임에 키포즈가 없음"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前帧没有关键姿势"
           }
         }
       }
@@ -9283,6 +9367,48 @@
         }
       }
     },
+    "This chain is rendering slower than real time.": {
+      "comment": "Mirage rack: tooltip on the warning shown when the measured cost of rendering the whole shader chain stays above one frame.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Kette wird langsamer als in Echtzeit gerendert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta cadena se renderiza más lento que en tiempo real."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette chaîne est rendue plus lentement que le temps réel."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチェーンのレンダリングはリアルタイムより遅くなっています。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 체인은 실시간보다 느리게 렌더링되고 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此链的渲染速度慢于实时。"
+          }
+        }
+      }
+    },
     "This pixel's position, in pixels.": {
       "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
       "extractionState": "manual",
@@ -11551,6 +11677,174 @@
         }
       }
     },
+    "Add Shader": {
+      "comment": "Mirage rack: tooltip on the button that appends another shader to the chain.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader hinzufügen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir shader"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un shader"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダを追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加着色器"
+          }
+        }
+      }
+    },
+    "Remove Shader": {
+      "comment": "Mirage rack: tooltip on the button that deletes the selected shader from the chain.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader entfernen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar shader"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer le shader"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダを削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더 제거"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除着色器"
+          }
+        }
+      }
+    },
+    "Preview the chain up to here. Final Cut's viewer still shows the whole chain.": {
+      "comment": "Mirage rack: tooltip on the button that previews the shader chain truncated after this shader.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kette bis hierher in der Vorschau anzeigen. Der Viewer von Final Cut zeigt weiterhin die gesamte Kette."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previsualizar la cadena hasta aquí. El visor de Final Cut sigue mostrando la cadena completa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévisualiser la chaîne jusqu'ici. Le viewer de Final Cut affiche toujours la chaîne complète."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここまでのチェーンをプレビューします。Final Cut のビューアは引き続きチェーン全体を表示します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "여기까지의 체인을 미리 봅니다. Final Cut 뷰어에는 전체 체인이 계속 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览到此为止的链条。Final Cut 检视器仍显示完整链条。"
+          }
+        }
+      }
+    },
+    "Preview this shader alone, on the original clip. Final Cut's viewer still shows the whole chain.": {
+      "comment": "Mirage rack: tooltip on the button that previews only this shader's own contribution.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur diesen Shader auf dem Originalclip in der Vorschau anzeigen. Der Viewer von Final Cut zeigt weiterhin die gesamte Kette."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previsualizar solo este shader, sobre el clip original. El visor de Final Cut sigue mostrando la cadena completa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévisualiser ce shader seul, sur le plan d'origine. Le viewer de Final Cut affiche toujours la chaîne complète."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このシェーダだけを元のクリップに適用してプレビューします。Final Cut のビューアは引き続きチェーン全体を表示します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 셰이더만 원본 클립에 적용해 미리 봅니다. Final Cut 뷰어에는 전체 체인이 계속 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅预览此着色器在原始片段上的效果。Final Cut 检视器仍显示完整链条。"
+          }
+        }
+      }
+    },
     "Remove": {
       "comment": "Color panel button that removes the selected instance of the shader's repeatable group of controls.",
       "extractionState": "manual",
@@ -12219,6 +12513,174 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示该着色器的选区，而不是调色后的画面。"
+          }
+        }
+      }
+    },
+    "Mirage can run a <accent>chain of shaders</accent> on one clip: the strip of boxes above the controls is the <accent>rack</accent>, and each shader takes the previous one's output as its input, with the last one writing the frame. One shader is simply a rack of one, and behaves exactly as it always has.": {
+      "comment": "Mirage help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirage kann eine <accent>Kette von Shadern</accent> auf einen Clip anwenden: Die Leiste mit den Kästchen über den Reglern ist das <accent>Rack</accent>, und jeder Shader nimmt die Ausgabe des vorherigen als Eingabe, wobei der letzte das Bild schreibt. Ein einzelner Shader ist einfach ein Rack mit einem Eintrag und verhält sich genau wie bisher."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirage puede ejecutar una <accent>cadena de shaders</accent> en un mismo clip: la tira de cajas encima de los controles es el <accent>rack</accent>, y cada shader toma la salida del anterior como su entrada, y el último escribe el fotograma. Un solo shader es sencillamente un rack de uno y se comporta igual que siempre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirage peut exécuter une <accent>chaîne de shaders</accent> sur un même plan : la bande de cases au-dessus des réglages est le <accent>rack</accent>, et chaque shader prend la sortie du précédent comme entrée, le dernier écrivant l'image. Un shader unique est simplement un rack d'un seul élément et se comporte exactement comme avant."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirage は 1 つのクリップに<accent>シェーダーのチェーン</accent>を適用できます。コントロールの上に並ぶボックスの列が<accent>ラック</accent>で、各シェーダーは前のシェーダーの出力を入力として受け取り、最後のシェーダーがフレームを書き出します。シェーダーが 1 つだけの場合は要素が 1 つのラックで、これまでとまったく同じように動作します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirage는 하나의 클립에 <accent>셰이더 체인</accent>을 적용할 수 있습니다. 컨트롤 위에 늘어선 상자들이 <accent>랙</accent>이며, 각 셰이더는 앞 셰이더의 출력을 입력으로 받고 마지막 셰이더가 프레임을 씁니다. 셰이더가 하나뿐이면 항목이 하나인 랙이며, 지금까지와 똑같이 동작합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirage 可以在同一个片段上运行<accent>着色器链</accent>：控件上方那一排方块就是<accent>机架</accent>，每个着色器都以上一个着色器的输出作为输入，最后一个负责输出画面。只有一个着色器时就是只有一项的机架，行为与以往完全一致。"
+          }
+        }
+      }
+    },
+    "<accent>Click a box</accent> to work on that shader - the code editor, the controls, the Color panel, the on-screen controls and the AI all follow the selection.": {
+      "comment": "Mirage help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Klicke ein Kästchen an</accent>, um an diesem Shader zu arbeiten - der Code-Editor, die Regler, das Farbpanel, die Bildschirmsteuerungen und die KI folgen alle der Auswahl."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Haz clic en una caja</accent> para trabajar en ese shader - el editor de código, los controles, el panel de Color, los controles en pantalla y la IA siguen la selección."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Cliquez sur une case</accent> pour travailler sur ce shader - l'éditeur de code, les réglages, le panneau Couleur, les contrôles à l'écran et l'IA suivent tous la sélection."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ボックスをクリック</accent>すると、そのシェーダーを編集できます。コードエディタ、コントロール、カラーパネル、画面上のコントロール、AI のすべてが選択に追従します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>상자를 클릭</accent>하면 해당 셰이더를 작업합니다. 코드 편집기, 컨트롤, 색상 패널, 화면 컨트롤, AI가 모두 선택을 따릅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>点按方块</accent>即可处理该着色器 - 代码编辑器、控件、颜色面板、屏幕控件和 AI 都会跟随选择。"
+          }
+        }
+      }
+    },
+    "<accent>+</accent> at the end of the chain adds a shader from the browser, and dragging a box along the strip changes the order they run in. Each box's <accent>Enabled</accent> switch is a keyframable bypass - a shader that is off is skipped whole and the chain flows past it.": {
+      "comment": "Mirage help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit dem <accent>+</accent> am Ende der Kette fügst du einen Shader aus dem Browser hinzu, und wenn du ein Kästchen in der Leiste verschiebst, änderst du die Reihenfolge, in der sie laufen. Der Schalter <accent>Aktiviert</accent> an jedem Kästchen ist ein keyframebarer Bypass - ein ausgeschalteter Shader wird komplett übersprungen, und die Kette fließt an ihm vorbei."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El <accent>+</accent> al final de la cadena añade un shader desde el navegador, y arrastrar una caja por la tira cambia el orden en que se ejecutan. El interruptor <accent>Activado</accent> de cada caja es un bypass con fotogramas clave - un shader apagado se omite por completo y la cadena pasa de largo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le <accent>+</accent> au bout de la chaîne ajoute un shader depuis le navigateur, et faire glisser une case le long de la bande change l'ordre d'exécution. Le commutateur <accent>Activé</accent> de chaque case est un contournement animable - un shader désactivé est entièrement sauté et la chaîne passe outre."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チェーンの末尾にある <accent>+</accent> でブラウザからシェーダーを追加でき、ボックスを列に沿ってドラッグすると実行順が変わります。各ボックスの<accent>有効</accent>スイッチはキーフレーム可能なバイパスで、オフのシェーダーはまるごとスキップされ、チェーンはその横を素通りします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "체인 끝의 <accent>+</accent>로 브라우저에서 셰이더를 추가하고, 상자를 줄을 따라 드래그하면 실행 순서가 바뀝니다. 각 상자의 <accent>사용</accent> 스위치는 키프레임이 가능한 바이패스로, 꺼진 셰이더는 통째로 건너뛰고 체인은 그대로 지나갑니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "链末尾的 <accent>+</accent> 可从浏览器添加着色器，沿着这一排拖动方块则会改变它们的运行顺序。每个方块上的<accent>启用</accent>开关是可设关键帧的旁通开关 - 关闭的着色器会被整个跳过，链路直接绕过它。"
+          }
+        }
+      }
+    },
+    "The mini viewer can preview the chain <accent>up to here</accent> or one shader <accent>solo</accent> (fed the original clip). Those only change the mini viewer, never Final Cut's viewer, and aren't saved with the project.": {
+      "comment": "Mirage help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Mini-Viewer kann die Kette <accent>bis hierhin</accent> oder einen Shader <accent>solo</accent> (mit dem Originalclip als Eingabe) zeigen. Das ändert nur den Mini-Viewer, nie den Viewer von Final Cut, und wird nicht mit dem Projekt gesichert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El minivisor puede previsualizar la cadena <accent>hasta aquí</accent> o un shader <accent>en solo</accent> (alimentado con el clip original). Eso solo cambia el minivisor, nunca el visor de Final Cut, y no se guarda con el proyecto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le mini-viewer peut prévisualiser la chaîne <accent>jusqu'ici</accent> ou un shader <accent>en solo</accent> (alimenté par le plan d'origine). Cela ne change que le mini-viewer, jamais le viewer de Final Cut, et n'est pas enregistré avec le projet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミニビューアでは、チェーンを<accent>ここまで</accent>表示したり、シェーダーを 1 つだけ<accent>ソロ</accent>で（元のクリップを入力として）表示したりできます。これはミニビューアだけに効き、Final Cut のビューアには影響せず、プロジェクトにも保存されません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미니 뷰어에서는 체인을 <accent>여기까지</accent> 보거나 셰이더 하나만 <accent>솔로</accent>로(원본 클립을 입력으로) 볼 수 있습니다. 이는 미니 뷰어에만 적용되며 Final Cut의 뷰어에는 영향을 주지 않고 프로젝트에 저장되지도 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "迷你检视器可以预览<accent>到此为止</accent>的链，或单独<accent>独奏</accent>某个着色器（以原始片段作为输入）。这只影响迷你检视器，不会改变 Final Cut 的检视器，也不会随项目保存。"
           }
         }
       }

@@ -28,6 +28,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// like rename).
 - (void)refreshLocal;
 
+/// A card was clicked: load that template into the rack entry the strip has
+/// SELECTED. One browser, one verb - adding a link to the chain is the "+"'s
+/// job and never opens this.
 @property(nonatomic, copy, nullable) void (^onSelectEntry)
     (MirageCatalogEntry *entry);
 @property(nonatomic, copy, nullable) void (^onPublishEntry)

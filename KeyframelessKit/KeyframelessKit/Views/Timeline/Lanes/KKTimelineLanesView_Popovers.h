@@ -113,6 +113,11 @@ NS_ASSUME_NONNULL_BEGIN
   double _openStaticBoundaryFraction;
   NSArray<KKLane *> *_openStaticBoundaryLanes;
   NSArray<NSString *> *_openStaticBoundaryExcluded;
+  // The slot fractions of the last published boundary request. An in-place
+  // retarget to another lane's keypose at the SAME time leaves the fraction
+  // untouched but changes the scoped keypose set, so the fraction alone can't
+  // tell whether the filmstrip still matches what's on screen.
+  NSArray<NSNumber *> *_lastPublishedBoundarySlots;
   // Suppress the _refresh-driven boundary-popover re-drive briefly after a
   // popover-originated edit, so the host's echo write doesn't rebuild rows
   // mid-interaction (add/remove already refresh themselves). External changes
@@ -189,6 +194,11 @@ NS_ASSUME_NONNULL_BEGIN
 // Single-owner plugins seed every available lane into `_timeline`, so this is
 // the full `_availableLanes` for them.
 - (NSArray<KKLane *> *)_ownerScopedAvailableLanes;
+/// The owner a layer-navigable dropdown should open on, resolved against
+/// `lanes`: the host's LIVE selection (`constantsLaneFilter`) when it supplies
+/// one, else our stored `activeLayerKey`. nil = no owner resolved (every
+/// single-owner plugin), which leaves the nav on its first layer.
+- (nullable NSString *)_hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes;
 - (nullable KKLane *)_templateForLabel:(NSString *)label;
 - (BOOL)_isAnimatableLabel:(NSString *)label;
 - (void)_refresh;
@@ -312,6 +322,8 @@ NS_ASSUME_NONNULL_BEGIN
                                                 partCompoundLabels
                                  partStates:(NSArray<NSArray<NSNumber *> *> *)
                                                 partCompoundStates
+                                  partLanes:(nullable NSArray<KKLane *> *)
+                                                partCompoundLanes
                               partRebuilder:
                                   (NSArray<NSArray<NSNumber *> *> *_Nullable (
                                       ^_Nullable)(void))partRebuilder
@@ -379,7 +391,13 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 /// graph at its open fraction (briefly suppressed after a popover edit).
 - (void)_refreshOpenStaticPopoverAnyOptedIn:(BOOL)anyOptedIn;
 - (void)_publishBoundaryRequestForFraction:(double)fraction;
+/// The slot fractions a boundary request for `fraction` would publish: the
+/// scoped keypose times, tie-collapsed, with the clicked keypose ALWAYS kept.
+- (NSArray<NSNumber *> *)_boundarySlotFractionsForFraction:(double)fraction;
 - (NSArray<NSNumber *> *)_animatableKPFractions;
+/// Every scoped keypose fraction, time-sorted and eps-deduped, WITHOUT the
+/// tie-collapse - the set a clicked keypose is resolved against.
+- (NSArray<NSNumber *> *)_allKPFractions;
 - (double)_snapEditFractionToKeypose:(double)fraction;
 - (void)_refreshBoundaryPopoverNavEnabled;
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction;

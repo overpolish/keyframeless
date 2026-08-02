@@ -17,7 +17,8 @@
 #import "MirageOSCBlockRuntime.h" // rotate blocks feed the rotation set
 #import "MirageRenderUniforms.h"  // MirageMakeUniforms (shared with FCP render)
 #import "MirageTypes.h"
-#import "Plugin_Private.h" // +availableLanesForShaderSource:
+#import "Plugin+Render_Internal.h" // kMiragePassthroughSource
+#import "Plugin_Private.h"         // +availableLanesForShaderSource:
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKSlotInstances.h> // slot lane keys + instance order
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -38,78 +39,13 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
   return KKMiniViewerFeedRequestPath(@"mesh", uuid);
 }
 
-// Single-value `units="px"` lanes are authored in source-media pixels. The
-// main renderer converts them to the active tile scale; do the same for the
-// mini's render target so changing preview zoom cannot change their apparent
-// size relative to the frame. Points and #multi pixel fields are normalized in
-// lane storage and already scale themselves.
-static void MirageScaleMiniPixelProps(MirageShaderModel *model,
-                                      vector_float4 *pool, int poolCount,
-                                      float renderW, float renderH,
-                                      CGSize mediaSize) {
-  if (!model || !pool || mediaSize.width <= 0.0 || mediaSize.height <= 0.0)
-    return;
-  float scaleX = renderW / (float)mediaSize.width;
-  float scaleY = renderH / (float)mediaSize.height;
-  float scale = fminf(scaleX, scaleY);
-  if (!isfinite(scale) || scale <= 0.0f || scale == 1.0f)
-    return;
-  const MirageScalarProp *props = model.scalarProps;
-  for (int i = 0; i < model.scalarCount; i++) {
-    const MirageScalarProp *p = &props[i];
-    if (p->isPoint || p->isMulti || p->fieldUnit[0] != 'p')
-      continue;
-    // A repeatable control is one vec4 PER INSTANCE; the dead slots are zero,
-    // and zero scales to zero, so the whole span goes through unconditionally.
-    int span = p->slotMax > 0 ? p->slotMax : 1;
-    for (int e = 0; e < span; e++) {
-      int off = p->poolOffset + e;
-      if (off < 0 || off >= poolCount)
-        continue;
-      pool[off].x *= scale;
-    }
-  }
-}
-
-// One colour-matched `// #frames` neighbour, held across draws. The conversion
-// it caches is a full-frame render pass plus an RGBA16Float allocation, and the
-// pixels behind it only move when the render process pumps a new frame - so the
-// work belongs to the pump, not to the redraw.
-@interface _MirageNeighborConversion : NSObject
-@property(nonatomic, strong) id<MTLTexture> raw;
-@property(nonatomic) uint64_t generation;
-@property(nonatomic) BOOL technicalTransform;
-@property(nonatomic, strong) id<MTLTexture> converted;
-@end
-
 @implementation _MirageNeighborConversion
 @end
 
-@implementation MirageMiniViewerRenderer {
-  NSMutableDictionary<NSString *, id<MTLRenderPipelineState>> *_pipelines;
-  MTLPixelFormat _pipelineFormat;
-  // Render-at-reference-resolution + downscale (so the small mini texture shows
-  // a proper minified copy of a full-res render: grain, dither, everything).
-  id<MTLTexture> _hiResTex;
-  id<MTLRenderPipelineState> _blitPipeline;
-  MTLPixelFormat _blitFormat;
-  id<MTLSamplerState> _linearSampler;
-  // Source last fed to -_syncMiniPointController, so the per-draw sync is a
-  // cheap string compare instead of re-running the directive parse each frame.
-  NSString *_pointSyncedSource;
-  KKPointOSCSet *_pointSet;
-  NSString *_rotSyncedSource;
-  KKRotationOSCSet *_rotSet;
-  MirageExprMiniSet *_exprSet;
-  // Last logged `// #frames` bind state (declared count / first offset / pumped
-  // count), so the diagnostic fires on a change instead of once per drawn
-  // frame.
-  NSString *_neighborBindSignature;
-  // Colour-matched neighbours, one entry per aux index. Same shape as the
-  // _hiResTex / _pipelines caches: an ivar-held Metal object rebuilt only when
-  // its key inputs change.
-  NSMutableArray<_MirageNeighborConversion *> *_neighborConversions;
-}
+@implementation _MirageMiniChainInputs
+@end
+
+@implementation MirageMiniViewerRenderer
 
 - (instancetype)init {
   if ((self = [super init]))
@@ -146,9 +82,14 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
 // label list is unchanged.
 - (void)_syncMiniPointController {
   NSString *src = [self _customShaderSource] ?: @"";
-  if ([src isEqualToString:_pointSyncedSource])
+  // Entry-qualified, like the viewer's `_oscBlockSig`: two rack entries running
+  // the same template have identical source while binding different lanes, so
+  // source alone would leave the previous entry's controllers up.
+  NSString *sig =
+      [NSString stringWithFormat:@"%@\n%@", [self _oscEntryID], src];
+  if ([sig isEqualToString:_pointSyncedSource])
     return;
-  _pointSyncedSource = [src copy];
+  _pointSyncedSource = [sig copy];
   NSMutableArray<NSString *> *labels = [NSMutableArray array];
   NSMutableSet<NSString *> *noSnap =
       [NSMutableSet set]; // `skipsnapping` labels
@@ -158,20 +99,27 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   // where it belongs.
   NSMutableDictionary<NSString *, MirageOSCBlockRuntime *> *warped =
       [NSMutableDictionary dictionary];
-  __weak KKMiniViewerRenderer *weakRenderer = self;
+  __weak MirageMiniViewerRenderer *weakRenderer = self;
   for (MirageOSCBlockRuntime *b in
        [MirageOSCBlockRuntime runtimesForSource:src
-                                          lanes:self.laneTemplates ?: @[]])
+                                          lanes:self.laneTemplates ?: @[]
+                                    rackEntryID:[self _oscEntryID]])
     if ([b.primitive isEqualToString:@"position"]) {
-      [labels addObject:b.binds]; // uniform name = lane identity
+      // The rack-scoped key, not the bare uniform name: the mini controller
+      // reads, writes and gates visibility by its laneLabel, exactly as
+      // KKPositionOSC does in the viewer.
+      [labels addObject:b.laneKey];
       if (!b.snaps)
-        [noSnap addObject:b.binds];
+        [noSnap addObject:b.laneKey];
       if (b.hasForward && b.hasInverse) {
         // Without this every uniform the warp REFERENCES resolves to 0, so a
         // forward like `mid + uPosition` collapses to a constant and the handle
         // sits at a fixed wrong spot. Same provider the expr set uses.
+        // Referenced uniforms arrive under the shader's own bare identifier,
+        // so they are scoped to the entry before they reach the timeline.
         b.laneValueProvider = ^NSArray<NSNumber *> *(NSString *label) {
-          return [weakRenderer rootValuesForLabel:label];
+          return [weakRenderer
+              rootValuesForLabel:[weakRenderer _oscScopedKey:label]];
         };
         // `size` is the SOURCE media resolution, not the preview's - a warp
         // written against real pixels has to mean the same thing here as in
@@ -179,7 +127,7 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
         b.mediaSizeProvider = ^CGSize(void) {
           return weakRenderer.canvas.sourceMediaSize;
         };
-        warped[b.binds] = b;
+        warped[b.laneKey] = b;
       }
     }
   [self.pointSet setLaneLabels:labels];
@@ -238,7 +186,7 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   NSArray<KKLane *> *lanes =
       src.length ? [MiragePlugin availableLanesForShaderSource:src]
                  : (self.laneTemplates ?: @[]);
-  [self.exprSet syncWithSource:src lanes:lanes];
+  [self.exprSet syncWithSource:src lanes:lanes rackEntryID:[self _oscEntryID]];
 }
 
 // The KKRotationAxes bitmask for a rotate block's `axes = x y z` subset
@@ -250,19 +198,22 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
 // compare skips the parse when the source is unchanged.
 - (void)_syncMiniRotController {
   NSString *src = [self _customShaderSource] ?: @"";
-  if ([src isEqualToString:_rotSyncedSource])
+  NSString *sig =
+      [NSString stringWithFormat:@"%@\n%@", [self _oscEntryID], src];
+  if ([sig isEqualToString:_rotSyncedSource])
     return;
-  _rotSyncedSource = [src copy];
+  _rotSyncedSource = [sig copy];
   NSMutableArray<NSDictionary<NSString *, id> *> *rots = [NSMutableArray array];
   if (src.length) {
     // Rotate blocks (the `osc={..}` sugar included) feed the spec-driven set,
     // keyed on their LANE label like the viewer gizmo. The two standard
     // `center =` shapes map onto the spec: a bare uniform name is a live link,
     // anything else evaluates once to a constant centre.
-    __weak typeof(self) weakRenderer = self;
+    __weak MirageMiniViewerRenderer *weakRenderer = self;
     for (MirageOSCBlockRuntime *b in
          [MirageOSCBlockRuntime runtimesForSource:src
-                                            lanes:self.laneTemplates ?: @[]]) {
+                                            lanes:self.laneTemplates ?: @[]
+                                      rackEntryID:[self _oscEntryID]]) {
       if (![b.primitive isEqualToString:@"rotate"])
         continue;
       // Every uniform the centre expression REFERENCES resolves through this
@@ -271,7 +222,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
       // put the rings half a frame off the top-left corner. The point + expr
       // sets already wire the same pair - this path was the one that didn't.
       b.laneValueProvider = ^NSArray<NSNumber *> *(NSString *label) {
-        return [weakRenderer rootValuesForLabel:label];
+        return [weakRenderer
+            rootValuesForLabel:[weakRenderer _oscScopedKey:label]];
       };
       b.mediaSizeProvider = ^CGSize(void) {
         return weakRenderer.canvas.sourceMediaSize;
@@ -292,10 +244,15 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
       // a bare uniform. Only classify it as the cheap live-link form when it
       // is actually a lane; otherwise evaluate the complete block per draw so
       // its locals and referenced lanes remain live.
+      // `laneTemplates` is the WHOLE rack's set, so the bare identifier the
+      // shader wrote is matched in this entry's namespace - otherwise a second
+      // entry's `center = uOrigin` never classifies as a link and falls to the
+      // per-draw evaluation path.
+      NSString *centerKey = [self _oscScopedKey:centerSrc];
       BOOL isLink = NO;
       if (isBareIdentifier)
         for (KKLane *lane in self.laneTemplates)
-          if ([lane.key isEqualToString:centerSrc]) {
+          if ([lane.key isEqualToString:centerKey]) {
             isLink = YES;
             break;
           }
@@ -303,11 +260,11 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
       if (centerSrc.length && !isLink)
         c = [b centerObjectForBound:KKExprScalar(0) aspect:1.0];
       NSMutableDictionary<NSString *, id> *spec = [@{
-        @"label" : b.binds,
+        @"label" : b.laneKey,
         @"axes" : @((int)MirageMiniRotationAxesForNames(b.axes)),
         @"centerX" : @(c.x),
         @"centerY" : @(c.y),
-        @"linkLabel" : isLink ? centerSrc : @"",
+        @"linkLabel" : isLink ? centerKey : @"",
       } mutableCopy];
       // An expression centre (anything but a bare uniform name) depends on the
       // lane's CURRENT value, so the constant baked above - evaluated against a
@@ -324,8 +281,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
             return CGPointMake(0.5, 0.5);
           double aspect =
               cr.size.height > 0 ? cr.size.width / cr.size.height : 1.0;
-          KKExprVal bound =
-              [rt boundValueFromLaneValues:[self rootValuesForLabel:rt.binds]];
+          KKExprVal bound = [rt
+              boundValueFromLaneValues:[self rootValuesForLabel:rt.laneKey]];
           simd_float2 oc = [rt centerObjectForBound:bound aspect:aspect];
           return CGPointMake(oc.x, oc.y);
         };
@@ -371,6 +328,17 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
 // (pointHandleSizeScale: the base's KKOSCAnchorDotScale default already
 // matches the dot family - no override needed.)
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
+  // SHADER RACK: the key names its entry, and the shader-declared default is a
+  // question about THAT entry's source. Peeled first, because a rack key wraps
+  // a `#slots` one (`~Rack#<id>.<group>#<inst>.<control>`) and the slot parse
+  // below expects the inner half. Every bare key belongs to the sentinel and
+  // passes through untouched, so a project that has never been racked answers
+  // exactly as it did.
+  NSString *entryID = kMirageRackSentinelEntryID;
+  NSString *bare = nil;
+  MirageRackParseLaneKey(label ?: @"", &entryID, &bare);
+  if (bare.length)
+    label = bare;
   // A `// #slots` instance lane whose keyframes aren't stamped yet answers from
   // the PROTOTYPE it was copied from, which is the control the key names. Every
   // instance therefore starts at the shader's declared default rather than at
@@ -392,7 +360,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   // isn't seeded with these lanes yet, so valuesForLabel lands here. Return the
   // shader-DECLARED default (not super's @[@0], which would drive a `// #float`
   // uniform to 0 and flatten the preview) so the mini matches the first render.
-  NSString *src = [self _customShaderSource];
+  NSString *src = [self _customShaderSourceForEntry:entryID];
   MirageShaderModel *model = [MirageShaderModel modelForSource:src];
   const MirageScalarProp *sp = model.scalarProps;
   for (int i = 0; i < model.scalarCount; i++)
@@ -441,42 +409,61 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   return [super defaultValuesForLabel:label];
 }
 
-// The Custom type's user shader source from the timeline's "Mirage" code lane
-// (the default plasma when empty), mirroring the FCP render read.
-- (NSString *)_customShaderSource {
-  KKLane *shaderLane = nil;
-  for (KKLane *lane in self.timeline.lanes)
-    if ([lane.key isEqualToString:kMirageCodeLaneLabel]) {
-      shaderLane = lane;
-      break;
-    }
+// The Custom type's user shader source for ONE rack entry, from that entry's
+// code lane (the default plasma when the sentinel's is missing entirely),
+// mirroring the FCP render read.
+- (NSString *)_customShaderSourceForEntry:(NSString *)entryID {
+  KKLane *shaderLane =
+      MirageRackCodeLaneForEntry(self.timeline, entryID, kMirageCodeLaneLabel);
   if (shaderLane.codeString.length)
     return shaderLane.codeString;
-  if (!shaderLane)
-    // Fresh instance: timeline not yet seeded. Mirror the FCP render and use
-    // the baked plasma default so the mini matches. A present-but-empty
-    // codeString means the user cleared it => passthrough.
+  // Fresh instance: timeline not yet seeded. Mirror the FCP render and use the
+  // baked plasma default so the mini matches. A present-but-empty codeString
+  // means the user cleared it => passthrough. The seed is the SENTINEL's alone,
+  // matching MirageEvalStateAtFrac: a later rack entry exists only because its
+  // registry slot was persisted, so a missing code lane there means no shader,
+  // not an unwritten one.
+  if (!shaderLane &&
+      (!entryID.length || [entryID isEqualToString:kMirageRackSentinelEntryID]))
     return MirageCustomDefaultShaderSource();
-  return @"void mainImage(out vec4 O, in vec2 fc){ O = "
-         @"texture(iChannel0, fc / iResolution.xy); }"; // passthrough when
-                                                        // empty
+  return kMiragePassthroughSource;
 }
 
-// All Custom sections from the Mirage lane: Image (codeString) + non-empty
-// extra tabs (Common / Buffer A-D) by name. Mirrors the FCP render's blob
-// sections.
-- (NSDictionary<NSString *, NSString *> *)_customSections {
+// The entry the on-screen controls belong to, defaulted to the sentinel - both
+// the pre-selection answer and the only entry an unracked project has.
+- (NSString *)_oscEntryID {
+  return MirageRackEntryIDOrSentinel(self.rackEntryID);
+}
+
+// A shader-authored (bare) key in that entry's namespace, idempotently, so a
+// call site may hand over either half of the boundary.
+- (NSString *)_oscScopedKey:(NSString *)key {
+  return MirageRackScopedLaneKey([self _oscEntryID], key);
+}
+
+// The source the SOURCE-DERIVED on-screen controls (the point / rotation / expr
+// sets) and the bare-label defaults are read from: the SELECTED entry's, which
+// is the entry the viewer's own OSC is scoped to - the two stay in lockstep
+// through the selection rather than through the sentinel. Chain-wide rendering
+// asks per entry (-_customShaderSourceForEntry:) instead.
+- (NSString *)_customShaderSource {
+  return [self _customShaderSourceForEntry:[self _oscEntryID]];
+}
+
+// All Custom sections from one entry's code lane: Image (codeString) +
+// non-empty extra tabs (Common / Buffer A-D) by name. Mirrors the FCP render's
+// per-entry blob sections.
+- (NSDictionary<NSString *, NSString *> *)_customSectionsForEntry:
+    (NSString *)entryID {
   NSMutableDictionary<NSString *, NSString *> *out =
       [NSMutableDictionary dictionary];
-  KKLane *shaderLane = nil;
-  for (KKLane *lane in self.timeline.lanes)
-    if ([lane.key isEqualToString:kMirageCodeLaneLabel]) {
-      shaderLane = lane;
-      break;
-    }
+  KKLane *shaderLane =
+      MirageRackCodeLaneForEntry(self.timeline, entryID, kMirageCodeLaneLabel);
   if (!shaderLane) {
     // Fresh instance: seed the baked plasma default (mirrors the FCP render).
-    out[@"Image"] = MirageCustomDefaultShaderSource();
+    // Sentinel only - see -_customShaderSourceForEntry:.
+    if (!entryID.length || [entryID isEqualToString:kMirageRackSentinelEntryID])
+      out[@"Image"] = MirageCustomDefaultShaderSource();
     return out;
   }
   if (shaderLane.codeString.length)
@@ -490,124 +477,10 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   return out;
 }
 
-// Runtime-compiled pipeline for a Custom shader: the GLSL is
-// transpiled to MSL via glslang + SPIRV-Cross (the same shared, memoised path
-// as the FCP render), then cached in _pipelines on the emitted MSL hash.
-// Returns nil (logged) on failure; the caller falls back to the error pattern.
-- (id<MTLRenderPipelineState>)_customPipelineForDevice:(id<MTLDevice>)device
-                                           pixelFormat:(MTLPixelFormat)format
-                                                source:(NSString *)userSource
-                                            bufferMode:(BOOL)bufferMode {
-  KKGLSLTranspileResult *tr = bufferMode ? KKTranspileGLSLBuffer(userSource)
-                                         : KKTranspileGLSL(userSource);
-  if (!tr.msl) {
-    KKLogError(@"MirageMiniViewerRenderer: GLSL transpile failed: %@",
-               tr.errorLog);
-    return nil;
-  }
-  if (_pipelineFormat != format) {
-    _pipelines = nil;
-    _pipelineFormat = format;
-  }
-  if (!_pipelines)
-    _pipelines = [NSMutableDictionary dictionary];
-  NSString *key = [NSString stringWithFormat:@"custom:%@", tr.mslDigest];
-  id<MTLRenderPipelineState> existing = _pipelines[key];
-  if (existing)
-    return existing;
-  NSError *err = nil;
-  id<MTLLibrary> lib = [device newLibraryWithSource:tr.msl
-                                            options:nil
-                                              error:&err];
-  if (!lib) {
-    KKLogError(@"MirageMiniViewerRenderer: custom MSL compile failed: %@", err);
-    return nil;
-  }
-  MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
-  pd.vertexFunction = [lib newFunctionWithName:tr.vertexName];
-  pd.fragmentFunction = [lib newFunctionWithName:tr.fragmentName];
-  pd.colorAttachments[0].pixelFormat = format;
-  id<MTLRenderPipelineState> ps =
-      [device newRenderPipelineStateWithDescriptor:pd error:&err];
-  if (!ps) {
-    KKLogError(@"MirageMiniViewerRenderer: custom pipeline failed: %@", err);
-    return nil;
-  }
-  _pipelines[key] = ps;
-  return ps;
-}
-
-// A cached reference-resolution (1080-tall, dest aspect) intermediate render
-// target, or nil when `dest` is already tall enough that rendering direct is
-// fine. The type is rendered into this at full resolution and then downscaled
-// into the small mini texture, so grain / dither / any resolution-dependent
-// effect looks like a proper minified copy of the FCP render.
-- (id<MTLTexture>)hiResTargetForDest:(id<MTLTexture>)dest {
-  // Motion blur re-renders this N times per preview frame, and at 1080 that
-  // made each sample as expensive as a full render tick. The intermediate only
-  // buys correct MINIFICATION of grain / dither, which the blur's averaging
-  // destroys anyway, so skip it while sampling. Mirage can't use the Fast
-  // (velocity) technique - an arbitrary GLSL shader has no analytic velocity -
-  // so the sample path has to be affordable on its own.
-  if (self.previewMotionBlurSampling)
-    return nil;
-  NSUInteger dh = dest.height;
-  const NSUInteger refH = 1080;
-  if (dh == 0 || dh >= refH)
-    return nil; // already high enough, render straight in
-  NSUInteger refW = (NSUInteger)llround((double)refH * dest.width / (double)dh);
-  if (refW < 1)
-    refW = 1;
-  if (!_hiResTex || _hiResTex.width != refW || _hiResTex.height != refH ||
-      _hiResTex.pixelFormat != dest.pixelFormat) {
-    // Mipmapped so the down-blit can area-average the whole minification
-    // footprint (trilinear) instead of a single bilinear tap. Without this a
-    // fine per-channel dither aliases into chroma speckle when shrunk.
-    MTLTextureDescriptor *td = [MTLTextureDescriptor
-        texture2DDescriptorWithPixelFormat:dest.pixelFormat
-                                     width:refW
-                                    height:refH
-                                 mipmapped:YES];
-    td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-    td.storageMode = MTLStorageModePrivate;
-    _hiResTex = [dest.device newTextureWithDescriptor:td];
-  }
-  return _hiResTex;
-}
-
-- (id<MTLRenderPipelineState>)blitPipelineForDevice:(id<MTLDevice>)device
-                                             format:(MTLPixelFormat)format {
-  if (_blitPipeline && _blitFormat == format)
-    return _blitPipeline;
-  NSError *err = nil;
-  id<MTLLibrary> lib =
-      [device newDefaultLibraryWithBundle:[NSBundle bundleForClass:self.class]
-                                    error:&err];
-  if (!lib)
-    return nil;
-  MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
-  pd.vertexFunction = [lib newFunctionWithName:@"meshBlitVertex"];
-  pd.fragmentFunction = [lib newFunctionWithName:@"meshBlitFragment"];
-  pd.colorAttachments[0].pixelFormat = format;
-  _blitPipeline = [device newRenderPipelineStateWithDescriptor:pd error:&err];
-  _blitFormat = format;
-  if (!_blitPipeline)
-    KKLogError(@"MirageMiniViewerRenderer: blit pipeline failed: %@", err);
-  return _blitPipeline;
-}
-
-- (id<MTLSamplerState>)linearSamplerForDevice:(id<MTLDevice>)device {
-  if (_linearSampler)
-    return _linearSampler;
-  MTLSamplerDescriptor *sd = [[MTLSamplerDescriptor alloc] init];
-  sd.minFilter = MTLSamplerMinMagFilterLinear;
-  sd.magFilter = MTLSamplerMinMagFilterLinear;
-  sd.mipFilter = MTLSamplerMipFilterLinear; // trilinear: area-average on shrink
-  sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
-  sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
-  _linearSampler = [device newSamplerStateWithDescriptor:sd];
-  return _linearSampler;
-}
+// The instant the chain's SHAPE is resolved at - which entries are switched on.
+// The same clock the uniforms use (the smooth published fraction during live
+// playback, the scrub/static playhead otherwise), so the preview cannot show a
+// bypass the frame it is drawing doesn't have.
 
 // Downscale the reference-res intermediate into the mini dest with linear
 // filtering (averages the fine grain instead of showing raw coarse pixels).
@@ -637,482 +510,6 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
                      atIndex:0];
   [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   [e endEncoding];
-}
-
-// The mini feed publishes the source sRGB-encoded (KKMiniViewerFeed writes
-// FCP's linear source through a BGRA8_sRGB texture), so a plain BGRA8 read
-// samples GAMMA. Return an _sRGB-typed view of the same IOSurface so sampling
-// returns LINEAR, matching the main render (which samples FCP's linear source).
-// Falls back to `source` when it has no backing IOSurface or isn't plain BGRA8.
-- (id<MTLTexture>)_linearSourceView:(id<MTLTexture>)source {
-  if (!source.iosurface || source.pixelFormat != MTLPixelFormatBGRA8Unorm)
-    return source;
-  MTLTextureDescriptor *d = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm_sRGB
-                                   width:source.width
-                                  height:source.height
-                               mipmapped:NO];
-  d.usage = MTLTextureUsageShaderRead;
-  id<MTLTexture> v = [source.device newTextureWithDescriptor:d
-                                                   iosurface:source.iosurface
-                                                       plane:0];
-  return v ?: source;
-}
-
-// The `// #frames` neighbour textures to bind for `source`, in DIRECTIVE order.
-//
-// Call this BEFORE opening any render encoder on `commandBuffer`: matching a
-// neighbour's colour to iChannel0 encodes its own render pass, exactly like the
-// srcLin / toLin conversions this sits beside, and a command buffer permits one
-// live encoder at a time.
-//
-// The conversions are CACHED per aux index and reused until the render process
-// pumps a new frame. A drag redraws the mini many times against neighbours that
-// cannot have changed, and each conversion is a full-frame pass plus an
-// RGBA16Float allocation - multiplied by the filmstrip's slot count, since the
-// effect pass runs once per slot. Reconverting per redraw was the mini's lag on
-// a `#frames` shader.
-//
-// The render process pumps the neighbours it resolved into the feed's auxiliary
-// textures, so a trails / echo / temporal shader previews on the real frames.
-// Between FCP renders the last pumped set stays - tuning on a parked playhead
-// has to keep previewing, so nothing here invalidates them.
-//
-// Three deterministic fallbacks, all of which return a short/empty array that
-// KKBindCustomNeighborTextures fills with the caller's current-frame fallback
-// (skipping the bind is not an option: a declared-but-unbound sampler aborts
-// under Metal API Validation):
-//   - the shader declares no offsets, so there is nothing to bind;
-//   - nothing pumped yet (cold boot, or a shader without `// #frames`);
-//   - the pumped count disagrees with the directive, which is a pump from
-//     before a directive edit - clamping is wrong-but-stable, mis-indexing
-//     would show frames the shader never asked for.
-- (NSArray *)_neighborTexturesForSource:(NSString *)source
-                     technicalTransform:(BOOL)technicalTransform
-                          commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
-  MirageFrameOffsets fo = MirageFrameOffsetsForSource(source, NULL);
-  if (fo.count <= 0)
-    return @[];
-  NSUInteger available = self.canvas.auxTextureCount;
-  NSString *signature =
-      [NSString stringWithFormat:@"%d/%+d/%lu", fo.count, fo.offsets[0],
-                                 (unsigned long)available];
-  if (![signature isEqualToString:_neighborBindSignature]) {
-    _neighborBindSignature = [signature copy];
-    KKLogDebug(@"[Mirage] mini bind neighbours declared=%d firstOffset=%+d "
-               @"pumped=%lu",
-               fo.count, fo.offsets[0], (unsigned long)available);
-  }
-  if (available != (NSUInteger)fo.count)
-    return @[];
-  if (!_neighborConversions)
-    _neighborConversions = [NSMutableArray array];
-  while (_neighborConversions.count < available)
-    [_neighborConversions addObject:[[_MirageNeighborConversion alloc] init]];
-  while (_neighborConversions.count > available)
-    [_neighborConversions removeLastObject];
-
-  NSMutableArray *out = [NSMutableArray arrayWithCapacity:available];
-  for (NSUInteger i = 0; i < available; i++) {
-    id<MTLTexture> raw = [self.canvas auxTextureAtIndex:i];
-    _MirageNeighborConversion *entry = _neighborConversions[i];
-    if (!raw) {
-      entry.raw = nil;
-      entry.converted = nil;
-      [out addObject:[NSNull null]];
-      continue;
-    }
-    // Keyed on the PUBLISHER's generation as well as the texture object: the
-    // feed writes each new frame into the same IOSurface, so the wrapper object
-    // alone would report "unchanged" forever and the preview would freeze on
-    // the first pumped neighbours.
-    uint64_t generation = [self.canvas auxTextureGenerationAtIndex:i];
-    if (entry.converted && entry.raw == raw && entry.generation == generation &&
-        entry.technicalTransform == technicalTransform) {
-      [out addObject:entry.converted];
-      continue;
-    }
-    // The same colour handling iChannel0 gets a few lines above, so a temporal
-    // blend mixes like values: the feed's surface is display-encoded, so read
-    // it linearly, then re-encode to gamma for an ordinary Shadertoy shader.
-    id<MTLTexture> tex = [self _linearSourceView:raw];
-    if (!technicalTransform)
-      tex = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, tex) ?: tex;
-    entry.raw = raw;
-    entry.generation = generation;
-    entry.technicalTransform = technicalTransform;
-    // Written by THIS command buffer and read by later ones. Safe without a
-    // fence: every mini draw commits on the one view queue, and command buffers
-    // on a queue execute in commit order. Metal retains a resource for as long
-    // as any encoded buffer references it, so replacing the entry cannot pull a
-    // texture out from under a frame still in flight.
-    entry.converted = tex;
-    [out addObject:tex ?: (id)[NSNull null]];
-  }
-
-  return out;
-}
-
-// Custom mini render: Buffer A-D render into offscreen RGBA16F textures on the
-// shared command buffer, then the Image pass draws into the hi-res intermediate
-// (downscaled to dest). Mirrors the FCP render's multi-pass routing
-// (iChannelN->Buffer[N], source/noise fallback); Common is prepended to each. A
-// FEEDBACK shader (a buffer reading itself / a later buffer) re-simulates a
-// short window at capped resolution so the static preview accumulates; others
-// do a single full-res step. The mini keeps no state across renders (unlike the
-// FCP render), so this is an approximate preview, not a frame-exact match.
-- (BOOL)_encodeCustomEffectFromSource:(id<MTLTexture>)source
-                                 into:(id<MTLTexture>)dest
-                        commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
-  id<MTLDevice> device = dest.device;
-  NSDictionary<NSString *, NSString *> *sections = [self _customSections];
-  NSString *common = sections[@"Common"] ?: @"";
-  NSString *image = sections[@"Image"];
-  if (image.length == 0)
-    image = @"void mainImage(out vec4 O, in vec2 fc){ O = "
-            @"texture(iChannel0, fc / iResolution.xy); }"; // passthrough
-  NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
-    return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
-  };
-
-  id<MTLTexture> renderTex = [self hiResTargetForDest:dest];
-  BOOL downscale = (renderTex != nil);
-  if (!renderTex)
-    renderTex = dest;
-  MTLPixelFormat fmt = renderTex.pixelFormat;
-  float W = (float)renderTex.width, H = (float)renderTex.height;
-  int encodeSRGB = (dest.pixelFormat == MTLPixelFormatRGBA8Unorm ||
-                    dest.pixelFormat == MTLPixelFormatBGRA8Unorm)
-                       ? 1
-                       : 0;
-  // Match the FCP render's iTime, which uses seconds (frac * durSec), not the
-  // bare 0..1 fraction - otherwise the preview animates durSec-times too slow.
-  // Fall back to the raw fraction when the duration hasn't been pushed yet.
-  float timeSec = (float)(self.editFraction * (self.clipDurationSeconds > 0.0
-                                                   ? self.clipDurationSeconds
-                                                   : 1.0));
-  NSArray<NSNumber *> *seedV = [self valuesForLabel:@"Seed"];
-  float seed = seedV.count ? seedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SEED;
-  NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-  float speed =
-      speedV.count ? speedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SPEED;
-  float iTime = timeSec * speed + fmodf(seed, 10000.0f);
-  NSArray<NSNumber *> *grV = [self valuesForLabel:@"Grain"];
-  NSArray<NSNumber *> *grSzV = [self valuesForLabel:@"Grain Size"];
-  float grain = grV.count ? grV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
-  float grainSize =
-      grSzV.count ? grSzV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
-
-  // Shares the uniform-struct layout with the FCP render (MirageMakeUniforms)
-  // so the CPU<->shader contract can't drift. chanRes[0] = the render
-  // resolution {W,H}, matching the main render (its iChannelResolution[0]
-  // equals iResolution) so aspect-reading shaders preview the same as output.
-  // FCP's polled playhead advances in coarse ~4-frame steps during playback
-  // (~14Hz). The mini-viewer draw path already derives a smooth, lead-corrected
-  // 60fps fraction from the published feed and places it in `editFraction`.
-  // Use that same clock for every live shader input; otherwise iTime moves
-  // smoothly while iProgress and #audio visibly stair-step at ~14-20fps.
-  // Outside live playback, playheadFraction remains the correct scrub/static
-  // value (editFraction may instead be the keypose whose popover is open).
-  BOOL livePlayback = self.canvas.livePlaybackActive;
-  double previewFraction =
-      livePlayback ? self.editFraction : self.playheadFraction;
-  KKGLSLUniforms base =
-      MirageMakeUniforms(W, H, iTime, grain, grainSize, (float)previewFraction,
-                         (float)encodeSRGB, (simd_float4){W, H, 1.0f, 0.0f});
-  // `// #motionblur native`: the shader does its own blur, so hand it the same
-  // shutter the viewer does or the preview shows a different image (a trail
-  // pinned to its floor decay). Gated on the mode exactly as the FCP render is,
-  // so accumulate / off / absent all keep iMotionBlur at 0 in both paths.
-  if (MirageMotionBlurModeForSource(image) == MirageMotionBlurModeNative) {
-    base.transition.y = self.motionBlurShutterFraction;
-    base.transition.z = (float)self.previewMotionBlurSamples;
-  }
-  // A shader's `// #color` properties -> the colour pool (bound after the fixed
-  // uniforms, same as the FCP render).
-  simd_float4 colorPool[KK_SHADER_COLOR_POOL];
-  NSArray<NSNumber *> * (^values)(NSString *) =
-      ^NSArray<NSNumber *> *(NSString *label) {
-    return [self valuesForLabel:label];
-  };
-  // The same registry order the FCP render packs by, so the preview shows the
-  // instance the user is editing at the array element the shader reads.
-  KKTimeline *slotTimeline = self.timeline;
-  NSArray<NSString *> * (^slotInstances)(NSString *) =
-      ^NSArray<NSString *> *(NSString *groupName) {
-    return KKTimelineSlotInstanceIDs(slotTimeline, groupName);
-  };
-  MirageShaderModel *poolModel = [MirageShaderModel modelForSource:image];
-  int colorPoolN = [poolModel fillColorPool:colorPool
-                             valuesForLabel:values
-                              slotInstances:slotInstances];
-  colorPoolN = [poolModel fillScalarPool:colorPool
-                          valuesForLabel:values
-                           slotInstances:slotInstances];
-  MirageScaleMiniPixelProps(poolModel, colorPool, colorPoolN, W, H,
-                            self.canvas.sourceMediaSize);
-  // Sampled at the playhead's PROJECT time, pushed by the inspector - the same
-  // instant the viewer is showing, so the preview and the render agree. Still
-  // called when that's unknown (a large negative reads as outside the
-  // spectrogram = silence): the audio members must be COUNTED either way, or
-  // the block's tail goes unwritten and samples whatever the buffer last held.
-  double audioTimeSec = self.audioTimelineTimeSec;
-  if (livePlayback && self.clipTimelineStartSec >= 0.0 &&
-      self.clipDurationSeconds > 0.0)
-    audioTimeSec =
-        self.clipTimelineStartSec + previewFraction * self.clipDurationSeconds;
-  colorPoolN = MirageFillAudioPool(poolModel, colorPool, audioTimeSec, values);
-  // `// #gradient` ramps last, so the three pools above keep their offsets.
-  colorPoolN = [poolModel fillGradientPool:colorPool valuesForLabel:values];
-  // The injected `#slots` counts close the pool.
-  colorPoolN = [poolModel fillSlotCountPool:colorPool
-                              slotInstances:slotInstances];
-  NSArray<NSNumber *> *transitionModeV =
-      [self valuesForLabel:@"Transition Mode"];
-  int transitionMode =
-      transitionModeV.count
-          ? (int)MAX(0, MIN(2, lround(transitionModeV[0].doubleValue)))
-          : 0;
-  base.transition.w = (float)transitionMode;
-  BOOL technicalTransform = KKLooksLikeColorTransformShader(image);
-  // The cross-process feed is always sRGB-encoded BGRA8, even for a technical
-  // transform. Recover the same linear values the main FxPlug render receives;
-  // the distinction is only that an ordinary Shadertoy shader is encoded back
-  // to gamma below, while color-transform consumes those host values directly.
-  id<MTLTexture> srcLin = [self _linearSourceView:source];
-  // srcLin is linear (FCP's float source, or the sRGB view that linearises the
-  // mini's gamma surface). Shadertoy wants gamma-space input and the output
-  // wrapper re-decodes for a float dest, so encode to gamma here to match the
-  // main render - otherwise the source double-decodes and the preview darkens.
-  // Encodes onto the shared command buffer, ahead of the buffer/image passes.
-  if (!technicalTransform)
-    srcLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, srcLin);
-  id<MTLSamplerState> srcSampler = KKCustomSourceSampler(device);
-  id<MTLTexture> noiseTex = KKCustomChannelNoiseTexture(device);
-  id<MTLTexture> transparentTex =
-      transitionMode != 0 ? KKCustomTransparentTexture(device) : nil;
-  if (transitionMode == 1)
-    srcLin = transparentTex;
-  id<MTLTexture> ch1Raw = self.canvas.channel1Texture;
-  id<MTLTexture> toLin = ch1Raw ? [self _linearSourceView:ch1Raw] : nil;
-  if (toLin)
-    toLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, toLin);
-  if (transitionMode == 2)
-    toLin = transparentTex;
-  // `// #frames` neighbours resolve HERE, alongside srcLin/toLin and ahead of
-  // every render encoder below, because their colour match is itself a render
-  // pass on this same command buffer - and a command buffer allows exactly one
-  // live encoder. Resolving them at the bind site asked for a second encoder
-  // while the image pass was open, which Metal aborts on.
-  NSArray *neighborTex = [self _neighborTexturesForSource:image
-                                       technicalTransform:technicalTransform
-                                            commandBuffer:commandBuffer];
-  id<MTLSamplerState> noiseSampler = KKCustomChannelSampler(device);
-
-  // Precompile buffer pipelines + transpile; detect FEEDBACK (a buffer reading
-  // itself or a later buffer, i.e. any channel c >= its own index).
-  NSArray<NSString *> *bufNames =
-      @[ @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
-  id<MTLRenderPipelineState> bufPS[4] = {nil, nil, nil, nil};
-  KKGLSLTranspileResult *bufTR[4] = {nil, nil, nil, nil};
-  BOOL present[4] = {NO, NO, NO, NO};
-  BOOL needsFeedback = NO;
-  for (int k = 0; k < 4; k++) {
-    NSString *bs = sections[bufNames[k]];
-    if (bs.length == 0 || W == 0 || H == 0)
-      continue;
-    NSString *bsrc = withCommon(bs);
-    bufPS[k] = [self _customPipelineForDevice:device
-                                  pixelFormat:MTLPixelFormatRGBA16Float
-                                       source:bsrc
-                                   bufferMode:YES];
-    if (!bufPS[k])
-      continue;
-    present[k] = YES;
-    bufTR[k] = KKTranspileGLSLBuffer(bsrc);
-    for (int c = k; c < 4; c++)
-      if (bufTR[k].declaredChannelMask & (1u << c))
-        needsFeedback = YES;
-  }
-
-  // Feedback shaders re-sim a short window (so the static preview accumulates)
-  // at a capped resolution (the mini is a preview - keep it cheap).
-  // Non-feedback buffers do a single full-res step. `srcLin` is only bound to a
-  // channel that has no buffer, so re-sim reads its own previous frame, not the
-  // source.
-  NSUInteger bufW = (NSUInteger)W, bufH = (NSUInteger)H;
-  if (needsFeedback && bufH > (NSUInteger)KK_FEEDBACK_SIM_MAXDIM) {
-    bufH = KK_FEEDBACK_SIM_MAXDIM;
-    bufW = (NSUInteger)llround((double)W * (double)KK_FEEDBACK_SIM_MAXDIM /
-                               (double)H);
-  }
-  NSInteger frames = needsFeedback ? 48 : 1;
-  float dt = (1.0f / 60.0f) * speed; // approximate per-frame iTime step
-
-  id<MTLTexture> setTex[2][4] = {{nil, nil, nil, nil}, {nil, nil, nil, nil}};
-  int prevI = 0;
-  for (NSInteger f = 0; f < frames; f++) {
-    int curI = 1 - prevI;
-    BOOL first = (f == 0);
-    KKGLSLUniforms fu = base;
-    fu.resTime = (simd_float4){(float)bufW, (float)bufH, 1.0f,
-                               iTime - (float)(frames - 1 - f) * dt};
-    fu.extra.y = (float)f; // iFrame: 0 on the first step (seed-on-frame-0 sims)
-    fu.extra.w = 1.0f;     // buffers store raw data (no sRGB encode)
-    for (int k = 0; k < 4; k++) {
-      if (!bufPS[k])
-        continue;
-      id<MTLTexture> cur = setTex[curI][k];
-      if (!cur) {
-        MTLTextureDescriptor *td = [MTLTextureDescriptor
-            texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Float
-                                         width:bufW
-                                        height:bufH
-                                     mipmapped:NO];
-        td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-        td.storageMode = MTLStorageModePrivate;
-        cur = [device newTextureWithDescriptor:td];
-        setTex[curI][k] = cur;
-      }
-      if (!cur)
-        continue;
-      NSMutableArray *chArr = [NSMutableArray arrayWithCapacity:4];
-      KKGLSLUniforms bufU = fu;
-      for (int c = 0; c < 4; c++) {
-        id<MTLTexture> ct = nil;
-        if (present[c]) {
-          if (c < k)
-            ct = setTex[curI][c];
-          else if (!first)
-            ct = setTex[prevI][c];
-        } else if (c == 0) {
-          ct = srcLin;
-        } else if (c == 1) {
-          ct = toLin;
-        }
-        [chArr addObject:ct ?: (id)[NSNull null]];
-        if (ct)
-          bufU.chanRes[c] =
-              (simd_float4){(float)ct.width, (float)ct.height, 1.0f, 0.0f};
-      }
-      MTLRenderPassDescriptor *rpd =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      rpd.colorAttachments[0].texture = cur;
-      rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
-      rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-      id<MTLRenderCommandEncoder> be =
-          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-      [be setViewport:(MTLViewport){0, 0, (double)bufW, (double)bufH, -1.0,
-                                    1.0}];
-      [be setRenderPipelineState:bufPS[k]];
-      KKBindGLSLUniforms(be, &bufU, colorPool, colorPoolN);
-      KKBindCustomChannelTextures(be, bufTR[k], chArr, srcSampler, noiseTex,
-                                  noiseSampler);
-      [be drawPrimitives:MTLPrimitiveTypeTriangleStrip
-             vertexStart:0
-             vertexCount:4];
-      [be endEncoding];
-    }
-    prevI = curI;
-  }
-  id<MTLTexture> bufTex[4];
-  for (int c = 0; c < 4; c++)
-    bufTex[c] = setTex[prevI][c];
-
-  NSString *imgSrc = withCommon(image);
-  id<MTLRenderPipelineState> imagePS = [self _customPipelineForDevice:device
-                                                          pixelFormat:fmt
-                                                               source:imgSrc
-                                                           bufferMode:NO];
-  if (!imagePS) {
-    imgSrc = withCommon(MirageCustomErrorShaderSource());
-    imagePS = [self _customPipelineForDevice:device
-                                 pixelFormat:fmt
-                                      source:imgSrc
-                                  bufferMode:NO];
-  }
-  if (!imagePS)
-    return NO;
-  KKGLSLTranspileResult *imgTR = KKTranspileGLSL(imgSrc);
-  // iChannel1 = the feed's second texture (Mirage's "To" image well, i.e. a
-  // transition's incoming clip) when one was published. Same colour handling as
-  // iChannel0 above, so a two-texture shader previews the way it renders.
-  NSMutableArray *imgCh = [NSMutableArray arrayWithCapacity:4];
-  KKGLSLUniforms imgU = base;
-  for (int c = 0; c < 4; c++) {
-    id<MTLTexture> ct = bufTex[c];
-    if (!ct && c == 0)
-      ct = srcLin;
-    if (!ct && c == 1)
-      ct = toLin; // nil when no well -> NSNull -> noise, as before
-    [imgCh addObject:ct ?: (id)[NSNull null]];
-    if (ct)
-      imgU.chanRes[c] =
-          (simd_float4){(float)ct.width, (float)ct.height, 1.0f, 0.0f};
-  }
-  MTLRenderPassDescriptor *irpd =
-      [MTLRenderPassDescriptor renderPassDescriptor];
-  irpd.colorAttachments[0].texture = renderTex;
-  irpd.colorAttachments[0].loadAction = MTLLoadActionClear;
-  irpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-  irpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-  id<MTLRenderCommandEncoder> e =
-      [commandBuffer renderCommandEncoderWithDescriptor:irpd];
-  [e setViewport:(MTLViewport){0, 0, W, H, -1.0, 1.0}];
-  [e setRenderPipelineState:imagePS];
-  KKBindGLSLUniforms(e, &imgU, colorPool, colorPoolN);
-  KKBindCustomChannelTextures(e, imgTR, imgCh, srcSampler, noiseTex,
-                              noiseSampler);
-  KKBindCustomNeighborTextures(e, imgTR, neighborTex, srcSampler,
-                               (bufTex[0] ?: srcLin) ?: noiseTex);
-  [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
-  [e endEncoding];
-
-  if (downscale)
-    [self blitFrom:renderTex into:dest commandBuffer:commandBuffer];
-  return YES;
-}
-
-// Effect render: the plugin is Custom-only, so this always runs the Custom
-// (single- or multi-pass) GLSL path. `source` is the mini-viewer's source frame
-// (bound as iChannel0).
-- (BOOL)encodeEffectFromSource:(id<MTLTexture>)source
-                          into:(id<MTLTexture>)dest
-                 commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
-  return [self _encodeCustomEffectFromSource:source
-                                        into:dest
-                               commandBuffer:commandBuffer];
-}
-
-- (BOOL)miniViewer:(KKMiniViewerView *)canvas
-    processSourceTexture:(id<MTLTexture>)source
-             intoTexture:(id<MTLTexture>)dest
-           commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
-  // The generic mini renderer knows only the inspector's blur switch; Mirage's
-  // per-shader mode lives in the Image source. Native shaders render ONCE and
-  // consume iMotionBlur/iMotionBlurSamples themselves, while Off shaders also
-  // render once. Letting either fall through to the generic Accurate path
-  // multiplies the whole custom render by N. For a feedback preview that is
-  // especially pathological: 16 samples x 48 warm-up frames = 768 buffer
-  // passes per displayed frame. Temporarily suppress only the generic wrapper;
-  // Mirage's separate motionBlurShutterFraction/motionBlurSamples properties
-  // still reach a Native shader in -_encodeCustomEffectFromSource:.
-  NSDictionary<NSString *, NSString *> *sections = [self _customSections];
-  NSString *imageSource = sections[@"Image"] ?: @"";
-  MirageMotionBlurMode blurMode = MirageMotionBlurModeForSource(imageSource);
-  BOOL bypassGenericBlur = (blurMode != MirageMotionBlurModeAccumulate);
-  BOOL savedPreviewBlurEnabled = self.previewMotionBlurEnabled;
-  if (bypassGenericBlur)
-    self.previewMotionBlurEnabled = NO;
-
-  BOOL ok = [super miniViewer:canvas
-         processSourceTexture:source
-                  intoTexture:dest
-                commandBuffer:commandBuffer];
-  if (bypassGenericBlur)
-    self.previewMotionBlurEnabled = savedPreviewBlurEnabled;
-  return ok;
 }
 
 @end

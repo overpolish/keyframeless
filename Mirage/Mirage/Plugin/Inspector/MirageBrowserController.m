@@ -5,33 +5,19 @@
 
 #import "MirageBrowserController.h"
 #import "MirageBrowserView.h"
+#import <KeyframelessKit/KKCompanionPanelController.h>
 #import <KeyframelessKit/KKLog.h>
-#import <KeyframelessKit/KKPopoverKeepAlive.h>
+#import <KeyframelessKit/KKPopoverKeepAlive.h> // popover open/close notifications
 #import <KeyframelessKit/KKTimeline.h>
-#import <KeyframelessKit/NSColor+KKColors.h>
 #import <QuartzCore/QuartzCore.h>
 
+// Panel sits beside the popover card, ordered behind it; height matches the
+// card (KKCompanionPanelController).
 static const CGFloat kPanelWidth = 300.0;
-static const CGFloat kPanelGap = 8.0;
-static const CGFloat kPanelCornerRadius = 9.0;
-static const NSTimeInterval kShowDelay = 0.1;
-static const NSTimeInterval kFadeDuration = 0.28;
-static const CGFloat kSlideDistance = 12.0;
-
-@interface _MirageBrowserPanel : NSPanel
-@end
-@implementation _MirageBrowserPanel
-- (BOOL)canBecomeKeyWindow {
-  return YES;
-}
-@end
 
 @implementation MirageBrowserController {
-  NSPanel *_panel;
+  KKCompanionPanelController *_panelController;
   MirageBrowserView *_browser;
-  NSWindow *_parentWindow;
-  NSView *_popoverContentView;
-  BOOL _visible;
 }
 
 - (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView {
@@ -54,7 +40,7 @@ static const CGFloat kSlideDistance = 12.0;
   self.onSelectEntry = nil;
   self.onPublishEntry = nil;
   self.onDeleteEntry = nil;
-  [self _hide];
+  [_panelController hide];
 }
 
 - (void)dealloc {
@@ -69,121 +55,74 @@ static const CGFloat kSlideDistance = 12.0;
   [_browser refreshLocal];
 }
 
-// Resizable rounded-rect mask. NSVisualEffectView uses this both to clip the
-// vibrancy AND to shape the window shadow, so the shadow follows the corners
-// instead of the window's square backing (a plain layer cornerRadius leaves the
-// hasShadow shadow rectangular - the "blocky shadow"). Mirrors the Canvas layer
-// list panel.
-+ (NSImage *)_roundedMaskImageWithRadius:(CGFloat)radius {
-  CGFloat dim = radius * 2.0 + 1.0;
-  NSImage *image =
-      [NSImage imageWithSize:NSMakeSize(dim, dim)
-                     flipped:NO
-              drawingHandler:^BOOL(NSRect rect) {
-                [[NSColor blackColor] set];
-                [[NSBezierPath bezierPathWithRoundedRect:rect
-                                                 xRadius:radius
-                                                 yRadius:radius] fill];
-                return YES;
-              }];
-  image.capInsets = NSEdgeInsetsMake(radius, radius, radius, radius);
-  image.resizingMode = NSImageResizingModeStretch;
-  return image;
-}
-
-- (NSPanel *)_ensurePanel {
-  if (_panel)
-    return _panel;
-  NSPanel *p = [[_MirageBrowserPanel alloc]
-      initWithContentRect:NSMakeRect(0, 0, kPanelWidth, 300)
-                styleMask:NSWindowStyleMaskBorderless |
-                          NSWindowStyleMaskNonactivatingPanel
-                  backing:NSBackingStoreBuffered
-                    defer:YES];
-  p.becomesKeyOnlyIfNeeded = NO;
-  p.hasShadow = YES;
-  p.releasedWhenClosed = NO;
-  // NSPanel defaults this to YES. In a ViewBridge process activation churns
-  // constantly (and most of all while the first popover is still being built),
-  // and each deactivation ordered the panel out - which ALSO drops the
-  // parent/child link, orphaning it for good. The panel then never came back
-  // until the popover was closed and reopened: no close notification, no
-  // -_hide, parent window still alive and visible.
-  p.hidesOnDeactivate = NO;
-  p.backgroundColor = NSColor.clearColor;
-  p.opaque = NO;
-  p.animationBehavior = NSWindowAnimationBehaviorNone;
-
-  MirageBrowserView *content =
-      [[MirageBrowserView alloc] initWithFrame:NSZeroRect];
-  content.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+// The panel itself (chrome, placement, entrance, the child-window
+// relationship) comes from the kit; this only builds the browser inside it.
+- (KKCompanionPanelController *)_ensurePanelController {
+  if (_panelController)
+    return _panelController;
   __weak typeof(self) weak = self;
-  content.onSelectEntry = ^(MirageCatalogEntry *e) {
+  KKCompanionPanelController *pc =
+      [[KKCompanionPanelController alloc] initWithPanelWidth:kPanelWidth
+                                                      logTag:@"Browser"];
+  pc.contentBuilder = ^NSView * {
     __strong typeof(weak) s = weak;
-    if (s.onSelectEntry)
-      s.onSelectEntry(e);
+    if (!s)
+      return nil;
+    MirageBrowserView *content =
+        [[MirageBrowserView alloc] initWithFrame:NSZeroRect];
+    content.onSelectEntry = ^(MirageCatalogEntry *e) {
+      __strong typeof(weak) inner = weak;
+      if (inner.onSelectEntry)
+        inner.onSelectEntry(e);
+    };
+    content.onPublishEntry = ^(MirageCatalogEntry *e) {
+      __strong typeof(weak) inner = weak;
+      if (inner.onPublishEntry)
+        inner.onPublishEntry(e);
+    };
+    content.onDeleteEntry = ^(MirageCatalogEntry *e) {
+      __strong typeof(weak) inner = weak;
+      if (inner.onDeleteEntry)
+        inner.onDeleteEntry(e);
+    };
+    content.onRenameEntry = ^(MirageCatalogEntry *e, NSString *name) {
+      __strong typeof(weak) inner = weak;
+      if (inner.onRenameEntry)
+        inner.onRenameEntry(e, name);
+    };
+    s->_browser = content;
+    return content;
   };
-  content.onPublishEntry = ^(MirageCatalogEntry *e) {
+  // -reload is itself the deferral: it coalesces onto one drain a turn later
+  // (MirageBrowserView -_setNeedsRebuildAfterDelay:), so the panel still
+  // arrives on time and empty and fills in on the next tick. Asked for
+  // unconditionally here - the attach only happens for a popover that is on
+  // screen, so there is no stale case to guard, and a guard that could be wrong
+  // is what left the gallery blank.
+  pc.onDidAttach = ^{
     __strong typeof(weak) s = weak;
-    if (s.onPublishEntry)
-      s.onPublishEntry(e);
+    if (s)
+      [s->_browser reload];
   };
-  content.onDeleteEntry = ^(MirageCatalogEntry *e) {
-    __strong typeof(weak) s = weak;
-    if (s.onDeleteEntry)
-      s.onDeleteEntry(e);
-  };
-  content.onRenameEntry = ^(MirageCatalogEntry *e, NSString *name) {
-    __strong typeof(weak) s = weak;
-    if (s.onRenameEntry)
-      s.onRenameEntry(e, name);
-  };
-  _browser = content;
-
-  if (@available(macOS 26.0, *)) {
-    NSGlassEffectView *glass =
-        [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
-    glass.cornerRadius = kPanelCornerRadius;
-    // Opaque inspector-matched fill so the template browser reads like the
-    // popovers beside it, not see-through liquid glass. The glass clips it to
-    // the corner radius, so the panel keeps its rounded shape and shadow.
-    content.wantsLayer = YES;
-    content.layer.backgroundColor =
-        [NSColor.inspectorBackground colorWithAlphaComponent:0.5].CGColor;
-    glass.contentView = content;
-    p.contentView = glass;
-  } else {
-    NSVisualEffectView *fx =
-        [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
-    fx.material = NSVisualEffectMaterialContentBackground;
-    fx.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-    fx.state = NSVisualEffectStateActive;
-    fx.wantsLayer = YES;
-    fx.layer.borderColor = NSColor.separatorColor.CGColor;
-    fx.layer.borderWidth = 1.0;
-    // Round via a mask image (not layer cornerRadius): the mask shapes the
-    // window shadow too, so hasShadow follows the corners instead of drawing a
-    // square shadow past them. The hairline border is clipped to the same
-    // shape.
-    fx.maskImage = [MirageBrowserController
-        _roundedMaskImageWithRadius:kPanelCornerRadius];
-    content.frame = fx.bounds;
-    [fx addSubview:content];
-    p.contentView = fx;
-  }
-  _panel = p;
-  return _panel;
+  _panelController = pc;
+  return pc;
 }
 
 - (void)_popoverDidOpen:(NSNotification *)note {
-  // The browser is a shader SWITCHER, only useful beside the constants / code
-  // editor popover. Skip the animated-dropdown ("manage") and lane-filter
-  // ("filter") popovers - single-owner, nothing to switch there (Canvas
-  // attaches its layer list to those because it is per-layer; Mirage is not).
+  // The browser rides the two popovers where a shader is being worked on:
+  // constants (the code editor / controls) and keypose. Both, because the user
+  // switches template from either - and because a constants <-> keypose switch
+  // happens IN PLACE, with no open notification of its own, so a panel that
+  // only knew one of the two would vanish the moment they flipped. The
+  // structural popovers - the animated dropdown ("manage"), the lane filter
+  // ("filter"), OSC and applies-to - carry no shader and get nothing.
   NSString *kind = note.userInfo[@"kind"];
-  if ([kind isEqualToString:@"manage"] || [kind isEqualToString:@"filter"] ||
-      [kind isEqualToString:@"osc"] || [kind isEqualToString:@"appliesTo"])
+  if (![kind isEqualToString:@"constants"] &&
+      ![kind isEqualToString:@"keypose"]) {
+    KKLogDebug(@"[Panel] browser attach kind=%@ -> skipped(structural popover)",
+               kind);
     return;
+  }
   NSWindow *popoverWindow = note.userInfo[@"window"];
   NSView *contentView = note.userInfo[@"contentView"];
   // A cold boot can deliver this before the popover has a window at all, and
@@ -192,167 +131,36 @@ static const CGFloat kSlideDistance = 12.0;
   // window - so only give up when there is neither.
   if (![popoverWindow isKindOfClass:[NSWindow class]])
     popoverWindow = nil;
-  if (!popoverWindow && ![contentView isKindOfClass:[NSView class]])
+  if (!popoverWindow && ![contentView isKindOfClass:[NSView class]]) {
+    KKLogDebug(@"[Panel] browser attach kind=%@ -> skipped(no window and no "
+               @"content view to wait on)",
+               kind);
     return;
+  }
   NSValue *cardVal = note.userInfo[@"contentRect"];
   NSRect card = cardVal ? cardVal.rectValue : popoverWindow.frame;
-  _popoverContentView = contentView;
-  _parentWindow = popoverWindow;
-
-  [self _showWhenVisibleWithCard:card attempt:0];
-}
-
-// Wait for the popover window to actually be on screen, then show beside it.
-//
-// Retried rather than checked once: the first time this popover opens its views
-// are built from scratch, so it is routinely still invisible when a single
-// fixed delay elapses - and the old one-shot check simply returned, leaving the
-// browser hidden until the user closed and reopened (by which point the window
-// was warm and made the deadline). Bounded so a popover that never appears
-// stops the chain instead of polling forever.
-// The window is re-read from the CONTENT VIEW on every attempt, and the retry
-// runs long enough to outlast a cold boot. Holding the window handed over at
-// open time meant waiting on one that might never show (or might not exist yet),
-// and a 2s ceiling expired well before FCP had the first popover on screen -
-// either way the browser stayed hidden until the popover was closed and
-// reopened, by which point the window was warm and made the deadline.
-- (void)_showWhenVisibleWithCard:(NSRect)card attempt:(NSInteger)attempt {
-  static const NSInteger kMaxAttempts = 100; // ~10s at kShowDelay
-  NSView *pending = _popoverContentView;
-  NSWindow *window = pending.window ?: _parentWindow;
-  if (window.isVisible) {
-    _parentWindow = window;
-    [self _showBesideCard:card ofWindow:window];
-    return;
-  }
-  if (attempt + 1 >= kMaxAttempts) {
-    KKLogWarn(@"[Browser] popover never became visible, no panel");
-    return;
-  }
-  __weak typeof(self) weak = self;
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kShowDelay * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        __strong typeof(weak) s = weak;
-        // A different popover took over (or this one closed): abandon quietly.
-        if (!s || s->_popoverContentView != pending)
-          return;
-        [s _showWhenVisibleWithCard:card attempt:attempt + 1];
-      });
-}
-
-- (void)_showBesideCard:(NSRect)card ofWindow:(NSWindow *)popoverWindow {
-  if (_visible)
-    [self _hide];
-  NSPanel *panel = [self _ensurePanel];
-  panel.appearance = popoverWindow.appearance;
-
-  NSView *cv = _popoverContentView;
-  if (cv.window) {
-    NSRect live = [cv.window convertRectToScreen:[cv convertRect:cv.bounds
-                                                          toView:nil]];
-    if (!NSIsEmptyRect(live))
-      card = live;
-  }
-  NSRect finalFrame = [self _panelFrameForCard:card];
-  NSRect startFrame = finalFrame;
-  BOOL panelOnLeft = NSMidX(finalFrame) < NSMidX(card);
-  startFrame.origin.x += panelOnLeft ? kSlideDistance : -kSlideDistance;
-
-  NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
-  [nc removeObserver:self name:NSWindowDidMoveNotification object:nil];
-  [nc removeObserver:self name:NSWindowDidResizeNotification object:nil];
-  [nc addObserver:self
-         selector:@selector(_popoverFrameChanged:)
-             name:NSWindowDidMoveNotification
-           object:popoverWindow];
-  [nc addObserver:self
-         selector:@selector(_popoverFrameChanged:)
-             name:NSWindowDidResizeNotification
-           object:popoverWindow];
-
-  panel.alphaValue = 1.0;
-  panel.contentView.alphaValue = 0.0;
-  [panel setFrame:startFrame display:NO];
-  _parentWindow = popoverWindow;
-  [popoverWindow addChildWindow:panel ordered:NSWindowBelow];
-  KKPopoverAddKeepAliveWindow(panel);
-  [_browser reload];
-  _visible = YES;
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
-      ctx.duration = kFadeDuration;
-      ctx.timingFunction = [CAMediaTimingFunction
-          functionWithName:kCAMediaTimingFunctionEaseOut];
-      panel.contentView.animator.alphaValue = 1.0;
-      [panel.animator setFrame:finalFrame display:YES];
-    }];
-  });
-}
-
-- (NSRect)_panelFrameForCard:(NSRect)card {
-  NSRect vis = [self _screenVisibleFrameForCard:card];
-  CGFloat left = card.origin.x - kPanelWidth - kPanelGap;
-  CGFloat right = NSMaxX(card) + kPanelGap;
-  CGFloat x = left;
-  if (left < NSMinX(vis) && right + kPanelWidth <= NSMaxX(vis))
-    x = right;
-  x = MAX(NSMinX(vis), MIN(x, NSMaxX(vis) - kPanelWidth));
-  return NSMakeRect(x, card.origin.y, kPanelWidth, card.size.height);
-}
-
-- (NSRect)_screenVisibleFrameForCard:(NSRect)card {
-  NSPoint center = NSMakePoint(NSMidX(card), NSMidY(card));
-  for (NSScreen *s in NSScreen.screens)
-    if (NSPointInRect(center, s.frame))
-      return s.visibleFrame;
-  NSScreen *fallback = _popoverContentView.window.screen ?: NSScreen.mainScreen;
-  return fallback.visibleFrame;
-}
-
-- (void)_alignPanelToPopover {
-  NSView *cv = _popoverContentView;
-  if (!_visible || !cv.window)
-    return;
-  NSRect card = [cv.window convertRectToScreen:[cv convertRect:cv.bounds
-                                                        toView:nil]];
-  if (NSIsEmptyRect(card))
-    return;
-  [_panel setFrame:[self _panelFrameForCard:card] display:YES];
-}
-
-- (void)_popoverFrameChanged:(NSNotification *)note {
-  if (!_visible)
-    return;
-  __weak typeof(self) weak = self;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [weak _alignPanelToPopover];
-  });
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.12 * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        [weak _alignPanelToPopover];
-      });
+  // Attached HERE, in the notification turn, deliberately.
+  //
+  // This used to be deferred a tick behind a counter bumped by every open AND
+  // every close, to keep the panel build off the turn that puts the popover up.
+  // The counter cannot tell a close that belongs to THIS popover from one
+  // arriving late for the previous one - and the popover instance is reused
+  // across opens, so a same-anchor swap runs the outgoing popover's close
+  // callback around the incoming open. One late close inside that one tick
+  // bumped the counter and the panel silently never appeared again.
+  //
+  // Nothing is lost by attaching synchronously: the gallery build (the ~300ms
+  // that motivated the defer) is coalesced onto its own later drain by
+  // -reload, and the panel's own show path already waits for the popover
+  // window to be visible before it puts anything on screen.
+  [[self _ensurePanelController] openBesideCard:card
+                                  popoverWindow:popoverWindow
+                             popoverContentView:contentView];
+  KKLogDebug(@"[Panel] browser attach kind=%@ -> shown", kind);
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {
-  [self _hide];
-}
-
-- (void)_hide {
-  NSWindow *parent = _parentWindow;
-  _parentWindow = nil;
-  if (!_visible)
-    return;
-  _visible = NO;
-  _popoverContentView = nil;
-  NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
-  [nc removeObserver:self name:NSWindowDidMoveNotification object:nil];
-  [nc removeObserver:self name:NSWindowDidResizeNotification object:nil];
-  KKPopoverRemoveKeepAliveWindow(_panel);
-  [parent removeChildWindow:_panel];
-  [_panel orderOut:nil];
+  [_panelController hide];
 }
 
 @end

@@ -36,9 +36,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Refresh the plugin's lane templates (display names, metadata) after they
 /// change at runtime - e.g. a Mirage directive rename regenerates the lane
-/// catalog. The keypose popover resolves the display label and template metadata
-/// from this set, so a stale init-time copy showed old names there while
-/// every other surface had moved on.
+/// catalog. The keypose popover resolves the display label and template
+/// metadata from this set, so a stale init-time copy showed old names there
+/// while every other surface had moved on.
 - (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes;
 
 /// Labels of opted-in lanes to hide (lane-filter bar). View state only; the
@@ -78,6 +78,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// store (no popover side effects); use retargetKeyposePopoverToLayerKey: to
 /// re-point an OPEN popover.
 @property(nonatomic, copy, nullable) NSString *activeLayerKey;
+
+/// Multi-owner keypose popovers: how a same-group param of the clicked
+/// keypose's owner that has NO keypose at that exact time is presented.
+///  - NO (default, Canvas): it keeps the "Animate" affordance - an excluded row
+///    whose button keys the property here. Canvas's layers are independently
+///    keyed, so adding one is a normal edit.
+///  - YES (Mirage's shader rack): no excluded row is produced, so the param is
+///    dimmed + inert. A rack entry's keyposes are one co-timed set, so keying a
+///    lane that isn't part of this keypose is exactly the edit the rule
+///    forbids.
+/// Single-owner timelines keep their Animate rows either way. The foreign-owner
+/// scoping and the node-switcher eligibility are NOT gated by this - both match
+/// Canvas already.
+@property(nonatomic) BOOL keyposeStrictCoTimed;
 
 /// Re-point an OPEN keypose popover at a different layer's keypose at the same
 /// time (driven by the host's layer-list selection). No-op if that layer is
@@ -192,6 +206,7 @@ NS_ASSUME_NONNULL_BEGIN
      uint32_t seed, BOOL linked, BOOL showsLinked,
      NSArray<NSArray<NSString *> *> *participantCompoundLabels,
      NSArray<NSArray<NSNumber *> *> *participantCompoundStates,
+     NSArray<KKLane *> *participantCompoundLanes,
      NSArray<NSArray<NSNumber *> *> *_Nullable (^participantStateRebuilder)
          (void),
      void (^onModulation)(KKIntervalModulation modulation),

@@ -52,12 +52,6 @@ typedef NS_ENUM(NSInteger, _MirageItemKind) {
 @property(nonatomic) CGFloat contentHeight;
 @end
 
-// The card name field, editable inline. In a ViewBridge panel key events arrive
-// as key equivalents, not keyDown, so forward them to the field editor (the
-// Canvas layer-list rename fix), else typing does nothing.
-@interface _MirageRenameField : NSTextField
-@end
-
 // Search field with the same focus behaviour as the shader name field: don't
 // grab focus from the key-view loop on open (only from a real click on the
 // field), act on the first click even when the panel isn't key, and forward key

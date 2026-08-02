@@ -9,6 +9,7 @@
 #import "MirageOSCBlock.h"        // // @osc custom-handling blocks
 #import "MirageOSCBlockRuntime.h" // compiled block: eval / invert (shared w/ mini)
 #import "MirageOSCSnapshot.h"     // KKProcessTimelineSnapshot via the kit
+#import "MirageRack.h"            // selected entry -> lane / element key scope
 #import "OSC_Internal.h"
 #import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import <FxPlug/FxPlugSDK.h>
@@ -57,21 +58,6 @@ static KKRotationAxes MirageExprRotationAxes(NSString *axes) {
   if ([lower containsString:@"z"])
     m |= KKRotationAxisZ;
   return m ?: KKRotationAxisZ;
-}
-
-// A rotate block's OSC element keys: the gizmo gates on its LANE label (master
-// + per-axis suffixes), so the keys come from binds, in canonical X<Y<Z order.
-static NSArray<NSString *> *MirageExprRotateElementKeys(NSString *binds,
-                                                        NSString *axes) {
-  NSMutableArray<NSString *> *keys = [NSMutableArray arrayWithObject:binds];
-  KKRotationAxes m = MirageExprRotationAxes(axes);
-  if (m & KKRotationAxisX)
-    [keys addObject:[binds stringByAppendingString:@".X"]];
-  if (m & KKRotationAxisY)
-    [keys addObject:[binds stringByAppendingString:@".Y"]];
-  if (m & KKRotationAxisZ)
-    [keys addObject:[binds stringByAppendingString:@".Z"]];
-  return keys;
 }
 
 // The ring's radius encodes the scalar's value NORMALIZED to 0..1 across its
@@ -169,6 +155,11 @@ BOOL MirageGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   NSArray<MirageOSCBlockRuntime *> *_allRuntimes;
   NSString *_exprDragName;
   NSString *_oscBlockSig;
+  // SHADER RACK: the entry the controls currently belong to. Read from the
+  // per-instance state at the top of every sync (the inspector, the OSC and the
+  // mini all run in the same XPC process), and folded into `_oscBlockSig` so a
+  // selection move rebuilds even when the two entries run the SAME source.
+  NSString *_rackEntryID;
   // Template lanes by label for the runtimes' laneValueProvider (a referenced
   // uniform that hasn't materialized yet reads its directive default), and the
   // fraction of the CURRENT tick (the provider has no fraction argument).
@@ -222,13 +213,35 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   return self;
 }
 
+// The template lane a first write SEEDS from, re-keyed into the selected
+// entry's namespace. The prototype set the runtimes were built from is bare,
+// and both KKPositionOSC and KKRotationOSC seed a missing lane by COPYING this
+// lane
+// - keeping the bare key would materialize a second entry's control under the
+// sentinel's key, where nothing reads it. Only the key is rewritten: the seed
+// carries one keypose and no gates.
+- (nullable KKLane *)_scopedTemplateLaneForBlock:(MirageOSCBlockRuntime *)b {
+  if (!b.templateLane)
+    return nil;
+  if ([b.laneKey isEqualToString:b.templateLane.key])
+    return b.templateLane;
+  KKLane *scoped = [b.templateLane copy];
+  scoped.key = b.laneKey;
+  return scoped;
+}
+
 // Rebuild the custom-OSC controllers to match the shader's `// @osc` blocks.
 // Cheap no-op when the block set is unchanged (raw-block-text signature).
 - (void)_syncOSCBlocks:(NSString *)src {
   // The runtimes now include the DIRECTIVE SUGAR (osc=ring/box/{..}/point
   // synthesized as standard blocks), so any source edit can change them; the
   // whole source is the signature (same cheap compare the mini uses).
-  NSString *sig = src ?: @"";
+  // The ENTRY is part of the signature: two rack entries running the same
+  // template have byte-identical source while binding different lanes, so
+  // source alone would leave the previous entry's controllers in place.
+  NSString *sig = [NSString
+      stringWithFormat:@"%@\n%@", _rackEntryID ?: kMirageRackSentinelEntryID,
+                       src ?: @""];
   if ([sig isEqualToString:_oscBlockSig])
     return;
   _oscBlockSig = [sig copy];
@@ -243,8 +256,13 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     if (l.key.length)
       availByLabel[l.key] = l;
   _exprAvailLanes = [availByLabel copy];
+  // `avail` is the PROTOTYPE set for this one source, so its keys are bare -
+  // which is what `binds` matches against for a template lane. The entry only
+  // enters through the runtimes' `laneKey` / `elementKey`.
   NSArray<MirageOSCBlockRuntime *> *runtimes =
-      [MirageOSCBlockRuntime runtimesForSource:src lanes:avail];
+      [MirageOSCBlockRuntime runtimesForSource:src
+                                         lanes:avail
+                                   rackEntryID:_rackEntryID];
 
   NSMutableDictionary<NSString *, id> *nextCtl =
       [NSMutableDictionary dictionary];
@@ -264,7 +282,11 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   for (MirageOSCBlockRuntime *b in runtimes) {
     if (![b.primitive isEqualToString:@"position"])
       continue;
-    NSString *label = b.binds;
+    // The rack-scoped key, not the bare uniform name: KKPositionOSC reads and
+    // writes the lane by `laneLabel`, and gates its own visibility on it, so
+    // this one string carries both entry-correct lane identity and entry-
+    // distinct element identity.
+    NSString *label = b.laneKey;
     KKPositionOSC *ctl =
         _posControllers[label]
             ?: [[KKPositionOSC alloc]
@@ -279,7 +301,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     // guide teaches one primary point, and the bridge's guideStep gates it, so
     // the rest read their real lane value normally.
     ctl.guideProvider = self;
-    ctl.templateLane = b.templateLane;
+    ctl.templateLane = [self _scopedTemplateLaneForBlock:b];
     ctl.snapDisabled = !b.snaps; // `skipsnapping` on the position sugar/block
     // An authored `toPos`/`fromPos` on a `position` block remaps the whole
     // control - handle, path samples, keypose anchors, tangents - via the
@@ -341,9 +363,9 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       // A value-sized radius ring, drawn at the block's centre with its `toR`
       // radii - the same control the inline `osc=ring` path uses.
       KKRingOSC *ring =
-          [_exprControllers[b.name] isKindOfClass:KKRingOSC.class] &&
-                  ![(KKRingOSC *)_exprControllers[b.name] solidStyle]
-              ? _exprControllers[b.name]
+          [_exprControllers[b.elementKey] isKindOfClass:KKRingOSC.class] &&
+                  ![(KKRingOSC *)_exprControllers[b.elementKey] solidStyle]
+              ? _exprControllers[b.elementKey]
               : [[KKRingOSC alloc] initWithAPIManager:self.apiManager];
       ring.clearsOnDraw = NO; // draw over the points, don't wipe the tile
       ctl = ring;
@@ -351,22 +373,22 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       // Placement-only: the self-contained 3-ring gizmo reads/persists its
       // lane itself; the block supplies binds + axes + the centre expression.
       KKRotationOSC *rot =
-          [_exprControllers[b.name] isKindOfClass:KKRotationOSC.class]
-              ? _exprControllers[b.name]
+          [_exprControllers[b.elementKey] isKindOfClass:KKRotationOSC.class]
+              ? _exprControllers[b.elementKey]
               : [[KKRotationOSC alloc] initWithAPIManager:self.apiManager
-                                                laneLabel:b.binds];
-      rot.laneLabel = b.binds;
+                                                laneLabel:b.laneKey];
+      rot.laneLabel = b.laneKey;
       rot.clearsOnDraw = NO; // draw over the other controls
       rot.enabledAxes = MirageExprRotationAxes(b.axes);
-      rot.templateLane = b.templateLane;
+      rot.templateLane = [self _scopedTemplateLaneForBlock:b];
       ctl = rot;
     } else if ([b.primitive isEqualToString:@"box"]) {
       // The crop scaffold: border + 8 anchored-resize handles + body-move + a
       // px readout. The block's toRect/fromRect
       // bijection bridges its bound value to the scaffold's [w,h,x,y] model.
       KKCropOSC *crop =
-          [_exprControllers[b.name] isKindOfClass:KKCropOSC.class]
-              ? _exprControllers[b.name]
+          [_exprControllers[b.elementKey] isKindOfClass:KKCropOSC.class]
+              ? _exprControllers[b.elementKey]
               : [[KKCropOSC alloc] initWithAPIManager:self.apiManager];
       crop.hitPadding = 6.0; // forgiving handle grab, like the scale box
       MirageOSCBlockRuntime *blk = b;
@@ -420,9 +442,9 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       g.clearsOnDraw = NO;
       ctl = g;
     }
-    nextCtl[b.name] = ctl;
-    nextBlk[b.name] = b;
-    [order addObject:b.name];
+    nextCtl[b.elementKey] = ctl;
+    nextBlk[b.elementKey] = b;
+    [order addObject:b.elementKey];
   }
   _exprControllers = nextCtl;
   _exprBlocks = nextBlk;
@@ -432,12 +454,21 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 // Raw lane values (lane units) for any uniform label at the current tick's
 // fraction: the snapshot lane when materialized, else the directive-default
 // template lane. Backs the runtimes' laneValueProvider.
+//
+// This is the bare/scoped boundary for REFERENCED uniforms: expressions name
+// their siblings by the shader's own identifier (`center = uOrigin`), so the
+// label arrives bare and has to be scoped to reach the timeline. The template
+// fallback stays on the BARE key - `_exprAvailLanes` is the prototype set for
+// this one source, which is bare by construction.
 - (nullable NSArray<NSNumber *> *)_exprRawLaneValuesForLabel:(NSString *)label
                                                   atFraction:(double)frac {
+  NSString *scoped = [self _scopedKey:label];
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.key isEqualToString:label])
+    if ([l.key isEqualToString:scoped])
       return KKTimelineLaneValueAtFraction(l, frac);
-  KKLane *tpl = _exprAvailLanes[label];
+  NSString *bare = nil;
+  MirageRackParseLaneKey(label ?: @"", NULL, &bare);
+  KKLane *tpl = _exprAvailLanes[bare.length ? bare : label];
   return tpl ? KKTimelineLaneValueAtFraction(tpl, frac) : nil;
 }
 
@@ -456,12 +487,34 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   return sGuidePosition;
 }
 
-// The live shader source from the process timeline snapshot (blob reads are
-// flaky in the OSC tick; the snapshot is canonical).
+// The rack entry the inspector has selected, from the per-instance state. Same
+// XPC process as the inspector that wrote it (the OSC already reads
+// `oscMasterVisible` / `hiddenOSCElements` from the very same object in
+// KKOnScreenControl), so this is a plain read, not a cross-process hop.
+//
+// Falls back to the sentinel, which is both the pre-selection answer and the
+// only entry an unracked project has - so a project that has never been racked
+// resolves exactly what it always did.
+- (NSString *)_selectedRackEntryID {
+  return MirageRackEntryIDOrSentinel(
+      KKInstanceStateForAPI(self.apiManager).selectedRackEntryID);
+}
+
+// A bare (shader-authored) key scoped to the selected entry, idempotently - so
+// a lane field that arrives pre-scoped (a snapshot lane's `maxControllerKey`)
+// isn't wrapped twice.
+- (NSString *)_scopedKey:(NSString *)key {
+  return MirageRackScopedLaneKey(_rackEntryID, key);
+}
+
+// The live shader source for the SELECTED rack entry, from the process timeline
+// snapshot (blob reads are flaky in the OSC tick; the snapshot is canonical).
 - (nullable NSString *)_currentShaderSource {
+  NSString *codeKey = MirageRackCodeLaneKey(
+      _rackEntryID ?: kMirageRackSentinelEntryID, kMirageCodeLaneLabel);
   BOOL hasShaderLane = NO;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.key isEqualToString:kMirageCodeLaneLabel]) {
+    if ([l.key isEqualToString:codeKey]) {
       hasShaderLane = YES;
       if (l.codeString.length)
         return l.codeString;
@@ -473,13 +526,31 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   // OSC step. A PRESENT-but-empty lane means the user cleared the code
   // (passthrough), so it correctly has no controls. Mirrors MirageStateBlob's
   // absent-vs-empty rule on the render side.
-  return hasShaderLane ? nil : MirageCustomDefaultShaderSource();
+  //
+  // The seed is the SENTINEL's alone, matching -_customShaderSourceForEntry: in
+  // the mini: a later rack entry exists only because its registry slot was
+  // persisted, so a missing code lane there means no shader, not an unwritten
+  // one - seeding Plasma would draw a second entry's handles for a shader that
+  // isn't running.
+  if (hasShaderLane)
+    return nil;
+  return [(_rackEntryID ?: kMirageRackSentinelEntryID)
+             isEqualToString:kMirageRackSentinelEntryID]
+             ? MirageCustomDefaultShaderSource()
+             : nil;
 }
 
 // Rebuild every OSC control to match the shader source. The runtimes are the
 // single source of truth (directive sugar + authored blocks); the block sync
 // owns all controller construction.
+//
+// The selected entry is re-read HERE rather than pushed in from the inspector:
+// this runs at the top of every drawOSC tick and every oscElementKeys query, so
+// the set can be at most one tick behind the strip and there is no notification
+// to miss. `_syncOSCBlocks:` folds the entry into its signature, so the rebuild
+// fires even when the two entries run identical source.
 - (void)_syncOSCControllers {
+  _rackEntryID = [self _selectedRackEntryID];
   [self _syncOSCBlocks:[self _currentShaderSource]];
 }
 
@@ -503,7 +574,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 // keypose) so the handle is drawable / grabbable before the lane materializes.
 - (nullable KKLane *)_exprLaneForBlock:(MirageOSCBlockRuntime *)b {
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.key isEqualToString:b.binds])
+    if ([l.key isEqualToString:b.laneKey])
       return l;
   return b.templateLane;
 }
@@ -696,14 +767,14 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 - (BOOL)_exprVisible:(MirageOSCBlockRuntime *)b
           atFraction:(double)frac
               reveal:(BOOL *)outReveal {
-  BOOL dragging = [_exprDragName isEqualToString:b.name];
+  BOOL dragging = [_exprDragName isEqualToString:b.elementKey];
   BOOL shownHere =
       dragging || KKLaneVisibleAtFraction([self _exprLaneForBlock:b], frac,
                                           KKProcessFrameDurationSeconds());
-  BOOL enabled = [self kkOSCElementVisible:b.name];
+  BOOL enabled = [self kkOSCElementVisible:b.elementKey];
   BOOL visible = shownHere && enabled;
   BOOL reveal = !visible && self.optRevealActive && shownHere &&
-                [self kkOSCRevealEligible:b.name];
+                [self kkOSCRevealEligible:b.elementKey];
   if (outReveal)
     *outReveal = reveal;
   return visible;
@@ -742,7 +813,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   if (_exprActionDepth > 1)
     KKLogError(@"[ExprWrite] NESTED action (depth=%d) writing %@ via %@ - "
                @"this would assert FFUIAction in the host",
-               _exprActionDepth, b.binds, b.name);
+               _exprActionDepth, b.laneKey, b.elementKey);
   __block BOOL wrote = NO;
   KKPerformUndoable(
       self.apiManager, self, nil,
@@ -753,12 +824,12 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
         double frac = [self fractionAtTime:time];
         KKTimeline *snap = KKProcessTimelineSnapshot();
         KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                                    snap, b.binds, frac, values)
+                                    snap, b.laneKey, frac, values)
                               : nil;
         if (!tl) {
           tl = snap ? [snap copy] : [KKTimeline timeline];
-          KKLane *seed = [b.templateLane copy]
-                             ?: [KKLane laneWithKey:b.binds label:b.binds];
+          KKLane *seed = [[self _scopedTemplateLaneForBlock:b] copy]
+                             ?: [KKLane laneWithKey:b.laneKey label:b.binds];
           seed.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
           NSMutableArray<KKLane *> *lanes =
               [NSMutableArray arrayWithArray:tl.lanes];
@@ -856,8 +927,15 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   _dragHit = hit;
   // Let the position drag snap onto the point OSCs too (symmetric with the
   // point drag snapping onto positions). Static for the drag, so seed once.
+  //
+  // The exclusion is matched against the runtimes' BARE `binds`, so the
+  // controller's rack-scoped laneLabel is peeled back first - otherwise a
+  // handle on a non-sentinel entry fails to exclude itself and snaps to its own
+  // position.
+  NSString *excludeBinds = nil;
+  MirageRackParseLaneKey(c.laneLabel ?: @"", NULL, &excludeBinds);
   c.externalSnapTargets =
-      [self _exprSnapTargetsExcludingBinds:c.laneLabel
+      [self _exprSnapTargetsExcludingBinds:excludeBinds
                                 atFraction:[self fractionAtTime:time]];
   [c mouseDownAtX:x
                 y:y
@@ -1027,25 +1105,19 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   return YES;
 }
 
-// The OSC element keys, in RUNTIME order (directive sugar then authored
-// blocks), mirroring oscCompoundsForShaderSource: so the checklist states line
-// up. A position block is TWO hideable elements (handle + "<label> Path"); a
-// rotate block gates on its LANE label (master + per-axis suffixes);
-// everything else is a single element keyed by block name.
+// EVERY rack entry's OSC element keys, in rack order then runtime order -
+// exactly the set +oscCompoundsForRackTimeline: builds for the checklist.
+//
+// The whole rack, not the selected entry: the one caller is the kit's
+// opt-click-hide persist, which rebuilds the entire `oscElements` map from this
+// list. Returning only the entry under the cursor would erase every other
+// entry's stored visibility the moment the user opt-clicked a handle.
+//
+// Derived from the process snapshot through the plugin's own builder rather
+// than from `_allRuntimes`, which by construction holds one entry's blocks.
 - (NSArray<NSString *> *)oscElementKeys {
-  [self _syncOSCControllers];
-  NSMutableArray<NSString *> *keys = [NSMutableArray array];
-  for (MirageOSCBlockRuntime *b in _allRuntimes) {
-    if ([b.primitive isEqualToString:@"position"]) {
-      [keys addObject:b.binds];
-      [keys addObject:[b.binds stringByAppendingString:@" Path"]];
-    } else if ([b.primitive isEqualToString:@"rotate"]) {
-      [keys addObjectsFromArray:MirageExprRotateElementKeys(b.binds, b.axes)];
-    } else {
-      [keys addObject:b.name];
-    }
-  }
-  return keys;
+  return
+      [MiragePlugin oscElementKeysForRackTimeline:KKProcessTimelineSnapshot()];
 }
 
 - (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
@@ -1062,7 +1134,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
                            : axis == 1 ? @".Y"
                            : axis == 2 ? @".Z"
                                        : nil;
-        return suffix ? [b.binds stringByAppendingString:suffix] : b.binds;
+        return suffix ? [b.laneKey stringByAppendingString:suffix] : b.laneKey;
       }
       return _exprOrder[idx];
     }

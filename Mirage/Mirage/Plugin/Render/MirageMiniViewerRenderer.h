@@ -8,6 +8,8 @@
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
+#import "MirageRack.h" // MirageRackPreviewMode
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// Cross-process rendezvous path: the render side's `KKMiniViewerFeed`
@@ -35,6 +37,19 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// inspector. Used by `-templateLaneForLabel:` for not-yet-in-timeline constant
 /// lane defaults.
 @property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
+
+/// SHADER RACK: which entry the preview's ON-SCREEN CONTROLS belong to - the
+/// rack row the inspector has selected. Pushed by the plugin, because the
+/// mini's control sets are built once per source change rather than re-derived
+/// per tick like the viewer's.
+///
+/// Only the OSC side reads this. The RENDER walks the whole chain regardless,
+/// so the preview keeps showing every enabled entry composited while the
+/// handles on top of it belong to one.
+///
+/// nil / the sentinel id is what an unracked project has, and resolves exactly
+/// as it did before the rack.
+@property(nonatomic, copy, nullable) NSString *rackEntryID;
 
 /// TIMELINE seconds to sample `// #audio` at, from the inspector's playhead.
 ///
@@ -68,6 +83,15 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// handing the shader the same number the viewer hands it.
 @property(nonatomic) float motionBlurShutterFraction;
 @property(nonatomic) int motionBlurSamples;
+
+/// Which part of the shader rack the preview is showing, and the entry that
+/// mode is about. SESSION-ONLY: pushed in by the rack strip, dropped when the
+/// popover closes, and never written anywhere - the preview is the only thing
+/// either one changes, and Final Cut's viewer keeps rendering the whole chain
+/// throughout. `Off` (the default) renders every enabled entry, which is what a
+/// rack with no preview mode - and every single-template project - gets.
+@property(nonatomic) MirageRackPreviewMode rackPreviewMode;
+@property(nonatomic, copy, nullable) NSString *rackPreviewEntryID;
 
 // clipDurationSeconds + clipTimelineStartSec are inherited from
 // KKMiniViewerRenderer (hoisted there so every plugin's mini gets

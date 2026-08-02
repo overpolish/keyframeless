@@ -153,6 +153,10 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   double _curBoundaryHoldFrac;
   KKBasicSection _curAnimateSec;
   NSInteger _curDiamond;
+  // The clip fraction the last boundary (keypose) popover opened at, so a
+  // retarget can ask which owners have a keypose there. Diamond-derived, so it
+  // can't be recovered from _curDiamond without redoing the projection.
+  double _lastBoundaryFraction;
   // YES while the boundary (keypose) popover is open for _curDiamond, so the
   // drawing highlights that pill in the accent selection colour. Cleared when
   // the popover closes (KKStaticValuesPopoverDidCloseNotification observer).

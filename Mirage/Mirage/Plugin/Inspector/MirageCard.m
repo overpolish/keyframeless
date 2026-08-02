@@ -81,7 +81,7 @@ const CGFloat kMirageCardNameH = 16.0;
 
   CGFloat nameW =
       _w - 2 - (_authorBadge ? NSWidth(_authorBadge.frame) + KKSpacingSM : 0.0);
-  _name = [[_MirageRenameField alloc]
+  _name = [[KKInlineRenameField alloc]
       initWithFrame:NSMakeRect(1, 0, nameW, kMirageCardNameH)];
   _name.editable = NO;
   _name.selectable = NO;

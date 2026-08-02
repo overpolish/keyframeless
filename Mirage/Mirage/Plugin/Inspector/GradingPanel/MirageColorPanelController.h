@@ -32,6 +32,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// popover after launch.
 @property(nonatomic) BOOL surfaceEnabled;
 
+/// Which shader in the rack the panel is talking about: the entry the strip has
+/// selected. Everything the panel derives - the rings, the pucks, the picks,
+/// the `#slots` group it adds to - comes from THAT entry's source, and every
+/// control it reads or writes is that entry's lane.
+///
+/// nil / the sentinel id is the pre-rack answer, i.e. the bare "Mirage" code
+/// lane and bare lane keys, so a project that has never been racked behaves
+/// exactly as it did. Setting it re-derives and, for an entry whose template
+/// declares no `#color-surface`, takes the panel off screen - the same absence
+/// a non-grading template has always had.
+@property(nonatomic, copy, nullable) NSString *selectedRackEntryID;
+
 /// Whether the shader's selection - its matte - is showing in the preview.
 ///
 /// PUSHED IN from the compare row that lives on the mini viewer, which owns the

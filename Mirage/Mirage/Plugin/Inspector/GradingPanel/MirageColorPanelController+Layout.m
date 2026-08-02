@@ -208,8 +208,7 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline)
     return;
-  [self _applySurfaceSpecIfChanged:[MiragePlugin
-                                       shaderSourceFromTimeline:timeline]];
+  [self _applySurfaceSpecIfChanged:[self _entrySource:timeline]];
 }
 
 /// A panel button in the shared chrome style, right-aligned within its strip.

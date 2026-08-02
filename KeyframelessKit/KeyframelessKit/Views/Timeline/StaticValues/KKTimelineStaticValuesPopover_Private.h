@@ -10,6 +10,7 @@
 // KKTimelineLanesView_Private.h.
 
 #import "KKTimelineLanesView_Private.h"
+#import <QuartzCore/QuartzCore.h>
 
 @class KKCodeEditorView;
 @class KKLinkManifest;
@@ -52,6 +53,20 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   KKPillToggleRowView *_sizePill;
   NSLayoutConstraint *_miniViewerHeightConstraint;
   KKPillToggleRowView *_renderModePill; // guide anchor; nil when no pill shown
+  // Host-supplied strip between the mini-viewer band and the category nav /
+  // rows (Mirage's shader rack). Always in the constraint chain, zero-height
+  // and empty until a host installs one - so a popover without an accessory
+  // lays out exactly as it did before the seam existed.
+  NSView *_accessoryHost;
+  NSLayoutConstraint *_accessoryHeightConstraint;
+  CGFloat _accessoryHeight;
+  // The gap the host would sit below the mini-viewer band by if it were just
+  // another stacked element. An installed strip pads ITSELF (its own top/bottom
+  // inset), so the constraint goes to zero and this is what
+  // -_naturalContentSize has to give back - the class-level height calc counts
+  // the gap unconditionally.
+  NSLayoutConstraint *_accessoryTopConstraint;
+  CGFloat _accessoryTopInset;
   // Category nav: an icon pill row under the mini-viewer that filters which
   // param rows show. nil/empty when <2 distinct lane categories (no pill).
   KKPillToggleRowView *_categoryPill;

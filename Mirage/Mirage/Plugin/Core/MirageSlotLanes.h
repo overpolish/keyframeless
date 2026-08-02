@@ -8,6 +8,7 @@
 #import <KeyframelessKit/KKSlotInstances.h>
 #import <KeyframelessKit/KKTimeline.h>
 
+#import "MirageRack.h"  // rack entry ids, and the scoped registry key
 #import "MirageSlots.h" // `#slots` grammar: groups, placeholders, uniforms
 
 // --- `#slots`: prototypes, and the instances stamped from them -------------
@@ -112,9 +113,18 @@ static inline KKLane *MirageSlotStampedLane(KKLane *proto, NSString *groupName,
 /// ordering pass at the end of the build sorts by that group. Moving both to
 /// the first prototype's position would drag the colours ahead of the palette
 /// bar they belong under.
-static inline void MirageStampSlotLanes(NSMutableArray<KKLane *> *lanes,
-                                        NSString *source,
-                                        KKTimeline *timeline) {
+///
+/// `entryID` is the RACK ENTRY the source belongs to, and it scopes the
+/// REGISTRY only: the instances of a group declared inside entry E are tracked
+/// under `MirageRackScopedSlotGroupName(E, name)`, so two entries running the
+/// same template each mint their own. The stamped lane KEYS stay bare
+/// (`<group>#<id>.<uniform>`) - the rack prefix is applied once, afterwards, by
+/// the entry's key-rewrite pass, which is what makes the composition in
+/// MirageRackScopedSlotGroupName's note hold.
+static inline void
+MirageStampSlotLanesForRackEntry(NSMutableArray<KKLane *> *lanes,
+                                 NSString *source, KKTimeline *timeline,
+                                 NSString *entryID) {
   if (!timeline || !lanes.count)
     return;
   NSArray<NSValue *> *groups = MirageSlotGroupsForSource(source, NULL, NULL);
@@ -127,6 +137,7 @@ static inline void MirageStampSlotLanes(NSMutableArray<KKLane *> *lanes,
   for (NSUInteger gi = 0; gi < groups.count; gi++) {
     MirageSlotsGroup g = MirageSlotsGroupValue(groups[gi]);
     NSString *name = @(g.name);
+    NSString *registryName = MirageRackScopedSlotGroupName(entryID, name);
     NSMutableArray<KKLane *> *protos = [NSMutableArray array];
     // The prototypes of one inspector group, and the row the first of them
     // occupies - which is where that group's instances go.
@@ -149,9 +160,10 @@ static inline void MirageStampSlotLanes(NSMutableArray<KKLane *> *lanes,
     }
     if (!protos.count)
       continue;
-    if (!timeline.slotGroups[name])
-      KKTimelineEnsureSlotCount(timeline, name, g.defaultCount, protos);
-    NSArray<NSString *> *ids = KKTimelineSlotInstanceIDs(timeline, name);
+    if (!timeline.slotGroups[registryName])
+      KKTimelineEnsureSlotCount(timeline, registryName, g.defaultCount, protos);
+    NSArray<NSString *> *ids =
+        KKTimelineSlotInstanceIDs(timeline, registryName);
     // One pass: a prototype is replaced by its group's instances at the row the
     // first of them held, and dropped everywhere else.
     NSMutableArray<KKLane *> *rebuilt =

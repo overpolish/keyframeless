@@ -5,9 +5,12 @@
 
 #import "KKOSCChecklistView.h"
 
+#import "KKLaneCategoryNav.h"
 #import "KKLocalized.h"
 #import "KKOSCVisibilityDefaults.h"
 #import "KKPaddedScrollView.h"
+#import "KKPillBar.h"
+#import "KKPillToggleRowView.h"
 #import "KKTimelineLanesView_Private.h" // _KKManageRow, _KKSearchField, tokens
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
@@ -18,6 +21,10 @@ static const NSInteger kOSCMaxVisibleRows = 6;
 
 // The [Reset][Make Default] row between the search field and the list.
 static const CGFloat kOSCDefaultsRowH = 20.0;
+
+// The optional owner (layer) pill row above the search field. Same height as
+// the Animated dropdown's navs, so the two popovers line up.
+static const CGFloat kOSCLayerPillH = 24.0;
 
 @interface KKOSCChecklistView () <NSSearchFieldDelegate>
 @end
@@ -41,6 +48,15 @@ static const CGFloat kOSCDefaultsRowH = 20.0;
   NSButton *_makeDefaultButton;
   NSButton *_resetDefaultButton;
   NSString * (^_displayForKey)(NSString *);
+  // Owner (layer) nav, one level ABOVE the rows: present only when the fed
+  // compounds resolve to two or more distinct owners (Mirage's shader rack).
+  // There is no "all owners" page - one concrete owner is always selected.
+  KKPillBar *_layerPillBar;
+  NSArray<NSString *> *_layerKeys;
+  NSDictionary<NSString *, NSString *> *_layerByElementKey;
+  NSString *_selectedLayer;
+  // The search field's top pin, re-made when the layer nav takes the top edge.
+  NSLayoutConstraint *_searchTop;
 }
 
 + (CGFloat)preferredWidth {
@@ -106,8 +122,8 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
                                           constant:KKPaddingMD],
     [_search.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                            constant:-KKPaddingMD],
-    [_search.topAnchor constraintEqualToAnchor:self.topAnchor
-                                      constant:KKPaddingMD],
+    (_searchTop = [_search.topAnchor constraintEqualToAnchor:self.topAnchor
+                                                    constant:KKPaddingMD]),
     [_search.heightAnchor constraintEqualToConstant:kSearchH],
   ]];
 
@@ -173,6 +189,118 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
   _scrollHeight.constant = [self _rowAreaHeight];
   [self _updateDefaultsRow];
   return self;
+}
+
+// The owner of one element key: the lane that declares it, or - for a Position
+// OSC's motion-path element, which has no lane of its own - the base lane it
+// hangs off. Mirrors the display-name lookup the host feeds in `displayForKey`.
+static NSString *
+_kkOSCLayerForElementKey(NSString *key,
+                         NSDictionary<NSString *, NSString *> *byLaneKey) {
+  NSString *layer = byLaneKey[key];
+  if (layer.length)
+    return layer;
+  if ([key hasSuffix:@" Path"])
+    return byLaneKey[[key substringToIndex:key.length - 5]];
+  return nil;
+}
+
+- (void)applyLayerLanes:(NSArray<KKLane *> *)lanes
+       selectedLayerKey:(NSString *)selectedLayerKey {
+  NSMutableDictionary<NSString *, NSString *> *byLaneKey =
+      [NSMutableDictionary dictionary];
+  for (KKLane *l in lanes)
+    if (l.key.length && l.layerKey.length)
+      byLaneKey[l.key] = l.layerKey;
+
+  // Only the owners this list's OWN elements resolve to: a plugin hands us its
+  // whole template set, most of which declares no on-screen control, and an
+  // owner with nothing to show here must not get a pill that lands on an empty
+  // page. Ordered by first appearance in the compounds, so the nav reads in the
+  // same order as the rows.
+  NSMutableArray<NSString *> *keys = [NSMutableArray array];
+  NSMutableDictionary<NSString *, NSString *> *layerByElement =
+      [NSMutableDictionary dictionary];
+  for (NSArray<NSString *> *compound in _compounds)
+    for (NSString *elementKey in compound) {
+      NSString *layer = _kkOSCLayerForElementKey(elementKey, byLaneKey);
+      if (!layer.length)
+        continue;
+      layerByElement[elementKey] = layer;
+      if (![keys containsObject:layer])
+        [keys addObject:layer];
+    }
+  if (keys.count < 2)
+    return; // single-owner (or no layer info): today's flat list, untouched
+
+  _layerKeys = keys;
+  _layerByElementKey = layerByElement;
+  NSUInteger found = selectedLayerKey.length
+                         ? [keys indexOfObject:selectedLayerKey]
+                         : NSNotFound;
+  _selectedLayer = (found == NSNotFound) ? keys.firstObject : selectedLayerKey;
+
+  // Reuse the lane set for the pill LABELS (each owner's display name lives on
+  // its lanes), scoped to the owners that survived above so the pill run and
+  // `_layerKeys` are the same list in the same order.
+  NSMutableArray<KKLane *> *pillLanes = [NSMutableArray array];
+  for (NSString *k in keys)
+    for (KKLane *l in lanes)
+      if ([l.layerKey isEqualToString:k]) {
+        [pillLanes addObject:l];
+        break;
+      }
+  __weak typeof(self) weak = self;
+  KKPillToggleRowView *pill =
+      KKMakeLaneLayerPill(pillLanes, _selectedLayer, ^(NSString *layerKey) {
+        [weak _selectLayerKey:layerKey];
+      });
+  if (!pill) {
+    _layerKeys = nil;
+    _layerByElementKey = nil;
+    _selectedLayer = nil;
+    return;
+  }
+
+  // A long owner run scrolls inside the bar (edge-faded) instead of forcing the
+  // popover wide - same wrapper the Animated dropdown's navs use.
+  _layerPillBar = [[KKPillBar alloc] initWithPillRow:pill];
+  _layerPillBar.translatesAutoresizingMaskIntoConstraints = NO;
+  [_layerPillBar
+      setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                 forOrientation:NSLayoutConstraintOrientationHorizontal];
+  [_layerPillBar
+      setContentCompressionResistancePriority:1
+                               forOrientation:
+                                   NSLayoutConstraintOrientationHorizontal];
+  [self addSubview:_layerPillBar];
+  // The nav takes the top edge; the search field moves under it.
+  _searchTop.active = NO;
+  [NSLayoutConstraint activateConstraints:@[
+    [_layerPillBar.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+    [_layerPillBar.leadingAnchor
+        constraintGreaterThanOrEqualToAnchor:self.leadingAnchor
+                                    constant:KKPaddingMD],
+    [_layerPillBar.trailingAnchor
+        constraintLessThanOrEqualToAnchor:self.trailingAnchor
+                                 constant:-KKPaddingMD],
+    [_layerPillBar.topAnchor constraintEqualToAnchor:self.topAnchor
+                                            constant:KKPaddingMD],
+    [_layerPillBar.heightAnchor constraintEqualToConstant:kOSCLayerPillH],
+    (_searchTop =
+         [_search.topAnchor constraintEqualToAnchor:_layerPillBar.bottomAnchor
+                                           constant:KKSpacingSM]),
+  ]];
+  [self _applyFilter];
+}
+
+// Picking an owner only re-scopes the ROWS: unlike the Animated dropdown there
+// is no category nav under this one to rebuild, so a refilter is the whole job.
+- (void)_selectLayerKey:(NSString *)layerKey {
+  if (!_layerKeys.count || [layerKey isEqualToString:_selectedLayer])
+    return;
+  _selectedLayer = [layerKey copy];
+  [self _applyFilter];
 }
 
 // One flat text-and-glyph action, matching the curve popover's title-bar pair:
@@ -248,10 +376,10 @@ static NSButton *KKOSCDefaultsButton(NSString *title, NSString *symbol,
   NSMutableSet<NSString *> *hidden = [NSMutableSet set];
   for (NSInteger ci = 0; ci < (NSInteger)_compounds.count; ci++)
     for (NSInteger si = 0; si < (NSInteger)_compounds[ci].count; si++) {
-      BOOL on = (ci < (NSInteger)_states.count &&
-                 si < (NSInteger)_states[ci].count)
-                    ? _states[ci][si].boolValue
-                    : NO;
+      BOOL on =
+          (ci < (NSInteger)_states.count && si < (NSInteger)_states[ci].count)
+              ? _states[ci][si].boolValue
+              : NO;
       if (!on)
         [hidden addObject:_compounds[ci][si]];
     }
@@ -364,7 +492,8 @@ static NSButton *KKOSCDefaultsButton(NSString *title, NSString *symbol,
   // Matches the live constraints: search gap + (row + its gap, when shown).
   CGFloat defaultsH =
       _defaultsRow.hidden ? 0.0 : (kOSCDefaultsRowH + KKSpacingSM);
-  return KKPaddingMD + kSearchH + KKSpacingSM + defaultsH +
+  CGFloat layerH = _layerPillBar ? (kOSCLayerPillH + KKSpacingSM) : 0.0;
+  return KKPaddingMD + layerH + kSearchH + KKSpacingSM + defaultsH +
          [self _rowAreaHeight];
 }
 
@@ -386,11 +515,20 @@ static NSButton *KKOSCDefaultsButton(NSString *title, NSString *symbol,
 - (void)_applyFilter {
   NSString *query = _search.stringValue;
   BOOL searching = query.length > 0;
-  for (_KKManageRow *row in _rows) {
+  for (NSInteger r = 0; r < (NSInteger)_rows.count; r++) {
+    _KKManageRow *row = _rows[r];
     BOOL match =
         !searching || [row.rowLabel rangeOfString:query
                                           options:NSCaseInsensitiveSearch]
                               .location != NSNotFound;
+    // An element with no resolved owner shows on every owner page, exactly as
+    // an uncategorised lane does for the category nav.
+    if (match && _layerKeys.count) {
+      NSInteger ci = _rowCompound[r].integerValue;
+      NSInteger si = _rowSegment[r].integerValue;
+      NSString *layer = _layerByElementKey[_compounds[ci][si]];
+      match = !layer.length || [layer isEqualToString:_selectedLayer];
+    }
     row.hidden = !match;
   }
   _scrollHeight.constant = [self _rowAreaHeight];
@@ -408,12 +546,7 @@ static NSButton *KKOSCDefaultsButton(NSString *title, NSString *symbol,
 - (BOOL)control:(NSControl *)control
                textView:(NSTextView *)textView
     doCommandBySelector:(SEL)selector {
-  if (selector == @selector(insertNewline:) ||
-      selector == @selector(cancelOperation:)) {
-    [control.window makeFirstResponder:nil];
-    return YES;
-  }
-  return NO;
+  return KKSearchFieldBlurOnCommit(control, selector);
 }
 
 @end

@@ -10,7 +10,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class _KKManageRow, _KKSearchField, KKPillToggleRowView;
+@class _KKManageRow, _KKSearchField, KKPillToggleRowView, KKPillBar;
 
 /// Shared chrome for the timeline's searchable, category-navigable checkable
 /// lane lists: the Animated "manage" dropdown (`_KKManagePopoverView`) and the
@@ -26,9 +26,18 @@ NS_ASSUME_NONNULL_BEGIN
   NSStackView *_rowStack;
   NSMutableArray<_KKManageRow *> *_allRows;
   KKPillToggleRowView *_categoryPill;
+  KKPillBar *_categoryPillBar;
   NSString *_selectedCategory;
   NSDictionary<NSString *, NSString *> *_rowCategoryByLabel;
   BOOL _hasPill;
+  // Layer (owner) nav, one level ABOVE the categories: present only when the
+  // lanes carry two or more distinct `layerKey`s (Mirage's shader rack). There
+  // is no "all layers" page - one concrete owner is always selected.
+  KKPillToggleRowView *_layerPill;
+  KKPillBar *_layerPillBar;
+  NSString *_selectedLayer;
+  NSDictionary<NSString *, NSString *> *_rowLayerByLabel;
+  BOOL _hasLayerPill;
   CGFloat _minimumHeight;
   NSArray<KKLane *> *_lanes;
   // Embedded mode (hosted inside another popover, e.g. the gap "Applies to"
@@ -110,6 +119,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// this so a "tap <lane>" step can spotlight a lane that lives outside the
 /// default (first) category page.
 - (void)selectCategoryForLabel:(NSString *)label;
+
+/// Distinct `layerKey`s across the current lane set, in first-seen order.
+/// Empty for a single-owner plugin (no lane declares one) - the layer nav only
+/// appears at two or more, so this is also how a host tests for it.
+- (NSArray<NSString *> *)layerKeys;
+
+/// Switch the layer nav to `layerKey`, re-scoping the category nav and the rows
+/// to that layer. nil / an unknown key falls back to the FIRST layer - the nav
+/// never sits on an "all owners" page, because a rack's parameter list is only
+/// meaningful per entry. No-op when there is no layer nav. A host calls this
+/// right after init to open on its own selected owner (Mirage's selected rack
+/// entry) instead of on the first one.
+- (void)selectLayerKey:(nullable NSString *)layerKey;
 
 + (CGFloat)preferredWidth;
 /// Height that hugs the currently-visible rows (>= the minimum height).

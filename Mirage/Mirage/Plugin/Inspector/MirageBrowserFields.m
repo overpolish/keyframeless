@@ -25,21 +25,6 @@
 }
 @end
 
-@implementation _MirageRenameField
-- (BOOL)acceptsFirstResponder {
-  return self.isEditable;
-}
-- (BOOL)performKeyEquivalent:(NSEvent *)event {
-  // Only the clipboard/select-all combos. Do NOT [editor keyDown:]-forward
-  // other events - in this child panel that bounces back out as another
-  // performKeyEquivalent and spins (the Esc-after-rename runaway). Let the rest
-  // pass; Enter/Esc are handled in doCommandBySelector, Delete via a monitor.
-  if (KKHandleEditMenuKeyEquivalent(self.currentEditor, event))
-    return YES;
-  return [super performKeyEquivalent:event];
-}
-@end
-
 @implementation _MirageSearchField
 - (BOOL)acceptsFirstResponder {
   NSEvent *cur = NSApp.currentEvent;

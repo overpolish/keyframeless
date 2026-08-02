@@ -5,10 +5,12 @@
 
 #import "Constants.h"
 #import "MirageCustomShader.h"
-#import "MirageDirectives.h"         // MirageCommonDefault
-#import "MirageFrameOffsets.h"       // `// #frames` neighbour offsets
-#import "MirageMiniViewerRenderer.h" // per-instance descriptor path
-#import "MirageRenderUniforms.h"     // MirageMakeUniforms (shared with mini)
+#import "MirageDirectives.h"            // MirageCommonDefault
+#import "MirageFeedbackSet.h"           // MirageNewBufferTexture
+#import "MirageFrameOffsets.h"          // `// #frames` neighbour offsets
+#import "MirageInspectorView_Private.h" // -refreshRack (the strip's warning)
+#import "MirageMiniViewerRenderer.h"    // per-instance descriptor path
+#import "MirageRenderUniforms.h"        // MirageMakeUniforms (shared with mini)
 #import "MirageStateBlob.h"
 #import "Plugin+Render_Internal.h"
 
@@ -18,15 +20,60 @@
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKWatermark.h>
+#import <QuartzCore/QuartzCore.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
 // Cleared code = passthrough (show the source unchanged), not the plasma
 // default.
-static NSString *const kMiragePassthroughSource =
+NSString *const kMiragePassthroughSource =
     @"void mainImage(out vec4 O, in vec2 fc){ O = "
     @"texture(iChannel0, fc / iResolution.xy); }";
+
+// Every `// #frames` offset any ENABLED entry declares, deduped, in entry then
+// declaration order. One entry - the pre-rack case - is exactly that entry's
+// own list, in its own order.
+//
+// An NSArray rather than a MirageFrameOffsets: the struct's capacity is the
+// per-shader ceiling (KK_SHADER_MAX_FRAME_OFFSETS), and a chain of eight
+// entries can legitimately want more DISTINCT frames than any one of them may
+// declare. This is only the schedule side; each entry still binds its own
+// declared list, in its own order, from its own sections.
+// Whether ANY byte of the blob mentions the `#frames` directive at all.
+//
+// The blob carries every entry's code sections verbatim, so this one scan
+// answers for the whole chain what asking entry by entry would cost N section
+// decodes (each rebuilding that entry's shader source as NSStrings) plus N
+// directive parses - per scheduled frame, on the render thread, for the answer
+// "no" that almost every project gives. A false positive (the word inside a
+// comment or a string) only falls through to the exact parse below.
+static BOOL MirageBlobMentionsFrames(NSData *pluginState) {
+  if (pluginState.length < 7)
+    return NO;
+  static const char needle[] = "#frames";
+  return memmem(pluginState.bytes, pluginState.length, needle,
+                sizeof(needle) - 1) != NULL;
+}
+
+static NSArray<NSNumber *> *MirageUnionFrameOffsets(NSData *pluginState) {
+  if (!MirageBlobMentionsFrames(pluginState))
+    return @[];
+  NSMutableOrderedSet<NSNumber *> *out = [NSMutableOrderedSet orderedSet];
+  NSInteger entries = MirageStateBlobEntryCount(pluginState);
+  for (NSInteger e = 0; e < entries; e++) {
+    // Sample 0 is the render time: an entry switched off there encodes no pass
+    // at all, so it schedules no frames either.
+    if (!MirageStateBlobEntryEnabled(pluginState, e, 0))
+      continue;
+    NSString *image =
+        MirageStateBlobReadSectionsAtIndex(pluginState, e)[@"Image"];
+    MirageFrameOffsets fo = MirageFrameOffsetsForSource(image, NULL);
+    for (int i = 0; i < fo.count; i++)
+      [out addObject:@(fo.offsets[i])];
+  }
+  return out.array;
+}
 
 @implementation MiragePlugin (Render)
 
@@ -75,14 +122,14 @@ static NSString *const kMiragePassthroughSource =
   // requests above and with any sub-frame source requests motion blur adds -
   // every request in this array is an independent frame FCP delivers, and the
   // render side pairs each back by mediaTime rather than by position.
-  MirageFrameOffsets fo = MirageFrameOffsetsForSource(
-      MirageStateBlobReadSections(pluginState)[@"Image"], NULL);
+  NSArray<NSNumber *> *offsets = MirageUnionFrameOffsets(pluginState);
   double frameDur = self.renderCache.frameDurSec;
-  if (fo.count > 0 && frameDur > 0.0) {
+  if (offsets.count > 0 && frameDur > 0.0) {
     int32_t scale = renderTime.timescale > 0 ? renderTime.timescale : 600;
     double base = CMTimeGetSeconds(renderTime);
-    for (int i = 0; i < fo.count; i++) {
-      CMTime t = CMTimeMakeWithSeconds(base + fo.offsets[i] * frameDur, scale);
+    for (NSNumber *offset in offsets) {
+      CMTime t =
+          CMTimeMakeWithSeconds(base + offset.intValue * frameDur, scale);
       [reqs addObject:[[FxImageTileRequest alloc]
                           initWithSource:kFxImageTileRequestSourceEffectClip
                                     time:t
@@ -173,6 +220,28 @@ NSArray *MirageNeighborFrameTextures(
   return dst;
 }
 
+- (id<MTLTexture>)reusableChainTextureForEntry:(NSString *)entryID
+                                        device:(id<MTLDevice>)device
+                                         width:(NSUInteger)width
+                                        height:(NSUInteger)height {
+  if (!device || width == 0 || height == 0 || !entryID.length)
+    return nil;
+  if (!self.chainTextures)
+    self.chainTextures = [NSMutableDictionary dictionary];
+  id<MTLTexture> tex = self.chainTextures[entryID];
+  // Keyed on size for the same reason the gamma destinations are: a render at
+  // another size (a thumbnail pass) rebuilds the slot rather than reusing a
+  // mismatched one.
+  if (tex && tex.width == width && tex.height == height)
+    return tex;
+  tex = MirageNewBufferTexture(device, width, height);
+  if (tex)
+    self.chainTextures[entryID] = tex;
+  else
+    [self.chainTextures removeObjectForKey:entryID];
+  return tex;
+}
+
 - (NSArray *)gammaMatchNeighbors:(NSArray *)neighbors
                           decode:(BOOL)decode
                           device:(id<MTLDevice>)device
@@ -218,9 +287,9 @@ NSArray *MirageNeighborFrameTextures(
 
 // The fixed uniform block for this frame. `mediaW/H` are the output dimensions,
 // which drive iResolution.
-static KKGLSLUniforms MirageBuildUniforms(const MiragePluginState *base,
-                                          CGFloat mediaW, CGFloat mediaH,
-                                          float encodeSRGB) {
+KKGLSLUniforms MirageBuildUniforms(const MiragePluginState *base,
+                                   CGFloat mediaW, CGFloat mediaH,
+                                   float encodeSRGB) {
   float iTime = base->common.time * base->common.speed +
                 fmodf(base->common.seed, 10000.0f);
   // iProgress is the raw clip fraction, deliberately NOT scaled by Speed/Seed
@@ -533,10 +602,32 @@ MirageGammaSetupBlock(NSArray *pairs, BOOL decode,
 
 // Publish the source (and the "To" well) to the inspector's mini-viewer feed.
 // The renderer applies the shader locally, so these are the RAW textures.
+// Which entry's Image the pumped `// #frames` neighbours follow: the first one
+// in the chain that declares the directive, `fallback` (entry 0's) when none
+// does. A single-template project answers `fallback` without touching the blob.
+static NSString *MirageChainNeighborSource(NSData *pluginState,
+                                           NSString *fallback) {
+  NSInteger entryCount = MirageStateBlobEntryCount(pluginState);
+  if (entryCount <= 1)
+    return fallback;
+  // Nothing in the chain declares the directive: skip the per-entry section
+  // decode entirely (see MirageBlobMentionsFrames). The pump then finds no
+  // offsets in `fallback` either, which is the same answer the loop reaches.
+  if (!MirageBlobMentionsFrames(pluginState))
+    return fallback;
+  for (NSInteger i = 0; i < entryCount; i++) {
+    NSString *image =
+        MirageStateBlobReadSectionsAtIndex(pluginState, i)[@"Image"];
+    if ([image rangeOfString:@"#frames"].location != NSNotFound)
+      return image;
+  }
+  return fallback;
+}
+
 - (void)_publishMiniViewerFeeds:(FxImageTile *)destinationImage
                    sourceImages:(NSArray<FxImageTile *> *)sourceImages
                      renderTime:(CMTime)renderTime
-                    imageSource:(NSString *)imageSource
+                 neighborSource:(NSString *)neighborSource
                transitionShader:(BOOL)transitionShader
              technicalTransform:(BOOL)technicalTransform {
   // Per slot: single-slot = playhead, multi-slot = boundary preview / filmstrip
@@ -577,7 +668,7 @@ MirageGammaSetupBlock(NSArray *pairs, BOOL decode,
   [self _publishMiniViewerNeighbors:destinationImage
                        sourceImages:sourceImages
                          renderTime:renderTime
-                        imageSource:imageSource];
+                        imageSource:neighborSource];
 }
 
 // `// #frames`: pump the neighbour frames THIS render just resolved into the
@@ -643,7 +734,7 @@ MirageGammaSetupBlock(NSArray *pairs, BOOL decode,
 // FxTileableEffect exposes no render-scale API. The reliable idiom is the
 // SOURCE image's inversePixelTransform (pixel -> canonical); the destination's
 // pixelTransform is both the wrong matrix and the wrong direction.
-static float MirageRenderScale(NSArray<FxImageTile *> *sourceImages) {
+float MirageRenderScale(NSArray<FxImageTile *> *sourceImages) {
   if (sourceImages.count == 0)
     return 1.0f;
   FxImageTile *src = sourceImages[0];
@@ -666,8 +757,8 @@ static float MirageRenderScale(NSArray<FxImageTile *> *sourceImages) {
 // Scale every RAW-pixel scalar in a filled pool. Points and #multi px fields
 // are stored normalised (0..1 of the frame) and already scale themselves, so
 // only the single-value `units="px"` scalars need it.
-static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
-                                  int poolCount, float scale) {
+void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
+                           int poolCount, float scale) {
   if (!model || !pool || scale == 1.0f)
     return;
   const MirageScalarProp *props = model.scalarProps;
@@ -691,7 +782,7 @@ static void MirageScalePixelProps(MirageShaderModel *model, vector_float4 *pool,
 // prepended and an absent one left as an empty string so the index still names
 // the buffer. `*outAny` is YES when any buffer is present at all, which is what
 // selects the multi-pass path (buffer textures feed the passes' iChannels).
-static NSArray<NSString *> *
+NSArray<NSString *> *
 MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
                                 NSString * (^withCommon)(NSString *),
                                 BOOL *outAny) {
@@ -716,6 +807,7 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
+  CFTimeInterval t0 = CACurrentMediaTime();
   BOOL ok = [self _renderDestinationImageInner:destinationImage
                                   sourceImages:sourceImages
                                    pluginState:pluginState
@@ -726,7 +818,89 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   // clean frame out of the trial.
   KKWatermarkApplyIfUnlicensed(KKLicenseProductMirage, destinationImage);
   [self _reportStrayRenderWaits];
+  CFTimeInterval elapsed = CACurrentMediaTime() - t0;
+  [self _trackChainRenderCost:elapsed pluginState:pluginState];
   return ok;
+}
+
+// SHADER RACK, measured cost. An eight-shader chain can run with no lag at all,
+// so counting passes and warning on the count would warn about racks that are
+// fine. What the strip's warning says is measured instead, on the only honest
+// seam there is from in here: the callback itself. ONE mandatory wait per
+// callback is the architecture (see the RenderGuard canary above), and the
+// destination pass is what carries it, so wall time across the callback covers
+// the whole chain's GPU work plus the CPU that set it up - which is the cost
+// Final Cut is actually paying per frame.
+//
+// Smoothed, because a single frame proves nothing: a cold seek, a feedback
+// buffer warming up or a shader compiling on first use all spike far past
+// budget and then never again. Only a run of frames whose AVERAGE is over the
+// project's frame duration is a chain that is slower than real time.
+//
+// Reduced-size renders (thumbnails, the effects browser, library previews) go
+// through here too and are much cheaper than a full frame. They can only pull
+// the average DOWN, which is the safe direction: this warning is allowed to
+// miss, never to cry wolf.
+- (void)_trackChainRenderCost:(NSTimeInterval)elapsed
+                  pluginState:(NSData *)pluginState {
+  // The smoothing constant, the run length, and the hysteresis. ~12 frames is
+  // half a second at 24fps - long enough that nothing transient reaches the
+  // strip, short enough that a user dragging a control feels the answer follow.
+  // Clearing at 0.85 of budget rather than at budget keeps a chain sitting
+  // exactly on the line from flickering the glyph on and off.
+  static const double kEMAAlpha = 0.2;
+  static const NSInteger kSustainedFrames = 12;
+  static const double kClearFactor = 0.85;
+
+  double budget = self.renderCache.frameDurSec;
+  // Not a chain, or no frame budget to compare against: nothing to warn about,
+  // and a rack shortened back to one shader clears whatever it was saying.
+  if (budget <= 0.0 || elapsed <= 0.0 ||
+      MirageStateBlobEntryCount(pluginState) < 2) {
+    self.chainRenderCostEMA = 0.0;
+    self.chainRenderOverBudgetFrames = 0;
+    [self _publishChainRenderSlow:NO budget:budget];
+    return;
+  }
+
+  double ema = self.chainRenderCostEMA;
+  ema = ema > 0.0 ? ema + kEMAAlpha * (elapsed - ema) : elapsed;
+  self.chainRenderCostEMA = ema;
+  if (ema > budget)
+    self.chainRenderOverBudgetFrames++;
+  else if (ema < budget * kClearFactor)
+    self.chainRenderOverBudgetFrames = 0;
+
+  BOOL slow = self.chainRenderSlowPublished;
+  if (self.chainRenderOverBudgetFrames >= kSustainedFrames)
+    slow = YES;
+  else if (self.chainRenderOverBudgetFrames == 0)
+    slow = NO;
+  [self _publishChainRenderSlow:slow budget:budget];
+}
+
+// The render -> inspector hop the clip's timeline position already takes
+// (-_publishClipTimelineStart): a value the render is the only one able to
+// measure, landed on main because a view is what consumes it. Written to the
+// per-instance state rather than only to the view, so a popover opened after
+// the fact still finds the answer - the strip is torn down with every popover,
+// this outlives it.
+//
+// NOT a write in the FxPlug sense: no parameter, no lane, no undo entry. Only
+// on a CHANGE, so steady playback costs one comparison per frame.
+- (void)_publishChainRenderSlow:(BOOL)slow budget:(double)budget {
+  if (slow == self.chainRenderSlowPublished)
+    return;
+  self.chainRenderSlowPublished = slow;
+  KKLogInfo(@"[Rack] chain render %@ real time (EMA %.2f ms, budget %.2f ms)",
+            slow ? @"slower than" : @"back within",
+            self.chainRenderCostEMA * 1000.0, budget * 1000.0);
+  id<PROAPIAccessing> api = self.apiManager;
+  MirageInspectorView *iv = (MirageInspectorView *)self.inspectorView;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    KKInstanceStateForAPI(api).chainRenderingSlowerThanRealTime = slow;
+    [iv refreshRack];
+  });
 }
 
 // Canary: ONE mandatory wait per callback is the architecture, on every path -
@@ -803,12 +977,39 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   if (imageSrc.length == 0)
     imageSrc = kMiragePassthroughSource;
   BOOL transitionShader = KKLooksLikeTransitionShader(imageSrc);
+  // The feed publishes the RAW clip and the inspector's preview applies the
+  // whole chain to it locally, so what the head entry is decides how the clip
+  // is delivered (which well, which colour space) - and that is entry 0, whose
+  // sections these are.
+  //
+  // `// #frames` is the exception: the neighbours are pumped ONCE and any entry
+  // in the chain may be the one that declares them, so the pump follows the
+  // first entry that does. One set can be published, so a second declaring
+  // entry falls back to the current frame in the preview (the mini binds only
+  // when the pumped count matches its own directive) rather than binding
+  // another entry's offsets.
   [self _publishMiniViewerFeeds:destinationImage
                    sourceImages:sourceImages
                      renderTime:renderTime
-                    imageSource:imageSrc
+                 neighborSource:MirageChainNeighborSource(pluginState, imageSrc)
                transitionShader:transitionShader
              technicalTransform:KKLooksLikeColorTransformShader(imageSrc)];
+
+  // SHADER RACK: more than one entry and the chain renderer owns the frame -
+  // each entry runs its own full pipeline, entry k + 1 reading entry k's
+  // output. Everything above is entry 0's and stands either way; everything
+  // below is the single-template render, reached unchanged by every project
+  // that has one (the blob carries exactly one entry, which is what a pre-rack
+  // project can only ever produce).
+  if (MirageStateBlobEntryCount(pluginState) > 1)
+    return [self renderRackChainForDestinationImage:destinationImage
+                                       sourceImages:sourceImages
+                                        pluginState:pluginState
+                                             atTime:renderTime
+                                             mediaW:mediaW
+                                             mediaH:mediaH
+                                         encodeSRGB:encodeSRGB];
+
   NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
     return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
   };
@@ -933,6 +1134,7 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
                                            renderTime:renderTime
                                        sampleUniforms:sampleUniforms
                                        transitionMode:base.transitionMode
+                                                chain:nil
                                      destinationImage:destinationImage
                                          sourceImages:sourceImages];
   if (mpStates)

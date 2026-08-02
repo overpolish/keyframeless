@@ -42,7 +42,7 @@ typedef void (^KKHoldForwardBlock)(
     KKIntervalModulation modulation, double intensity, double frequency,
     uint32_t seed, BOOL linked, BOOL showsLinked,
     NSArray<NSArray<NSString *> *> *partLabels,
-    NSArray<NSArray<NSNumber *> *> *partStates,
+    NSArray<NSArray<NSNumber *> *> *partStates, NSArray<KKLane *> *partLanes,
     NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
     void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
     void (^onFrequency)(double), void (^onSeed)(uint32_t),
@@ -93,19 +93,19 @@ static KKGapForwardBlock KKMakeGapForwarder(KKTimelineLanesView *owner,
 
 static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   __weak KKTimelineLanesView *weak = owner;
-  return ^(NSView *anchor, double startFraction, double endFraction,
-           KKIntervalModulation modulation, double intensity, double frequency,
-           uint32_t seed, BOOL linked, BOOL showsLinked,
-           NSArray<NSArray<NSString *> *> *partLabels,
-           NSArray<NSArray<NSNumber *> *> *partStates,
-           NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
-           void (^onModulation)(KKIntervalModulation),
-           void (^onIntensity)(double), void (^onFrequency)(double),
-           void (^onSeed)(uint32_t), void (^onLinked)(BOOL),
-           void (^onParticipation)(NSInteger, BOOL), void (^onDragBegin)(void),
-           void (^onDragEnd)(void), NSString *laneLabel,
-           KKInterval *representative, KKGapIntervalReader reader,
-           KKGapIntervalMutator mutator) {
+  return ^(
+      NSView *anchor, double startFraction, double endFraction,
+      KKIntervalModulation modulation, double intensity, double frequency,
+      uint32_t seed, BOOL linked, BOOL showsLinked,
+      NSArray<NSArray<NSString *> *> *partLabels,
+      NSArray<NSArray<NSNumber *> *> *partStates, NSArray<KKLane *> *partLanes,
+      NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
+      void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
+      void (^onFrequency)(double), void (^onSeed)(uint32_t),
+      void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
+      void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
+      KKInterval *representative, KKGapIntervalReader reader,
+      KKGapIntervalMutator mutator) {
     [weak
         _presentHoldModulationPopoverFromAnchor:anchor
                                   startFraction:startFraction
@@ -118,6 +118,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                                     showsLinked:showsLinked
                                      partLabels:partLabels
                                      partStates:partStates
+                                      partLanes:partLanes
                                   partRebuilder:partRebuilder
                                    onModulation:onModulation
                                     onIntensity:onIntensity
@@ -133,6 +134,17 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                                  intervalReader:reader
                                 intervalMutator:mutator];
   };
+}
+
+// How many distinct owners `lanes` spans (lanes with no `layerKey` don't
+// count). >1 means this one lane set is multi-owner in its own right, which is
+// what the layer navs key off.
+static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
+  NSMutableSet<NSString *> *keys = [NSMutableSet set];
+  for (KKLane *l in lanes)
+    if (l.layerKey.length)
+      [keys addObject:l.layerKey];
+  return keys.count;
 }
 
 @implementation KKTimelineLanesView
@@ -389,7 +401,18 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _advancedGraph.hidden = YES;
   _advancedGraph.onKeyposeLayerActivated = ^(NSString *layerKey) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onKeyposeLayerActivated)
+    if (!s)
+      return;
+    // Landing on a keypose SELECTS its owner, kit-side: the dropdowns
+    // (Animated, filter) pre-select from `activeLayerKey`, so clicking entry
+    // 2's keypose and then opening a dropdown lands on entry 2's page. Stored
+    // before the host callback so a host that re-drives us mid-callback already
+    // sees the new owner.
+    [s setActiveLayerKey:layerKey];
+    KKLogDebug(@"[Keypose] activate layer %@ from lanes-view (advanced), "
+               @"host=%d",
+               layerKey, (int)(s->_onKeyposeLayerActivated != nil));
+    if (s->_onKeyposeLayerActivated)
       s->_onKeyposeLayerActivated(layerKey);
   };
   [_centeredArea addSubview:_advancedGraph];
@@ -475,7 +498,12 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _basicGraph.onHoldModulationPopover = KKMakeHoldForwarder(self);
   _basicGraph.onKeyposeLayerActivated = ^(NSString *layerKey) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onKeyposeLayerActivated)
+    if (!s)
+      return;
+    [s setActiveLayerKey:layerKey]; // see the Advanced forwarder above
+    KKLogDebug(@"[Keypose] activate layer %@ from lanes-view (basic), host=%d",
+               layerKey, (int)(s->_onKeyposeLayerActivated != nil));
+    if (s->_onKeyposeLayerActivated)
       s->_onKeyposeLayerActivated(layerKey);
   };
 }
@@ -566,7 +594,22 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // Scope + size the filter checklist like the Animated dropdown: per active
   // layer (multi-owner), matching the companion layer panel's height.
   _laneFilterBar.minimumPopoverHeight = self.minimumManagePopoverHeight;
-  _laneFilterBar.activeLayerKey = _activeLayerKey;
+  // The checklist gets its own layer nav only when THIS view's timeline is the
+  // multi-owner one (Mirage's shader rack: every entry's lanes in `_timeline`).
+  // A host that hands us one owner's timeline and merges the rest into
+  // `graphTimeline` (Canvas) already drives owner selection from its own layer
+  // list, so it keeps the bar's external scoping and sees no extra nav. Set
+  // BEFORE activeLayerKey - that setter branches on it.
+  _laneFilterBar.layerNavEnabled =
+      !_graphTimeline && KKDistinctLayerKeyCount(_timeline.lanes) > 1;
+  // With its own nav the bar needs the owner the DROPDOWN should open on, which
+  // is the host's live selection when it publishes one - the same resolution
+  // the Animated dropdown uses, so the two open on the same entry. Without the
+  // nav it is the bar's external scope, which is our stored key.
+  _laneFilterBar.activeLayerKey =
+      _laneFilterBar.layerNavEnabled
+          ? ([self _hostSelectedLayerKeyIn:optedIn] ?: _activeLayerKey)
+          : _activeLayerKey;
   BOOL showFilter = anyOptedIn && _activeTab == 1 && optedIn.count >= 2;
   _laneFilterBar.hidden = !showFilter;
   // Graph visibility + empty-state hint (also driven live by the bar's
@@ -725,6 +768,20 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       // display, code-lane static config...) - the descriptor table's
       // TemplateCanonical role IS the definition of "not user state".
       [fixed kkApplyTemplateCanonicalFrom:tmpl];
+      // Layer identity (the Advanced view's outer grouping level) is ASSEMBLY
+      // metadata: which owner a lane was built for, decided by the plugin every
+      // time it derives its templates. It is serialized so a blob round-trip
+      // keeps it, but a blob written before the plugin grew a layer level - or
+      // by a lane the seeding path minted - carries none, so re-assert it from
+      // the template. Only when the template declares one: a plugin whose
+      // templates have no layerKey (every single-owner plugin) is untouched,
+      // and one whose timeline lanes carry a layer the templates don't know
+      // about (Canvas's per-layer minting) keeps its own.
+      if (tmpl.layerKey.length) {
+        fixed.layerKey = tmpl.layerKey;
+        fixed.layerLabel = tmpl.layerLabel;
+        fixed.layerSymbol = tmpl.layerSymbol;
+      }
       // A lane is matched by KEY, and in Mirage the key is the shader's
       // uniform name - so switching template can land a DIFFERENT control on
       // the same name (Plasma's `Scale`, a 1-component float, onto Magic
@@ -797,6 +854,9 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.spatialCurvable = tmpl.spatialCurvable;
     lane.integerValued = tmpl.integerValued;
     lane.isToggle = tmpl.isToggle;
+    lane.layerKey = tmpl.layerKey; // owner grouping (see the re-assert above)
+    lane.layerLabel = tmpl.layerLabel;
+    lane.layerSymbol = tmpl.layerSymbol;
     lane.codeString = tmpl.codeString; // seed a code lane with its default text
     lane.codeTabs = tmpl.codeTabs; // any added extra sections (empty default)
     lane.codeTabCatalog = tmpl.codeTabCatalog; // the "+" menu catalog
@@ -890,6 +950,14 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     KKLane *tmpl = tmplByLabel[tlLane.key];
     if (!tmpl || tlLane.enabled)
       continue; // only available, non-animatable (constant) properties
+    // Host scoping (Mirage's shader rack): the timeline legitimately carries
+    // every chained shader's controls - the graphs show them all - but the
+    // constants editor is about the ONE the user has selected in the strip.
+    // Filtering here rather than at the presenter covers the in-place refresh
+    // (`updateUnoptedLanes:`) and the Constants button's own availability too.
+    // nil (every other plugin, and Mirage before it is racked) = no scoping.
+    if (_constantsLaneFilter && !_constantsLaneFilter(tlLane))
+      continue;
     // Display metadata (paletteLockable / paletteGeneratorBar / decoupled
     // sliderMax / visibleWhen gating / aspect / integer / component bounds) is
     // template-defined and NOT persisted in the timeline blob, so re-inject it
@@ -1113,6 +1181,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 }
 - (NSString *)activeLayerKey {
   return _activeLayerKey;
+}
+
+- (void)setKeyposeStrictCoTimed:(BOOL)keyposeStrictCoTimed {
+  _keyposeStrictCoTimed = keyposeStrictCoTimed;
+  // Both graphs open keypose popovers, so both need the host's rule.
+  _basicGraph.keyposeStrictCoTimed = keyposeStrictCoTimed;
+  _advancedGraph.keyposeStrictCoTimed = keyposeStrictCoTimed;
 }
 
 - (void)setDropdownLayerTitles:(NSArray<NSString *> *)dropdownLayerTitles {

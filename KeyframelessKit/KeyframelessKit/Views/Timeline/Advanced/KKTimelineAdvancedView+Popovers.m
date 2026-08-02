@@ -7,6 +7,7 @@
 
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLocalized.h>
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPathMorph.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
@@ -72,6 +73,8 @@
   // re-entrancy; the host handler also no-ops when already on that layer.
   if (lane.layerKey.length) {
     _activeLayerKey = [lane.layerKey copy];
+    KKLogDebug(@"[Keypose] activate layer %@ from advanced-graph (fire=%d)",
+               _activeLayerKey, (int)fireActivation);
     // Only a USER landing on this keypose (a graph click / nav) moves the host
     // selection to its owner. A selection-DRIVEN re-drive (retarget after the
     // host already changed layers, or a timeline re-feed) passes NO - firing
@@ -79,6 +82,10 @@
     // ping-pong.
     if (fireActivation && self.onKeyposeLayerActivated)
       self.onKeyposeLayerActivated(_activeLayerKey);
+  } else {
+    KKLogDebug(@"[Keypose] no activation from advanced-graph: lane %@ carries "
+               @"no layerKey",
+               lane.key);
   }
 
   // Scroll the target row fully into view first (e.g. when re-targeting to a
@@ -109,6 +116,18 @@
   // handle visible). Same-group lanes without a co-time KP go into
   // excludedLabels - shown as the "available zone" row with an "Animate"
   // button.
+  //
+  // A host that opts into the strict co-timed rule (Mirage's rack) tightens
+  // that on a multi-owner timeline: ONLY a lane with a keypose at this exact
+  // time, in the clicked keypose's owner, is editable. That owner's own lanes
+  // that aren't keyed here are dimmed + inert (`locked`), so an edit can only
+  // ever land on the keypose the user actually clicked. The Animate affordance
+  // goes dormant there (no excluded rows are produced), because adding a
+  // keypose to a lane that isn't part of this keypose is exactly the edit the
+  // rule forbids. Canvas (the default) keeps its Animate rows across layers, as
+  // do single-owner timelines (Canvas unracked, one rack entry) everywhere.
+  BOOL strictCoTimed =
+      self.keyposeStrictCoTimed && KKLanesSpanMultipleLayers(_timeline.lanes);
   NSString *groupKey = lane.groupKey;
   NSString *layerKey = lane.layerKey;
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
@@ -117,8 +136,12 @@
     KKLane *l = r.lane;
     if (!l)
       continue; // layer/category header rows aren't editable params
-    // Multi-owner timelines: scope the popover to the clicked lane's LAYER, so
-    // a keypose popover shows only that layer's params (not every layer's).
+    // Multi-owner timelines: the popover is scoped to the clicked lane's LAYER
+    // and shows nothing else. Another owner's params - co-timed or not - are a
+    // different effect's parameter list; rendering them (even read-only) put
+    // two owners' groups in one editor and read as the popover having lost
+    // track of what it was editing. Canvas's multi-layer graph has always
+    // scoped this way; the rack follows it.
     BOOL sameLayer =
         (l.layerKey == layerKey) || [l.layerKey isEqualToString:layerKey];
     if (!sameLayer)
@@ -141,7 +164,7 @@
     NSArray<NSNumber *> *vals = match ? match.values
                                       : (KKTimelineLaneValueAtFraction(l, frac)
                                              ?: l.keyposes.firstObject.values);
-    if (!match)
+    if (!match && !strictCoTimed)
       [excludedLabels addObject:l.key];
     // Display lane carries the SOURCE lane's identity so the popover's edit
     // callbacks route back to the right lane even when names repeat.
@@ -181,7 +204,9 @@
     // the source lane (it's serialized too) so a keypose popover still matches
     // the constants row when the template isn't resolved.
     display.oscEditedOnly = tmpl ? tmpl.oscEditedOnly : l.oscEditedOnly;
-    display.locked = l.locked; // locked layer -> read-only value row
+    // Locked layer, or (multi-owner) this owner's own lane that has no keypose
+    // at this time -> read-only value row.
+    display.locked = l.locked || (strictCoTimed && !match);
     [display kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     // The display name is template-canonical: a persisted lane may carry a
     // stale label (saved before a rename), so the template's current label
@@ -418,9 +443,11 @@
     return;
   NSRect tracks = [self _tracksRect];
   NSRect row = [self _rowRectForIndex:animIdx count:anim.count];
-  CGFloat xA = [self _xForFrac:a.time inLane:anim[animIdx].lane
+  CGFloat xA = [self _xForFrac:a.time
+                        inLane:anim[animIdx].lane
                       inTracks:tracks];
-  CGFloat xB = [self _xForFrac:b.time inLane:anim[animIdx].lane
+  CGFloat xB = [self _xForFrac:b.time
+                        inLane:anim[animIdx].lane
                       inTracks:tracks];
   // When zoomed + scrolled, the gap's mathematical midpoint may sit outside
   // the visible scroll region OR under the label gutter (left of tracks).
@@ -516,6 +543,9 @@
         [NSMutableArray array];
     NSMutableArray<NSArray<NSNumber *> *> *partCompoundStates =
         [NSMutableArray array];
+    // Every compound here is an axis of the SAME lane, so the parallel lane
+    // array just repeats it (one owner, one category - neither nav appears).
+    NSMutableArray<KKLane *> *partCompoundLanes = [NSMutableArray array];
     if (multiComp) {
       NSIndexSet *mask = iv.modulationComponents;
       for (NSUInteger c = 0; c < compCount; c++) {
@@ -526,6 +556,7 @@
         BOOL on = laneModActive && (!mask || [mask containsIndex:c]);
         [partCompoundLabels addObject:@[ cn ]];
         [partCompoundStates addObject:@[ @(on) ]];
+        [partCompoundLanes addObject:lane];
       }
     }
     void (^onParticipation)(NSInteger, BOOL) = ^(NSInteger idx, BOOL on) {
@@ -633,9 +664,10 @@
     self.onHoldModulationPopover(
         _popoverAnchor, a.time, b.time, iv.modulation, iv.modulationIntensity,
         iv.modulationFrequency, iv.modulationSeed, iv.modulationLinked,
-        showsModLinked, partCompoundLabels, partCompoundStates, partRebuilder,
-        onModulation, onIntensity, onFrequency, onSeed, onLinked,
-        onParticipation, onDragBegin, onDragEnd, label, iv, reader, mutator);
+        showsModLinked, partCompoundLabels, partCompoundStates,
+        partCompoundLanes, partRebuilder, onModulation, onIntensity,
+        onFrequency, onSeed, onLinked, onParticipation, onDragBegin, onDragEnd,
+        label, iv, reader, mutator);
     // Set AFTER present: presenting closes any previously-open popover, whose
     // close notification clears these flags (mirrors _valuePopoverShowing).
     _gapPopoverShowing = YES;

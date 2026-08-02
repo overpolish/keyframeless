@@ -36,6 +36,7 @@
                               // `@osc` body reference paints orange
                               // too (recomputed each highlight)
   BOOL _highlightScheduled;
+  BOOL _validatorScheduled;
   KKCodeGutterView *_lineGutter;
   NSView *_errorBar;             // red strip container (height toggled 0/on)
   NSScrollView *_errorScroll;    // horizontal scroll so long messages fit
@@ -112,6 +113,11 @@
 - (BOOL)_hasUncommittedTyping;
 // +Validation - re-run on a section swap / external apply.
 - (void)_runValidator;
+// +Validation - the same run, coalesced onto the next runloop turn. For the
+// paths that set text while the editor is being BUILT (a popover row): a host
+// validator can be a full transpile, and running it inline blocks the popover
+// from appearing until it finishes.
+- (void)_scheduleValidator;
 // +Validation - button/scroll targets wired from the core-built error strip.
 - (void)_copyError:(id)sender;
 - (void)_copyExprError:(id)sender;

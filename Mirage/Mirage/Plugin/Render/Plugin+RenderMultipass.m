@@ -23,6 +23,9 @@ typedef struct {
   BOOL clearStart;
 } MirageSimRange;
 
+@implementation MirageRackChainSlot
+@end
+
 @implementation MiragePlugin (RenderMultipass)
 
 // Decide which frames to step, restoring a checkpoint when that makes a seek
@@ -89,6 +92,7 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                            renderTime:(CMTime)renderTime
                        sampleUniforms:(MirageSampleUniformsBlock)sampleUniforms
                        transitionMode:(int)transitionMode
+                                chain:(MirageRackChainSlot *)chain
                      destinationImage:(FxImageTile *)destinationImage
                          sourceImages:(NSArray<FxImageTile *> *)sourceImages {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
@@ -97,14 +101,25 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   if (!device)
     return NO;
 
-  // Image pipeline (with error-pattern fallback).
+  // Image pipeline (with error-pattern fallback). A chain entry that is not the
+  // last one draws into an RGBA16F intermediate, so its pipeline is built
+  // against THAT format rather than the destination tile's.
+  MTLPixelFormat imagePF =
+      chain.output
+          ? MTLPixelFormatRGBA16Float
+          : [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
   NSString *imgSrc = imageSource;
   id<MTLRenderPipelineState> imagePS =
-      [self customPipelineForSource:imgSrc destinationImage:destinationImage];
+      [self customPipelineForSource:imgSrc
+                        pixelFormat:imagePF
+                         registryID:registryID
+                               pass:KKGLSLPassImage];
   if (!imagePS) {
     imgSrc = MirageCustomErrorShaderSource();
     imagePS = [self customPipelineForSource:imgSrc
-                           destinationImage:destinationImage];
+                                pixelFormat:imagePF
+                                 registryID:registryID
+                                       pass:KKGLSLPassImage];
   }
   if (!imagePS)
     return NO;
@@ -113,14 +128,20 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   id<MTLTexture> noiseTex = KKCustomChannelNoiseTexture(device);
   id<MTLSamplerState> chSampler = KKCustomChannelSampler(device);
   id<MTLSamplerState> srcSampler = KKCustomSourceSampler(device);
-  id<MTLTexture> effectTex =
-      [MirageCurrentFrameTile(sourceImages, renderTime)
-          metalTextureForDevice:device];
+  id<MTLTexture> effectTex = [MirageCurrentFrameTile(sourceImages, renderTime)
+      metalTextureForDevice:device];
   id<MTLTexture> fromTex =
       [KKImageTileForParameterID(sourceImages, kParamFromImage)
           metalTextureForDevice:device];
   BOOL transitionShader = KKLooksLikeTransitionShader(imageSource);
   id<MTLTexture> srcTex = transitionShader && fromTex ? fromTex : effectTex;
+  // SHADER RACK: past the head of a chain the previous entry's output IS
+  // iChannel0, and it WINS over a transition's From well. The well names the
+  // clip on one side of the cut, which is what the head entry is applied to;
+  // an entry further down the chain is applied to what the chain has made so
+  // far, so honouring the well there would drop everything upstream of it.
+  if (chain.input)
+    srcTex = chain.input;
   id<MTLTexture> toTex = [KKImageTileForParameterID(sourceImages, kParamToImage)
       metalTextureForDevice:device];
   id<MTLTexture> transparentTex =
@@ -136,7 +157,11 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
     return NO;
 
   BOOL colorTransform = KKLooksLikeColorTransformShader(imageSource);
-  BOOL floatDst = u.extra.w == 0.0f;
+  // The SURFACE's space, which is what decides how a delivered clip texture has
+  // to be treated. Normally the output encode flag says it (a float FCP surface
+  // is linear and takes an unencoded output); a chain entry writing an
+  // intermediate always encodes, so it states the surface separately.
+  BOOL floatDst = chain ? chain.surfaceLinear : (u.extra.w == 0.0f);
   BOOL decodeSources = !floatDst && colorTransform;
   // PLANNED, encoded later onto a buffer that is already being submitted - see
   // the single-pass path. Each of these used to be its own command buffer with
@@ -144,34 +169,42 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   // round trips of pure scheduling latency per frame.
   NSMutableArray *convertPairs = [NSMutableArray array];
   BOOL convertSources = decodeSources || (floatDst && !colorTransform);
-  if (convertSources && KKGammaPipelineAvailable(device, decodeSources)) {
-    if (srcTex) {
-      id<MTLTexture> dst =
-          [self reusableGammaDestinationForKey:MirageGammaDestSource
-                                        device:device
-                                         width:srcTex.width
-                                        height:srcTex.height];
-      if (dst) {
-        [convertPairs addObject:@[ srcTex, dst ]];
-        srcTex = dst;
-      }
+  // A chain input does not arrive from FCP, it arrives from the previous
+  // entry - always GAMMA-ENCODED, which is the space an ordinary shader wants
+  // and so needs no conversion at all. A `color-transform` entry consumes
+  // LINEAR, so mid-chain it decodes that input whatever the surface format is:
+  // the mirror of the encode its own output branch applies for a gamma target.
+  BOOL convertSrc = chain.input ? colorTransform : convertSources;
+  BOOL decodeSrc = chain.input ? YES : decodeSources;
+  if (srcTex && convertSrc && KKGammaPipelineAvailable(device, decodeSrc)) {
+    id<MTLTexture> dst =
+        [self reusableGammaDestinationForKey:MirageGammaDestSource
+                                      device:device
+                                       width:srcTex.width
+                                      height:srcTex.height];
+    if (dst) {
+      [convertPairs addObject:@[ srcTex, dst, @(decodeSrc) ]];
+      srcTex = dst;
     }
-    if (toTex && transitionMode != 2) {
-      id<MTLTexture> dst =
-          [self reusableGammaDestinationForKey:MirageGammaDestTo
-                                        device:device
-                                         width:toTex.width
-                                        height:toTex.height];
-      if (dst) {
-        [convertPairs addObject:@[ toTex, dst ]];
-        toTex = dst;
-      }
+  }
+  // The To well and the `#frames` neighbours are delivered clip textures on
+  // every entry, chained or not, so they keep the surface-derived rule.
+  if (toTex && transitionMode != 2 && convertSources &&
+      KKGammaPipelineAvailable(device, decodeSources)) {
+    id<MTLTexture> dst = [self reusableGammaDestinationForKey:MirageGammaDestTo
+                                                       device:device
+                                                        width:toTex.width
+                                                       height:toTex.height];
+    if (dst) {
+      [convertPairs addObject:@[ toTex, dst, @(decodeSources) ]];
+      toTex = dst;
     }
   }
   void (^encodeConversions)(id<MTLCommandBuffer>) =
       convertPairs.count ? ^(id<MTLCommandBuffer> cb) {
         for (NSArray *pair in convertPairs)
-          KKGammaConvertOnBufferInto(cb, pair[0], pair[1], decodeSources);
+          KKGammaConvertOnBufferInto(cb, pair[0], pair[1],
+                                     [pair[2] boolValue]);
       } : nil;
 
   BOOL present[4];
@@ -217,8 +250,16 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   // are at the capped buffer res `bufW x bufH`).
   if (!self.feedbackSets)
     self.feedbackSets = [NSMutableDictionary dictionary];
-  NSString *fbKey = [NSString
-      stringWithFormat:@"%lux%lu", (unsigned long)W, (unsigned long)H];
+  // Keyed by entry too: two chain entries each running a Buffer feedback chain
+  // at the same output resolution would otherwise share one ping-pong set and
+  // one checkpoint history, and each would see the other's frame as its own
+  // previous one. The unracked key is the bare resolution it always was.
+  NSString *fbKey =
+      chain.entryID.length
+          ? [NSString stringWithFormat:@"%lux%lu#%@", (unsigned long)W,
+                                       (unsigned long)H, chain.entryID]
+          : [NSString stringWithFormat:@"%lux%lu", (unsigned long)W,
+                                       (unsigned long)H];
   MirageFeedbackSet *fb = [MirageFeedbackSet setInStore:self.feedbackSets
                                                  forKey:fbKey
                                                   width:bufW
@@ -226,10 +267,13 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
 
   // ONE queue for the whole frame: the buffer passes, the checkpoint blits and
   // the image pass all ride it, so commit order alone orders them and only the
-  // image pass has to wait. Two queues from the pool are interchangeable objects
-  // with no ordering between them, which is why this must be shared explicitly.
-  id<MTLCommandQueue> frameQueue = [cache commandQueueWithRegistryID:registryID
-                                                         pixelFormat:pf];
+  // image pass has to wait. Two queues from the pool are interchangeable
+  // objects with no ordering between them, which is why this must be shared
+  // explicitly. A chain supplies the queue - ONE for the whole frame across
+  // every entry, not just across one entry's passes - and owns returning it.
+  id<MTLCommandQueue> frameQueue =
+      chain.queue
+          ?: [cache commandQueueWithRegistryID:registryID pixelFormat:pf];
   NSInteger F = frameIndex;
   // Only a FEEDBACK chain can reuse a previous render's buffers: its state is a
   // function of history, so once frame F is simulated it stays valid. A
@@ -404,8 +448,13 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
   // identical at every sub-sample, so re-simulating it N times would compute
   // the same pixels N times. A FEEDBACK chain is a function of history and
   // cannot be shared like this - hence the guard.
-  BOOL mbAccumulate =
-      mbState.enabled && sampleUniforms != nil && !needsFeedback;
+  //
+  // A CHAIN follows the same shape one level up: an upstream entry encodes once
+  // per frame and only the last one - the entry that owns the destination -
+  // re-runs per sample. So an entry drawing an intermediate never accumulates,
+  // and the caller hands it no samples to accumulate over either.
+  BOOL mbAccumulate = mbState.enabled && sampleUniforms != nil &&
+                      !needsFeedback && !chain.output;
   __block BOOL imageSetupEncoded = NO;
   if (mbAccumulate) {
     // Blur submits on the FRAME's queue, so commit order puts it after the
@@ -465,11 +514,48 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                                                  }];
                     }];
     if (blurred) {
-      if (frameQueue)
+      if (frameQueue && !chain.queue)
         [cache returnCommandQueueToCache:frameQueue];
       return YES;
     }
     // Fall through to a single pass on any bail.
+  }
+
+  // A chain entry that is not the last one draws into its intermediate and
+  // COMMITS WITHOUT WAITING. Everything that reads it - the next entry's
+  // passes, and eventually the destination pass - is committed to this same
+  // queue afterwards, so commit order chains them and the frame still pays
+  // exactly one round trip, the one the final entry's destination pass makes.
+  if (chain.output) {
+    id<MTLCommandBuffer> cb = [frameQueue commandBuffer];
+    if (!cb)
+      return NO;
+    cb.label = @"Mirage chain entry";
+    if (imageSetup && !imageSetupEncoded)
+      imageSetup(cb);
+    BOOL encoded = [self
+        encodeFullScreenQuadIntoTexture:chain.output
+                       destinationImage:destinationImage
+                          commandBuffer:cb
+                         sourceTextures:@[]
+                               commands:^(id<MTLRenderCommandEncoder> encoder,
+                                          NSArray<id<MTLTexture>> *inputs) {
+                                 [encoder setRenderPipelineState:imagePS];
+                                 KKBindGLSLUniforms(encoder, &imgU, colorPool,
+                                                    poolCount);
+                                 KKBindCustomChannelTextures(
+                                     encoder, imgTR, imgCh, srcSampler,
+                                     noiseTex, chSampler);
+                                 KKBindCustomNeighborTextures(
+                                     encoder, imgTR, neighborTex, srcSampler,
+                                     neighborFallback);
+                                 [encoder drawPrimitives:
+                                              MTLPrimitiveTypeTriangleStrip
+                                             vertexStart:0
+                                             vertexCount:4];
+                               }];
+    [cb commit];
+    return encoded;
   }
 
   BOOL ok = [self
@@ -497,7 +583,7 @@ static NSArray *MirageChannelsForBuffer(int k, MirageFeedbackSet *fb, int curI,
                                               vertexStart:0
                                               vertexCount:4];
                                      }];
-  if (frameQueue)
+  if (frameQueue && !chain.queue)
     [cache returnCommandQueueToCache:frameQueue];
   return ok;
 }

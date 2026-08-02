@@ -392,7 +392,7 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline || rgb.count < 3)
     return;
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   // Same conversion and the same per-property writes either way. Only WHICH
   // subscribers the gesture reaches differs: the eyedropper aims every one of
   // them, and click-to-pick aims the handle the user last touched.
@@ -438,7 +438,8 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   BOOL changed = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {
     KKLane *lane = lanes[i];
-    NSNumber *boxed = lane.key.length ? picks[lane.key] : nil;
+    NSString *bare = [self _bareKeyForLane:lane];
+    NSNumber *boxed = bare ? picks[bare] : nil;
     if (!boxed || ![drivable containsObject:lane.key])
       continue; // gated off by a visibleby= rule, so not part of this gesture
     NSArray<NSNumber *> *current = KKTimelineLaneValueAtFraction(lane, frac);
@@ -609,11 +610,12 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
                                              fraction:[self _editFraction]];
   NSMutableArray<NSString *> *labels = [NSMutableArray array];
   for (KKLane *lane in timeline.lanes) {
-    if (!lane.key.length || !picks[lane.key])
+    NSString *bare = [self _bareKeyForLane:lane];
+    if (!bare || !picks[bare])
       continue;
     if (![drivable containsObject:lane.key])
       continue;
-    [labels addObject:lane.label.length ? lane.label : lane.key];
+    [labels addObject:lane.label.length ? lane.label : bare];
   }
   return labels;
 }

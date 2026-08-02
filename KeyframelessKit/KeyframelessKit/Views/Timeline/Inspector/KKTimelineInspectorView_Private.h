@@ -132,6 +132,18 @@ NS_ASSUME_NONNULL_BEGIN
   NSDictionary<NSString *, NSString *> *_paramOrderCatByLabel;
   NSArray<NSString *> *_paramOrderCategoryKeys;
   NSString *_paramOrderSelectedCategory;
+  // Owner (layer) nav above the category pills, present only when the params
+  // carry two or more distinct layerKeys (Mirage's shader rack): a rack's
+  // entries share category NAMES, so without it two entries' "Center" rows sit
+  // on one page indistinguishable from each other. Picking an owner re-scopes
+  // the category nav and the rows, so the category bar is rebuilt with it.
+  NSView *_paramOrderHeader;
+  NSView *_paramOrderScroll;
+  NSLayoutConstraint *_paramOrderScrollTop;
+  NSView *_paramOrderLayerBar;
+  NSView *_paramOrderCategoryBar;
+  NSDictionary<NSString *, NSString *> *_paramOrderLayerByLabel;
+  NSString *_paramOrderSelectedLayer;
   KKParameterRowView *_presetsRow;
   NSButton *_presetsButton;
   id _presetsPopover;

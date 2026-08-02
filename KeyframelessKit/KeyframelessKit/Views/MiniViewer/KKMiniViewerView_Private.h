@@ -11,6 +11,7 @@
 #import <IOSurface/IOSurface.h>
 #import <KeyframelessKit/KKShaderTypes.h> // KKVertex2D
 #import <MetalKit/MetalKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <simd/simd.h>
 
 // Outer radius (points) of the shared KKPointOSC handle glyph. Smaller than
@@ -152,8 +153,8 @@ NS_ASSUME_NONNULL_BEGIN
   // once when the feed's first frame resolves rather than every drawn frame.
   BOOL _compareWasAvailable;
 }
-// contentRectInViewPoints is declared PUBLICLY (KKMiniViewerView.h): a host that
-// samples the preview needs to map a click to an image position.
+// contentRectInViewPoints is declared PUBLICLY (KKMiniViewerView.h): a host
+// that samples the preview needs to map a click to an image position.
 - (CGSize)sourceMediaSize;
 
 // Slot/texture resolution + filmstrip geometry (main file); called by the
@@ -209,11 +210,10 @@ NS_ASSUME_NONNULL_BEGIN
 // () extension) so the primary @implementation isn't expected to provide the
 // required delegate methods - they live in KKMiniViewerView+Draw.m.
 @interface KKMiniViewerView (Draw) <MTKViewDelegate>
-/// Stroke the compare divider across the content rect. No-op unless the split is
-/// active and there's an ungraded frame to split against.
+/// Stroke the compare divider across the content rect. No-op unless the split
+/// is active and there's an ungraded frame to split against.
 - (void)_encodeCompareDividerInContentRect:(CGRect)contentRect
-                                   encoder:
-                                       (id<MTLRenderCommandEncoder>)encoder;
+                                   encoder:(id<MTLRenderCommandEncoder>)encoder;
 @end
 
 // Tool-overlay primitive batching. Implemented in KKMiniViewerView+ToolBatch.m

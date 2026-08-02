@@ -6,6 +6,8 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 
+#import <QuartzCore/QuartzCore.h>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
@@ -66,26 +68,46 @@
             ?: @{};
     BOOL enabled = [state[@"loopEnabled"] boolValue];
     NSInteger tab = [state[@"activeTab"] integerValue];
+    // Undo/redo of a rack selection (its own, or the one folded into an append
+    // or a remove). The strip's own writes come back through here too, and the
+    // view's restore self-guards on "already there", so an unrelated UI-state
+    // write (a pill, the OSC checklist) is a no-op rather than churn.
+    NSString *restoredEntry =
+        [state[@"selectedRackEntryID"] isKindOfClass:[NSString class]]
+            ? state[@"selectedRackEntryID"]
+            : nil;
+    // The OSC and the AI author read the entry off the per-instance state and
+    // never see the blob, so it is updated HERE, synchronously - the next
+    // drawOSC tick can land before the main-queue hop below.
+    if (restoredEntry.length)
+      KKInstanceStateEnsureForAPI(self.apiManager).selectedRackEntryID =
+          restoredEntry;
     // Shared glue: refresh OSC master + lastUIState + hidden set, and push the
     // tick + mini-viewer (undo/redo of the tick or a pill repaints live). Use
     // the SOURCE-AWARE element keys (the shader's `osc` lanes) - the static
     // oscCompounds is empty, so passing it would rebuild the hidden set from no
     // keys and wipe an opt-click hide the instant it persists.
-    NSString *oscSrc =
-        [MiragePlugin shaderSourceFromTimeline:KKProcessTimelineSnapshot()];
-    [self
-        kkRefreshOSCVisibilityFromState:state
-                                   view:self.inspectorView
-                               renderer:(KKMiniViewerRenderer *)self
-                                            .inspectorView.miniViewerDelegate
-                            elementKeys:[KKPlugin
-                                            kkOSCElementKeysForCompounds:
-                                                [MiragePlugin
-                                                    oscCompoundsForShaderSource:
-                                                        oscSrc]]];
+    //
+    // EVERY rack entry's keys, not just the selected one's: the hidden set this
+    // rebuilds is the whole instance's, and restricting it to the visible entry
+    // would drop the other entries' hides on the next persist.
+    [self kkRefreshOSCVisibilityFromState:state
+                                     view:self.inspectorView
+                                 renderer:(KKMiniViewerRenderer *)self
+                                              .inspectorView.miniViewerDelegate
+                              elementKeys:[MiragePlugin
+                                              oscElementKeysForRackTimeline:
+                                                  KKProcessTimelineSnapshot()]];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
+      // Inside the flag: the push re-drives the strip through the same funnel a
+      // click uses, and any path that reached the persist hook from in here
+      // would write the value it just read back - a duplicate undo entry
+      // directly behind the one the user is walking through.
+      self.restoringRackSelection = YES;
+      [self.inspectorView applyPersistedRackSelection:restoredEntry];
+      self.restoringRackSelection = NO;
     });
   }
 

@@ -95,7 +95,7 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline)
     return;
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   NSDictionary<NSString *, NSValue *> *responses =
       [self _responsesForRing:ringIndex source:source];
   if (!responses.count)
@@ -113,7 +113,12 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   BOOL changed = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {
     KKLane *lane = lanes[i];
-    NSValue *boxed = lane.key.length ? responses[lane.key] : nil;
+    // `responses` is keyed by the uniform name the SHADER declared, the lane by
+    // its rack-scoped key - so the lookup crosses the strip/prefix boundary
+    // (nil = another entry's lane, which this panel is not about). `drivable`
+    // is a set of real timeline keys and stays on `lane.key`.
+    NSString *bare = [self _bareKeyForLane:lane];
+    NSValue *boxed = bare ? responses[bare] : nil;
     if (!boxed || ![drivable containsObject:lane.key])
       continue;
     MirageSurfaceResponse r;
@@ -251,7 +256,7 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline)
     return;
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   NSString *selectionKey = MirageSurfaceSelectionToggleForSource(source);
   NSString *activeKey = MirageSurfaceActiveKeyControlForSource(source);
   if (!selectionKey.length && !activeKey.length)
@@ -298,8 +303,7 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
 /// marker is pointless there, every handle is the whole shader, and "all keys"
 /// is what the matte already shows.
 - (NSInteger)_activeKeyNumber {
-  NSString *source =
-      [MiragePlugin shaderSourceFromTimeline:_lanesView.currentTimeline];
+  NSString *source = [self _entrySource:_lanesView.currentTimeline];
   NSDictionary<NSString *, NSString *> *entry =
       [self _activeSlotPuckInSource:source];
   return entry[@"number"] ? entry[@"number"].integerValue : 0;
@@ -354,15 +358,19 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
               ring, (unsigned long)puckIndex);
     return;
   }
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   NSDictionary<NSString *, NSValue *> *responses =
       [self _responsesForRing:ringIndex source:source];
   NSMutableDictionary *captured = [NSMutableDictionary dictionary];
   double frac = [self _editFraction];
   for (KKLane *lane in timeline.lanes) {
-    if (!lane.key.length || !responses[lane.key])
+    NSString *bare = [self _bareKeyForLane:lane];
+    if (!bare || !responses[bare])
       continue;
     NSArray<NSNumber *> *values = [self _valuesForLane:lane fraction:frac];
+    // Captured under the REAL key: this dictionary is read back against
+    // `lane.key` on every drag tick, and against the renderer's live-value
+    // overrides, both of which speak full timeline keys.
     if (values.count)
       captured[lane.key] = values;
   }
@@ -498,7 +506,7 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline || !_dragStartValues.count)
     return;
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   NSDictionary<NSString *, NSValue *> *responses =
       [self _responsesForRing:ringIndex source:source];
   double frac = [self _editFraction];
@@ -530,7 +538,8 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   BOOL changed = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {
     KKLane *lane = lanes[i];
-    NSValue *boxed = lane.key.length ? responses[lane.key] : nil;
+    NSString *bare = [self _bareKeyForLane:lane];
+    NSValue *boxed = bare ? responses[bare] : nil;
     NSArray<NSNumber *> *start =
         lane.key.length ? _dragStartValues[lane.key] : nil;
     if (!boxed || !start.count)
@@ -665,7 +674,7 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline || !_circles.count)
     return;
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSString *source = [self _entrySource:timeline];
   [self _applySurfaceSpecIfChanged:source];
   // Resolved on every refresh rather than once at present: the directive is
   // normally typed with the panel already open, and a `visibleby=` choice can
@@ -771,7 +780,8 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   int n = 0;
   MirageSurfacePolarFit fit = {0.0, 0, 0.0, 0.0, 0};
   for (KKLane *lane in timeline.lanes) {
-    NSValue *boxed = lane.key.length ? responses[lane.key] : nil;
+    NSString *bare = [self _bareKeyForLane:lane];
+    NSValue *boxed = bare ? responses[bare] : nil;
     if (!boxed)
       continue;
     // Same gate as the write side, or the puck would derive from controls the

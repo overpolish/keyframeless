@@ -6,6 +6,8 @@
 #import "KKLocalized.h"
 #import "KKTimelineAdvancedView_Private.h"
 
+#import "KKLog.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineScrubMath.h"
 #import <KeyframelessKit/KKTimingEvaluation.h>
 

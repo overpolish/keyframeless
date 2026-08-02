@@ -120,6 +120,13 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
                                    states:
                                        (NSArray<NSArray<NSNumber *> *> *)states;
 
+/// Open the "Applies to" checklist on `layerKey`'s page. A multi-owner lane set
+/// (Canvas's layers, Mirage's shader rack) shows one owner at a time behind a
+/// layer pill nav, and it should open on the owner the host has selected rather
+/// than on the first one. No-op for a single-owner list or a pill-bar
+/// participation.
+- (void)selectParticipationLayerKey:(nullable NSString *)layerKey;
+
 /// The content height changed on its own (the Frequency row collapsing when
 /// the picked curve has no frequency). The host re-sizes the popover; without
 /// it the row's space would be left blank. Fires only on a real change.

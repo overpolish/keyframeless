@@ -43,6 +43,15 @@ NS_ASSUME_NONNULL_BEGIN
 @interface _KKSearchField : NSSearchField
 @end
 
+/// Enter / Esc drop focus (blur) so spacebar (playback) and Esc (close
+/// popover) reach the popover again, matching every other field in a
+/// ViewBridge popover. Call from the owner's
+/// `control:textView:doCommandBySelector:` and return the result - every
+/// `_KKSearchField` host wants exactly this, so it is not spelled out per
+/// checklist.
+FOUNDATION_EXPORT BOOL KKSearchFieldBlurOnCommit(NSControl *control,
+                                                 SEL selector);
+
 @interface _KKManageRow : NSView
 @property(nonatomic, copy) NSString *rowLabel;
 @property(nonatomic) BOOL checked;
@@ -61,6 +70,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// "X"/"Y" share labels across lanes). nil = uncategorised (shows on all
 /// pages). Default nil.
 @property(nonatomic, copy, nullable) NSString *categoryKey;
+/// The row's owner (layer) key, so the checklist can page it under the right
+/// layer pill even when its label is not the lane key (the modulation
+/// checklist's master / component rows carry display labels, which no
+/// key-indexed map can resolve). nil = no owner (shows on all layer pages).
+/// Default nil.
+@property(nonatomic, copy, nullable) NSString *layerKey;
 @property(nonatomic, copy, nullable) void (^onToggle)(void);
 /// Fired on an option-click instead of `onToggle` (the lane filter solos the
 /// row). When nil, an option-click falls through to `onToggle`.
@@ -514,6 +529,13 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// Switch the open popover to category `key` (nav pill + filter + height),
 /// without firing onCategoryChanged. No-op if `key` isn't a present category.
 - (void)guideSelectCategory:(NSString *)key;
+/// Mount a host strip between the mini-viewer band and the category nav / rows,
+/// `height` points tall (0 + nil removes it). The strip OCCUPIES that height:
+/// the popover's own content height grows by it, so nothing below is clipped or
+/// overlapped. Install it before the popover is shown (the presenter's
+/// -clampContentToScreenOfView: then sizes to include it); a later call re-fits
+/// the open popover.
+- (void)setAccessoryView:(nullable NSView *)view height:(CGFloat)height;
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(nullable NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect

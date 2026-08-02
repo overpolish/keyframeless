@@ -7,7 +7,6 @@
 #import <KeyframelessKit/KKPlugin.h> // KKBeginUndoGroup / KKEndUndoGroup
 
 #import "CanvasLayerRender.h"
-#import "CanvasLayerRowViews.h"
 #import "CanvasLayerTree.h"
 #import "CanvasLocalized.h"
 #import "Constants.h"
@@ -15,6 +14,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKCheckboxRowView.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKListRowViews.h>
 #import <KeyframelessKit/KKSVGParser.h>
 #import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -220,7 +220,7 @@
   // 1pt separator-color hairline matching the timing inspector box. An overlay
   // (not the scroll's own layer) because NSScrollView's clip view draws over
   // its backing layer's border. Passthrough so it never eats clicks/scroll.
-  _listBorder = [[CanvasLayerPassthroughView alloc] initWithFrame:NSZeroRect];
+  _listBorder = [[KKListPassthroughView alloc] initWithFrame:NSZeroRect];
   _listBorder.translatesAutoresizingMaskIntoConstraints = NO;
   _listBorder.wantsLayer = YES;
   _listBorder.layer.cornerRadius = KKRadiusMD;
@@ -322,8 +322,8 @@
 #pragma mark - Scroll-edge shadows
 
 - (NSView *)_edgeShadowAtTop:(BOOL)atTop {
-  CanvasLayerPassthroughView *v =
-      [[CanvasLayerPassthroughView alloc] initWithFrame:NSZeroRect];
+  KKListPassthroughView *v =
+      [[KKListPassthroughView alloc] initWithFrame:NSZeroRect];
   v.translatesAutoresizingMaskIntoConstraints = NO;
   CAGradientLayer *grad = [CAGradientLayer layer];
   // Match Steno's ScrollShadowView: top max 0.15, bottom max 0.3.

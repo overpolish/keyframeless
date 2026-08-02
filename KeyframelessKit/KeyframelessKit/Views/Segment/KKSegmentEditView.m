@@ -242,6 +242,10 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   return h + KKPaddingMD;
 }
 
+- (void)selectParticipationLayerKey:(NSString *)layerKey {
+  [(_partChecklist ?: _partCompoundChecklist) selectLayerKey:layerKey];
+}
+
 - (BOOL)hasChecklistParticipation {
   return _partChecklist != nil || _partCompoundChecklist != nil;
 }

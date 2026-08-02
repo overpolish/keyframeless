@@ -335,7 +335,9 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
     return @[];
   NSMutableArray<NSDictionary<NSString *, id> *> *rows = [NSMutableArray array];
   for (KKLane *lane in timeline.lanes) {
-    NSNumber *kind = lane.key.length ? picks[lane.key] : nil;
+    // `picks` is source-derived, so bare; `listed` holds real timeline keys.
+    NSString *bare = [self _bareKeyForLane:lane];
+    NSNumber *kind = bare ? picks[bare] : nil;
     if (!kind || kind.integerValue != MirageSurfacePickKindColor)
       continue;
     if ([listed containsObject:lane.key])
@@ -365,8 +367,7 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
 // belong to the other puck - and that is what this answers.
 - (void)_refreshReadout {
   KKTimeline *timeline = _lanesView.currentTimeline;
-  NSString *source =
-      timeline ? [MiragePlugin shaderSourceFromTimeline:timeline] : nil;
+  NSString *source = timeline ? [self _entrySource:timeline] : nil;
   if (!source.length) {
     [self _setReadoutRows:@[]];
     return;
@@ -403,7 +404,8 @@ static NSString *MirageReadoutNumber(double value, MirageSurfaceResponse r) {
     NSMutableArray<NSDictionary<NSString *, id> *> *block =
         [NSMutableArray array];
     for (KKLane *lane in timeline.lanes) {
-      NSValue *boxed = lane.key.length ? responses[lane.key] : nil;
+      NSString *bare = [self _bareKeyForLane:lane];
+      NSValue *boxed = bare ? responses[bare] : nil;
       if (!boxed || ![drivable containsObject:lane.key])
         continue;
       MirageSurfaceResponse r;

@@ -17,6 +17,7 @@
 #import "KKPillToggleRowView.h"
 #import "KKPluginInstanceState.h" // KKInstanceUUIDForAPI
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKPopupSelectView.h"
 #import "KKReorderListView.h"
 #import "KKShaderTypes.h"

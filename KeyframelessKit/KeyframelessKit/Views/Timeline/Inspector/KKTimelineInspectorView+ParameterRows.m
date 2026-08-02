@@ -12,8 +12,8 @@
 #import "KKConstants.h"
 #import "KKLabelView.h"
 #import "KKLaneCategoryNav.h"
-#import "KKMiniViewerView.h"
 #import "KKLog.h"
+#import "KKMiniViewerView.h"
 #import "KKOSCChecklistView.h"
 #import "KKPaddedScrollView.h"
 #import "KKParameterRowView.h"
@@ -202,6 +202,17 @@ static const CGFloat kParamOrderMaxListH = 200.0;
   [self addSubview:_paramOrderRow];
 }
 
+// label -> owning layerKey, the row-level lookup the owner nav filters on.
+static NSDictionary<NSString *, NSString *> *
+_kkParamOrderLayerByLabel(NSArray<KKLane *> *lanes) {
+  NSMutableDictionary<NSString *, NSString *> *byLabel =
+      [NSMutableDictionary dictionary];
+  for (KKLane *l in lanes)
+    if (l.key.length && l.layerKey.length)
+      byLabel[l.key] = l.layerKey;
+  return byLabel;
+}
+
 - (void)_paramOrderClicked:(id)sender {
   if (_paramOrderPopover.isShown) {
     [_paramOrderPopover close];
@@ -235,41 +246,53 @@ static const CGFloat kParamOrderMaxListH = 200.0;
                                      constant:KKPaddingMD],
   ]];
 
-  NSArray<NSString *> *categoryKeys = KKLaneCategoryKeys(_availableLanes);
+  // The owner nav comes first: each owner declares its own categories, so the
+  // category pills below are a statement about the SELECTED owner. Resolved off
+  // the lanes view's live host selection - the same resolution the Animated
+  // dropdown uses - so both popovers open on the entry the user came from.
+  // Every open builds a fresh content view, so the previous one's rows are dead
+  // references - dropped here rather than only where they are rebuilt, since a
+  // re-open with fewer owners (a rack emptied down to one entry) builds no
+  // layer bar at all and would otherwise pin the list under a detached view.
+  _paramOrderLayerBar = nil;
+  _paramOrderCategoryBar = nil;
+  _paramOrderScrollTop = nil;
+
+  NSArray<NSString *> *layerKeys = KKLaneLayerKeys(_availableLanes);
+  _paramOrderLayerByLabel = _kkParamOrderLayerByLabel(_availableLanes);
+  _paramOrderSelectedLayer =
+      layerKeys.count > 1
+          ? ([self.basicLanesView hostSelectedLayerKeyIn:_availableLanes]
+                 ?: layerKeys.firstObject)
+          : nil;
+  if (_paramOrderSelectedLayer.length &&
+      ![layerKeys containsObject:_paramOrderSelectedLayer])
+    _paramOrderSelectedLayer = layerKeys.firstObject;
+  _paramOrderLabels = labels;
+  _paramOrderCatByLabel = KKLaneCategoryByLabel(_availableLanes);
+  _paramOrderContent = content;
+  _paramOrderHeader = header;
+
+  NSArray<NSString *> *categoryKeys =
+      KKLaneCategoryKeys([self _paramOrderScopedLanes]);
   __weak typeof(self) weak = self;
 
-  if (categoryKeys.count > 0) {
+  if (categoryKeys.count > 0 || layerKeys.count > 1) {
     // Category pills filter the reorder list to one category at a time; the
     // category blocks themselves stay in the plugin's order. Dragging reorders
     // within the shown category, merged back into the full order on each
     // change.
-    _paramOrderLabels = labels;
-    _paramOrderCatByLabel = KKLaneCategoryByLabel(_availableLanes);
     _paramOrderCategoryKeys = categoryKeys;
     _paramOrderSelectedCategory = categoryKeys.firstObject;
-    _paramOrderContent = content;
 
-    KKPillToggleRowView *pill = KKMakeLaneCategoryPill(
-        _availableLanes, categoryKeys.firstObject, ^(NSString *categoryKey) {
-          KKTimelineInspectorView *strong = weak;
-          if (!strong)
-            return;
-          strong->_paramOrderSelectedCategory = categoryKey;
-          [strong _rebuildParamOrderList];
-        });
-    // Wrap the category pills in a KKPillBar so they scroll with edge-fade
-    // shadows instead of overflowing both sides of the popover.
-    KKPillBar *pillBar = [[KKPillBar alloc] initWithPillRow:pill];
-    pillBar.translatesAutoresizingMaskIntoConstraints = NO;
-    // Hug content when it fits, but a near-zero compression resistance lets it
-    // shrink so the inner scroll takes over on overflow (vs clipping).
-    [pillBar setContentHuggingPriority:NSLayoutPriorityRequired - 1
-                        forOrientation:NSLayoutConstraintOrientationHorizontal];
-    [pillBar
-        setContentCompressionResistancePriority:1
-                                 forOrientation:
-                                     NSLayoutConstraintOrientationHorizontal];
-    [content addSubview:pillBar];
+    if (layerKeys.count > 1) {
+      KKPillToggleRowView *layerPill = KKMakeLaneLayerPill(
+          _availableLanes, _paramOrderSelectedLayer, ^(NSString *layerKey) {
+            [weak _paramOrderSelectLayer:layerKey];
+          });
+      _paramOrderLayerBar = [self _paramOrderPillBarFor:layerPill
+                                              belowEdge:header.bottomAnchor];
+    }
 
     NSView *listContainer = [[NSView alloc] initWithFrame:NSZeroRect];
     listContainer.translatesAutoresizingMaskIntoConstraints = NO;
@@ -281,6 +304,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
                                                  padding:0.0];
     scroll.translatesAutoresizingMaskIntoConstraints = NO;
     [content addSubview:scroll];
+    _paramOrderScroll = scroll;
     _paramOrderScrollHeight =
         [scroll.heightAnchor constraintEqualToConstant:kParamOrderMaxListH];
     // The reorder list has a fixed intrinsic width that used to drive the
@@ -289,27 +313,18 @@ static const CGFloat kParamOrderMaxListH = 200.0;
     _paramOrderScrollWidth = [scroll.widthAnchor constraintEqualToConstant:0.0];
 
     [NSLayoutConstraint activateConstraints:@[
-      [pillBar.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
-      [pillBar.leadingAnchor
-          constraintGreaterThanOrEqualToAnchor:content.leadingAnchor
-                                      constant:KKPaddingMD],
-      [pillBar.trailingAnchor
-          constraintLessThanOrEqualToAnchor:content.trailingAnchor
-                                   constant:-KKPaddingMD],
-      [pillBar.heightAnchor constraintEqualToConstant:24.0],
-      [pillBar.topAnchor constraintEqualToAnchor:header.bottomAnchor
-                                        constant:KKPaddingSM],
       [scroll.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
                                            constant:KKPaddingMD],
       [scroll.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
                                             constant:-KKPaddingMD],
-      [scroll.topAnchor constraintEqualToAnchor:pillBar.bottomAnchor
-                                       constant:KKPaddingSM],
       [scroll.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
                                           constant:-KKPaddingMD],
       _paramOrderScrollHeight,
       _paramOrderScrollWidth,
     ]];
+    // Builds the category bar (when the owner has categories) and pins the
+    // scroll under whichever row ends up above it. Re-run on an owner switch.
+    [self _installParamOrderCategoryBar];
     [self _rebuildParamOrderList];
   } else {
     NSMutableArray<NSString *> *titles =
@@ -353,6 +368,109 @@ static const CGFloat kParamOrderMaxListH = 200.0;
                                      }];
 }
 
+// The lanes the category nav + the rows are scoped to: the selected owner's
+// when there is an owner nav, every lane for a plugin that carries no layer
+// info (which is every single-owner plugin, including Canvas).
+- (NSArray<KKLane *> *)_paramOrderScopedLanes {
+  if (_paramOrderSelectedLayer.length == 0)
+    return _availableLanes;
+  NSMutableArray<KKLane *> *out = [NSMutableArray array];
+  for (KKLane *l in _availableLanes)
+    if ([l.layerKey isEqualToString:_paramOrderSelectedLayer])
+      [out addObject:l];
+  return out;
+}
+
+// A label belongs on the current page when it has no owner (a plugin that mixes
+// owned and unowned params keeps the latter reachable everywhere) or its owner
+// is the selected one.
+- (BOOL)_paramOrderLabelInScope:(NSString *)label {
+  NSString *layer = _paramOrderLayerByLabel[label];
+  return _paramOrderSelectedLayer.length == 0 || layer.length == 0 ||
+         [layer isEqualToString:_paramOrderSelectedLayer];
+}
+
+// A pill run wrapped in an edge-faded horizontal scroll so a long row stays on
+// one line instead of forcing the popover wide. nil `pill` (fewer than two
+// segments) installs nothing and returns nil.
+- (NSView *)_paramOrderPillBarFor:(KKPillToggleRowView *)pill
+                        belowEdge:(NSLayoutYAxisAnchor *)topEdge {
+  if (!pill)
+    return nil;
+  KKPillBar *pillBar = [[KKPillBar alloc] initWithPillRow:pill];
+  pillBar.translatesAutoresizingMaskIntoConstraints = NO;
+  // Hug content when it fits, but a near-zero compression resistance lets it
+  // shrink so the inner scroll takes over on overflow (vs clipping).
+  [pillBar setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                      forOrientation:NSLayoutConstraintOrientationHorizontal];
+  [pillBar
+      setContentCompressionResistancePriority:1
+                               forOrientation:
+                                   NSLayoutConstraintOrientationHorizontal];
+  [_paramOrderContent addSubview:pillBar];
+  [NSLayoutConstraint activateConstraints:@[
+    [pillBar.centerXAnchor
+        constraintEqualToAnchor:_paramOrderContent.centerXAnchor],
+    [pillBar.leadingAnchor
+        constraintGreaterThanOrEqualToAnchor:_paramOrderContent.leadingAnchor
+                                    constant:KKPaddingMD],
+    [pillBar.trailingAnchor
+        constraintLessThanOrEqualToAnchor:_paramOrderContent.trailingAnchor
+                                 constant:-KKPaddingMD],
+    [pillBar.heightAnchor constraintEqualToConstant:24.0],
+    [pillBar.topAnchor constraintEqualToAnchor:topEdge constant:KKPaddingSM],
+  ]];
+  return pillBar;
+}
+
+// (Re)build the category nav for the CURRENT owner and re-pin the list under
+// whatever row now sits above it. Torn down and rebuilt rather than refilled
+// because each owner declares its own categories - a rack entry running a
+// different shader has a different set entirely.
+- (void)_installParamOrderCategoryBar {
+  [_paramOrderCategoryBar removeFromSuperview];
+  _paramOrderCategoryBar = nil;
+  _paramOrderScrollTop.active = NO;
+
+  NSArray<KKLane *> *scoped = [self _paramOrderScopedLanes];
+  _paramOrderCategoryKeys = KKLaneCategoryKeys(scoped);
+  _paramOrderSelectedCategory =
+      [_paramOrderCategoryKeys containsObject:_paramOrderSelectedCategory]
+          ? _paramOrderSelectedCategory
+          : _paramOrderCategoryKeys.firstObject;
+
+  NSView *above = _paramOrderLayerBar ?: _paramOrderHeader;
+  if (_paramOrderCategoryKeys.count > 0) {
+    __weak typeof(self) weak = self;
+    KKPillToggleRowView *pill = KKMakeLaneCategoryPill(
+        scoped, _paramOrderSelectedCategory, ^(NSString *categoryKey) {
+          KKTimelineInspectorView *strong = weak;
+          if (!strong)
+            return;
+          strong->_paramOrderSelectedCategory = categoryKey;
+          [strong _rebuildParamOrderList];
+        });
+    _paramOrderCategoryBar = [self _paramOrderPillBarFor:pill
+                                               belowEdge:above.bottomAnchor];
+    if (_paramOrderCategoryBar)
+      above = _paramOrderCategoryBar;
+  }
+  _paramOrderScrollTop =
+      [_paramOrderScroll.topAnchor constraintEqualToAnchor:above.bottomAnchor
+                                                  constant:KKPaddingSM];
+  _paramOrderScrollTop.active = YES;
+}
+
+// Picking an owner re-scopes the category nav and, through it, the rows.
+- (void)_paramOrderSelectLayer:(NSString *)layerKey {
+  if (layerKey.length == 0 ||
+      [layerKey isEqualToString:_paramOrderSelectedLayer])
+    return;
+  _paramOrderSelectedLayer = [layerKey copy];
+  [self _installParamOrderCategoryBar];
+  [self _rebuildParamOrderList];
+}
+
 // Rebuild the reorder list to show only the selected category's params (in
 // their current relative order) and resize the popover to fit. Dragging within
 // the list merges the new sub-order back into the full order.
@@ -362,6 +480,15 @@ static const CGFloat kParamOrderMaxListH = 200.0;
 - (NSString *)_paramOrderEffectiveCategory:(NSString *)label {
   NSString *c = _paramOrderCatByLabel[label];
   return c.length ? c : _paramOrderCategoryKeys.firstObject;
+}
+
+// Whether `label` shows on `category`'s page. An owner with no categories at
+// all has no category nav either, so every one of its labels shows.
+- (BOOL)_paramOrderShowsLabel:(NSString *)label
+                   inCategory:(NSString *)category {
+  if (_paramOrderCategoryKeys.count == 0)
+    return YES;
+  return [[self _paramOrderEffectiveCategory:label] isEqualToString:category];
 }
 
 // The reorder ROW title is the user-facing display name (a dynamic plugin's
@@ -383,8 +510,9 @@ static const CGFloat kParamOrderMaxListH = 200.0;
   NSMutableArray<NSString *> *ids = [NSMutableArray array];
   NSMutableArray<NSString *> *titles = [NSMutableArray array];
   for (NSString *label in _paramOrderLabels)
-    if ([[self _paramOrderEffectiveCategory:label]
-            isEqualToString:_paramOrderSelectedCategory]) {
+    if ([self _paramOrderLabelInScope:label] &&
+        [self _paramOrderShowsLabel:label
+                         inCategory:_paramOrderSelectedCategory]) {
       [ids addObject:label];
       [titles addObject:[self _paramOrderTitleForLabel:label]];
     }
@@ -421,15 +549,17 @@ static const CGFloat kParamOrderMaxListH = 200.0;
     _paramOrderPopover.contentSize = _paramOrderContent.fittingSize;
 }
 
-// Splice the reordered category sub-order back into the full param order: the
-// block of `category` items is replaced in place (at its first occurrence),
+// Splice the reordered sub-order back into the full param order: the block of
+// items the popover was SHOWING - `category`, and within the selected owner
+// when there is an owner nav - is replaced in place (at its first occurrence),
 // every other label keeps its position. Persists via applyParamOrder.
 - (void)_applyParamSubOrder:(NSArray<NSString *> *)subOrder
                 forCategory:(NSString *)category {
   NSMutableArray<NSString *> *result = [NSMutableArray array];
   BOOL inserted = NO;
   for (NSString *label in _paramOrderLabels) {
-    if ([[self _paramOrderEffectiveCategory:label] isEqualToString:category]) {
+    if ([self _paramOrderLabelInScope:label] &&
+        [self _paramOrderShowsLabel:label inCategory:category]) {
       if (!inserted) {
         [result addObjectsFromArray:subOrder];
         inserted = YES;
@@ -483,6 +613,15 @@ static const CGFloat kParamOrderMaxListH = 200.0;
           }];
   list.translatesAutoresizingMaskIntoConstraints = NO;
   list.defaultsScope = self.oscDefaultsScope;
+  // Owner nav: the same lane templates the display names came from also say
+  // which owner each element belongs to, so a multi-owner element set (a shader
+  // rack feeding every entry's controls) gets a pill row and opens on the entry
+  // the host has selected - the resolution the Animated dropdown uses. A no-op
+  // for a feed that resolves to one owner or none, which is every single-owner
+  // plugin (Canvas's templates carry no layerKey, and its compounds are already
+  // narrowed to the selected layer).
+  [list applyLayerLanes:avail
+       selectedLayerKey:[self.basicLanesView hostSelectedLayerKeyIn:avail]];
   _oscPillBar = list; // guide spotlight anchor (weak; lives in the popover)
   __weak typeof(self) weak = self;
   list.onToggled = ^(NSInteger compoundIdx, NSInteger segIdx, BOOL isOn) {

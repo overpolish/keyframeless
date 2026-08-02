@@ -6,6 +6,7 @@
 #import "MirageExprMiniSet.h"
 
 #import "MirageOSCBlockRuntime.h"
+#import "MirageRack.h"                      // entry-scoped lane keys
 #import <KeyframelessKit/KKOSCGlyphStyle.h> // KKOSCMiniGlyphRatio
 #import <KeyframelessKit/KKResizeCursor.h>  // KKVisibilityShow/HideCursor
 #import <KeyframelessKit/KKSnapEngine.h>    // Cmd-held point snapping (parity)
@@ -15,6 +16,9 @@
   __weak KKMiniViewerRenderer *_renderer;
   NSArray<MirageOSCBlockRuntime *> *_runtimes;
   NSString *_syncedSource;
+  // The rack entry the runtimes were built for: the scope every BARE label
+  // crossing back into the timeline is wrapped in.
+  NSString *_rackEntryID;
   NSString *_activeName; // block being dragged (nil = none)
   // Ring-drag press anchor: the bound value + the cursor's offset from the
   // centre (content-min-dim fractions) at mouse-down, for the runtime's shared
@@ -62,13 +66,16 @@ static BOOL MirageExprMiniBoxControlsX(NSInteger idx) {
 - (NSArray<NSValue *> *)_snapTargetsExcludingBinds:(NSString *)binds
                                        contentRect:(CGRect)cr {
   KKMiniViewerRenderer *r = _renderer;
+  NSString *entry = _rackEntryID ?: (NSString *)kMirageRackSentinelEntryID;
   double aspect = cr.size.height > 0 ? cr.size.width / cr.size.height : 1.0;
   return [MirageOSCBlockRuntime
       snapTargetsForRuntimes:_runtimes
               excludingBinds:binds
                       aspect:aspect
                   laneValues:^NSArray<NSNumber *> *(NSString *b) {
-                    return [r valuesForLabel:b];
+                    // The runtimes answer in the shader's own bare identifiers;
+                    // the timeline stores them under the entry's keys.
+                    return [r valuesForLabel:MirageRackLaneKey(entry, b)];
                   }];
 }
 
@@ -81,7 +88,7 @@ static BOOL MirageExprMiniBoxControlsX(NSInteger idx) {
       continue;
     simd_float2 o = [MirageOSCBlockRuntime
         handleObjectPointForRuntime:b
-                         laneValues:[r valuesForLabel:b.binds]
+                         laneValues:[r valuesForLabel:b.laneKey]
                              aspect:aspect];
     [out addObject:[NSValue valueWithPoint:NSMakePoint(o.x, o.y)]];
   }
@@ -112,18 +119,27 @@ static BOOL MirageExprMiniBoxControlsX(NSInteger idx) {
     *fromKeyposeY = _snapYFromObj;
 }
 
-- (void)syncWithSource:(NSString *)src lanes:(NSArray<KKLane *> *)lanes {
-  NSString *s = src ?: @"";
+- (void)syncWithSource:(NSString *)src
+                 lanes:(NSArray<KKLane *> *)lanes
+           rackEntryID:(NSString *)entryID {
+  NSString *entry = MirageRackEntryIDOrSentinel(entryID);
+  NSString *s = [NSString stringWithFormat:@"%@\n%@", entry, src ?: @""];
   if ([s isEqualToString:_syncedSource])
     return;
   _syncedSource = [s copy];
-  _runtimes = [MirageOSCBlockRuntime runtimesForSource:s lanes:lanes ?: @[]];
+  _rackEntryID = [entry copy];
+  _runtimes = [MirageOSCBlockRuntime runtimesForSource:src ?: @""
+                                                 lanes:lanes ?: @[]
+                                           rackEntryID:entry];
   // A referenced uniform (center = uOrigin, …) reads the mini's ROOT lane
-  // value (un-link-resolved, matching the radial sets' centre handling).
+  // value (un-link-resolved, matching the radial sets' centre handling). The
+  // shader names it bare, so it is scoped to the entry on the way through.
   __weak KKMiniViewerRenderer *weakRenderer = _renderer;
+  NSString *scopeEntry = entry;
   for (MirageOSCBlockRuntime *b in _runtimes) {
     b.laneValueProvider = ^NSArray<NSNumber *> *(NSString *label) {
-      return [weakRenderer rootValuesForLabel:label];
+      return [weakRenderer
+          rootValuesForLabel:MirageRackLaneKey(scopeEntry, label)];
     };
     // `size` is the SOURCE media resolution, not the preview's, so an
     // expression written against real pixels means the same here as in the
@@ -160,7 +176,8 @@ static BOOL MirageExprMiniIsGlyph(MirageOSCBlockRuntime *b) {
 - (NSArray<NSNumber *> *)_boxValuesForRuntime:(MirageOSCBlockRuntime *)b
                                   contentRect:(CGRect)cr {
   KKMiniViewerRenderer *r = _renderer;
-  KKExprVal bound = [b boundValueFromLaneValues:[r rootValuesForLabel:b.binds]];
+  KKExprVal bound =
+      [b boundValueFromLaneValues:[r rootValuesForLabel:b.laneKey]];
   double aspect = cr.size.height > 0 ? cr.size.width / cr.size.height : 1.0;
   return [MirageOSCBlockRuntime cropModelFromRect:[b boxRectForBound:bound
                                                               aspect:aspect]];
@@ -192,16 +209,17 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
 // is peeking it). The element key is the block NAME; the lane is `binds`.
 - (BOOL)_activeRuntime:(MirageOSCBlockRuntime *)b forContentRect:(CGRect)cr {
   KKMiniViewerRenderer *r = _renderer;
-  return r && !CGRectIsEmpty(cr) && b.name.length &&
-         ![r.suppressedHandleLabels containsObject:b.name] &&
-         [r isConstantLabel:b.binds] && [r labelVisibleOrRevealing:b.name];
+  return r && !CGRectIsEmpty(cr) && b.elementKey.length &&
+         ![r.suppressedHandleLabels containsObject:b.elementKey] &&
+         [r isConstantLabel:b.laneKey] &&
+         [r labelVisibleOrRevealing:b.elementKey];
 }
 
 // The handle's overlay centre for the current lane value: bound -> forward
 // (object) -> overlay via the renderer's clip-space mapping.
 - (CGPoint)_centerForRuntime:(MirageOSCBlockRuntime *)b contentRect:(CGRect)cr {
   KKMiniViewerRenderer *r = _renderer;
-  KKExprVal bound = [b boundValueFromLaneValues:[r valuesForLabel:b.binds]];
+  KKExprVal bound = [b boundValueFromLaneValues:[r valuesForLabel:b.laneKey]];
   double aspect = cr.size.height > 0 ? cr.size.width / cr.size.height : 1.0;
   simd_float2 o = [b objectPointForBound:bound
                                   aspect:aspect
@@ -218,7 +236,8 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
                     radiusX:(out CGFloat *)outRx
                     radiusY:(out CGFloat *)outRy {
   KKMiniViewerRenderer *r = _renderer;
-  KKExprVal bound = [b boundValueFromLaneValues:[r rootValuesForLabel:b.binds]];
+  KKExprVal bound =
+      [b boundValueFromLaneValues:[r rootValuesForLabel:b.laneKey]];
   double aspect = cr.size.height > 0 ? cr.size.width / cr.size.height : 1.0;
   simd_float2 oc = [b centerObjectForBound:bound aspect:aspect];
   KKExprVal radii = [b ringRadiiForBound:bound aspect:aspect];
@@ -299,7 +318,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
     [out addObject:@{
       @"center" : [NSValue valueWithPoint:c],
       @"style" : @(MirageExprMiniStyle(b)),
-      @"alpha" : @([r ghostAlphaForLabel:b.name]),
+      @"alpha" : @([r ghostAlphaForLabel:b.elementKey]),
       // The viewer's dot glyph (KKPointOSC) is WHITE; ask the mini to match
       // instead of its accent position-handle fill.
       @"white" : @YES,
@@ -321,7 +340,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
     // inline boxes; a crop-style vec4 shows its rect in SOURCE PIXELS,
     // matching the viewer's crop readout.
     NSString *readout = nil;
-    NSArray<NSNumber *> *raw = [r rootValuesForLabel:b.binds];
+    NSArray<NSNumber *> *raw = [r rootValuesForLabel:b.laneKey];
     // Crop-style vec4 boxes AND centred boxes with declared per-component
     // units (`units={px,%}`) show the BOUND LANE's display units, matching
     // the lane fields; a unit-less (or single-component) value box keeps the
@@ -340,7 +359,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
                             handleCenters:[editor handleCentersForValues:values
                                                              contentRect:cr]
                                   readout:readout
-                               ghostAlpha:[r ghostAlphaForLabel:b.name]]];
+                               ghostAlpha:[r ghostAlphaForLabel:b.elementKey]]];
   }
   return out;
 }
@@ -363,10 +382,10 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
       continue;
     // A thin ring's ghost is barely visible at the base 0.3 dim; lift it to
     // 0.6 (peek mode returns 1.0, so it stays fully interactive there).
-    CGFloat alpha = [r ghostAlphaForLabel:b.name] < 1.0 ? 0.6 : 1.0;
+    CGFloat alpha = [r ghostAlphaForLabel:b.elementKey] < 1.0 ? 0.6 : 1.0;
     BOOL ghost = alpha < 0.999;
     NSInteger emphasis =
-        ghost ? 0 : ([_activeName isEqualToString:b.name] ? 2 : 0);
+        ghost ? 0 : ([_activeName isEqualToString:b.elementKey] ? 2 : 0);
     [out addObject:@{
       @"center" : [NSValue valueWithPoint:c],
       @"radiusX" : @(rx),
@@ -416,9 +435,10 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
   BOOL optToggle =
       r.revealHidden && !r.handlesHidden && r.onHandleVisibilityToggled != nil;
   if (optToggle)
-    return ([r ghostAlphaForLabel:hit.name] < 1.0) ? KKVisibilityShowCursor()
-                                                   : KKVisibilityHideCursor();
-  if ([r ghostAlphaForLabel:hit.name] < 1.0)
+    return ([r ghostAlphaForLabel:hit.elementKey] < 1.0)
+               ? KKVisibilityShowCursor()
+               : KKVisibilityHideCursor();
+  if ([r ghostAlphaForLabel:hit.elementKey] < 1.0)
     return nil; // a re-enable ghost keeps the arrow
   if (MirageExprMiniIsRing(hit)) {
     CGPoint c = CGPointZero;
@@ -449,11 +469,11 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
   MirageOSCBlockRuntime *hit = [self _runtimeAtPoint:p contentRect:cr];
   if (!hit)
     return NO;
-  _activeName = hit.name;
+  _activeName = hit.elementKey;
   if (MirageExprMiniIsRing(hit)) {
     KKMiniViewerRenderer *r = _renderer;
     _dragPressBound =
-        [hit boundValueFromLaneValues:[r rootValuesForLabel:hit.binds]];
+        [hit boundValueFromLaneValues:[r rootValuesForLabel:hit.laneKey]];
     CGPoint c = CGPointZero;
     [self _ringGeomForRuntime:hit
                   contentRect:cr
@@ -483,7 +503,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
       _dragBoxControlsX = MirageExprMiniBoxControlsX(idx);
       KKMiniViewerRenderer *r = _renderer;
       _dragPressBound =
-          [hit boundValueFromLaneValues:[r rootValuesForLabel:hit.binds]];
+          [hit boundValueFromLaneValues:[r rootValuesForLabel:hit.laneKey]];
     }
   }
   [canvas setNeedsDisplay:YES];
@@ -498,7 +518,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
     return NO;
   MirageOSCBlockRuntime *b = nil;
   for (MirageOSCBlockRuntime *r in _runtimes)
-    if ([r.name isEqualToString:_activeName]) {
+    if ([r.elementKey isEqualToString:_activeName]) {
       b = r;
       break;
     }
@@ -517,7 +537,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
               ? (float)((p.y - CGRectGetMinY(cr)) / cr.size.height)
               : 0};
       BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
-      BOOL laneLinked = b.linked && [self _laneLinkedForLabel:b.binds];
+      BOOL laneLinked = b.linked && [self _laneLinkedForLabel:b.laneKey];
       BOOL effLinked = b.linked ? (laneLinked ^ shift) : NO;
       KKExprVal nv = [b boxCenteredBoundForObjectMouse:mObj
                                                 corner:_dragBoxCorner
@@ -526,7 +546,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
                                        linkedEffective:effLinked
                                                 aspect:aspect];
       [r commitValues:[b laneValuesFromBound:nv]
-             forLabel:b.binds
+             forLabel:b.laneKey
                canvas:canvas];
       [canvas setNeedsDisplay:YES];
       return YES;
@@ -539,9 +559,11 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
       return YES;
     KKExprVal rect = [MirageOSCBlockRuntime rectFromCropModel:values];
     KKExprVal boundNow =
-        [b boundValueFromLaneValues:[r rootValuesForLabel:b.binds]];
+        [b boundValueFromLaneValues:[r rootValuesForLabel:b.laneKey]];
     KKExprVal nv = [b boxBoundForRect:rect boundNow:boundNow aspect:aspect];
-    [r commitValues:[b laneValuesFromBound:nv] forLabel:b.binds canvas:canvas];
+    [r commitValues:[b laneValuesFromBound:nv]
+           forLabel:b.laneKey
+             canvas:canvas];
     [canvas setNeedsDisplay:YES];
     return YES;
   }
@@ -558,14 +580,16 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
     simd_float2 off = {(float)((p.x - c.x) / minDim),
                        (float)((p.y - c.y) / minDim)};
     BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
-    BOOL laneLinked = b.linked && [self _laneLinkedForLabel:b.binds];
+    BOOL laneLinked = b.linked && [self _laneLinkedForLabel:b.laneKey];
     BOOL effLinked = b.linked ? (laneLinked ^ shift) : NO;
     KKExprVal nv = [b ringBoundForDragOffset:off
                                  pressOffset:_dragPressOff
                                   pressBound:_dragPressBound
                              linkedEffective:effLinked
                                       aspect:aspect];
-    [r commitValues:[b laneValuesFromBound:nv] forLabel:b.binds canvas:canvas];
+    [r commitValues:[b laneValuesFromBound:nv]
+           forLabel:b.laneKey
+             canvas:canvas];
     [canvas setNeedsDisplay:YES];
     return YES;
   }
@@ -613,12 +637,12 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
   }
   KKExprVal nv;
   if (b.hasInverse) {
-    KKExprVal bound = [b boundValueFromLaneValues:[r valuesForLabel:b.binds]];
+    KKExprVal bound = [b boundValueFromLaneValues:[r valuesForLabel:b.laneKey]];
     nv = [b inverseBoundForObjectMouse:om boundNow:bound aspect:aspect];
   } else {
     nv = [b invertBoundForObjectPoint:om aspect:aspect];
   }
-  [r commitValues:[b laneValuesFromBound:nv] forLabel:b.binds canvas:canvas];
+  [r commitValues:[b laneValuesFromBound:nv] forLabel:b.laneKey canvas:canvas];
   [canvas setNeedsDisplay:YES];
   return YES;
 }
@@ -644,7 +668,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
     return NO;
   KKMiniViewerRenderer *r = _renderer;
   if (r.onHandleVisibilityToggled)
-    r.onHandleVisibilityToggled(hit.name);
+    r.onHandleVisibilityToggled(hit.elementKey);
   [canvas setNeedsDisplay:YES];
   return YES;
 }

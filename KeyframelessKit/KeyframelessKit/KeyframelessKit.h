@@ -26,6 +26,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKColor.h>
 #import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKColorWellView.h>
+#import <KeyframelessKit/KKCompanionPanelController.h>
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKCropModel.h>
 #import <KeyframelessKit/KKCropOSC.h>
@@ -46,6 +47,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKHelpView.h>
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKIconButtonOSC.h>
+#import <KeyframelessKit/KKInlineRenameField.h>
 #import <KeyframelessKit/KKJoyrideController.h>
 #import <KeyframelessKit/KKJoyrideDragStep.h>
 #import <KeyframelessKit/KKJoyrideGuideHost.h>
@@ -59,6 +61,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKLinkExpr.h>
 #import <KeyframelessKit/KKLinkWatcher.h>
+#import <KeyframelessKit/KKListRowViews.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMarkup.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>

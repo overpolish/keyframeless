@@ -133,11 +133,12 @@
     // navigation (cell click / arrows) updates _openStaticBoundaryFraction
     // without rebuilding the popover, so capturing cfg.fraction would
     // leave the override pinned to the original keypose.
-    // Snap to the representative collapsed-slot fraction: when the popover
-    // is on the second KP of a tied-hold pair, _openStaticBoundaryFraction
-    // points past the slot's tag and the renderer's per-slot editFraction
-    // (slot tag) wouldn't match. Use the largest collapsed frac <= want so
-    // both halves of a linked pair push into the same slot.
+    // Snap to the published slot fraction: the renderer's per-slot
+    // editFraction is the slot's tag, so a push bound to anything else
+    // wouldn't match any cell. The open keypose always has its own slot
+    // (see -_fractions:byRestoringAnchor:from:), so this normally resolves
+    // to `want` itself - the largest-slot-<=-want walk only matters for a
+    // fraction that sits between published slots.
     double liveFraction = 0.0;
     if (cfg.isBoundary) {
       double want = s->_openStaticBoundaryFraction;
@@ -278,6 +279,15 @@
               onDragEnd:onDragEndBlock
            editsKeypose:cfg.isBoundary
         initialCategory:cfg.initialCategory];
+    // Host strip (Mirage's shader rack) between the mini-viewer and the rows.
+    // Fresh popover only: an in-place mode switch keeps the one it has, so the
+    // strip doesn't blink - and the host isn't asked to rebuild it.
+    if (self.staticValuesAccessoryProvider) {
+      NSView *accessory = self.staticValuesAccessoryProvider();
+      if (accessory)
+        [staticView setAccessoryView:accessory
+                              height:self.staticValuesAccessoryHeight];
+    }
   }
   _openStaticView = staticView;
   _openStaticIsBoundary = cfg.isBoundary;
@@ -460,8 +470,21 @@
 
   // An in-place mode switch ends here - the popover is already shown and its
   // close handler (which reads the LIVE mode) is already installed.
-  if (popoverOpen)
+  if (popoverOpen) {
+    // Nothing else tells the host the popover changed KIND. DidOpen only fires
+    // for a fresh present (below), and DidNavigate only for a keypose->keypose
+    // move, so an owner switcher that grays the owners with no keypose here
+    // (Mirage's rack strip, Canvas's layer list) kept the set it derived at
+    // open
+    // - a keypose->constants switch stayed grayed, and constants->keypose
+    // stayed ungrayed. Same narrow signal keypose navigation uses, deliberately
+    // NOT a DidOpen re-post: the companion panels riding that pair (the
+    // browser, the color panel) tear down and re-slide on every open. Posted
+    // AFTER _openStaticIsBoundary / the keypose edit state are updated above,
+    // so an observer re-reading -openKeyposePopoverLayerKeys sees the NEW kind.
+    KKPostStaticValuesPopoverDidNavigate(self, cfg.isBoundary, cfg.fraction);
     return;
+  }
 
   // Clamp the initial popover height to the anchor's screen so a small /
   // low-resolution display doesn't push the bottom rows off-screen. The view's

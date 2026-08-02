@@ -175,6 +175,22 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_showIfPopoverOpen;
 - (void)_showIfPopoverOpenAttempt:(NSInteger)attempt;
 - (BOOL)_resolveSurfaceEnabledFromLanes;
+/// The SELECTED rack entry's shader source. The panel's one crossing from a
+/// timeline that may hold several shaders to the single one it is about.
+- (NSString *)_entrySource:(nullable KKTimeline *)timeline;
+/// `lane`'s key with the rack scope peeled off, or nil when the lane belongs to
+/// a DIFFERENT entry than the selected one.
+///
+/// The strip/prefix boundary: everything derived from the source (responses,
+/// pucks, picks) is keyed by the bare uniform name the shader declared, while
+/// the timeline's keys carry the entry scope. Look up with the bare key; write
+/// through `lane` itself, which already has the full one.
+- (nullable NSString *)_bareKeyForLane:(KKLane *)lane;
+/// A `#slots` group name inside the selected entry, as the registry keys it.
+- (NSString *)_scopedSlotGroup:(NSString *)groupName;
+/// The live timeline with the selected entry's `#slots` registry re-keyed to
+/// the BARE group names the source declares, for the grammar expansions.
+- (nullable KKTimeline *)_entryScopedRegistry;
 - (NSSet<NSString *> *)_drivableKeysIn:(KKTimeline *)timeline
                               fraction:(double)frac;
 - (double)_editFraction;

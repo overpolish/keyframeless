@@ -69,12 +69,26 @@ MirageFrameOffsetsForSource(NSString *source,
     *outError = MirageFramesDirectiveErrorNone;
   if (!source.length)
     return out;
+  // Substring fast-reject before the regex. A rack asks this once per ENTRY per
+  // scheduled frame (and again per entry per mini redraw), and compiling an
+  // NSRegularExpression costs far more than the scan that proves there is
+  // nothing to match - which is the answer for every shader that doesn't
+  // declare the directive, i.e. almost all of them.
+  if ([source rangeOfString:@"#frames"].location == NSNotFound)
+    return out;
 
-  NSRegularExpression *expression =
-      [NSRegularExpression regularExpressionWithPattern:
-                               @"(?m)^[ \\t]*//[ \\t]*#frames(?![-\\w])(.*)$"
-                                                options:0
-                                                  error:nil];
+  // Built once per process, not once per call: the pattern is constant and
+  // compiling it was the dominant cost of asking this question on a chain.
+  // -initWithPattern: (not the autoreleased convenience form) so the static
+  // holds a retained object under MRR as well as ARC.
+  static NSRegularExpression *expression;
+  static dispatch_once_t onceFrames;
+  dispatch_once(&onceFrames, ^{
+    expression = [[NSRegularExpression alloc]
+        initWithPattern:@"(?m)^[ \\t]*//[ \\t]*#frames(?![-\\w])(.*)$"
+                options:0
+                  error:nil];
+  });
   NSArray<NSTextCheckingResult *> *matches =
       [expression matchesInString:source
                           options:0
@@ -98,10 +112,13 @@ MirageFrameOffsetsForSource(NSString *source,
     return out;
   }
 
-  NSRegularExpression *intRe =
-      [NSRegularExpression regularExpressionWithPattern:@"^[+-]?[0-9]+$"
-                                                options:0
-                                                  error:nil];
+  static NSRegularExpression *intRe;
+  static dispatch_once_t onceInt;
+  dispatch_once(&onceInt, ^{
+    intRe = [[NSRegularExpression alloc] initWithPattern:@"^[+-]?[0-9]+$"
+                                                 options:0
+                                                   error:nil];
+  });
   int parsed[KK_SHADER_MAX_FRAME_OFFSETS];
   int n = 0;
   for (NSString *raw in [list componentsSeparatedByString:@","]) {

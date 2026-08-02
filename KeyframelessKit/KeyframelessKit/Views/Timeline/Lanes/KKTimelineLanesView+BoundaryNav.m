@@ -7,6 +7,7 @@
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
@@ -37,6 +38,7 @@
 }
 
 - (void)_exitKeyposeEditState {
+  _lastPublishedBoundarySlots = nil;
   KKSetBoundaryEditing(self.miniViewerDelegate, NO, 0.0);
   KKSetSuppressedHandles(self.miniViewerDelegate, nil);
   KKWriteBoundaryRequest(self.miniViewerRequestPath, 0.0, NO);
@@ -80,9 +82,8 @@
         [NSDate timeIntervalSinceReferenceDate] >=
             _boundaryRedriveSuppressUntil))
     return;
-  [[self _activeGraph]
-      requestValuePopoverAtFraction:_openStaticBoundaryFraction
-                     fireActivation:NO];
+  [[self _activeGraph] requestValuePopoverAtFraction:_openStaticBoundaryFraction
+                                      fireActivation:NO];
 }
 
 - (nullable NSSet<NSString *> *)_scopedLaneLabelsForOpenPopover {
@@ -100,54 +101,59 @@
   return labels;
 }
 
-- (void)_publishBoundaryRequestForFraction:(double)fraction {
+- (NSArray<NSNumber *> *)_boundarySlotFractionsForFraction:(double)fraction {
   // Filmstrip / Onion = one frame per KP across the lanes participating in
-  // the open popover (same-group as the clicked KP), time-sorted. Off =
-  // single-frame at the clicked fraction. KP-snap (within ~1 frame) so
-  // Basic's OutEnd (frac=1.0 click vs endFrac<1.0 KP) doesn't produce a
-  // phantom extra cell.
+  // the open popover (same-group as the clicked KP), time-sorted. KP-snap
+  // (within ~1 frame) so Basic's OutEnd (frac=1.0 click vs endFrac<1.0 KP)
+  // doesn't produce a phantom extra cell.
+  NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
+  NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
+  for (KKLane *lane in [self _graphTimeline].lanes) {
+    if (!lane.enabled)
+      continue;
+    if (scope && ![scope containsObject:lane.key])
+      continue;
+    for (KKKeyPose *kp in lane.keyposes)
+      [kpTimes addObject:@(kp.time)];
+  }
+  const double kSnapToKP = 0.05;
+  double snapped = fraction;
+  double bestDt = kSnapToKP;
+  for (NSNumber *t in kpTimes) {
+    double dt = fabs(t.doubleValue - fraction);
+    if (dt < bestDt) {
+      bestDt = dt;
+      snapped = t.doubleValue;
+    }
+  }
+  NSMutableArray<NSNumber *> *all = [NSMutableArray array];
+  [all addObject:@(snapped)];
+  [all addObjectsFromArray:kpTimes];
+  [all sortUsingSelector:@selector(compare:)];
+  NSMutableArray<NSNumber *> *ordered = [NSMutableArray array];
+  const double dedupEps = [self _kpDedupEps];
+  for (NSNumber *f in all) {
+    if (ordered.count == 0 ||
+        fabs(f.doubleValue - ordered.lastObject.doubleValue) > dedupEps)
+      [ordered addObject:f];
+  }
+  NSArray<NSNumber *> *collapsed = [self _collapseTiedHolds:ordered
+                                                      scope:scope];
+  return [self _fractions:collapsed byRestoringAnchor:snapped from:ordered];
+}
+
+- (void)_publishBoundaryRequestForFraction:(double)fraction {
   if (_renderMode != KKMiniViewerRenderModeOff) {
-    NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
-    NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
-    for (KKLane *lane in [self _graphTimeline].lanes) {
-      if (!lane.enabled)
-        continue;
-      if (scope && ![scope containsObject:lane.key])
-        continue;
-      for (KKKeyPose *kp in lane.keyposes)
-        [kpTimes addObject:@(kp.time)];
-    }
-    const double kSnapToKP = 0.05;
-    double snapped = fraction;
-    double bestDt = kSnapToKP;
-    for (NSNumber *t in kpTimes) {
-      double dt = fabs(t.doubleValue - fraction);
-      if (dt < bestDt) {
-        bestDt = dt;
-        snapped = t.doubleValue;
-      }
-    }
-    NSMutableArray<NSNumber *> *all = [NSMutableArray array];
-    [all addObject:@(snapped)];
-    [all addObjectsFromArray:kpTimes];
-    [all sortUsingSelector:@selector(compare:)];
-    NSMutableArray<NSNumber *> *ordered = [NSMutableArray array];
-    const double dedupEps = [self _kpDedupEps];
-    for (NSNumber *f in all) {
-      if (ordered.count == 0 ||
-          fabs(f.doubleValue - ordered.lastObject.doubleValue) > dedupEps)
-        [ordered addObject:f];
-    }
-    NSArray<NSNumber *> *collapsed = [self _collapseTiedHolds:ordered
-                                                        scope:scope];
-    KKWriteBoundaryRequestMulti(self.miniViewerRequestPath, collapsed, YES);
+    NSArray<NSNumber *> *slots =
+        [self _boundarySlotFractionsForFraction:fraction];
+    _lastPublishedBoundarySlots = slots;
+    KKWriteBoundaryRequestMulti(self.miniViewerRequestPath, slots, YES);
   } else {
+    _lastPublishedBoundarySlots = @[ @(fraction) ];
     KKWriteBoundaryRequest(self.miniViewerRequestPath, fraction, YES);
   }
 }
 
-// Time-sorted, eps-deduped list of every KP fraction across animatable
-// lanes - the navigable set behind the popover's prev/next buttons.
 // Snap a boundary fraction to the nearest animatable keypose time before it
 // becomes the mini renderer's editFraction. BASIC represents the final boundary
 // as the visual clip end (frac 1.0), while its keypose is stored one frame in
@@ -155,10 +161,18 @@
 // misses it and shows only the anchor dot. Snapping to the actual keypose time
 // makes BASIC match Advanced (which already passes the stored time). No-op when
 // the fraction already sits on a keypose (interior boundaries).
+// The preview must show the moment the user CLICKED, so this resolves against
+// the uncollapsed keypose set. The tie-collapse (below) folds a linked pair's
+// second keypose into the first on the theory that a flat hold renders an
+// identical frame - true for the tied lane alone, false for the composite: the
+// other lanes (Mirage rack nodes, Canvas layers) keep animating across that
+// span, and a temporal effect (bloom, feedback, motion trails) hasn't
+// accumulated at the run's start. Snapping here would preview the LINK SOURCE's
+// moment instead of the clicked keypose's.
 - (double)_snapEditFractionToKeypose:(double)fraction {
-  NSArray<NSNumber *> *fracs = [self _animatableKPFractions];
+  NSArray<NSNumber *> *all = [self _allKPFractions];
   double best = fraction, bestDist = INFINITY;
-  for (NSNumber *f in fracs) {
+  for (NSNumber *f in all) {
     double d = fabs(f.doubleValue - fraction);
     if (d < bestDist) {
       bestDist = d;
@@ -168,7 +182,7 @@
   return best;
 }
 
-- (NSArray<NSNumber *> *)_animatableKPFractions {
+- (NSArray<NSNumber *> *)_allKPFractions {
   NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
   NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
   for (KKLane *lane in [self _graphTimeline].lanes) {
@@ -187,7 +201,48 @@
         fabs(f.doubleValue - deduped.lastObject.doubleValue) > dedupEps)
       [deduped addObject:f];
   }
-  return [self _collapseTiedHolds:deduped scope:scope];
+  return deduped;
+}
+
+// The navigable set behind the popover's prev/next buttons and the filmstrip:
+// the deduped KP fractions with tie-collapsed runs folded away, but always
+// including the keypose the popover is open on.
+- (NSArray<NSNumber *> *)_animatableKPFractions {
+  NSArray<NSNumber *> *all = [self _allKPFractions];
+  NSArray<NSNumber *> *collapsed =
+      [self _collapseTiedHolds:all
+                         scope:[self _scopedLaneLabelsForOpenPopover]];
+  return [self _fractions:collapsed
+        byRestoringAnchor:_openStaticBoundaryFraction
+                     from:all];
+}
+
+// Put the keypose the popover is actually open on back into a collapsed list
+// that dropped it. The collapse exists to keep the filmstrip / prev-next from
+// showing the same frame twice, but the OPEN keypose is never redundant - a
+// dropped anchor previews (and navigates from) its link partner's moment, and
+// leaves the live-value push aimed at a slot tag that isn't published.
+- (NSArray<NSNumber *> *)_fractions:(NSArray<NSNumber *> *)collapsed
+                  byRestoringAnchor:(double)anchor
+                               from:(NSArray<NSNumber *> *)all {
+  if (all.count == 0)
+    return collapsed;
+  double kp = all.firstObject.doubleValue, bestDist = INFINITY;
+  for (NSNumber *f in all) {
+    double d = fabs(f.doubleValue - anchor);
+    if (d < bestDist) {
+      bestDist = d;
+      kp = f.doubleValue;
+    }
+  }
+  const double dedupEps = [self _kpDedupEps];
+  for (NSNumber *f in collapsed)
+    if (fabs(f.doubleValue - kp) <= dedupEps)
+      return collapsed;
+  NSMutableArray<NSNumber *> *out = [collapsed mutableCopy];
+  [out addObject:@(kp)];
+  [out sortUsingSelector:@selector(compare:)];
+  return out;
 }
 
 // YES when every in-scope lane is constant across the open span (a,b) *because
@@ -318,13 +373,14 @@
 }
 
 // Scrub or playback with a keypose popover open: the playhead renders rightly
-// take over the mini viewer while the timeline is moving - the user asked to see
-// it move. But those renders consume the boundary request, so once the playhead
-// SETTLES nothing re-asks for the keypose frame and the preview stays stuck on
-// wherever the playhead stopped. Each render-tick push schedules a debounced
-// re-request; while pushes keep arriving each one supersedes the last, and the
-// final one fires after the playhead has been still for a beat - re-publishing
-// the request and nudging a render, exactly what clicking the keypose did.
+// take over the mini viewer while the timeline is moving - the user asked to
+// see it move. But those renders consume the boundary request, so once the
+// playhead SETTLES nothing re-asks for the keypose frame and the preview stays
+// stuck on wherever the playhead stopped. Each render-tick push schedules a
+// debounced re-request; while pushes keep arriving each one supersedes the
+// last, and the final one fires after the playhead has been still for a beat -
+// re-publishing the request and nudging a render, exactly what clicking the
+// keypose did.
 //
 // Deliberately NOT via _republishBoundaryRequestIfOpen: that helper is the
 // filmstrip re-drive and bails in render-mode Off, while this ping-back is
@@ -379,6 +435,17 @@
   [self _applyKeyposeEditStateWithLanes:lanes
                                fraction:fraction
                          excludedLabels:excludedLabels];
+  // Retargeting to ANOTHER lane's keypose at the same time keeps the fraction
+  // but re-scopes the keypose set behind the filmstrip, so the strip would keep
+  // rendering the previous lane's frames until a close/reopen. Compare the slot
+  // list the request would carry, not just the time. Cheap: a walk of the
+  // scoped lanes' keyposes, the same one the fraction-change path already does.
+  NSArray<NSNumber *> *slots =
+      _renderMode == KKMiniViewerRenderModeOff
+          ? @[ @(fraction) ]
+          : [self _boundarySlotFractionsForFraction:fraction];
+  BOOL slotsChanged = !(_lastPublishedBoundarySlots &&
+                        [slots isEqualToArray:_lastPublishedBoundarySlots]);
   // Full row rebuild (not just value rebind): the editable↔Animate split can
   // change between fractions (navigate) or after add/remove, and the one-way
   // applyExcludedLabels: swap can't restore an editable row on its own.
@@ -388,17 +455,27 @@
   [_openStaticView setHeaderDetail:[self _timeStringForFraction:fraction]];
   [_openStaticView setHeaderLinked:[self _anyLinkedKeyposeAtFraction:fraction]];
   // The render nudge writes an undoable param to force FCP to resolve the
-  // preview frame at a NEW boundary time. A same-fraction in-place rebuild
-  // (add / remove / undo-refresh) keeps the time, and the blob write already
-  // triggers a render - nudging here would add a phantom undo entry (cmd-Z
-  // would then need two presses). Only republish + nudge on a real time change
-  // (navigation between boundaries).
+  // preview frame at a NEW boundary time. A same-fraction, same-slots in-place
+  // rebuild (add / remove / undo-refresh) shows the same frames, and the blob
+  // write already triggers a render - nudging here would add a phantom undo
+  // entry (cmd-Z would then need two presses). Only republish + nudge when the
+  // preview content actually moves: a new time, or a new slot set (a retarget
+  // to another lane's keypose).
   if (fracChanged) {
+    // The popover window never closed, so nothing told the host it is now
+    // editing a DIFFERENT moment - and an owner switcher that grays the owners
+    // with no keypose here (Mirage's rack strip, Canvas's layer list) keeps the
+    // set it derived at open time. Narrow signal, not a DidOpen re-post: the
+    // companion panels riding that pair re-slide on every open.
+    KKPostStaticValuesPopoverDidNavigate(self, YES, fraction);
+  }
+  if (fracChanged || slotsChanged) {
     [self _publishBoundaryRequestForFraction:fraction];
     // Navigation is "look at THAT keypose now", so the host playhead goes too -
     // required for adjustment layers, whose source only composites correctly
-    // under the playhead. See onBoundarySeekHostPlayhead.
-    if (self.onBoundarySeekHostPlayhead)
+    // under the playhead. See onBoundarySeekHostPlayhead. Only on a time
+    // change: a same-time lane switch is already under the playhead.
+    if (fracChanged && self.onBoundarySeekHostPlayhead)
       self.onBoundarySeekHostPlayhead(fraction);
     if (self.onBoundaryPreviewNeedsRender)
       self.onBoundaryPreviewNeedsRender();

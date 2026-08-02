@@ -793,6 +793,29 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     stackTopInset = KKPaddingMD;
   }
 
+  // The host accessory strip sits between the mini-viewer band and everything
+  // below it, IN the chain rather than over it: the category nav (and, with no
+  // pill, the row scroller) pins below the host, and the host pins below the
+  // mini-viewer. Empty and zero-height here, so a host that never installs one
+  // gets the layout it had before this existed.
+  _accessoryHost = [[NSView alloc] initWithFrame:NSZeroRect];
+  _accessoryHost.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:_accessoryHost];
+  _accessoryHeightConstraint =
+      [_accessoryHost.heightAnchor constraintEqualToConstant:0.0];
+  _accessoryTopInset = stackTopInset;
+  _accessoryTopConstraint =
+      [_accessoryHost.topAnchor constraintEqualToAnchor:stackTopAnchor
+                                               constant:stackTopInset];
+  [NSLayoutConstraint activateConstraints:@[
+    [_accessoryHost.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [_accessoryHost.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    _accessoryTopConstraint,
+    _accessoryHeightConstraint,
+  ]];
+  stackTopAnchor = _accessoryHost.bottomAnchor;
+  stackTopInset = 0.0;
+
   // Capture the anchor the category nav (or, when there's no pill, the row
   // stack) pins below - the mini-viewer / header bottom - so the nav can be
   // rebuilt in place when the lane set changes (e.g. a category empties out).
@@ -1009,6 +1032,40 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   }
 }
 
+- (CGFloat)_accessoryInstalledTopDrop {
+  return MIN(_accessoryTopInset, KKPaddingMD);
+}
+
+- (void)setAccessoryView:(NSView *)view height:(CGFloat)height {
+  for (NSView *v in _accessoryHost.subviews.copy)
+    [v removeFromSuperview];
+  _accessoryHeight = view ? MAX(0.0, height) : 0.0;
+  _accessoryHeightConstraint.constant = _accessoryHeight;
+  // An installed strip pads itself, so the ONE KKPaddingMD of separation the
+  // chain would give it goes: kept, it stacked on the strip's own top inset and
+  // the strip's content sat 12 above / 6 below. Only that one pad is dropped -
+  // with no mini-viewer the inset also clears a header band, which still has to
+  // be cleared. Restored with the strip, so a popover that never installs one
+  // lays out exactly as before.
+  _accessoryTopConstraint.constant =
+      view ? _accessoryTopInset - [self _accessoryInstalledTopDrop]
+           : _accessoryTopInset;
+  if (view) {
+    view.translatesAutoresizingMaskIntoConstraints = NO;
+    [_accessoryHost addSubview:view];
+    [NSLayoutConstraint activateConstraints:@[
+      [view.leadingAnchor constraintEqualToAnchor:_accessoryHost.leadingAnchor],
+      [view.trailingAnchor
+          constraintEqualToAnchor:_accessoryHost.trailingAnchor],
+      [view.topAnchor constraintEqualToAnchor:_accessoryHost.topAnchor],
+      [view.bottomAnchor constraintEqualToAnchor:_accessoryHost.bottomAnchor],
+    ]];
+  }
+  // No-op before the popover exists (the presenter's initial clamp reads the
+  // new natural size); re-fits it afterwards.
+  [self _applyContentSize];
+}
+
 // The popover content's natural (unclamped) size for the current lanes /
 // category / live values.
 - (CGSize)_naturalContentSize {
@@ -1028,6 +1085,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     if (ed && !ed.hidden)
       h += extra;
   }
+  // Likewise instance state: the host strip is installed after init, so the
+  // class-level calc knows nothing about it. It costs its own height and gives
+  // back the external gap the install zeroes (see -setAccessoryView:height:),
+  // which that calc counted as part of the mini-viewer band.
+  if (_accessoryHeight > 0.0)
+    h += _accessoryHeight - [self _accessoryInstalledTopDrop];
   return NSMakeSize(
       [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
       h);
@@ -1748,10 +1811,20 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   [self _rebuildCategoryNavForLanes:lanes initialCategory:_selectedCategory];
   [self _applyCategoryFilter];
 
-  if (lanes.count == 0 && _popover)
+  // No rows left = nothing to edit = close... unless a host accessory strip is
+  // installed, which is content of its own AND the only way back: Mirage's
+  // shader rack scopes these rows to the link selected IN the strip, so a
+  // scope that momentarily resolves to nothing (a just-appended entry whose
+  // lanes have not been derived yet) would dismiss the popover the user is
+  // building the chain in, with no way to reselect.
+  if (lanes.count == 0 && _popover && _accessoryHeight <= 0.0) {
     [_popover close];
-  else if (_popover)
+  } else if (_popover) {
+    if (lanes.count == 0)
+      KKLogDebug(@"[StaticValues] no constant rows, accessory installed - "
+                 @"holding the popover open");
     [self _applyContentSize];
+  }
 
   // The shared mini-viewer renderer was updated externally (cmd-Z, or a new
   // layer's lanes arriving while the companion layer-list panel is open), but

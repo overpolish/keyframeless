@@ -6,6 +6,7 @@
 #pragma once
 
 #import "KKGLSLTranspiler.h"
+#import "MirageStateBlob.h" // MirageStateBlobEntry
 #import "MirageTypes.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KKMotionBlur.h> // KKMotionBlurState
@@ -16,6 +17,7 @@
 //   Plugin+RenderState.m      pluginState: + the lane -> MiragePluginState eval
 //   Plugin+RenderPipeline.m   transpile -> MSL -> cached MTLRenderPipelineState
 //   Plugin+RenderMultipass.m  the Buffer A-D + feedback render
+//   Plugin+RenderRack.m       the multi-entry chain (Shader Rack)
 //
 // Runtime-compiled user shaders are the only render path. The user writes a
 // GLSL Image shader (`void mainImage(out vec4, in vec2)`, bare iTime /
@@ -24,6 +26,8 @@
 // approximation) drives the result.
 
 NS_ASSUME_NONNULL_BEGIN
+
+@class MirageShaderModel;
 
 /// The delivered tile carrying the CURRENT frame - what iChannel0 binds. With
 /// boundary-preview and `// #frames` requests in flight there are several
@@ -56,14 +60,71 @@ NSArray *MirageNeighborFrameTextures(
     double frameDurSec, id<MTLDevice> device, id<MTLTexture> _Nullable fallback,
     id<MTLTexture> _Nullable (^_Nullable convert)(id<MTLTexture> tex));
 
+/// Cleared code = passthrough (show the source unchanged), not the plasma
+/// default. Also what a rack renders when the user has switched every entry
+/// off.
+FOUNDATION_EXPORT NSString *const kMiragePassthroughSource;
+
+/// The fixed uniform block for one frame (or one motion-blur sub-sample).
+/// `mediaW/H` are the output dimensions, which drive iResolution; `encodeSRGB`
+/// describes the TARGET, so a chain intermediate passes 1 (it stores gamma)
+/// while the FxPlug destination passes whatever its surface wants.
+KKGLSLUniforms MirageBuildUniforms(const MiragePluginState *base,
+                                   CGFloat mediaW, CGFloat mediaH,
+                                   float encodeSRGB);
+
+/// The render's pixel scale (thumbnail vs full frame), from the SOURCE tile's
+/// inversePixelTransform - FxTileableEffect exposes no render-scale API.
+float MirageRenderScale(NSArray<FxImageTile *> *sourceImages);
+
+/// Scale every RAW-pixel scalar in a filled pool, so a `units="px"` control
+/// covers the same fraction of a thumbnail as of the full render.
+void MirageScalePixelProps(MirageShaderModel *_Nullable model,
+                           vector_float4 *pool, int poolCount, float scale);
+
+/// The four buffer sources in fixed A, B, C, D order, each with Common already
+/// prepended and an absent one left as an empty string so the index still names
+/// the buffer. `*outAny` is YES when any buffer is present at all, which is
+/// what selects the multi-pass path.
+NSArray<NSString *> *
+MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
+                                NSString * (^withCommon)(NSString *),
+                                BOOL *_Nullable outAny);
+
 /// Role keys for the per-instance reusable gamma destinations. Neighbours
-/// occupy `MirageGammaDestNeighbor0 + i`, so every converted texture in a render
-/// has one stable slot and none of them is reallocated per frame.
+/// occupy `MirageGammaDestNeighbor0 + i`, so every converted texture in a
+/// render has one stable slot and none of them is reallocated per frame.
 typedef NS_ENUM(NSInteger, MirageGammaDestKey) {
   MirageGammaDestSource = 0,
   MirageGammaDestTo = 1,
   MirageGammaDestNeighbor0 = 100,
 };
+
+/// SHADER RACK: where one entry of a chain sits in the frame.
+///
+/// nil everywhere the plugin renders a single template, and every field's nil /
+/// NO reading is the pre-rack behaviour - which is how the one-entry path stays
+/// literally the code it was.
+@interface MirageRackChainSlot : NSObject
+/// The previous ENABLED entry's output, already in the chain's gamma-encoded
+/// space. nil for the head entry (and for every entry a disabled predecessor
+/// skipped past), which then takes the clip exactly as a lone template does.
+@property(nonatomic, strong, nullable) id<MTLTexture> input;
+/// Where this entry's image pass draws. nil = the FxPlug destination, which is
+/// the final enabled entry and the only pass in the frame that waits.
+@property(nonatomic, strong, nullable) id<MTLTexture> output;
+/// The frame's ONE queue. Every entry commits to it without waiting, so commit
+/// order alone chains them and the final entry's mandatory wait covers the lot.
+@property(nonatomic, strong, nullable) id<MTLCommandQueue> queue;
+/// Namespaces this entry's persistent feedback set: two entries each running a
+/// Buffer feedback chain hold separate history instead of stamping on one
+/// another's.
+@property(nonatomic, copy, nullable) NSString *entryID;
+/// Whether the FxPlug SURFACE is linear float. Normally implied by the output
+/// encode flag (`u.extra.w == 0`), but an intermediate always stores gamma
+/// while the surface may be either, so the chain states it outright.
+@property(nonatomic) BOOL surfaceLinear;
+@end
 
 @interface MiragePlugin (RenderInternal)
 
@@ -74,19 +135,28 @@ typedef NS_ENUM(NSInteger, MirageGammaDestKey) {
                                                     width:(NSUInteger)width
                                                    height:(NSUInteger)height;
 
+/// SHADER RACK: the reusable RGBA16F intermediate one entry renders into and
+/// the next samples. Keyed by entry id (never by position - a disabled entry
+/// changes positions without changing what any entry holds) and rebuilt only
+/// when the size changes. Never a per-frame allocation.
+- (nullable id<MTLTexture>)reusableChainTextureForEntry:(NSString *)entryID
+                                                 device:(id<MTLDevice>)device
+                                                  width:(NSUInteger)width
+                                                 height:(NSUInteger)height;
+
 /// Plan the gamma match for a resolved neighbour set: hand back the textures to
-/// BIND, and encode nothing yet. The returned block does the encoding when it is
-/// handed a command buffer, so the conversions ride the render's own buffer
+/// BIND, and encode nothing yet. The returned block does the encoding when it
+/// is handed a command buffer, so the conversions ride the render's own buffer
 /// instead of paying a commit + wait each.
 ///
-/// Entries are converted by index; an `NSNull` (an offset FCP could not deliver)
-/// passes through untouched, so the binder still substitutes the current frame.
-/// `outEncode` is nil when there is nothing to convert.
+/// Entries are converted by index; an `NSNull` (an offset FCP could not
+/// deliver) passes through untouched, so the binder still substitutes the
+/// current frame. `outEncode` is nil when there is nothing to convert.
 - (NSArray *)gammaMatchNeighbors:(NSArray *)neighbors
                           decode:(BOOL)decode
                           device:(id<MTLDevice>)device
-                          encode:(void (^_Nullable *_Nullable)
-                                      (id<MTLCommandBuffer>))outEncode;
+                          encode:(void (^_Nullable *_Nullable)(
+                                     id<MTLCommandBuffer>))outEncode;
 
 /// Display pipeline for the final Image pass: derives the pixel format from the
 /// destination tile.
@@ -124,6 +194,11 @@ typedef void (^MirageSampleUniformsBlock)(
     NSInteger sampleIndex, KKGLSLUniforms *outU,
     const simd_float4 *_Nonnull *_Nonnull outPool, int *outPoolCount);
 
+/// `chain` nil is the single-template render, unchanged in every particular.
+/// Non-nil rebinds three things and nothing else: iChannel0 comes from the
+/// previous entry, the image pass targets an intermediate texture on the
+/// frame's shared queue (committed, never waited on), and the feedback set is
+/// keyed per entry.
 - (BOOL)renderCustomMultipassWithUniforms:(KKGLSLUniforms)u
                                 colorPool:(const simd_float4 *)colorPool
                                 poolCount:(int)poolCount
@@ -136,6 +211,7 @@ typedef void (^MirageSampleUniformsBlock)(
                            sampleUniforms:(nullable MirageSampleUniformsBlock)
                                               sampleUniforms
                            transitionMode:(int)transitionMode
+                                    chain:(nullable MirageRackChainSlot *)chain
                          destinationImage:(FxImageTile *)destinationImage
                              sourceImages:
                                  (NSArray<FxImageTile *> *)sourceImages;
@@ -148,6 +224,31 @@ typedef void (^MirageSampleUniformsBlock)(
             atTimes:(const CMTime *)times
               count:(NSInteger)count
               error:(NSError **)error;
+
+/// As above, additionally answering every RACK entry's states + per-sample
+/// enabled flags at the same instants. `*outRackEntries` is nil when the
+/// timeline holds the implicit single entry - the pre-rack answer, for which
+/// `outStates` is already the whole story.
+- (BOOL)buildStates:(MiragePluginState *)outStates
+            atTimes:(const CMTime *)times
+              count:(NSInteger)count
+        rackEntries:(NSArray<MirageStateBlobEntry *> *_Nullable *_Nullable)
+                        outRackEntries
+              error:(NSError **)error;
+
+/// SHADER RACK: render the chain the blob carries. Every enabled entry runs its
+/// own full pipeline (gamma planning, buffer passes, image pass) into a cached
+/// RGBA16F intermediate, the next entry binds that as iChannel0, and the last
+/// one draws into the FxPlug destination carrying the frame's only wait.
+/// Called only when the blob holds more than one entry.
+- (BOOL)renderRackChainForDestinationImage:(FxImageTile *)destinationImage
+                              sourceImages:
+                                  (NSArray<FxImageTile *> *)sourceImages
+                               pluginState:(NSData *)pluginState
+                                    atTime:(CMTime)renderTime
+                                    mediaW:(CGFloat)mediaW
+                                    mediaH:(CGFloat)mediaH
+                                encodeSRGB:(float)encodeSRGB;
 
 @end
 

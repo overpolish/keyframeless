@@ -12,6 +12,19 @@
 #import "KKPathMorph.h"
 #import <objc/runtime.h> // DEBUG field-descriptor completeness check
 
+BOOL KKLanesSpanMultipleLayers(NSArray<KKLane *> *lanes) {
+  NSString *first = nil;
+  for (KKLane *l in lanes) {
+    if (!l.layerKey.length)
+      continue;
+    if (!first)
+      first = l.layerKey;
+    else if (![first isEqualToString:l.layerKey])
+      return YES;
+  }
+  return NO;
+}
+
 BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a, KKKeyPose *b) {
   if (lane.oscEditedOnly)
     return KKMorphSnapshotSignature(a.geometrySnapshot) ==

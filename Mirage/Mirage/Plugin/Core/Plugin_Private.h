@@ -50,12 +50,54 @@
 /// returning, so no previous frame can still be reading one.
 @property(nonatomic, strong, nullable)
     NSMutableDictionary<NSNumber *, id<MTLTexture>> *gammaDestinations;
+/// SHADER RACK: reused RGBA16Float intermediates, one per entry id - what an
+/// entry renders into and the next entry samples as iChannel0. Held per
+/// instance for the same reason the gamma destinations are, and safe to reuse
+/// across frames for the same reason: the render callback waits before it
+/// returns, so no previous frame is still reading one.
+@property(nonatomic, strong, nullable)
+    NSMutableDictionary<NSString *, id<MTLTexture>> *chainTextures;
+/// The chain the last render actually encoded ("id,id,..."), so the render can
+/// log the composition and its skips once when they change rather than on every
+/// frame of playback.
+@property(nonatomic, copy, nullable) NSString *lastRackChainSignature;
+/// SHADER RACK, measured cost: an exponential moving average of how long one
+/// whole render callback takes (seconds), the run of consecutive frames that
+/// average has stayed over the project's frame budget, and the last answer
+/// published to the inspector. A rack that is genuinely slower than real time
+/// is the only thing the strip's warning is allowed to say, and only
+/// measurement can tell that from an eight-shader chain that runs fine.
+@property(nonatomic) double chainRenderCostEMA;
+@property(nonatomic) NSInteger chainRenderOverBudgetFrames;
+@property(nonatomic) BOOL chainRenderSlowPublished;
+/// Memo for -linkableLanesForManifest: the lane set last built, and the
+/// timeline blob + audio bindings it was built from. The manifest is rebuilt on
+/// every render tick and a rack multiplies the directive parse behind it by its
+/// entry count, so the parse happens when one of its inputs moves rather than
+/// once a frame.
+@property(nonatomic, copy, nullable) NSString *linkManifestLanesSignature;
+@property(nonatomic, copy, nullable) NSArray<KKLane *> *linkManifestLanesCache;
+/// Gate for the link-bus publish itself (NOT just the lane set above): the
+/// fingerprint last advertised and when. -writeLinkManifest re-enters the host
+/// several times and serializes every entry's lanes, which is far too much to
+/// repeat per frame for a clip that has not changed.
+@property(nonatomic, copy, nullable) NSString *linkPublishSignature;
+@property(nonatomic) double linkPublishTime;
+/// The persisted timeline THIS render tick read, raw and decoded, so one
+/// callback crosses XPC for it once instead of three times. Valid only inside
+/// the -pluginState: callback that filled them; cleared as it returns.
+@property(nonatomic, copy, nullable) NSString *tickTimelineJSON;
+@property(nonatomic, strong, nullable) KKTimeline *tickTimeline;
 /// Last-read Sonar tickets (key -> ticket), refreshed by `syncAudioTickets…`.
 ///
 /// Cached because the lane builder needs them where the param APIs don't
 /// resolve: `availableLanesProvider` fires from a code-commit callback, which
 /// is outside any action scope, and reading a parameter there returns nil.
 @property(nonatomic, copy, nullable) NSDictionary<NSString *, id> *audioTickets;
+/// Set while the rack selection restored by an undo/redo is being pushed into
+/// the inspector, so the push doesn't persist the value it just read back and
+/// stack a duplicate undo entry behind the one the user is walking through.
+@property(nonatomic) BOOL restoringRackSelection;
 @end
 
 NS_ASSUME_NONNULL_BEGIN
@@ -90,9 +132,23 @@ NS_ASSUME_NONNULL_BEGIN
                      audioTickets:
                          (nullable NSDictionary<NSString *, id> *)tickets
                          timeline:(nullable KKTimeline *)timeline;
+/// As above, naming which rack entry `source` (the editor's uncommitted code)
+/// belongs to. nil = the sentinel entry, which is what an unracked project has
+/// and what a caller with no selection to offer means.
++ (NSArray<KKLane *> *)
+    availableLanesForShaderSource:(NSString *)source
+                     audioTickets:
+                         (nullable NSDictionary<NSString *, id> *)tickets
+                         timeline:(nullable KKTimeline *)timeline
+                      rackEntryID:(nullable NSString *)entryID;
 /// The current shader source from a timeline's "Mirage" code lane (baked
 /// default when absent).
 + (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline;
+/// One rack entry's shader source (its own code lane; baked default when
+/// absent). nil `entryID` = the sentinel, i.e. the bare "Mirage" code lane
+/// every pre-rack project carries.
++ (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline
+                          forRackEntry:(nullable NSString *)entryID;
 /// The PROTOTYPE lanes of one `// #slots` group: the lane set one instance of
 /// it is a copy of. What a caller stamping a new instance hands the kit.
 + (NSArray<KKLane *> *)slotPrototypeLanesForShaderSource:(NSString *)source
@@ -108,6 +164,27 @@ NS_ASSUME_NONNULL_BEGIN
 /// settings-cog popover + hide persistence for the current shader.
 + (NSArray<NSArray<NSString *> *> *)oscCompoundsForShaderSource:
     (NSString *)source;
+/// As above, scoped to one rack entry: every element key comes back in that
+/// entry's namespace (`~Rack#<id>.<key>`), matching MirageOSC's own element
+/// keys, so the checklist rows and the viewer gate on the same strings and two
+/// entries running one template hide independently. nil = the sentinel, which
+/// returns exactly what the unscoped form does.
++ (NSArray<NSArray<NSString *> *> *)
+    oscCompoundsForShaderSource:(NSString *)source
+                    rackEntryID:(nullable NSString *)entryID;
+/// EVERY rack entry's compounds, in rack order - what the visibility checklist
+/// is fed, since that popover scopes itself with its own node pills. Also what
+/// the persisted map is rebuilt from, so toggling an element on one entry can't
+/// drop another entry's stored state. `overrideCode` is the editor's
+/// uncommitted source and belongs to `overrideEntryID` (nil = the sentinel).
++ (NSArray<NSArray<NSString *> *> *)
+    oscCompoundsForRackTimeline:(nullable KKTimeline *)timeline
+                   overrideCode:(nullable NSString *)overrideCode
+                overrideEntryID:(nullable NSString *)overrideEntryID;
+/// The flattened form of the above - the element-key list the OSC-visibility
+/// glue takes.
++ (NSArray<NSString *> *)oscElementKeysForRackTimeline:
+    (nullable KKTimeline *)timeline;
 @end
 
 @interface MiragePlugin (AudioTickets)

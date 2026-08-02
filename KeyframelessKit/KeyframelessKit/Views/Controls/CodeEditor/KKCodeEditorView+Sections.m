@@ -78,7 +78,9 @@ static NSString *KKSchemaOptionTitle(void) {
     _activeTab = 0;
   _textView.string = _sectionCodes[_activeTab] ?: @"";
   [self _rebuildTabBar];
-  [self _runValidator];
+  // Deferred for the same reason -setCodeText: defers: this is how a popover
+  // row seeds a tabbed editor while the popover is still being built.
+  [self _scheduleValidator];
 }
 
 - (NSArray<NSDictionary<NSString *, NSString *> *> *)sections {

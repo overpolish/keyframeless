@@ -45,6 +45,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// scroll takes over, which is the point of the bar.
 @property(nonatomic) CGFloat maxIntrinsicWidth;
 
+/// Horizontal scroll position of the pill run, clamped to the scrollable range.
+/// A host that tears the bar down and rebuilds it (a re-scope that changes the
+/// segments) reads this before and writes it back after, so the run doesn't
+/// snap back to the first pill under the user.
+@property(nonatomic) CGFloat scrollOffsetX;
+
+/// Scroll the minimum distance that brings the pill at `index` fully into view
+/// (no-op when it already is, or when the run doesn't overflow). Pair with
+/// `scrollOffsetX` after a rebuild so a restored offset can never leave the
+/// pill the user just clicked off-screen.
+- (void)revealPillAtIndex:(NSInteger)index;
+
 @end
 
 NS_ASSUME_NONNULL_END

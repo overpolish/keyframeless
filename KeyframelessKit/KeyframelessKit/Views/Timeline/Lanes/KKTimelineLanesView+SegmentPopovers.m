@@ -335,8 +335,11 @@
   // host just switched layers - update the open checklist + curve in place
   // instead of building a new popover (no close/reopen flicker).
   if (_rescopingGapPopover && _openGapEditor) {
-    if (partLanes)
+    if (partLanes) {
       [_openGapEditor rescopeParticipationLanes:partLanes states:partStates];
+      [_openGapEditor
+          selectParticipationLayerKey:[self _hostSelectedLayerKeyIn:partLanes]];
+    }
     // Re-wire the toggle to the NEW layer's callback - it captures this layer's
     // (tagged) labels, so without this a tick writes to the old layer.
     [self _wireSegmentEditor:_openGapEditor
@@ -357,6 +360,10 @@
                                    bulkHeader:NO
                            participationLanes:partLanes
                           participationStates:partStates];
+  // A multi-owner list opens on the owner the host has selected (the rack entry
+  // / layer the user came from), not on the first one. Before presenting, so
+  // the popover is sized to that owner's row count.
+  [edit selectParticipationLayerKey:[self _hostSelectedLayerKeyIn:partLanes]];
   [self _wireSegmentEditor:edit
            onParticipation:onParticipation
                onDragBegin:onDragBegin
@@ -450,6 +457,8 @@
                                                 partCompoundLabels
                                  partStates:(NSArray<NSArray<NSNumber *> *> *)
                                                 partCompoundStates
+                                  partLanes:
+                                      (NSArray<KKLane *> *)partCompoundLanesIn
                               partRebuilder:
                                   (NSArray<NSArray<NSNumber *> *> *_Nullable (
                                       ^)(void))partRebuilder
@@ -470,10 +479,14 @@
                             intervalMutator:
                                 (KKGapIntervalMutator)intervalMutator {
   // "Applies to" as the Animated-style checklist (master + indented component
-  // rows) instead of the compound pill bar - see the Transition path. Resolve
-  // each compound's lane for the category pill nav.
+  // rows) instead of the compound pill bar - see the Transition path. The graph
+  // hands over the live lane behind each compound (its category + owner drive
+  // the two pill navs); the label-matched fallback only covers a caller that
+  // passes none.
   NSArray<KKLane *> *partCompoundLanes =
-      [self _compoundLanesForCompounds:partCompoundLabels];
+      (partCompoundLanesIn.count == partCompoundLabels.count)
+          ? partCompoundLanesIn
+          : [self _compoundLanesForCompounds:partCompoundLabels];
 
   // Layer re-scope: update the open modulation editor's checklist + state in
   // place instead of building a new popover (see the gap popover for the rate).
@@ -481,6 +494,8 @@
     [_openHoldModEditor rescopeCompoundParticipationLanes:partCompoundLanes
                                                 compounds:partCompoundLabels
                                                    states:partCompoundStates];
+    [_openHoldModEditor selectParticipationLayerKey:
+                            [self _hostSelectedLayerKeyIn:partCompoundLanes]];
     // Re-wire the toggle to this layer's callback (captures its tagged labels).
     [self _wireSegmentEditor:_openHoldModEditor
              onParticipation:onParticipation
@@ -504,6 +519,10 @@
                    participationCompoundLanes:partCompoundLanes
                        participationCompounds:partCompoundLabels
                   participationCompoundStates:partCompoundStates];
+  // Open on the host's selected owner (see the Transition path), before the
+  // popover is sized to the row count.
+  [edit selectParticipationLayerKey:
+            [self _hostSelectedLayerKeyIn:partCompoundLanes]];
   [self _wireSegmentEditor:edit
            onParticipation:onParticipation
                onDragBegin:onDragBegin

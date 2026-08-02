@@ -77,6 +77,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// Multi-owner timelines: the host's selected layer, so the keypose popover
 /// scopes its params to that layer (nil => first animated layer).
 @property(nonatomic, copy, nullable) NSString *activeLayerKey;
+
+/// Multi-owner keypose popovers: how a param of the active owner that does NOT
+/// participate in the clicked boundary is presented.
+///  - NO (default, Canvas): it keeps the "Animate" affordance - a message row
+///    with a button that arms the property at this boundary. Canvas's layers
+///    are independently keyed, so arming one there is a normal edit.
+///  - YES (Mirage's shader rack): it is dimmed + inert. A rack entry's
+///    keyposes are one co-timed set, so arming a property that has no keypose
+///    at this boundary is exactly the edit the rule forbids.
+/// Single-owner timelines keep their Animate rows either way.
+@property(nonatomic) BOOL keyposeStrictCoTimed;
 /// Fired when a keypose popover resolves its scope to a layer, so the host can
 /// highlight that layer in its layer list.
 @property(nonatomic, copy, nullable) void (^onKeyposeLayerActivated)
@@ -149,12 +160,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// `participantLabels` / `participantStates` are the animatable properties
 /// and whether the Hold modulation currently applies to each (its Hold
 /// interval modulation != None); `onParticipation` toggles one lane on/off.
+/// `participantCompoundLanes[i]` is the live lane behind compound `i` - the
+/// "Applies to" checklist groups by its category / layer, which no label
+/// lookup can recover (the compound's first entry is a display name).
 @property(nonatomic, copy, nullable) void (^onHoldModulationPopover)
     (NSView *anchorView, double startFraction, double endFraction,
      KKIntervalModulation modulation, double intensity, double frequency,
      uint32_t seed, BOOL linked, BOOL showsLinked,
      NSArray<NSArray<NSString *> *> *participantCompoundLabels,
      NSArray<NSArray<NSNumber *> *> *participantCompoundStates,
+     NSArray<KKLane *> *participantCompoundLanes,
      NSArray<NSArray<NSNumber *> *> *_Nullable (^participantStateRebuilder)
          (void),
      void (^onModulation)(KKIntervalModulation modulation),

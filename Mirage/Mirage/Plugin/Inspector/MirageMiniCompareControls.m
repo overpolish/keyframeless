@@ -9,6 +9,7 @@
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
+#import <QuartzCore/QuartzCore.h>
 
 #import "MirageInspectorChrome.h"
 #import "MirageLocalized.h"
@@ -96,7 +97,17 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   // nothing for either to act on.
   if (!mini)
     return;
+  // In the notification turn, like both companion panels. This was deferred a
+  // tick, guarded on `_popoverContentView` still being this content view - and
+  // that guard cannot hold: the popover instance is reused across opens, so an
+  // outgoing popover's close callback can run around an incoming open, and the
+  // close nils exactly the view the guard tests. A late close inside that one
+  // tick dropped the row entirely. Three buttons is not worth a guard that can
+  // be wrong.
   [self _installInMini:mini];
+  // AFTER the install: it teardowns the previous row on its way in, and the
+  // teardown clears this.
+  _popoverContentView = content;
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {

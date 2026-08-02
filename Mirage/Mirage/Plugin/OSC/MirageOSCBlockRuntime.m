@@ -7,6 +7,7 @@
 
 #import "MirageDirectives.h" // MirageShaderModel + MirageScalarProp
 #import "MirageOSCBlock.h"   // // @osc custom-handling blocks
+#import "MirageRack.h"       // lane/element keys scoped to a rack entry
 #import <KeyframelessKit/KKResizeCursor.h>
 #import <KeyframelessKit/KeyframelessKit.h> // KKLane
 
@@ -51,6 +52,13 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
 + (NSArray<MirageOSCBlockRuntime *> *)runtimesForSource:(NSString *)src
                                                   lanes:(NSArray<KKLane *> *)
                                                             lanes {
+  return [self runtimesForSource:src lanes:lanes rackEntryID:nil];
+}
+
++ (NSArray<MirageOSCBlockRuntime *> *)runtimesForSource:(NSString *)src
+                                                  lanes:
+                                                      (NSArray<KKLane *> *)lanes
+                                            rackEntryID:(NSString *)entryID {
   if (src.length == 0)
     return @[];
   MirageShaderModel *model = [MirageShaderModel modelForSource:src];
@@ -64,8 +72,11 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
                                                 props:props
                                                 count:np
                                                 lanes:lanes];
-    if (r)
+    if (r) {
+      r->_laneKey = MirageRackLaneKey(entryID ?: @"", r->_binds);
+      r->_elementKey = MirageRackLaneKey(entryID ?: @"", r->_name);
       [out addObject:r];
+    }
   }
   return out;
 }

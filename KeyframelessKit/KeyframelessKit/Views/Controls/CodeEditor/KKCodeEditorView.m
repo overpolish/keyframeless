@@ -511,7 +511,10 @@ NSNotificationName const KKCodeEditorReloadNotification =
     return;
   _textView.string = codeText ?: @"";
   _sectionCodes[_activeTab] = [_textView.string copy];
-  [self _runValidator]; // validates expressions too (KKLinkExpr) -> error strip
+  // Deferred, not inline: this is the setter a popover row uses to seed the
+  // editor while the popover is still being built, and a host validator can be
+  // a full transpile. See -_scheduleValidator.
+  [self _scheduleValidator]; // validates expressions too (KKLinkExpr)
 }
 
 - (void)insertReferenceText:(NSString *)text {
@@ -537,7 +540,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
 - (void)setCodeValidator:(NSString * (^)(NSString *,
                                          NSInteger *))codeValidator {
   _codeValidator = [codeValidator copy];
-  [self _runValidator];
+  [self _scheduleValidator];
 }
 
 - (void)setCodeFormatter:(NSString * (^)(NSString *))codeFormatter {

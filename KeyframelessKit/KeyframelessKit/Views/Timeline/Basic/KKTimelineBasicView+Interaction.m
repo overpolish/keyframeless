@@ -8,7 +8,9 @@
 
 #import "KKKeyposeClipboard.h"
 #import "KKKeyposeSymbol.h"
+#import "KKLog.h"
 #import "KKMiniViewerView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineScale.h"
 #import "KKTimelineScrubMath.h"
@@ -438,7 +440,8 @@ static NSInteger KKBasicKPIdxForDiamond(KKLane *lane, NSInteger diamond) {
       if (sib != idx && sib >= 0 && sib < (NSInteger)kps.count) {
         KKKeyPose *sk = [kps[sib] copy];
         sk.values = match.values;
-        sk.geometrySnapshot = match.geometrySnapshot; // geometry lane: mirror shape
+        sk.geometrySnapshot =
+            match.geometrySnapshot; // geometry lane: mirror shape
         kps[sib] = sk;
       }
     }

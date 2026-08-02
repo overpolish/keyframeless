@@ -15,6 +15,7 @@
 #import "KKGLSLSyntax.h"
 #import "KKLinkExpr.h" // built-in expression validator
 #import "KKLocalized.h"
+#import "KKLog.h"
 #import "KKTokens.h"
 #import <QuartzCore/QuartzCore.h> // CATransaction / CAGradientLayer
 
@@ -28,6 +29,27 @@
   // formatUsing: lives in +Sections.m (declared in the public (Sections)
   // category, so it's callable here).
   [self formatUsing:self.codeFormatter];
+}
+
+// Coalesced onto the next runloop turn: a host validator is allowed to be
+// expensive (Mirage's is a full GLSL->MSL transpile), and the build-time
+// callers - setCodeText: / setCodeValidator: / the initial setSections: - run
+// while a popover row is still being constructed, so an inline run is time the
+// popover is not on screen. Deferring shows the editor immediately and fills
+// the error strip a frame later; the strip's height change is internal layout,
+// so nothing else is sized off it.
+- (void)_scheduleValidator {
+  if (_validatorScheduled)
+    return;
+  _validatorScheduled = YES;
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    s->_validatorScheduled = NO;
+    [s _runValidator];
+  });
 }
 
 - (void)_runValidator {

@@ -893,6 +893,13 @@ FOUNDATION_EXPORT const NSInteger kKKTimelineJSONVersion;
 
 @end
 
+/// YES when `lanes` carry more than one distinct `layerKey` (lanes with none
+/// are ignored). A multi-owner lane set is one merged timeline over several
+/// owners (Mirage's rack entries, Canvas's layers), where "the layer being
+/// edited" is a real distinction; a single-owner set has none, so UI that
+/// scopes by owner must leave it exactly as it was.
+FOUNDATION_EXPORT BOOL KKLanesSpanMultipleLayers(NSArray<KKLane *> *lanes);
+
 /// Geometry-aware keypose "value" equality. For an OSC-edited geometry lane
 /// (`oscEditedOnly`) the keyposes carry no scalar - their value IS the shape -
 /// so this compares their morph-snapshot hashes; for any other lane it compares

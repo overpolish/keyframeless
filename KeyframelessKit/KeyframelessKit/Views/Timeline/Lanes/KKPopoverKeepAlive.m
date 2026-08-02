@@ -11,6 +11,8 @@ NSNotificationName const KKStaticValuesPopoverDidOpenNotification =
     @"KKStaticValuesPopoverDidOpenNotification";
 NSNotificationName const KKStaticValuesPopoverDidCloseNotification =
     @"KKStaticValuesPopoverDidCloseNotification";
+NSNotificationName const KKStaticValuesPopoverDidNavigateNotification =
+    @"KKStaticValuesPopoverDidNavigateNotification";
 
 // Weak set of windows that count as "inside" for popover outside-click
 // dismissal. Registry + popover dismissal both run on the main thread, so no
@@ -59,11 +61,11 @@ static void KKPostPopoverOpenWhenWindowed(NSPopover *popover, id sender,
                                           double fraction, NSInteger attempt) {
   // ~5s. `popover.isShown` is the real stop condition - this cap only bounds a
   // popover that is shown but never lands in a window. It was ~1s, which a COLD
-  // FCP boot routinely exceeds: the whole inspector is being built for the first
-  // time, the deadline passed, and the window-less notification below then told
-  // every companion panel there was nothing to attach to. That is the long-
-  // standing "first popover after launch shows no side panel" bug, and it was
-  // never specific to one panel.
+  // FCP boot routinely exceeds: the whole inspector is being built for the
+  // first time, the deadline passed, and the window-less notification below
+  // then told every companion panel there was nothing to attach to. That is the
+  // long- standing "first popover after launch shows no side panel" bug, and it
+  // was never specific to one panel.
   static const NSInteger kMaxAttempts = 100;
   static const NSTimeInterval kRetryDelay = 0.05;
   NSView *contentView = popover.contentViewController.view;
@@ -89,8 +91,9 @@ static void KKPostPopoverOpenWhenWindowed(NSPopover *popover, id sender,
   } else if (contentView) {
     // Windowless give-up. Pass the content view anyway: it is the one object
     // that WILL acquire a window, so an observer can keep waiting on it instead
-    // of being told there is nothing to attach to. Without this the notification
-    // carried `kind` alone and every companion panel silently gave up.
+    // of being told there is nothing to attach to. Without this the
+    // notification carried `kind` alone and every companion panel silently gave
+    // up.
     info[@"contentView"] = contentView;
     KKLogWarn(@"[Popover] %@ never windowed in %.1fs, companions must resolve "
               @"the window from contentView",
@@ -109,4 +112,16 @@ void KKPostStaticValuesPopoverDidOpen(NSPopover *popover, id sender,
                                       NSString *kind, BOOL isBoundary,
                                       double fraction) {
   KKPostPopoverOpenWhenWindowed(popover, sender, kind, isBoundary, fraction, 0);
+}
+
+void KKPostStaticValuesPopoverDidNavigate(id sender, BOOL isBoundary,
+                                          double fraction) {
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:KKStaticValuesPopoverDidNavigateNotification
+                    object:sender
+                  userInfo:@{
+                    @"isBoundary" : @(isBoundary),
+                    @"fraction" : @(fraction),
+                    @"kind" : isBoundary ? @"keypose" : @"constants",
+                  }];
 }

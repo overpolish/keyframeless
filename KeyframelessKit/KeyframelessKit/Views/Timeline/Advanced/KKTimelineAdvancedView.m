@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLaneCategoryNav.h" // KKLaneLayerKeysWithKeyposeNearFraction
 #import "KKPopoverKeepAlive.h"
 #import "KKTimelineAdvancedView_Private.h"
 #import "KKViewHelpers.h" // KKTrackingAreaMatches
+#import <KeyframelessKit/KKLog.h>
 
 // Global user preference (not per-clip): the Dynamic display warp is a viewing
 // aid, so it persists across sessions and clips like a UI setting, never in the
@@ -76,6 +78,18 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
 - (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
   if (layerKey == _activeLayerKey || [layerKey isEqualToString:_activeLayerKey])
     return;
+  // An owner with no keypose at the open time has nothing for this popover to
+  // edit, so the popover stays where it is rather than re-scoping to an empty
+  // editor. The host's own switcher is expected to gray that owner
+  // (KKLaneLayerKeysWithKeyposeNearFraction, the set Canvas grays its layer
+  // list with); this is the backstop for the paths that reach us anyway.
+  if (layerKey.length &&
+      ![KKLaneLayerKeysWithKeyposeNearFraction(
+          _timeline.lanes, _currentPopoverFrac) containsObject:layerKey]) {
+    KKLogDebug(@"[Keypose] retarget to %@ refused: no keypose at %.4f",
+               layerKey, _currentPopoverFrac);
+    return;
+  }
   _activeLayerKey = [layerKey copy];
   // Re-point the open keypose popover at this layer's keypose at the same time.
   // Selection already moved here (this IS the response to it), so don't fire

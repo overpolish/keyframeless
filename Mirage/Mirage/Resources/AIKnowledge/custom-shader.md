@@ -121,6 +121,8 @@ These three are **opt-in**: a shader that doesn't declare them gets neither the 
 
 ## The editor
 
+The editor always shows the **selected rack entry's** shader (see the shader doc): with a chain of shaders on one clip, editing or replacing the code affects that one entry, and its `iChannel0` is the previous entry's output rather than the raw clip. An unracked clip has a single entry, so this is invisible to it.
+
 The Mirage editor is a small dark (GitHub-Dark) code pane: live GLSL syntax highlighting, a line-number gutter, and live error reporting. A shader that fails to compile shows a red bar reading `Line N: <message>` and flags line N in both the code and the gutter; fix it and the flag clears. When asking for an edit, refer to lines by the gutter numbers.
 
 ## Tips

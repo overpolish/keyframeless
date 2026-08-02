@@ -22,6 +22,7 @@
 #import "MirageDirectiveVocab.h" // MirageDirectiveValueKeywords (highlight set)
 #import "MirageDirectives.h"
 #import "MirageLocalized.h"       // RLoc
+#import "MirageRack.h"            // rack entries: ids, keys, display names
 #import "MirageSchemaDoc.h"       // Copy Schema clipboard document
 #import "MirageSlotBudget.h"      // `#slots` pool budget at max instances
 #import "MirageSlotLanes.h"       // `#slots` prototype -> instance stamping
@@ -756,10 +757,15 @@ MirageAppendAudioLanes(NSMutableArray<KKLane *> *lanes, NSString *source,
   }
 }
 
+// One rack entry's lanes, on BARE keys. `entryID` reaches only as far as the
+// `#slots` registry (two entries running the same template mint their own
+// instances); every key this build produces is the key the unracked plugin
+// produced, and the rack prefix is applied afterwards by
+// MirageBuildAvailableLanesForRack.
 static inline NSArray<KKLane *> *
-MirageBuildAvailableLanesForSourceStamped(NSString *shaderSource,
-                                          NSDictionary<NSString *, id> *tickets,
-                                          KKTimeline *timeline) {
+MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
+                                      NSDictionary<NSString *, id> *tickets,
+                                      KKTimeline *timeline, NSString *entryID) {
   // Lanes are BUILT in a convenient order and REORDERED by group at the end
   // (see the bucketing pass before the return, which is what actually decides
   // top-to-bottom order). Users can reorder further in the inspector.
@@ -1538,7 +1544,7 @@ MirageBuildAvailableLanesForSourceStamped(NSString *shaderSource,
   // pass - so the stamped rows are bucketed by their own group like any other
   // lane. A build with no timeline keeps the prototypes (see MirageStampSlot-
   // Lanes), and a source with no block never enters it at all.
-  MirageStampSlotLanes(lanes, shaderSource, timeline);
+  MirageStampSlotLanesForRackEntry(lanes, shaderSource, timeline, entryID);
 
   // Group order: the three groups that are not the shader's to name lead, in a
   // fixed order, then the shader's own groups in the order it declares them.
@@ -1585,6 +1591,17 @@ MirageBuildAvailableLanesForSourceStamped(NSString *shaderSource,
   return ordered;
 }
 
+// The unracked spelling: one source, the sentinel entry's bare keys. What every
+// caller answering "what does this source offer, against this project" has
+// always asked for.
+static inline NSArray<KKLane *> *
+MirageBuildAvailableLanesForSourceStamped(NSString *shaderSource,
+                                          NSDictionary<NSString *, id> *tickets,
+                                          KKTimeline *timeline) {
+  return MirageBuildAvailableLanesForRackEntry(shaderSource, tickets, timeline,
+                                               kMirageRackSentinelEntryID);
+}
+
 // Prototypes-only entry: what a piece of GLSL DECLARES, with every `#slots`
 // block left as the one prototype set it is written as. For every caller
 // answering a question about the source rather than about a project - the
@@ -1600,6 +1617,146 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
 static inline NSArray<KKLane *> *MirageBuildAvailableLanes(void) {
   return MirageBuildAvailableLanesForSource(MirageCustomDefaultShaderSource(),
                                             nil);
+}
+
+// Rewrite every key field of one entry's lane into the rack's namespace.
+//
+// The full set, mirroring MirageSlotStampedLane's: the lane's own `key`, its
+// keypose-popover scope (`groupKey`), its palette group, and the three
+// visibility gates plus the reactive-max controller - every field on KKLane
+// whose value is another lane's key. `linkExpression` is deliberately NOT here:
+// it is the user's, not the build's, and it names lanes across plugins.
+//
+// Unconditional within the entry, unlike the slot stamping's sibling test: an
+// entry's lanes are built from one source and every key they name belongs to
+// that same source, so a gate pointing at a lane this build did not produce
+// (`visibleWhenKey = @"Type"`, which no longer exists) is absent before the
+// rewrite and absent after it - and an absent controller can't gate.
+static inline void MirageRackScopeLaneKeys(KKLane *lane, NSString *entryID) {
+  lane.key = MirageRackLaneKey(entryID, lane.key);
+  if (lane.groupKey.length)
+    lane.groupKey = MirageRackLaneKey(entryID, lane.groupKey);
+  if (lane.paletteGroup.length)
+    lane.paletteGroup = MirageRackLaneKey(entryID, lane.paletteGroup);
+  if (lane.visibleWhenKey.length)
+    lane.visibleWhenKey = MirageRackLaneKey(entryID, lane.visibleWhenKey);
+  if (lane.visibleWhenOrKey.length)
+    lane.visibleWhenOrKey = MirageRackLaneKey(entryID, lane.visibleWhenOrKey);
+  if (lane.visibleWhenAndKey.length)
+    lane.visibleWhenAndKey = MirageRackLaneKey(entryID, lane.visibleWhenAndKey);
+  if (lane.maxControllerKey.length)
+    lane.maxControllerKey = MirageRackLaneKey(entryID, lane.maxControllerKey);
+}
+
+// One entry's on/off lane. New with the rack, so it is prefixed for every entry
+// including the sentinel (MirageRackEnabledLaneKey's note), and animatable -
+// switching an entry out mid-clip is a cut, and a cut is a keyframe.
+static inline KKLane *MirageRackEnabledLane(NSString *entryID) {
+  KKLane *lane =
+      [KKLane laneWithKey:MirageRackEnabledLaneKey(entryID)
+                    label:RLoc(@"Enabled", @"Mirage rack entry on/off lane.")];
+  lane.valueType = KKLaneValueTypeFloat;
+  lane.isToggle = YES;
+  lane.integerValued = YES;
+  lane.animatable = YES;
+  lane.enabled = NO;
+  lane.componentMin = @[ @0.0 ];
+  lane.componentMax = @[ @1.0 ];
+  lane.groupKey = lane.key;
+  // With the code lane, at the head of the entry: the two rows that are about
+  // the ENTRY rather than about anything the shader declared. The category is
+  // the BARE name for every entry - see the note in
+  // MirageBuildAvailableLanesForRack on why it is never rack-scoped.
+  lane.categoryKey = (NSString *)kMirageShaderCategory;
+  lane.categorySymbol = @"chevron.left.forwardslash.chevron.right";
+  [lane insertKeypose:[KKKeyPose
+                          keyposeAtTime:0.0
+                                 values:@[
+                                   @(MirageRackEntryEnabledDefault ? 1.0 : 0.0)
+                                 ]]];
+  return lane;
+}
+
+// The whole rack's lane set: every entry's lanes, in rack order, each entry's
+// keys scoped to it.
+//
+// PROVABLY INERT for a project that has never been racked. Its entry list is
+// the synthesized `@[sentinel]`, and every transform below is a no-op on the
+// sentinel by construction - `MirageRackLaneKey` passes its key through, the
+// category is not prefixed, and the layer/Enabled additions are gated on the
+// registry being explicitly present. So the array is the one
+// `MirageBuildAvailableLanesForSourceStamped` returned before the rack existed,
+// element for element and field for field (asserted in the harness, not just
+// claimed here).
+//
+// `overrideSource` is ONE entry's source when non-empty - mid-edit code from
+// the editor, which has not been committed to a code lane yet - while every
+// other entry contributes from its own stored code. `overrideEntryID` says
+// which entry it belongs to: the rack strip's selected entry, since that is
+// the entry the code editor is bound to. Empty/nil means the sentinel, which
+// is both the pre-selection answer and the only entry an unracked project has.
+static inline NSArray<KKLane *> *MirageBuildAvailableLanesForRack(
+    KKTimeline *timeline, NSDictionary<NSString *, id> *tickets,
+    NSString *overrideSource, NSString *overrideEntryID) {
+  NSString *overrideOwner =
+      overrideEntryID.length ? overrideEntryID : kMirageRackSentinelEntryID;
+  NSArray<NSString *> *entryIDs = MirageRackEntryIDs(timeline);
+  // Explicitly racked, as against the implied single entry a pre-rack project
+  // carries. The gate on everything the rack ADDS to a lane set, so a legacy
+  // project gains no lane and no layer level it never had.
+  BOOL racked =
+      KKTimelineSlotInstanceIDs(timeline, kMirageRackGroupName).count > 0;
+
+  NSString *fallbackName =
+      RLoc(@"Shader", @"Generic GLSL code lane display "
+                      @"name (the code editor's caption).");
+  NSMutableArray<NSString *> *names =
+      [NSMutableArray arrayWithCapacity:entryIDs.count];
+  for (NSString *entryID in entryIDs)
+    [names addObject:MirageRackEntryDisplayName(timeline, entryID,
+                                                kMirageCodeLaneLabel,
+                                                fallbackName)];
+  NSArray<NSString *> *displayNames = MirageRackDedupedDisplayNames(names);
+
+  NSMutableArray<KKLane *> *out = [NSMutableArray array];
+  for (NSUInteger i = 0; i < entryIDs.count; i++) {
+    NSString *entryID = entryIDs[i];
+    BOOL sentinel = [entryID isEqualToString:kMirageRackSentinelEntryID];
+    NSString *stored =
+        MirageRackCodeLaneForEntry(timeline, entryID, kMirageCodeLaneLabel)
+            .codeString;
+    NSString *source =
+        (overrideSource.length && [entryID isEqualToString:overrideOwner])
+            ? overrideSource
+            : stored;
+    NSArray<KKLane *> *entryLanes = MirageBuildAvailableLanesForRackEntry(
+        source.length ? source : MirageCustomDefaultShaderSource(), tickets,
+        timeline, entryID);
+    NSMutableArray<KKLane *> *ofEntry = [NSMutableArray array];
+    // The Enabled lane's key is minted in the rack's namespace already, so it
+    // joins AFTER the scoping pass, not before it.
+    // `categoryKey` is deliberately NOT scoped. Unlike every field
+    // MirageRackScopeLaneKeys rewrites, it is not another lane's key - it is a
+    // group NAME the user reads, on the Advanced view's category header and on
+    // the constants popover's category pill, and a scoped one showed there
+    // verbatim as "~Rack#7f3a01.Options". Per-entry collapse independence -
+    // the one thing scoping bought - is already provided by the kit, which
+    // scopes a category's collapse identity by its owning layer
+    // (-_categoryCollapseKeyForLayer:category:), and the layer IS the entry.
+    if (!sentinel)
+      for (KKLane *lane in entryLanes)
+        MirageRackScopeLaneKeys(lane, entryID);
+    if (racked)
+      [ofEntry addObject:MirageRackEnabledLane(entryID)];
+    [ofEntry addObjectsFromArray:entryLanes];
+    if (racked)
+      for (KKLane *lane in ofEntry) {
+        lane.layerKey = entryID;
+        lane.layerLabel = displayNames[i];
+      }
+    [out addObjectsFromArray:ofEntry];
+  }
+  return out;
 }
 
 /// The prototype lanes of one `#slots` group, in build order.

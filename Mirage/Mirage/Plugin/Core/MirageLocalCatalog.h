@@ -57,6 +57,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Every saved entry, newest first (thumbnails loaded lazily on access).
 - (NSArray<MirageCatalogEntry *> *)entries;
 
+/// A cheap change token for the on-disk catalog: the entry folder names and
+/// their modification dates, nothing parsed and no source read. Two equal
+/// tokens mean `-entries` would answer with the same content, so a UI that
+/// rebuilds often (the browser gallery) can reuse its last parse instead of
+/// re-reading every metadata.json, every .glsl and every preview.
+- (NSString *)entriesFingerprint;
+
 /// Shipped starter shaders (currently the default Plasma), always present so
 /// the browser is never empty. Non-deletable. Their thumbnail is set once via
 /// `+setBuiltinThumbnail:forName:` (baked by the inspector's renderer).
@@ -99,6 +106,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Favourites (persisted): any entry id (built-in / local / community).
 - (BOOL)isFavorite:(NSString *)entryID;
 - (void)toggleFavorite:(NSString *)entryID;
+
+/// Order-independent token for the whole favourites set. Same role as
+/// `-entriesFingerprint`: a card draws its own star, so the gallery has to be
+/// able to tell that a favourite moved without asking about every entry.
+- (NSString *)favoritesFingerprint;
 
 /// The files a publish needs: filename -> bytes (`.glsl` per section +
 /// `preview.jpg`), NOT including metadata.json (the caller builds that).

@@ -60,6 +60,26 @@ NS_ASSUME_NONNULL_BEGIN
     NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *>
         *oscElementsByOwner;
 
+/// The rack entry the user last clicked in a chained-shader plugin's rack list
+/// (Mirage). SESSION-ONLY on purpose: it is not undoable, not persisted, and
+/// not part of the timeline blob - selecting a row changes what the UI talks
+/// about, never what renders. Kept here rather than only on the inspector view
+/// so the other consumers in this process (the OSC's element routing, the AI
+/// authoring target) can ask which entry is being edited. nil = the first
+/// entry.
+@property(nonatomic, copy, nullable) NSString *selectedRackEntryID;
+
+/// YES while the MEASURED cost of rendering a chained-shader plugin's whole
+/// chain (Mirage's rack) has stayed above the project's frame budget for long
+/// enough to be a sustained state rather than one cold frame. Written from the
+/// render tick's smoothing (hopped to main), read by the inspector when it
+/// rebuilds the rack strip - which is why it lives here rather than only on the
+/// view: the strip is torn down with every popover, and the answer outlives it.
+///
+/// Display state, never a write: no lane, no parameter, no undo entry. Always
+/// NO for an unracked instance, where a slow shader is just a slow shader.
+@property(nonatomic) BOOL chainRenderingSlowerThanRealTime;
+
 /// YES while a guide is transiently forcing OSC visibility (see
 /// `-kkForceOSCForGuideKeepingLabels:...`). The UI-state OSC refresh checks
 /// this and skips re-applying the saved visibility, so an async
@@ -110,9 +130,9 @@ KKPluginInstanceState *_Nullable KKInstanceStateForAPI(id<PROAPIAccessing> api);
 KKPluginInstanceState *_Nullable KKInstanceStateEnsureForAPI(
     id<PROAPIAccessing> api);
 
-/// Call from the plugin's `parameterChanged:` with every parameter ID; acts only
-/// on `kKKParamInstanceID`. Re-reads the param and replaces the per-api cached
-/// UUID when it differs.
+/// Call from the plugin's `parameterChanged:` with every parameter ID; acts
+/// only on `kKKParamInstanceID`. Re-reads the param and replaces the per-api
+/// cached UUID when it differs.
 ///
 /// This is what keeps the RENDER process honest across a paste-attributes:
 /// pasting clones `kKKParamInstanceID`, the duplicate-owner detection above

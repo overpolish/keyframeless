@@ -191,25 +191,23 @@
   return nil;
 }
 
-// Multi-owner (Canvas) timelines carry every layer's lanes; the gap / modulate
-// "Applies to" must list only the active layer's, exactly like the keypose
-// popover. Single-owner timelines (no layerKey / no active key) include all.
-- (BOOL)_laneInActiveLayer:(KKLane *)lane {
-  return !_activeLayerKey.length || !lane.layerKey.length ||
-         [lane.layerKey isEqualToString:_activeLayerKey];
-}
-
 // The animatable lanes that appear in a gap / modulation "Applies to": enabled,
-// shaped (>=2 keyposes), visible under the mode-gating cascade, and on the
-// active layer. ONE source of truth so each builder and its cmd-Z rebuilder
-// stay in lock-step (a mismatch silently no-ops the state refresh).
+// shaped (>=2 keyposes) and visible under the mode-gating cascade. ONE source
+// of truth so each builder and its cmd-Z rebuilder stay in lock-step (a
+// mismatch silently no-ops the state refresh).
+//
+// EVERY owner's lanes, not just the active layer's: the checklist that renders
+// them pages by owner behind a layer pill (opened on the host's selected
+// owner), so a multi-owner list stays navigable instead of burying one shader's
+// parameters in a flat run of every shader's. A single-owner timeline carries
+// no layerKey at all, so the nav never appears and the list is unchanged.
 - (NSArray<KKLane *> *)_gapParticipatingLanes {
   NSSet<NSString *> *visible =
       KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   NSMutableArray<KKLane *> *out = [NSMutableArray array];
   for (KKLane *lane in _timeline.lanes)
     if (lane.enabled && lane.keyposes.count >= 2 &&
-        [visible containsObject:lane.key] && [self _laneInActiveLayer:lane])
+        [visible containsObject:lane.key])
       [out addObject:lane];
   return out;
 }
@@ -433,6 +431,9 @@
   // the single-segment compound for a single-component lane.
   NSMutableArray<NSString *> *partLaneLabels = [NSMutableArray array];
   NSMutableArray<NSNumber *> *partComponentIdx = [NSMutableArray array];
+  // The live lane behind each compound, in compound order: the checklist pages
+  // the rows by its category + owner, which the display labels can't name.
+  NSMutableArray<KKLane *> *partCompoundLanes = [NSMutableArray array];
   for (KKLane *lane in [self _gapParticipatingLanes]) {
     BOOL isGradient = (lane.valueType == KKLaneValueTypeGradient);
     BOOL gradientLinear =
@@ -469,12 +470,14 @@
       }
       [partCompoundLabels addObject:segLabels];
       [partCompoundStates addObject:segStates];
+      [partCompoundLanes addObject:lane];
     } else {
       // The gradient's lone toggle reads "Angle" but still targets its lane.
       NSString *disp = isGradient ? KKLocalizedParamName(@"Angle")
                                   : KKLocalizedParamName(lane.displayName);
       [partCompoundLabels addObject:@[ disp ]];
       [partCompoundStates addObject:@[ @(laneModActive) ]];
+      [partCompoundLanes addObject:lane];
       [partLaneLabels addObject:lane.key];
       [partComponentIdx addObject:@(-2)]; // single-segment, lane-level
     }
@@ -519,7 +522,7 @@
   self.onHoldModulationPopover(
       _popoverAnchor, p.inEndFrac, p.outStartFrac, mod, mInten, mFreq, seed,
       linked, showsLinked, partCompoundLabels, partCompoundStates,
-      partRebuilder,
+      partCompoundLanes, partRebuilder,
       ^(KKIntervalModulation m) {
         [weak _mutateHoldModWith:^(KKInterval *iv) {
           iv.modulation = m;

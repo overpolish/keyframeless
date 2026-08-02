@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLaneCategoryNav.h" // KKLaneLayerKeysWithKeyposeNearFraction
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
 #import "KKLog.h"
@@ -13,6 +14,7 @@
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
+#import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
@@ -124,6 +126,25 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   return visibleLanes;
 }
 
+// The owner a dropdown should open on. `constantsLaneFilter` comes FIRST when a
+// host supplies one: it is read live and answers YES for exactly the owner the
+// host has selected right now (Mirage's rack strip), whereas `activeLayerKey`
+// is our own stored copy, which a host that doesn't push its selection back to
+// us can outrun. `activeLayerKey` then covers the hosts with no filter (and the
+// keypose click that stored it).
+- (nullable NSString *)_hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes {
+  BOOL (^filter)(KKLane *) = self.constantsLaneFilter;
+  if (filter)
+    for (KKLane *l in lanes)
+      if (l.layerKey.length && filter(l))
+        return l.layerKey;
+  if (self.activeLayerKey.length)
+    for (KKLane *l in lanes)
+      if ([l.layerKey isEqualToString:self.activeLayerKey])
+        return self.activeLayerKey;
+  return nil;
+}
+
 - (void)_showManagePopoverFromView:(NSView *)anchorView {
   NSSet<NSString *> *checked = [self _optedInLabelsSet];
   __weak typeof(self) weak = self;
@@ -145,6 +166,16 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                s.onLaneOptedIn(label);
              [manageView updateCheckedLabels:[s _optedInLabelsSet]];
            }];
+
+  // Multi-owner lane sets (Mirage's shader rack) get a layer nav above the
+  // category pills, and it opens on the owner the host already has selected -
+  // the user came from that entry's strip, so that is the list they mean.
+  // `constantsLaneFilter` is the only live read of the host's selection the
+  // lanes view has; it answers YES for exactly the selected owner's lanes, so
+  // the first lane it accepts names the layer. There is no "all owners" page
+  // to fall back to: an unresolvable key lands on the FIRST layer, and a
+  // single-owner plugin gets no layer nav at all - today's flat list.
+  [manageView selectLayerKey:[self _hostSelectedLayerKeyIn:visibleLanes]];
 
   _openManageView = manageView;
 
@@ -234,6 +265,118 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   return owner;
 }
 
+// Opaque cover + centred spinner, parked over a popover's content area while
+// its controller is swapped. AppKit implements a controller change on a SHOWN
+// popover as a cross-fade from a SNAPSHOT of the outgoing content scaled into
+// the incoming frame, so a curve editor visibly stretched into the keypose
+// editor's shape before the real rows appeared. Covering BOTH sides means the
+// snapshot is of the loader and the cross-fade tweens loader->loader: the user
+// sees one steady panel resizing, never the stretch.
+static NSView *KKMakePopoverSwapCover(NSRect frame) {
+  NSView *cover = [[NSView alloc] initWithFrame:frame];
+  cover.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  cover.wantsLayer = YES;
+  // Fully opaque (the popover's own fill is half-alpha over the glass chrome) -
+  // anything less lets the outgoing rows read through the loader.
+  cover.layer.backgroundColor = [NSColor inspectorBackground].CGColor;
+  NSProgressIndicator *spinner = [[NSProgressIndicator alloc] init];
+  spinner.style = NSProgressIndicatorStyleSpinning;
+  spinner.controlSize = NSControlSizeSmall;
+  spinner.indeterminate = YES;
+  spinner.displayedWhenStopped = NO;
+  spinner.translatesAutoresizingMaskIntoConstraints = NO;
+  [cover addSubview:spinner];
+  [NSLayoutConstraint activateConstraints:@[
+    [spinner.centerXAnchor constraintEqualToAnchor:cover.centerXAnchor],
+    [spinner.centerYAnchor constraintEqualToAnchor:cover.centerYAnchor],
+  ]];
+  [spinner startAnimation:nil];
+  return cover;
+}
+
+// One display tick: the shortest the cover can possibly be up for and still
+// have hidden the frame the controller change is committed on. There is no
+// longer a fixed floor beyond it - the reveal is driven by the incoming
+// content's own layout settling (below), so a swap that resizes by a little
+// costs a little and one that doesn't resize at all costs nothing.
+static const CFTimeInterval kPopoverSwapMinCoverTime = 1.0 / 60.0;
+
+// How long the reveal will wait for the wrapper to stop moving before giving
+// up and showing whatever is there. Only reached if the popover is animating
+// unusually slowly - the stall detector below normally settles first.
+static const CFTimeInterval kPopoverSwapDeadline = 0.35;
+
+// Consecutive identical bounds samples that count as "the resize is over" for a
+// popover that never reaches the size we asked for (clamped to the screen edge,
+// or born at the target and never animated at all). Three ticks ~ 50ms, short
+// enough not to be felt and long enough not to fire on the frame before the
+// window animation starts.
+static const NSInteger kPopoverSwapStableTicks = 3;
+
+// Drop `cover` once the popover has finished resizing to `target`. The size
+// signal is the WRAPPER's own bounds: AppKit drives the content view's frame as
+// the popover window animates, so when it reaches the size we asked for, the
+// incoming content is laid out at its final width and safe to reveal.
+//
+// The wrapper does NOT always get there: a popover clamped to the screen edge
+// settles short of the requested size, and one whose incoming content is the
+// same size as the outgoing never moves at all. Waiting out a fixed deadline in
+// those cases was the whole of the swap's felt latency (0.6s + a 0.12s fade
+// against a fresh open's zero), so a stalled wrapper reveals as soon as its
+// bounds stop changing.
+static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
+                                       NSSize target) {
+  __weak NSView *weakCover = cover;
+  __weak NSView *weakWrapper = wrapper;
+  CFTimeInterval start = CACurrentMediaTime();
+  CFTimeInterval deadline = start + kPopoverSwapDeadline;
+  __block NSSize lastSize = NSMakeSize(-1.0, -1.0);
+  __block NSInteger stableTicks = 0;
+  __block void (^tick)(void) = nil;
+  tick = ^{
+    NSView *cv = weakCover;
+    NSView *wr = weakWrapper;
+    if (!cv || !wr) {
+      tick = nil;
+      return;
+    }
+    CFTimeInterval now = CACurrentMediaTime();
+    NSSize size = wr.bounds.size;
+    BOOL atTarget = fabs(size.width - target.width) < 0.5 &&
+                    fabs(size.height - target.height) < 0.5;
+    BOOL unchanged = fabs(size.width - lastSize.width) < 0.5 &&
+                     fabs(size.height - lastSize.height) < 0.5;
+    stableTicks = unchanged ? stableTicks + 1 : 0;
+    lastSize = size;
+    CFTimeInterval elapsed = now - start;
+    BOOL settled = elapsed >= kPopoverSwapMinCoverTime &&
+                   (atTarget || stableTicks >= kPopoverSwapStableTicks);
+    if (!settled && now < deadline) {
+      dispatch_after(
+          dispatch_time(DISPATCH_TIME_NOW, (int64_t)(NSEC_PER_SEC / 60)),
+          dispatch_get_main_queue(), ^{
+            if (tick)
+              tick();
+          });
+      return;
+    }
+    KKLogDebug(@"[Keypose] popover swap revealed after %.0fms (atTarget=%d "
+               @"stable=%ld deadline=%d)",
+               elapsed * 1000.0, (int)atTarget, (long)stableTicks,
+               (int)(now >= deadline));
+    [NSAnimationContext
+        runAnimationGroup:^(NSAnimationContext *ctx) {
+          ctx.duration = 0.08;
+          cv.animator.alphaValue = 0.0;
+        }
+        completionHandler:^{
+          [cv removeFromSuperview];
+        }];
+    tick = nil;
+  };
+  tick();
+}
+
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                          preferredEdge:(NSRectEdge)preferredEdge
@@ -244,6 +387,17 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   // so the dismiss monitor below reads THIS popover's kind, not a later one's.
   BOOL optionType = _nextPopoverIsOptionType;
   _nextPopoverIsOptionType = NO;
+
+  // Capture the size the content WANTS before it is pinned into the wrapper.
+  // Once pinned, `content.bounds` tracks the wrapper - which AppKit lays out to
+  // the popover's CURRENT (outgoing) content size the moment the new controller
+  // is installed. Reading bounds after that point fed the OLD width straight
+  // back into -setContentSize:, so a swap between two differently-sized editors
+  // settled at the wrong width. `fittingSize` covers a content view that was
+  // handed to us with no frame at all.
+  NSSize desiredContentSize = content.bounds.size;
+  if (NSIsEmptyRect(content.bounds))
+    desiredContentSize = content.fittingSize;
 
   _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
   wrapper.frame = content.bounds;
@@ -296,14 +450,51 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
     // (onClose + mini-viewer release) here since its WillClose won't fire.
     if (outgoingOnClose)
       outgoingOnClose();
+    // The loader exists ONLY to hide the stretch: AppKit implements a
+    // controller change on a shown popover as a cross-fade from a snapshot of
+    // the outgoing content scaled into the incoming frame, and the scaling is
+    // what reads as a smear. Same size in and out = no scaling = nothing to
+    // hide, so the swap runs bare and costs a plain cross-fade - which is what
+    // a fresh open looks like anyway. This is the common case for keypose <->
+    // constants and for curve <-> keypose at equal row counts, and covering it
+    // was pure latency.
+    NSSize outgoing = _openContentPopover.contentSize;
+    BOOL resizes = desiredContentSize.width > 0.0 &&
+                   desiredContentSize.height > 0.0 &&
+                   (fabs(outgoing.width - desiredContentSize.width) >= 0.5 ||
+                    fabs(outgoing.height - desiredContentSize.height) >= 0.5);
+    // Hide both sides of the swap behind a loader BEFORE the controller change
+    // so the snapshot AppKit tweens is of the cover, not of the outgoing rows.
+    // The outgoing cover goes away with its view; the incoming one is dropped
+    // once the popover has finished resizing (see KKRevealAfterPopoverResize).
+    NSView *incomingCover = nil;
+    if (resizes) {
+      NSView *outgoingRoot = _openContentPopover.contentViewController.view;
+      if (outgoingRoot) {
+        NSView *outgoingCover = KKMakePopoverSwapCover(outgoingRoot.bounds);
+        [outgoingRoot addSubview:outgoingCover
+                      positioned:NSWindowAbove
+                      relativeTo:nil];
+        [outgoingRoot displayIfNeeded];
+      }
+      incomingCover = KKMakePopoverSwapCover(wrapper.bounds);
+      [wrapper addSubview:incomingCover
+               positioned:NSWindowAbove
+               relativeTo:nil];
+    }
+    KKLogDebug(@"[Keypose] popover swap %.0fx%.0f -> %.0fx%.0f (%@)",
+               outgoing.width, outgoing.height, desiredContentSize.width,
+               desiredContentSize.height, resizes ? @"covered" : @"bare");
     // Controller FIRST, then contentSize, then force layout - setting size
     // first leaves the popover grown to the new size while the OLD content is
     // still installed, so a taller editor (curve -> modulation, gap -> keypose)
     // never repaints the exposed area.
     _openContentPopover.contentViewController = vc;
-    if (!NSIsEmptyRect(content.bounds))
-      _openContentPopover.contentSize = content.bounds.size;
+    if (desiredContentSize.width > 0.0 && desiredContentSize.height > 0.0)
+      _openContentPopover.contentSize = desiredContentSize;
     [wrapper layoutSubtreeIfNeeded];
+    if (incomingCover)
+      KKRevealAfterPopoverResize(incomingCover, wrapper, desiredContentSize);
     __weak NSView *weakOutgoing = outgoingContent;
     dispatch_async(dispatch_get_main_queue(), ^{
       __strong NSView *oc = weakOutgoing;
@@ -325,8 +516,8 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
     popover.behavior = NSPopoverBehaviorApplicationDefined;
   }
   popover.contentViewController = vc;
-  if (!NSIsEmptyRect(content.bounds))
-    popover.contentSize = content.bounds.size;
+  if (desiredContentSize.width > 0.0 && desiredContentSize.height > 0.0)
+    popover.contentSize = desiredContentSize;
   [popover showRelativeToRect:anchor.bounds
                        ofView:anchor
                 preferredEdge:preferredEdge];
@@ -845,6 +1036,17 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 @end
 
 @implementation KKTimelineLanesView (Popovers)
+
+- (NSString *)hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes {
+  return [self _hostSelectedLayerKeyIn:lanes];
+}
+
+- (NSSet<NSString *> *)openKeyposePopoverLayerKeys {
+  if (!_openStaticView || !_openStaticIsBoundary)
+    return [NSSet set];
+  return KKLaneLayerKeysWithKeyposeNearFraction([self _graphTimeline].lanes,
+                                                _openStaticBoundaryFraction);
+}
 
 - (void)closeManagePopover {
   [_openManagePopover close];

@@ -44,6 +44,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// layer list switches it; nil = show every lane (single-owner). Setting it
 /// re-scopes an open checklist in place.
 @property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// YES = the checklist carries its OWN layer pill nav (the shared chrome's),
+/// pre-selected to `activeLayerKey`, so the user can switch owners from inside
+/// the dropdown. For a host whose one timeline holds every owner's lanes
+/// (Mirage's shader rack).
+///
+/// NO (the default) keeps the bar scoping the checklist itself to
+/// `activeLayerKey` before handing the lanes over - what a host that already
+/// drives owner selection from its own UI wants (Canvas's layer list), since
+/// a second nav inside the dropdown would just shadow it.
+@property(nonatomic) BOOL layerNavEnabled;
 /// Minimum popover height (matches the companion layer panel, like the Animated
 /// dropdown). 0 = hug the rows.
 @property(nonatomic) CGFloat minimumPopoverHeight;

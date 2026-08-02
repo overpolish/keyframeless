@@ -16,6 +16,7 @@
 #import "MirageLocalCatalog.h"
 #import "MirageLocalized.h"
 #import "MirageMiniViewerRenderer.h"
+#import "MirageRack.h" // rack entry ids + per-entry code lane keys
 #import "MirageThumbnailRenderer.h"
 #import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import <KeyframelessKit/KKCurveDefaults.h>
@@ -241,6 +242,43 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
       return s ? s->_colorPanelController.gestureInFlight : NO;
     };
     [self _bakeBuiltinThumbnails];
+    // The shader chain sits in the parameter popover, between the preview and
+    // the controls - where the picture it produces and the controls that shape
+    // it are both already on screen. The popover asks for the strip each time
+    // it opens and owns it until it closes.
+    self.basicLanesView.staticValuesAccessoryHeight =
+        [MirageShaderRackView stripHeight];
+    self.basicLanesView.staticValuesAccessoryProvider = ^NSView * {
+      __strong typeof(weak) s = weak;
+      return s ? [s buildRackStrip] : nil;
+    };
+    // ...and the rows below the strip are the SELECTED entry's, not the whole
+    // chain's. The graphs still show every entry (a chain is one animation),
+    // so the scope is the constants editor's alone - and it is a display
+    // filter over lanes that keep their full prefixed keys, so no write path,
+    // link resolution or value popover changes with the selection.
+    // A rack entry's keyposes are ONE co-timed set, so a keypose popover only
+    // ever edits the params actually keyed there - the rest are dimmed, not
+    // offered an "Animate" button (Canvas's independently-keyed layers keep
+    // that affordance, which is why it is opt-in).
+    self.basicLanesView.keyposeStrictCoTimed = YES;
+    self.basicLanesView.constantsLaneFilter = ^BOOL(KKLane *lane) {
+      __strong typeof(weak) s = weak;
+      return s ? [s rackShowsLaneInConstants:lane] : YES;
+    };
+    // Clicking a keypose belonging to another entry moves the strip's selection
+    // to it, so the popover the click opened, the constants scope and the color
+    // panel all agree on which shader is being edited. The kit already stored
+    // the layer on itself before this fires; _rackSelectEntry re-asserting the
+    // same value is idempotent.
+    self.basicLanesView.onKeyposeLayerActivated = ^(NSString *layerKey) {
+      __strong typeof(weak) s = weak;
+      if (!s || !layerKey.length)
+        return;
+      // User-driven, so it persists and is undoable exactly like a box click.
+      [s _rackSelectEntry:layerKey persist:YES];
+      [s refreshRack];
+    };
   }
   return self;
 }
@@ -372,8 +410,14 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
       [[self _curveDefaultsBaseScope] stringByAppendingFormat:@"/%@", entryID]);
   NSMutableArray<KKLane *> *lanes = [current.lanes mutableCopy];
   BOOL changed = NO;
+  // The save bar saves what the EDITOR is showing, which is the selected rack
+  // entry's code - so that is the lane the new template identity lands on.
+  NSString *codeKey = MirageRackCodeLaneKey(self.selectedRackEntryID.length
+                                                ? self.selectedRackEntryID
+                                                : kMirageRackSentinelEntryID,
+                                            kMirageCodeLaneLabel);
   for (NSUInteger i = 0; i < lanes.count; i++) {
-    if (![lanes[i].key isEqualToString:kMirageCodeLaneLabel])
+    if (![lanes[i].key isEqualToString:codeKey])
       continue;
     if ([(lanes[i].codeSaveID ?: @"") isEqualToString:entryID])
       continue;
@@ -464,13 +508,23 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
                   }];
 }
 
-// Load a saved entry into the Mirage code lane (Image = codeString, other
-// sections = codeTabs) and persist via the inspector's onTimelineMutated
-// channel (the host writes the timeline param in an action scope).
+// Load a saved entry into the SELECTED rack entry's code lane (Image =
+// codeString, other sections = codeTabs) and persist via the inspector's
+// onTimelineMutated channel (the host writes the timeline param in an action
+// scope).
+//
+// Which entry: the one the strip has selected. Picking a template is a SWAP,
+// and what it swaps is the link the user is standing on - an unracked project
+// has exactly one, the sentinel, whose key is the bare code lane every
+// pre-rack project persisted.
 - (void)_loadEntry:(MirageCatalogEntry *)entry {
   KKTimeline *current = _miniViewerRenderer.timeline;
   if (!current || !entry.sections.count)
     return;
+  NSString *targetEntry = self.selectedRackEntryID.length
+                              ? self.selectedRackEntryID
+                              : kMirageRackSentinelEntryID;
+  NSString *codeKey = MirageRackCodeLaneKey(targetEntry, kMirageCodeLaneLabel);
 
   NSString *image = entry.sections[@"Image"] ?: @"";
   NSMutableArray<NSDictionary<NSString *, NSString *> *> *tabs =
@@ -483,7 +537,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   NSMutableArray<KKLane *> *lanes = [current.lanes mutableCopy];
   BOOL found = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {
-    if (![lanes[i].key isEqualToString:kMirageCodeLaneLabel])
+    if (![lanes[i].key isEqualToString:codeKey])
       continue;
     KKLane *lane = [lanes[i] copy];
     lane.codeString = image;
@@ -513,8 +567,16 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     KKLane *lane = lanes[i];
     if (lane.valueType == KKLaneValueTypeCode)
       continue;
+    // Only the entry being swapped, and asked about under its BARE key - the
+    // directive name is what the shader declared, which is the key with the
+    // rack scope peeled off. Another entry in the chain is a different shader
+    // and its values are none of this template's business.
+    NSString *owner = nil, *bareKey = nil;
+    MirageRackParseLaneKey(lane.key, &owner, &bareKey);
+    if (![owner isEqualToString:targetEntry])
+      continue;
     NSArray<NSNumber *> *def =
-        MirageDirectiveDefaultValuesForLabel(newSource, lane.key);
+        MirageDirectiveDefaultValuesForLabel(newSource, bareKey);
     if (!def)
       continue; // Core lane, or not declared by the new source
     if (MirageLaneIsAtConstant(lane, def))
@@ -591,9 +653,16 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
 
 - (void)_syncCurveDefaultsScope:(KKTimeline *)timeline {
   NSString *base = [self _curveDefaultsBaseScope];
+  // The SELECTED entry's template identity: with a chain, the curve defaults
+  // that apply are the ones belonging to the shader whose controls are on
+  // screen.
+  NSString *codeKey = MirageRackCodeLaneKey(self.selectedRackEntryID.length
+                                                ? self.selectedRackEntryID
+                                                : kMirageRackSentinelEntryID,
+                                            kMirageCodeLaneLabel);
   NSString *entryID = nil;
   for (KKLane *l in timeline.lanes)
-    if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeSaveID.length) {
+    if ([l.key isEqualToString:codeKey] && l.codeSaveID.length) {
       entryID = l.codeSaveID;
       break;
     }
@@ -655,16 +724,35 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   NSString *restoredInstance =
       KKSlotFirstAddedInstance(_lastSlotSignature, derived, &restoredGroup);
   _lastSlotSignature = [derived copy];
+  // The rack rides the SAME registry, so appending a link is a slot-registry
+  // addition by this measure - and the id it adds is a rack entry, not a puck.
+  // Handing it to the Color panel would point it at a handle that either does
+  // not exist or, since both come from the same minter, is some unrelated
+  // instance that happens to share the id. The re-derive above still stands (a
+  // rack change does move the lane set); only the SELECTION is refused.
+  if ([restoredGroup isEqualToString:kMirageRackGroupName]) {
+    KKLogDebug(@"[Rack] registry diff was the rack itself (entry %@) - the "
+               @"Color panel keeps its selection",
+               restoredInstance);
+    return nil;
+  }
   return restoredInstance;
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
-  // Mirrors -shaderSourceFromTimeline: exactly: a present-with-code Mirage lane
-  // uses its code, otherwise the baked default. A guide seed drops the code
-  // lane, so it resolves to the default.
+  // The SELECTED rack entry's code lane, or the baked default when it has none
+  // (a guide seed drops the code lane, so it resolves to the default). "The"
+  // shader for everything below - the editor, the OSC set, `#motionblur` and
+  // the Color panel are all statements about the link the user is standing on,
+  // and an unracked project has exactly one, whose key is the bare code lane.
+  NSString *selectedEntry = self.selectedRackEntryID.length
+                                ? self.selectedRackEntryID
+                                : kMirageRackSentinelEntryID;
+  NSString *codeKey =
+      MirageRackCodeLaneKey(selectedEntry, kMirageCodeLaneLabel);
   NSString *effective = MirageCustomDefaultShaderSource();
   for (KKLane *l in timeline.lanes)
-    if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
+    if ([l.key isEqualToString:codeKey] && l.codeString.length) {
       effective = l.codeString;
       break;
     }
@@ -686,11 +774,18 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   BOOL wantsSurface =
       MirageColorSurfaceForSource(effective, &surfaceSpace, &surfaceError) &&
       surfaceError == MirageColorSurfaceErrorNone;
+  // BEFORE the opt-in: the panel resolves its rings, pucks and lanes from the
+  // entry it is pointed at, so pointing it must come first or a swap between
+  // two grading templates would rebuild against the outgoing one.
+  _colorPanelController.selectedRackEntryID = selectedEntry;
   _colorPanelController.surfaceEnabled = wantsSurface;
   [_colorPanelController timelineDidChange];
   // A recompile can add or drop `preview=selection` under an open popover, and
   // the row's one shader-dependent button is a function of exactly that.
   [_compareControls timelineDidChange];
+  // The chain is a function of the timeline, so every arrival re-derives it -
+  // including the ones the rack didn't cause (an undo, a preset, an AI merge).
+  [self refreshRack];
   // Now that the refresh above has rebuilt the handles from the new registry,
   // the restored one exists and can be selected. Only an ADDITION gets here -
   // the panel's own +/- already place their selection, and a removal has

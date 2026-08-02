@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -49,6 +50,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// scope so a vector layer's default can't leave an image layer with no
 /// visible control. Set before the view is shown.
 @property(nonatomic, copy, nullable) NSString *defaultsScope;
+
+/// Feed the owner (layer) dimension, from the plugin's lane templates: an
+/// element key's owner is the `layerKey` of the lane whose `key` matches it (a
+/// motion-path element, `<lane> Path`, inherits its base lane's). When the
+/// CURRENT compounds resolve to two or more distinct owners, a layer pill row
+/// appears above the search field and the rows are scoped to the selected one,
+/// exactly as the Animated dropdown's nav does; below two it is a no-op and the
+/// list stays pixel-identical. `selectedLayerKey` is the owner to open on (an
+/// unknown key falls back to the first - there is no "all owners" page).
+///
+/// Call BEFORE the view is sized / presented: it changes `fittingHeight`.
+- (void)applyLayerLanes:(NSArray<KKLane *> *)lanes
+       selectedLayerKey:(nullable NSString *)selectedLayerKey;
 
 /// Replace the checkbox states (parallel to the init `compounds`), e.g. when
 /// the host swaps to a different owner's set while the popover stays open.
