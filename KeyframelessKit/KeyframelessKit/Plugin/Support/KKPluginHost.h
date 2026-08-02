@@ -42,6 +42,14 @@ double KKProcessFrameDurationSeconds(void);
 @property(nonatomic) double effectStartSec;
 @property(nonatomic) double effectDurSec;
 @property(nonatomic) double timelineStartSec; // FCP movePlayhead base
+/// The effect's OWN start mapped into project seconds
+/// (`timelineTime:fromInputTime:(effectStart)`) - clip fraction 0 in absolute
+/// timeline time, which is the span every link-bus publish is tagged with.
+/// Distinct from `timelineStartSec`, which maps the SOURCE in-point.
+/// Refreshed every tick by KKRefreshRenderCache, so anything on the render
+/// path that needs it reads it here instead of re-entering the host for an
+/// answer this tick already has.
+@property(nonatomic) double clipProjectStartSec;
 /// Raw source-media in-point (startTimeOfInputToFilter), in source seconds.
 /// Head-trimming a clip advances this; tail-trimming leaves it. Used by the
 /// "Maintain Timing" remap to anchor keyposes to absolute media time.

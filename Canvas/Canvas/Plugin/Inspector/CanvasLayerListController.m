@@ -10,6 +10,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h> // KKWriteCustomParamString
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin.h>   // KKPerformUndoable
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimeline.h>
@@ -33,6 +34,15 @@ static const CGFloat kPanelWidth = 200.0;
     [nc addObserver:self
            selector:@selector(_popoverDidClose:)
                name:KKStaticValuesPopoverDidCloseNotification
+             object:lanesView];
+    // Arrowing between keyposes (or an in-place keypose <-> constants switch)
+    // moves what the OPEN popover edits without reopening it, and the gray set
+    // is a function of that kind + time. Deliberately a separate, narrower
+    // handler than the open one: it must not re-run the panel show path (the
+    // panel would re-slide on every arrow press).
+    [nc addObserver:self
+           selector:@selector(_popoverDidNavigate:)
+               name:KKStaticValuesPopoverDidNavigateNotification
              object:lanesView];
   }
   return self;
@@ -315,6 +325,20 @@ static const CGFloat kPanelWidth = 200.0;
   NSSet<NSString *> *ns = [self _nonSelectableForKind:_openPopoverKind
                                              fraction:_openPopoverFraction];
   return ![ns containsObject:layerID];
+}
+
+- (void)_popoverDidNavigate:(NSNotification *)note {
+  // No popover of ours is open (close already cleared the scope): nothing to
+  // re-derive, and adopting a kind here would gray rows with no popover up.
+  if (!_openPopoverKind.length)
+    return;
+  NSString *kind = note.userInfo[@"kind"];
+  if (kind.length)
+    _openPopoverKind = [kind copy];
+  _openPopoverFraction = [note.userInfo[@"fraction"] doubleValue];
+  KKLogDebug(@"[LayerList] popover navigated: kind=%@ fraction=%.4f",
+             _openPopoverKind, _openPopoverFraction);
+  [self _refreshNonSelectableForOpenPopover];
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {

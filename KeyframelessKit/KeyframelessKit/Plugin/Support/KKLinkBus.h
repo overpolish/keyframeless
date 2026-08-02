@@ -240,6 +240,19 @@ KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
                     double clipStartSec, double clipDurSec,
                     NSString *effectName, NSString *_Nullable displayBaseName);
 
+/// KKLinkWriteManifest with the two host-derived values passed IN rather than
+/// resolved from `api` (the instance uuid and the FCP document id). Nothing in
+/// it touches an FxPlug API, so it is safe to call from a background queue -
+/// which is how a render tick publishes without paying the assembly + write on
+/// the render thread: resolve `uuid` / `documentID` where the APIs are legal
+/// (inside the callback, both memoized and near-free), then hand the lanes and
+/// the timing to a serial publish queue. `documentID` may be nil (unscoped).
+FOUNDATION_EXPORT void
+KKLinkWriteManifestForUUID(NSString *uuid, NSString *_Nullable documentID,
+                           NSArray<KKLane *> *lanes, double clipStartSec,
+                           double clipDurSec, NSString *effectName,
+                           NSString *_Nullable displayBaseName);
+
 /// Layered variant of KKLinkWriteManifest for plugins whose referenceable
 /// params live on per-layer timelines (layers are "sub-clips": Canvas). Each
 /// KKLinkLayerSource carries layerID + displayName + its EFFECTIVE `lanes`;
@@ -250,6 +263,14 @@ FOUNDATION_EXPORT void KKLinkWriteManifestWithLayers(
     id<PROAPIAccessing> api, NSArray<KKLane *> *topLevelLanes,
     NSArray<KKLinkLayerSource *> *layers, double clipStartSec,
     double clipDurSec, NSString *effectName,
+    NSString *_Nullable displayBaseName);
+
+/// Background-safe form of KKLinkWriteManifestWithLayers (see
+/// KKLinkWriteManifestForUUID for why the uuid / documentID come in).
+FOUNDATION_EXPORT void KKLinkWriteManifestWithLayersForUUID(
+    NSString *uuid, NSString *_Nullable documentID,
+    NSArray<KKLane *> *topLevelLanes, NSArray<KKLinkLayerSource *> *layers,
+    double clipStartSec, double clipDurSec, NSString *effectName,
     NSString *_Nullable displayBaseName);
 
 /// Per-layer counterpart of KKLinkPublishReferenceableLanes: publishes each
@@ -275,6 +296,16 @@ FOUNDATION_EXPORT void KKLinkPublishReferenceableLanes(id<PROAPIAccessing> api,
                                                        NSArray<KKLane *> *lanes,
                                                        double tlStart,
                                                        double tlEnd);
+
+/// Background-safe forms of the two publishers above: the caller resolves the
+/// instance uuid where the FxPlug APIs are legal and passes it in, so the lane
+/// serialization + file writes can run off the render thread.
+FOUNDATION_EXPORT void
+KKLinkPublishReferenceableLanesForUUID(NSString *uuid, NSArray<KKLane *> *lanes,
+                                       double tlStart, double tlEnd);
+FOUNDATION_EXPORT void
+KKLinkPublishReferenceableLayerForUUID(NSString *uuid, KKLinkLayerSource *layer,
+                                       double tlStart, double tlEnd);
 
 /// Resolved value of `lane` at clip fraction `frac`: when the lane carries a
 /// non-trivial `linkExpression`, the expression evaluated at absolute
@@ -307,6 +338,24 @@ FOUNDATION_EXPORT
 NSArray<NSNumber *> *_Nullable KKLinkResolvedLaneValueWithOverride(
     KKLane *lane, double frac, double timelineSec, double clipDurSec,
     KKLinkRefOverride _Nullable refOverride);
+
+/// The lane in `lanes` that a stored `${ref}` names, when that ref targets THIS
+/// clip - the lookup every same-clip live-drag `KKLinkRefOverride` needs, so a
+/// referenced lane resolves against the in-flight timeline instead of the
+/// bus curve (which only updates on commit).
+///
+/// `refName` is the stored form: `uuid.<key>` for a flat source, or
+/// `uuid.<layerID>.<key>` for a layered one (Canvas). Returns nil - meaning
+/// "read the bus" - for a ref naming another clip (when `selfUUID` is known),
+/// another layer, or a param this timeline has no lane for.
+///
+/// The two forms are ambiguous by shape alone, because a KEY may itself contain
+/// dots (Mirage's racked lanes are `~Rack#<id>.<uniform>`, `#slots` groups
+/// likewise). So the whole tail is matched as a key FIRST, and only a tail that
+/// names no lane is re-read as `<layerID>.<key>`. Splitting on the first dot
+/// unconditionally made every racked ref look layered, and it fell to the bus.
+FOUNDATION_EXPORT KKLane *_Nullable KKLinkSelfClipLaneForRef(
+    NSString *refName, NSString *_Nullable selfUUID, NSArray<KKLane *> *lanes);
 
 /// The source names a timeline's lanes reference - the `${refs}` across all
 /// lanes' linkExpressions - so a subscriber knows which sources to watch for

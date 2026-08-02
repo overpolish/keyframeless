@@ -51,6 +51,11 @@ extern double KKCurrentEffectDurationSeconds(id<PROAPIAccessing> apiManager);
 /// the drag is in flight; the per-tick `onStopsChanged` callback skips
 /// its own action scope + undo group when this is YES.
 @property(nonatomic, strong, nullable) KKDragUndoSession *gradientDragSession;
+/// Link-bus publish gate (see -shouldPublishLinkManifestForSignature:): the
+/// fingerprint last advertised and the monotonic time it was advertised at.
+/// Touched only from the render tick that owns this instance.
+@property(nonatomic, copy, nullable) NSString *linkPublishSignature;
+@property(nonatomic) double linkPublishTimeMono;
 
 @end
 

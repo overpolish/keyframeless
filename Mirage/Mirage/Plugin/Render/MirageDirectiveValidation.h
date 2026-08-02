@@ -16,6 +16,7 @@
 #import <math.h>
 #import <string.h>
 
+#import "MirageSlots.h" // MirageSlotsSubstitute, for a per-instance group icon
 #import "MirageTypes.h"
 
 // Validation reads every directive kind back, so it sits on the parsed model
@@ -104,6 +105,12 @@ static inline NSString *MirageFirstMisplacedGroup(NSString *source) {
 /// for `sparkles` silently produces a group with no icon and nothing to explain
 /// it. Any installed symbol is accepted - the completion list is discovery, not
 /// a whitelist.
+///
+/// A `{n}` in the name is resolved before the lookup, because a group inside a
+/// `#slots` block is per instance and `{n}.circle` is the numbered icon the
+/// stamping produces - never a symbol name in its own right. Checked at 1: the
+/// first instance always exists, and the digit symbols run past the 16-instance
+/// ceiling, so one probe answers for every instance the group can have.
 static inline NSString *MirageUnknownGroupSymbol(NSString *source) {
   if (!source.length)
     return nil;
@@ -119,7 +126,8 @@ static inline NSString *MirageUnknownGroupSymbol(NSString *source) {
     if (bp[i]->present && bp[i]->groupSymbol[0])
       [symbols addObject:@(bp[i]->groupSymbol)];
   for (NSString *s in symbols)
-    if (![NSImage imageWithSystemSymbolName:s accessibilityDescription:nil])
+    if (![NSImage imageWithSystemSymbolName:MirageSlotsSubstitute(s, 1)
+                   accessibilityDescription:nil])
       return s;
   return nil;
 }

@@ -706,6 +706,23 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageGLSLIdents(void) {
           Fn(@"dFdy", @"dFdy(x)",
              @"How fast a value changes across the screen, top "
              @"to bottom."),
+          Fn(@"decodeToLinear", @"decodeToLinear(c)",
+             @"sRGB colour to linear light. What iChannel0 needs before "
+             @"any grading maths."),
+          Fn(@"encodeFromLinear", @"encodeFromLinear(c)",
+             @"Linear light back to sRGB colour, for the output."),
+          Fn(@"linearToOklab", @"linearToOklab(c)",
+             @"Linear colour to Oklab, where lightness, chroma and hue "
+             @"move independently."),
+          Fn(@"oklabToLinear", @"oklabToLinear(lab)",
+             @"Oklab back to linear colour, pulling chroma in when the "
+             @"colour is outside the gamut."),
+          Fn(@"oklabToLinearRaw", @"oklabToLinearRaw(lab)",
+             @"Oklab back to linear colour with no gamut fit. Prefer "
+             @"oklabToLinear."),
+          Fn(@"balanceGain", @"balanceGain(redCyan, greenMagenta)",
+             @"Colour balance as linear channel gains, red against cyan "
+             @"and green against magenta."),
         ],
         kFN);
     // The output value (white).

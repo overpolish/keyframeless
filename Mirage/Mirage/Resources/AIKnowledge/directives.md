@@ -413,6 +413,32 @@ A binding also survives leaving the Mac it was made on. Published audio doesn't 
 
 See `audio-shader-directive` for shaping the levels into something that looks good, and `audio-sonar` for how a user publishes the audio in the first place, including the walkthrough for that warning.
 
+## Grading helpers (no directive, no declaration)
+
+Colour work keeps needing the same three or four functions, so the wrapper supplies them. **Call them; do not paste a copy in.** They are injected only when the shader names one, so an ordinary shader carries none of it.
+
+| Function                                              | Does                                                                                                                                                                              |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vec3 decodeToLinear(vec3 c)`                         | sRGB code values to linear light (the standard piecewise curve, not a `pow(2.2)`)                                                                                                 |
+| `vec3 encodeFromLinear(vec3 c)`                       | linear light back to sRGB code values                                                                                                                                             |
+| `vec3 linearToOklab(vec3 c)`                          | linear Rec.709 to Oklab, on the constants the Color panel's ring and scopes are built from                                                                                        |
+| `vec3 oklabToLinearRaw(vec3 lab)`                     | the plain inverse, which may return a negative channel for a colour Rec.709 cannot show                                                                                           |
+| `vec3 oklabToLinear(vec3 lab)`                        | the inverse that fits: out of gamut it pulls the **chroma** in, holding lightness and hue, rather than clipping a channel (clipping blue alone swings the hue by tens of degrees) |
+| `vec3 balanceGain(float redCyan, float greenMagenta)` | two-axis print balance as linear channel gains, each axis lifting one primary and sharing the loss across the other two                                                           |
+
+`iChannel0` is gamma-encoded for an ordinary shader, so the usual grading shape is decode, work in linear or Oklab, encode back:
+
+```glsl
+vec3 lin = decodeToLinear(texture(iChannel0, uv).rgb);
+vec3 lab = linearToOklab(lin);
+lab.yz *= saturation;
+fragColor = vec4(encodeFromLinear(oklabToLinear(lab)), 1.0);
+```
+
+A `// #template color-transform` shader already receives linear values and must not decode. See `#template` above.
+
+The names are reserved in the sense that matters: a shader that **defines** one of them keeps its own version and gets none of that family injected, so an older template carrying its own copy still compiles. Redefining one to mean something else works but reads as a trap; pick another name.
+
 ## On-screen controls (`osc`)
 
 Add `osc` (or `osc=<kind>`) to a directive to also draw a **draggable control on the viewer and mini-viewer**. The control edits the same lane, so dragging is just another way to keyframe the value.
@@ -707,6 +733,8 @@ uniform float uNewStrength;
 ### `{n}`, the instance number
 
 `{n}` is where the instance's number goes, counting from **1**. It is legal in `label=`, in `group=`, and in both slots of `puck={"Name", "symbol"}` - which is what makes `puck={"Colour {n}", "{n}.circle"}` give instance 3 its own handle, drawn with the `3.circle` symbol. Writing `puck="Colour {n}"` with no symbol at all reaches the same place through the default: an instance with nothing declared is marked with its number.
+
+In `group=` it decides something bigger than a name: whether the instances share one inspector group or get one each. `group={"Colour {n}"}` gives instance 2 its own **Colour 2** header, which collapses, expands and reads on its own. A `group=` with no `{n}` - or none at all - puts every instance under the one header, which is what a block wants when its controls are variations on a single idea rather than separate things. Both are supported and neither is the default in disguise: a block that never writes `{n}` into `group=` groups exactly as it always has. The icon follows the same rule, so `group={"Colour {n}", "{n}.circle"}` heads instance 3 with the `3.circle` symbol, and the editor resolves the numbered name rather than reporting `{n}.circle` as an unknown symbol.
 
 Inside a block it is **required** on every control's `label=`, and on the `puck=` name when there is one. That is not tidiness: two instances whose rows both read "New Colour" are two rows the user cannot tell apart, and two pucks sharing a name are **one** puck being dragged by both instances. Writing `puck=` with no readable name is rejected for the same reason - an unnamed handle is one handle, so the collapse would arrive through the front door. Omit `puck=` entirely if the controls are meant to share the surface's single unnamed puck. Outside a block `{n}` is rejected, since there is no instance number to put there and it would otherwise reach the inspector as literal text.
 

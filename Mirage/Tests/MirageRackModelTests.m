@@ -134,6 +134,20 @@ int main(void) {
                                                                 @"Colours")],
               @"two entries running the same template get separate registries");
 
+    // A `{n}` inspector group ("Colour 2" once stamped) is a NAME the user
+    // reads, never a key. It must not compose with either namespace: the
+    // registry is keyed off the block's `name=`, so the two live side by side
+    // without meeting.
+    KKRequire(![MirageRackScopedSlotGroupName(@"a1b2c3", @"Colours")
+                  isEqualToString:@"Colour 2"],
+              @"a per-instance category is not a registry key");
+    entryID = nil;
+    bareKey = nil;
+    MirageRackParseLaneKey(@"Colour 2", &entryID, &bareKey);
+    KKRequire([entryID isEqualToString:kMirageRackSentinelEntryID] &&
+                  [bareKey isEqualToString:@"Colour 2"],
+              @"...and reads back as an unscoped string, whole");
+
     // --- MirageRackEnabledLaneKey: always prefixed, sentinel included -----
     KKRequire([MirageRackEnabledLaneKey(kMirageRackSentinelEntryID)
                   isEqualToString:@"~Rack#0.Enabled"],

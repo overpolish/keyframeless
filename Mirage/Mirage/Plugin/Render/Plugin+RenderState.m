@@ -334,58 +334,46 @@ static NSString *MirageRackFallbackEntryName(void) {
 
 // Whether this tick has to advertise the clip on the link bus at all.
 //
-// -writeLinkManifest is not a cheap call to make once a frame. Before it
-// serializes anything it derives the chain's display name, and then takes three
-// FxTimingAPI round trips plus a documentID resolve - every one of them a
-// synchronous re-entry into Final Cut, from the render thread, while Final Cut
-// is busy playing back. Then it serializes EVERY referenceable lane of EVERY
-// entry to compare against what it last wrote, and a rack multiplies that lane
-// count by its entry count. Measured on a four-entry chain, all of that came to
-// 40-150 ms per tick at 14-24 ticks a second: the render thread spent most of
-// playback re-advertising a clip that had not changed - which also starved the
-// inspector's mini viewer, since its frames come from this same render.
+// A publish is not a cheap thing to do once a frame. Before it serializes
+// anything it derives the chain's display name, then it serializes EVERY
+// referenceable lane of EVERY entry to compare against what it last wrote, and
+// a rack multiplies that lane count by its entry count. Measured on a
+// four-entry chain, that came to 40-150 ms per tick at 14-24 ticks a second:
+// the render thread spent most of playback re-advertising a clip that had not
+// changed - which also starved the inspector's mini viewer, since its frames
+// come from this same render.
 //
-// What the manifest says is a pure function of the persisted timeline and this
-// instance's audio bindings - the same fingerprint the lane memo already keys
-// on, and one this tick has in hand without another read. So an unchanged tick
-// publishes nothing at all.
+// What the manifest says is a pure function of the persisted timeline, this
+// instance's audio bindings, and where the clip sits - the first two are the
+// same fingerprint the lane memo already keys on, and the third this tick has
+// from the render cache. So an unchanged tick publishes nothing at all, and a
+// clip that is moved or retrimmed republishes on the very next tick.
 //
-// Still refreshed every kMirageLinkRepublishSeconds: an idle clip's manifest
-// file has to keep its mtime recent or KKLinkBus's orphan sweep collects it
-// (it prunes anything not touched within its window). The interval matches the
-// bus's own touch interval, so the GC behaviour is exactly what it was - this
-// only stops the 20-odd redundant publishes in between.
-static const double kMirageLinkRepublishSeconds = 10.0;
-
+// The heartbeat (see the base gate) still refreshes it every 10s: an idle
+// clip's manifest file has to keep its mtime recent or KKLinkBus's orphan
+// sweep collects it. The interval matches the bus's own touch interval, so the
+// GC behaviour is exactly what it was.
 - (BOOL)_shouldPublishLinkManifestForJSON:(NSString *)timelineJSON {
-  NSString *signature =
-      [NSString stringWithFormat:@"%@|%@", timelineJSON ?: @"",
-                                 self.audioTickets.description];
-  double now = CACurrentMediaTime();
-  BOOL changed = ![signature isEqualToString:self.linkPublishSignature];
-  BOOL stale = self.linkPublishTime <= 0.0 ||
-               (now - self.linkPublishTime) > kMirageLinkRepublishSeconds;
-  if (!changed && !stale)
-    return NO;
-  self.linkPublishSignature = signature;
-  self.linkPublishTime = now;
-  return YES;
+  return [self
+      shouldPublishLinkManifestForSignature:
+          [NSString stringWithFormat:@"%@|%@|%.4f|%.4f", timelineJSON ?: @"",
+                                     self.audioTickets.description,
+                                     self.renderCache.clipProjectStartSec,
+                                     self.renderCache.effectDurSec]];
 }
 
 // Tell the inspector where this clip sits in PROJECT time, so its mini-viewer
 // can sample `// #audio` at the playhead instead of previewing silence. The
 // render tick is the only place the clip's position surfaces; the value is a
 // view's, so it lands on main.
-- (void)_publishClipTimelineStart:(id<FxTimingAPI_v4>)timingAPI {
+- (void)_publishClipTimelineStart {
   MirageInspectorView *iv = (MirageInspectorView *)self.inspectorView;
   if (!iv)
     return;
-  // Converted, not raw: effectStartSec is native-media time in FCP.
-  CMTime effStartTL = kCMTimeZero;
-  [timingAPI timelineTime:&effStartTL
-            fromInputTime:CMTimeMakeWithSeconds(self.renderCache.effectStartSec,
-                                                600)];
-  double projectStart = CMTimeGetSeconds(effStartTL);
+  // Converted, not raw: effectStartSec is native-media time in FCP. The
+  // conversion is the render cache's (KKRefreshRenderCache ran it this tick),
+  // not a second synchronous re-entry into the host for the same answer.
+  double projectStart = self.renderCache.clipProjectStartSec;
   dispatch_async(dispatch_get_main_queue(), ^{
     iv.clipTimelineStartSec = projectStart;
   });
@@ -445,7 +433,7 @@ static const double kMirageLinkRepublishSeconds = 10.0;
                     uiStateParamID:kParamUIState];
   double durSec = self.renderCache.effectDurSec;
   if (hasTiming)
-    [self _publishClipTimelineStart:timingAPI];
+    [self _publishClipTimelineStart];
   // Live scrubber: render ticks stop ~1s before the clip end (FCP pre-render
   // buffer - renderTime leads currentTime). Arm the self-terminating poll so it
   // follows currentTime through the tail.
@@ -459,7 +447,8 @@ static const double kMirageLinkRepublishSeconds = 10.0;
   // Advertise this clip as a link SOURCE via the shared base hook (see
   // -linkableLanesForManifest below for Mirage's effective directive lane set).
   if (hasTiming && [self _shouldPublishLinkManifestForJSON:timelineJSON])
-    [self writeLinkManifest];
+    [self writeLinkManifestWithClipStartSec:self.renderCache.clipProjectStartSec
+                                durationSec:self.renderCache.effectDurSec];
 
   // Subscriber side: watch the sources THIS clip's expressions reference so a
   // cross-clip source edit forces us to re-render (FCP renders clips
@@ -469,8 +458,9 @@ static const double kMirageLinkRepublishSeconds = 10.0;
   // scope.
   NSSet<NSString *> *linkSources = KKLinkTimelineSourceNames(timeline);
   // Drop SAME-clip references (`${selfUUID.label}`). This clip republishes its
-  // own lanes on every render (writeLinkManifest above), which bumps their
-  // change stamp - so watching them would nudge-loop forever (render ->
+  // own lanes whenever it changes or the heartbeat comes round (the publish
+  // above), which bumps their change stamp - so watching them would
+  // nudge-loop forever (render ->
   // republish -> stamp bump -> nudge -> render), firing continuous ungrouped
   // render-nudge writes even while idle. A same-clip source is already live in
   // this clip's own timeline and re-renders with it, so it needs no cross-clip

@@ -77,6 +77,32 @@ static NSString *const kSlotsSource =
     @"void mainImage(out vec4 o, in vec2 c) { o = uSlotColor * uSlotWeight; "
     @"}\n";
 
+// The same block, asking for one inspector group PER INSTANCE (`group={"Colour
+// {n}", "{n}.circle"}`) alongside a control that asks for a SHARED one. Both
+// answers have to come out of one block, since that is what a template gets to
+// choose per control.
+static NSString *const kSlotsGroupedSource =
+    @"// #template generator\n"
+    @"// #slots name=\"Colours\" max=4 min=1 default=2\n"
+    @"// #float label=\"Weight {n}\" group={\"Colour {n}\", \"{n}.circle\"} "
+    @"min=0 max=1 default=0.5\n"
+    @"uniform float uSlotWeight;\n"
+    @"// #float label=\"Bias {n}\" group={\"Shared\", \"dial\"} min=0 max=1 "
+    @"default=0.25\n"
+    @"uniform float uSlotBias;\n"
+    @"// #slots-end\n"
+    @"void mainImage(out vec4 o, in vec2 c) { o = vec4(uSlotWeight[0] * "
+    @"uSlotBias[0]); }\n";
+
+static NSArray<NSString *> *KKCategoriesForKeySuffix(NSArray<KKLane *> *lanes,
+                                                     NSString *suffix) {
+  NSMutableArray<NSString *> *out = [NSMutableArray array];
+  for (KKLane *lane in lanes)
+    if ([lane.key hasSuffix:suffix])
+      [out addObject:lane.categoryKey ?: @""];
+  return out;
+}
+
 // A build with no rack registry has to be the build that shipped: same lanes,
 // same order, same every naming field.
 static void KKAssertLegacyIdentity(NSString *source, NSString *what) {
@@ -330,6 +356,103 @@ int main(void) {
     }
     KKRequire(enabledRows == namedIDs.count,
               @"every entry publishes exactly one Enabled row");
+
+    // --- (d) a `{n}` inspector group, unracked then racked -----------------
+    //
+    // `group={"Colour {n}"}` asks for one header per instance; a `group=` with
+    // no `{n}` in the same block asks for one header for all of them. Both
+    // have to hold at once, and the shared one is the shape every block
+    // written before this had - so it is also the regression test that nothing
+    // changed for them.
+    KKAssertLegacyIdentity(kSlotsGroupedSource, @"grouped slots legacy");
+    KKTimeline *grouped =
+        KKTimelineWithCode(kMirageRackSentinelEntryID, kSlotsGroupedSource,
+                           nil);
+    NSArray<KKLane *> *groupedLanes =
+        MirageBuildAvailableLanesForSourceStamped(kSlotsGroupedSource, nil,
+                                                  grouped);
+    NSArray<NSString *> *weightIDs =
+        KKTimelineSlotInstanceIDs(grouped, @"Colours");
+    KKRequire(weightIDs.count == 2, @"the grouped block minted its default");
+    NSArray<NSString *> *weightCats =
+        KKCategoriesForKeySuffix(groupedLanes, @".uSlotWeight");
+    NSArray<NSString *> *biasCats =
+        KKCategoriesForKeySuffix(groupedLanes, @".uSlotBias");
+    KKRequire([weightCats isEqualToArray:(@[ @"Colour 1", @"Colour 2" ])],
+              @"a `{n}` group is stamped per instance, numbered from 1");
+    KKRequire([biasCats isEqualToArray:(@[ @"Shared", @"Shared" ])],
+              @"a group without `{n}` stays shared across instances");
+    for (KKLane *lane in groupedLanes) {
+      KKRequire(!MirageSlotsHasPlaceholder(lane.categoryKey),
+                @"no stamped lane reaches the inspector with a literal `{n}` "
+                @"category");
+      KKRequire(!MirageSlotsHasPlaceholder(lane.categorySymbol),
+                @"...nor with a literal `{n}` category icon");
+    }
+    // The icon is numbered with the header, which is what `{n}.circle` is for.
+    for (KKLane *lane in groupedLanes) {
+      if (![lane.key hasSuffix:@".uSlotWeight"])
+        continue;
+      NSString *n = [lane.categoryKey substringFromIndex:
+                                          lane.categoryKey.length - 1];
+      KKRequire([lane.categorySymbol
+                    isEqualToString:[n stringByAppendingString:@".circle"]],
+                @"a `{n}` group icon is numbered with its header");
+    }
+    // Per-instance categories are grouping, not ordering: each instance's
+    // header owns a contiguous run, so the inspector reads Colour 1 then
+    // Colour 2 rather than interleaving the two.
+    NSMutableArray<NSString *> *catRuns = [NSMutableArray array];
+    for (KKLane *lane in groupedLanes)
+      if (!catRuns.count || ![catRuns.lastObject isEqualToString:
+                                                     lane.categoryKey ?: @""])
+        [catRuns addObject:lane.categoryKey ?: @""];
+    NSCountedSet *runCounts = [NSCountedSet setWithArray:catRuns];
+    for (NSString *cat in runCounts)
+      KKRequire([runCounts countForObject:cat] == 1,
+                [NSString stringWithFormat:@"category %@ is one contiguous run",
+                                           cat]);
+
+    // Racked: the registry is scoped per entry, the CATEGORY is not - it is a
+    // name the user reads, and two entries running the same template are meant
+    // to both say "Colour 1". Their collapse identities stay separate because
+    // the kit scopes a category's collapse key by the owning layer, and the
+    // layer is the entry.
+    KKTimeline *groupedRack =
+        KKTimelineWithCode(kMirageRackSentinelEntryID, kSlotsGroupedSource,
+                           nil);
+    groupedRack =
+        KKTimelineWithCode(second, kSlotsGroupedSource, groupedRack);
+    groupedRack.slotGroups =
+        @{kMirageRackGroupName : @[ kMirageRackSentinelEntryID, second ]};
+    NSArray<KKLane *> *groupedRackLanes =
+        MirageBuildAvailableLanesForRack(groupedRack, nil, nil, nil);
+    NSMutableSet<NSString *> *sentinelWeightCats = [NSMutableSet set];
+    NSMutableSet<NSString *> *secondWeightCats = [NSMutableSet set];
+    for (KKLane *lane in groupedRackLanes) {
+      KKRequire(!MirageSlotsHasPlaceholder(lane.categoryKey),
+                @"a racked `{n}` group is substituted too");
+      KKRequire(![(lane.categoryKey ?: @"") hasPrefix:kMirageRackGroupName],
+                @"a per-instance category is never rack-scoped");
+      NSString *entryID = nil, *bare = nil;
+      MirageRackParseLaneKey(lane.key, &entryID, &bare);
+      if (![bare hasSuffix:@".uSlotWeight"])
+        continue;
+      [([entryID isEqualToString:second] ? secondWeightCats
+                                         : sentinelWeightCats)
+          addObject:lane.categoryKey ?: @""];
+    }
+    NSSet<NSString *> *bothCats =
+        [NSSet setWithArray:(@[ @"Colour 1", @"Colour 2" ])];
+    KKRequire([sentinelWeightCats isEqualToSet:bothCats] &&
+                  [secondWeightCats isEqualToSet:bothCats],
+              @"both entries head their instances with the same read-aloud "
+              @"category, distinguished by their layer rather than by it");
+    KKRequire(![KKTimelineSlotInstanceIDs(groupedRack, @"Colours")
+                  isEqualToArray:KKTimelineSlotInstanceIDs(
+                                     groupedRack, MirageRackScopedSlotGroupName(
+                                                      second, @"Colours"))],
+              @"...while their registries stay separate");
 
     // --- scale: the lane build at a full chain -----------------------------
     //

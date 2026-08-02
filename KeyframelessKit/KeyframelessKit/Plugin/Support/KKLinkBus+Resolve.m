@@ -168,6 +168,36 @@ KKLinkResolvedLaneValueWithOverride(KKLane *lane, double frac,
   return KKLaneClampToComponentRange(lane, KKLinkArrayFromExprVal(out));
 }
 
+KKLane *KKLinkSelfClipLaneForRef(NSString *refName, NSString *selfUUID,
+                                 NSArray<KKLane *> *lanes) {
+  if (!refName.length || !lanes.count)
+    return nil;
+  NSRange dot = [refName rangeOfString:@"."];
+  NSString *tail = refName;
+  if (dot.location != NSNotFound) {
+    if (selfUUID.length &&
+        ![[refName substringToIndex:dot.location] isEqualToString:selfUUID])
+      return nil; // another clip -> bus
+    tail = [refName substringFromIndex:dot.location + 1];
+  }
+  // Whole tail as a key first: a racked / slotted key CONTAINS dots
+  // (`~Rack#<id>.uScanlines`), so it must not be mistaken for a layer prefix.
+  // An untagged lane wins here, matching what a flat source publishes.
+  for (KKLane *l in lanes)
+    if ([l.key isEqualToString:tail])
+      return l;
+  // Only now read it as a layered ref (`<layerID>.<key>`, Canvas).
+  NSRange inner = [tail rangeOfString:@"."];
+  if (inner.location == NSNotFound)
+    return nil;
+  NSString *layerID = [tail substringToIndex:inner.location];
+  NSString *key = [tail substringFromIndex:inner.location + 1];
+  for (KKLane *l in lanes)
+    if ([l.key isEqualToString:key] && [l.layerKey isEqualToString:layerID])
+      return l;
+  return nil;
+}
+
 NSArray<NSString *> *KKLinkUnresolvedReferences(KKLane *lane,
                                                 KKLinkRefOverride refOverride) {
   KKLinkExpr *expr = KKLinkCompile(lane.linkExpression);

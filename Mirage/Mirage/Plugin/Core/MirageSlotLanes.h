@@ -66,6 +66,15 @@ MirageSlotGroupIndexForLaneKey(NSString *laneKey,
 /// gate aimed OUTSIDE the block is left alone - it names a control the whole
 /// group shares, and rewriting it would point every instance at a lane that
 /// does not exist.
+///
+/// The inspector GROUP is neither of those. It is a name the user reads on a
+/// category header, so it is not scoped - it is SUBSTITUTED, and only when the
+/// author wrote `{n}` into it. `group={"Colour {n}"}` asks for one header per
+/// instance and gets it; a plain `group={"Colours"}` keeps every instance under
+/// the one header, which is what every block written before this did and still
+/// does, field for field. The symbol travels the same way, so
+/// `group={"Colour {n}", "{n}.circle"}` numbers the header's icon the way
+/// `puck=` already numbers the handle's.
 static inline KKLane *MirageSlotStampedLane(KKLane *proto, NSString *groupName,
                                             NSString *instanceID,
                                             NSInteger number,
@@ -82,6 +91,11 @@ static inline KKLane *MirageSlotStampedLane(KKLane *proto, NSString *groupName,
   if (proto.paletteGroup.length)
     lane.paletteGroup =
         KKSlotLaneKey(groupName, instanceID, proto.paletteGroup);
+  if (MirageSlotsHasPlaceholder(proto.categoryKey))
+    lane.categoryKey = MirageSlotsSubstitute(proto.categoryKey, (int)number);
+  if (MirageSlotsHasPlaceholder(proto.categorySymbol))
+    lane.categorySymbol =
+        MirageSlotsSubstitute(proto.categorySymbol, (int)number);
   for (KKLane *sibling in siblings) {
     if (!sibling.key.length)
       continue;

@@ -32,6 +32,10 @@ Use them exactly as on Shadertoy:
 | `iMotionBlur`            | `float`     | shutter `0..1` from the user's Motion Blur popover (`0` when off). Non-zero **only** in a `// #motionblur native` shader; otherwise the plugin owns the blur and this stays `0`. See the `// #motionblur` directive           |
 | `iMotionBlurSamples`     | `int`       | Motion Blur sample count, for a `native` shader that loops internally                                                                                                                                                         |
 
+## Built-in grading functions (no declaration needed)
+
+Alongside those inputs, the wrapper supplies the colour helpers a grading shader keeps needing: `decodeToLinear` / `encodeFromLinear` (the sRGB transfer pair), `linearToOklab` / `oklabToLinearRaw` / `oklabToLinear` (the Oklab round trip, the last one pulling chroma in when a colour falls outside Rec.709), and `balanceGain`. Call them rather than pasting a copy; they appear only in a shader that names one. A shader that defines one of them keeps its own. Full table in the directives doc.
+
 ## What works, what doesn't
 
 Under the hood the GLSL is compiled to Metal at runtime with the real glslang + SPIRV-Cross toolchain, not a hand-rolled subset - which is why the whole language is available.

@@ -5,25 +5,25 @@
 
 #import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction (lane gate)
 #import "CanvasFillRender.h"     // TEMP solid fill for closed paths
+#import "CanvasInspectorView.h" // reloadLayerList (maintain-timing graph refresh)
 #import "CanvasLayerRender.h"
 #import "CanvasLayerTimeline.h"  // CanvasSetUIStateSnapshot
 #import "CanvasLayerTransform.h" // CanvasStrokeEnabledAtFraction (lane gate)
-#import "CanvasLayerTree.h"     // CanvasLayerPathWithAncestors
-#import "CanvasInspectorView.h" // reloadLayerList (maintain-timing graph refresh)
+#import "CanvasLayerTree.h"      // CanvasLayerPathWithAncestors
 #import "CanvasMiniViewerRenderer.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KKBezierPath.h>
-#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneDisplayValueAtFraction
-#import <KeyframelessKit/KKTimeline.h>       // KKTimelineRetimedForMediaAnchor
 #import <KeyframelessKit/KKLicense.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKMotionBlurReconstruct.h>
-#import <KeyframelessKit/KKWatermark.h>
 #import <KeyframelessKit/KKPlugin+MiniViewerFeed.h>
 #import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKTimeline.h> // KKTimelineRetimedForMediaAnchor
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneDisplayValueAtFraction
+#import <KeyframelessKit/KKWatermark.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -78,10 +78,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // KKBuildSourceRequests appends the sub-frame source requests.
   NSArray *reqs = KKBuildSourceRequests(
       renderTime,
-      CanvasMiniViewerRequestPathForUUID(
-          KKInstanceUUIDForAPI(self.apiManager)),
-      self.renderCache,
-      ^id(CMTime t) {
+      CanvasMiniViewerRequestPathForUUID(KKInstanceUUIDForAPI(self.apiManager)),
+      self.renderCache, ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
                       time:t
@@ -123,9 +121,9 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
     if (uiJSON.length) {
       // Seed the viewer OSC's UIState snapshot here too (the OSC can't read the
       // param directly). pluginState only fires on a CHANGE, so on a cold FCP
-      // launch the snapshot would be empty until the user interacts - leaving the
-      // toolbar / grid at defaults. Render runs before the OSC draws, so seeding
-      // here restores them immediately.
+      // launch the snapshot would be empty until the user interacts - leaving
+      // the toolbar / grid at defaults. Render runs before the OSC draws, so
+      // seeding here restores them immediately.
       CanvasSetUIStateSnapshot(uiJSON);
       NSDictionary *ui = [NSJSONSerialization
           JSONObjectWithData:[uiJSON dataUsingEncoding:NSUTF8StringEncoding]
@@ -165,9 +163,11 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // Advertise this clip as a LAYERED link source (picker: Canvas > Layer >
   // Param; token: `${uuid.layerID.label}`). Each layer's EFFECTIVE timeline
   // (template-seeded when untouched) supplies its referenceable lanes.
-  // Sources rebuild only when the layer blob changes; the manifest + curve
-  // writes run every timing tick (idempotent) so the clip's absolute span
-  // stays fresh.
+  // Sources rebuild only when the layer blob changes, and the publish itself
+  // runs only when what it would SAY changed (the blob, or where the clip
+  // sits) - plus the bus's 10s heartbeat, which keeps the manifest file's
+  // mtime fresh for the orphan sweep. Publishing every tick meant serializing
+  // every layer's every lane once a frame just to discover the bytes matched.
   NSSet<NSString *> *refSources = nil; // ALL `${refs}` (incl. same-clip)
   if (hasTiming) {
     NSUInteger blobHash = CanvasLayerBlobDigest(layerBlob);
@@ -195,7 +195,14 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
       }
       self.linkLayerSources = sources;
     }
-    [self writeLinkManifest];
+    NSString *publishSignature =
+        [NSString stringWithFormat:@"%lu|%.4f|%.4f", (unsigned long)blobHash,
+                                   self.renderCache.clipProjectStartSec,
+                                   self.renderCache.effectDurSec];
+    if ([self shouldPublishLinkManifestForSignature:publishSignature])
+      [self
+          writeLinkManifestWithClipStartSec:self.renderCache.clipProjectStartSec
+                                durationSec:self.renderCache.effectDurSec];
 
     // Subscriber side (mirrors Mirage's RenderState wiring): watch the
     // sources this clip's layer expressions reference so a cross-clip source
@@ -221,10 +228,10 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
     }
     if (linkSources.count > 0 || self.linkWatcher) {
       if (!self.linkWatcher)
-        self.linkWatcher =
-            [[KKLinkWatcher alloc] initWithAPIManager:self.apiManager
-                                         actionTarget:self
-                                         nudgeParamID:kKKParamRenderNudgeString];
+        self.linkWatcher = [[KKLinkWatcher alloc]
+            initWithAPIManager:self.apiManager
+                  actionTarget:self
+                  nudgeParamID:kKKParamRenderNudgeString];
       KKLinkWatcher *watcher = self.linkWatcher;
       dispatch_async(dispatch_get_main_queue(), ^{
         [watcher setSourceNames:linkSources]; // empty stops it
@@ -249,23 +256,25 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // (frac -> project seconds; the same linear mapping the bus curves use).
   // Zero duration = timing unavailable -> render evaluates unresolved.
   CanvasLinkTiming linkTiming = {0.0, 0.0, 0ull};
-  if (timingAPI) {
-    CMTime effStart = kCMTimeZero, dur = kCMTimeZero, effStartTL = kCMTimeZero;
-    [timingAPI startTimeForEffect:&effStart];
-    [timingAPI durationTimeForEffect:&dur];
-    [timingAPI timelineTime:&effStartTL fromInputTime:effStart];
-    linkTiming.clipStartTLSec = CMTimeGetSeconds(effStartTL);
-    linkTiming.clipDurSec = CMTimeGetSeconds(dur);
+  if (hasTiming) {
+    // The render cache's, not three more synchronous host re-entries for the
+    // answers KKRefreshRenderCache already resolved at the top of this tick.
+    linkTiming.clipStartTLSec = self.renderCache.clipProjectStartSec;
+    linkTiming.clipDurSec = self.renderCache.effectDurSec;
   }
   // Fold every referenced source's bus change-stamp into the state (see the
   // CanvasLinkTiming.refFreshness contract). Sorted so the fold is
   // deterministic across the unordered set. Same-clip refs are included but
-  // settle: this clip republishes its own curves (idempotently) BEFORE this
-  // point in the same call, so their stamps only move when the blob did.
+  // settle: this clip only republishes its own curves when the blob (or its
+  // placement) moved, so their stamps do too. The publish now lands a few
+  // milliseconds later on the publish queue rather than inline, so the stamp
+  // for an edit can surface on the tick AFTER the one that wrote it - one
+  // extra render per edit at worst, and it still settles, because an
+  // unchanged blob republishes nothing.
   if (refSources.count) {
     unsigned long long fresh = 0;
-    for (NSString *name in [refSources.allObjects
-             sortedArrayUsingSelector:@selector(compare:)])
+    for (NSString *name in
+         [refSources.allObjects sortedArrayUsingSelector:@selector(compare:)])
       fresh = fresh * 1099511628211ull ^
               (unsigned long long)[KKLinkBus changeStampForLink:name];
     linkTiming.refFreshness = fresh;
@@ -335,7 +344,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                              boundaryReqFracs:self.renderCache.boundaryReqFracs
                               multiSlotActive:YES
                             changesOutputSize:NO
-                                 linearFloat:NO
+                                  linearFloat:NO
                                    defaultTag:[self.renderCache
                                                   clipFractionAtSeconds:
                                                       CMTimeGetSeconds(
@@ -397,11 +406,12 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                 fragmentShader:@"KKTextureGradientTintFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
 
-  // Stroke pipeline: the SAME transform vertex shader (so vector strokes compose
-  // with CanvasComposedModelMatrix exactly like image quads) + the kit's
-  // antialiased line fragment, which reads the signed edge distance the
+  // Stroke pipeline: the SAME transform vertex shader (so vector strokes
+  // compose with CanvasComposedModelMatrix exactly like image quads) + the
+  // kit's antialiased line fragment, which reads the signed edge distance the
   // tessellator packs into textureCoordinate.y. One pipeline serves normal AND
-  // (later) sketch strokes - sketch is a path pre-jitter, not a second pipeline.
+  // (later) sketch strokes - sketch is a path pre-jitter, not a second
+  // pipeline.
   id<MTLRenderPipelineState> strokePS = [cache
       buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.stroke"
@@ -422,8 +432,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                 fragmentShader:@"KKGradientLineFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
   // Dashed-stroke variant: a vertex shader that also threads per-vertex arc
-  // length, + a fragment that masks the dash pattern by arc (solid OR gradient).
-  // Same solid stroke geometry, so dash corners == solid corners.
+  // length, + a fragment that masks the dash pattern by arc (solid OR
+  // gradient). Same solid stroke geometry, so dash corners == solid corners.
   id<MTLRenderPipelineState> strokeDashPS = [cache
       buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                @".Canvas.strokeDash"
@@ -440,7 +450,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   CanvasLinkTiming linkTiming = {0.0, 0.0};
   KKMotionBlurState mbState = {0};
   NSData *layerBlob = nil;
-  const NSUInteger kPrefixLen = sizeof(CanvasLinkTiming) + sizeof(KKMotionBlurState);
+  const NSUInteger kPrefixLen =
+      sizeof(CanvasLinkTiming) + sizeof(KKMotionBlurState);
   if (pluginState.length >= kPrefixLen) {
     [pluginState getBytes:&linkTiming length:sizeof(linkTiming)];
     [pluginState getBytes:&mbState
@@ -474,8 +485,9 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   FxRect imgB = destinationImage.imagePixelBounds;
   float outputWidth = (float)(imgB.right - imgB.left);
   float outputHeight = (float)(imgB.top - imgB.bottom);
-  // Publish the true output size for the viewer OSC's path ops (stroke-to-outline
-  // bakes px-relative geometry and the OSC only knows zoom-dependent canvas px).
+  // Publish the true output size for the viewer OSC's path ops
+  // (stroke-to-outline bakes px-relative geometry and the OSC only knows
+  // zoom-dependent canvas px).
   CanvasSetOutputSize(outputWidth, outputHeight);
   // Render scale: stroke widths are authored in CANONICAL (canvas/100%) px, but
   // a downscaled FCP browser/effect thumbnail renders fewer real pixels per
@@ -515,30 +527,31 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   };
   double frac = fracForTime(renderTime);
   // Media time since the effect start - drives the marching-ants dash animation
-  // (independent of the clip fraction, so it marches even on a constant stroke).
+  // (independent of the clip fraction, so it marches even on a constant
+  // stroke).
   double marchElapsed =
       fmax(0.0, CMTimeGetSeconds(renderTime) - self.renderCache.effectStartSec);
 
   // Source passthrough + the layer stack (evaluated at `f`) into one encoder.
   // `withStrokes` keeps the strokes IN this accumulated composite (the
   // motion-blur path, so strokes smear); the non-blur path passes NO and draws
-  // strokes in their own pass AFTER the fills (so a fill sits UNDER its stroke).
-  // Motion-blur sample: render the layer stack PER LAYER (image -> fill ->
-  // stroke, back-to-front, array[0] = topmost drawn last) into one blur SAMPLE
-  // texture over its time-matched source, so every accumulated sample carries the
-  // SAME correct cross-layer z-order as the non-blur path (fills now smear with
-  // the rest instead of the old single post-pass). `sdest` is a tracked scratch
-  // texture owned by KKMotionBlur (it commits `scb` and averages the samples), so
-  // sequential render passes in that one command buffer serialize correctly - no
-  // separate buffers / waits (unlike the untracked FCP dest).
-  // Depth-order the drawables ONCE per render (back-to-front) so a layer tilted
-  // physically in front draws on top, instead of strict list order. The order is
-  // stable across motion-blur sub-frame samples, so it's computed here at the
-  // frame `frac` and reused for every sample - NOT rebuilt inside
-  // renderSampleOrdered (that re-evaluated every layer's transform N times and
-  // stalled the viewer during a rotation drag). Near-coincident layers flip
-  // front/back by deck facing (see CanvasOrderDrawablesBackToFront); flat keep
-  // stack order.
+  // strokes in their own pass AFTER the fills (so a fill sits UNDER its
+  // stroke). Motion-blur sample: render the layer stack PER LAYER (image ->
+  // fill -> stroke, back-to-front, array[0] = topmost drawn last) into one blur
+  // SAMPLE texture over its time-matched source, so every accumulated sample
+  // carries the SAME correct cross-layer z-order as the non-blur path (fills
+  // now smear with the rest instead of the old single post-pass). `sdest` is a
+  // tracked scratch texture owned by KKMotionBlur (it commits `scb` and
+  // averages the samples), so sequential render passes in that one command
+  // buffer serialize correctly - no separate buffers / waits (unlike the
+  // untracked FCP dest). Depth-order the drawables ONCE per render
+  // (back-to-front) so a layer tilted physically in front draws on top, instead
+  // of strict list order. The order is stable across motion-blur sub-frame
+  // samples, so it's computed here at the frame `frac` and reused for every
+  // sample - NOT rebuilt inside renderSampleOrdered (that re-evaluated every
+  // layer's transform N times and stalled the viewer during a rotation drag).
+  // Near-coincident layers flip front/back by deck facing (see
+  // CanvasOrderDrawablesBackToFront); flat keep stack order.
   NSInteger total = (NSInteger)layers.count;
   NSInteger *idxBuf = malloc(sizeof(NSInteger) * (size_t)MAX(total, 1));
   CanvasLayerDrawKey *keyBuf =
@@ -549,15 +562,14 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
     if (lp.isGroup || lp.hidden)
       continue;
     idxBuf[nDraw] = i;
-    keyBuf[nDraw] = CanvasLayerComposedDrawKey(
-        layers, i, frac, outputWidth, outputHeight, tileShiftX, tileShiftY, nil,
-        nil);
+    keyBuf[nDraw] =
+        CanvasLayerComposedDrawKey(layers, i, frac, outputWidth, outputHeight,
+                                   tileShiftX, tileShiftY, nil, nil);
     nDraw++;
   }
   NSInteger *ordBuf = malloc(sizeof(NSInteger) * (size_t)MAX(nDraw, 1));
-  CanvasOrderDrawablesBackToFront(idxBuf, keyBuf, nDraw,
-                                  0.02f * fmaxf(outputWidth, outputHeight),
-                                  ordBuf);
+  CanvasOrderDrawablesBackToFront(
+      idxBuf, keyBuf, nDraw, 0.02f * fmaxf(outputWidth, outputHeight), ordBuf);
   NSMutableArray<NSNumber *> *drawOrder =
       [NSMutableArray arrayWithCapacity:(NSUInteger)nDraw];
   for (NSInteger k = 0; k < nDraw; k++)
@@ -566,81 +578,79 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   free(keyBuf);
   free(ordBuf);
 
-  void (^renderSampleOrdered)(id<MTLTexture>, id<MTLCommandBuffer>,
-                              id<MTLTexture>, double, double,
-                              NSArray<NSNumber *> *) =
-      ^(id<MTLTexture> sdest, id<MTLCommandBuffer> scb, id<MTLTexture> srcTex,
-        double f, double mbPrevFrac, NSArray<NSNumber *> *order) {
-        if (!device || !sdest || !imagePS)
-          return;
-        float sw = (float)sdest.width, sh = (float)sdest.height;
-        MTLViewport svp = (MTLViewport){0, 0, sw, sh, -1, 1};
-        simd_uint2 svpSize = {(unsigned int)sw, (unsigned int)sh};
-        id<MTLRenderCommandEncoder> (^sEnc)(id<MTLRenderPipelineState>,
-                                            MTLLoadAction) =
-            ^(id<MTLRenderPipelineState> ps, MTLLoadAction load) {
-              MTLRenderPassDescriptor *rpd =
-                  [MTLRenderPassDescriptor renderPassDescriptor];
-              rpd.colorAttachments[0].texture = sdest;
-              rpd.colorAttachments[0].loadAction = load;
-              rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-              if (load == MTLLoadActionClear)
-                rpd.colorAttachments[0].clearColor =
-                    MTLClearColorMake(0, 0, 0, 0);
-              id<MTLRenderCommandEncoder> e =
-                  [scb renderCommandEncoderWithDescriptor:rpd];
-              [e setViewport:svp];
-              [e setVertexBytes:&svpSize
-                         length:sizeof(svpSize)
-                        atIndex:KKVertexInputIndex_ViewportSize];
-              [e setRenderPipelineState:ps];
-              return e;
-            };
-        // Source base: clear the sample + draw its time-matched source frame.
-        id<MTLRenderCommandEncoder> base = sEnc(imagePS, MTLLoadActionClear);
-        if (srcTex)
-          CanvasEncodeSourceTile(base, srcTex, outputWidth, outputHeight,
-                                 tileShiftX, tileShiftY);
-        [base endEncoding];
-        CanvasFillPipelines fillPipes = {0};
-        CanvasFillBuildPipelines(device, regID, pf, &fillPipes);
-        BOOL canFill =
-            fillPipes.stencil && fillPipes.color && fillPipes.composite;
-        double ef = f < 0.0 ? 0.0 : f;
-        for (NSNumber *idxN in order) {
-          NSInteger i = idxN.integerValue;
-          KKBezierPath *p = layers[i];
-          // Bundle p's ancestor groups in so the per-layer encoders still
-          // compose the group transform (they skip group rows but read them for
-          // the compose); a bare @[p] drops it and a grouped layer renders
-          // untransformed while its OSC/highlight follow the group.
-          NSArray<KKBezierPath *> *one =
-              CanvasLayerPathWithAncestors(p, layers);
-          if (p.isImage) {
-            id<MTLRenderCommandEncoder> e = sEnc(imagePS, MTLLoadActionLoad);
-            CanvasEncodeImageLayers(one, e, device, texCache, outputWidth,
-                                    outputHeight, tileShiftX, tileShiftY, f, nil,
-                                    nil, imagePS, imageTintPS, imageGradTintPS);
-            [e endEncoding];
-          }
-          if (canFill && CanvasFillEnabledAtFraction(p, ef, nil, nil) &&
-              (!p.isImage ||
-               CanvasFillStyleAtFraction(p, ef, nil, nil).style != 0)) {
-            CanvasEncodeFilledLayers(one, device, texCache, scb, sdest,
-                                     &fillPipes, outputWidth, outputHeight, sw, sh,
-                                     tileShiftX, tileShiftY, f, nil, nil);
-          }
-          if (!p.isImage && CanvasStrokeEnabledAtFraction(p, ef, nil, nil) &&
-              strokePS) {
-            id<MTLRenderCommandEncoder> e = sEnc(strokePS, MTLLoadActionLoad);
-            CanvasEncodeVectorLayers(one, e, device, outputWidth, outputHeight,
-                                     tileShiftX, tileShiftY, f, nil, nil,
-                                     strokeScale, marchElapsed, mbPrevFrac,
-                                     strokePS, strokeGradientPS, strokeDashPS);
-            [e endEncoding];
-          }
-        }
-      };
+  void (^renderSampleOrdered)(
+      id<MTLTexture>, id<MTLCommandBuffer>, id<MTLTexture>, double, double,
+      NSArray<NSNumber *> *) = ^(id<MTLTexture> sdest, id<MTLCommandBuffer> scb,
+                                 id<MTLTexture> srcTex, double f,
+                                 double mbPrevFrac,
+                                 NSArray<NSNumber *> *order) {
+    if (!device || !sdest || !imagePS)
+      return;
+    float sw = (float)sdest.width, sh = (float)sdest.height;
+    MTLViewport svp = (MTLViewport){0, 0, sw, sh, -1, 1};
+    simd_uint2 svpSize = {(unsigned int)sw, (unsigned int)sh};
+    id<MTLRenderCommandEncoder> (^sEnc)(id<MTLRenderPipelineState>,
+                                        MTLLoadAction) =
+        ^(id<MTLRenderPipelineState> ps, MTLLoadAction load) {
+          MTLRenderPassDescriptor *rpd =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          rpd.colorAttachments[0].texture = sdest;
+          rpd.colorAttachments[0].loadAction = load;
+          rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+          if (load == MTLLoadActionClear)
+            rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+          id<MTLRenderCommandEncoder> e =
+              [scb renderCommandEncoderWithDescriptor:rpd];
+          [e setViewport:svp];
+          [e setVertexBytes:&svpSize
+                     length:sizeof(svpSize)
+                    atIndex:KKVertexInputIndex_ViewportSize];
+          [e setRenderPipelineState:ps];
+          return e;
+        };
+    // Source base: clear the sample + draw its time-matched source frame.
+    id<MTLRenderCommandEncoder> base = sEnc(imagePS, MTLLoadActionClear);
+    if (srcTex)
+      CanvasEncodeSourceTile(base, srcTex, outputWidth, outputHeight,
+                             tileShiftX, tileShiftY);
+    [base endEncoding];
+    CanvasFillPipelines fillPipes = {0};
+    CanvasFillBuildPipelines(device, regID, pf, &fillPipes);
+    BOOL canFill = fillPipes.stencil && fillPipes.color && fillPipes.composite;
+    double ef = f < 0.0 ? 0.0 : f;
+    for (NSNumber *idxN in order) {
+      NSInteger i = idxN.integerValue;
+      KKBezierPath *p = layers[i];
+      // Bundle p's ancestor groups in so the per-layer encoders still
+      // compose the group transform (they skip group rows but read them for
+      // the compose); a bare @[p] drops it and a grouped layer renders
+      // untransformed while its OSC/highlight follow the group.
+      NSArray<KKBezierPath *> *one = CanvasLayerPathWithAncestors(p, layers);
+      if (p.isImage) {
+        id<MTLRenderCommandEncoder> e = sEnc(imagePS, MTLLoadActionLoad);
+        CanvasEncodeImageLayers(one, e, device, texCache, outputWidth,
+                                outputHeight, tileShiftX, tileShiftY, f, nil,
+                                nil, imagePS, imageTintPS, imageGradTintPS);
+        [e endEncoding];
+      }
+      if (canFill && CanvasFillEnabledAtFraction(p, ef, nil, nil) &&
+          (!p.isImage ||
+           CanvasFillStyleAtFraction(p, ef, nil, nil).style != 0)) {
+        CanvasEncodeFilledLayers(one, device, texCache, scb, sdest, &fillPipes,
+                                 outputWidth, outputHeight, sw, sh, tileShiftX,
+                                 tileShiftY, f, nil, nil);
+      }
+      if (!p.isImage && CanvasStrokeEnabledAtFraction(p, ef, nil, nil) &&
+          strokePS) {
+        id<MTLRenderCommandEncoder> e = sEnc(strokePS, MTLLoadActionLoad);
+        CanvasEncodeVectorLayers(one, e, device, outputWidth, outputHeight,
+                                 tileShiftX, tileShiftY, f, nil, nil,
+                                 strokeScale, marchElapsed, mbPrevFrac,
+                                 strokePS, strokeGradientPS, strokeDashPS);
+        [e endEncoding];
+      }
+    }
+  };
 
   // Destination tile dims: the non-blur per-layer loop's viewport + the fill
   // MSAA target size. (The blur path reads its sample texture's own dims.)
@@ -649,12 +659,13 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   float tileH = (float)(tileBF.top - tileBF.bottom);
 
   // Non-blur path: composite the whole per-layer-ordered stack (source +
-  // image/fill/stroke, top-of-list LAST) into a TRACKED per-instance intermediate
-  // via renderSampleOrdered - ONE command buffer, whose intra-buffer hazard
-  // tracking serialises the passes correctly - then a single blit copies that to
-  // FCP's untracked dest tile. This replaces the old per-draw waitUntilCompleted
-  // (one command buffer + CPU stall PER image/fill/stroke), which crushed
-  // playback on busy / multi-instance setups (dozens of GPU round-trips a frame).
+  // image/fill/stroke, top-of-list LAST) into a TRACKED per-instance
+  // intermediate via renderSampleOrdered - ONE command buffer, whose
+  // intra-buffer hazard tracking serialises the passes correctly - then a
+  // single blit copies that to FCP's untracked dest tile. This replaces the old
+  // per-draw waitUntilCompleted (one command buffer + CPU stall PER
+  // image/fill/stroke), which crushed playback on busy / multi-instance setups
+  // (dozens of GPU round-trips a frame).
   BOOL (^runLayersOrdered)(double) = ^BOOL(double f) {
     if (!device)
       return NO;
@@ -690,18 +701,19 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
             ? [sourceImages.firstObject metalTextureForDevice:device]
             : nil;
     renderSampleOrdered(interm, cb, srcTex, f, -1.0, drawOrder);
-    // Copy the finished composite onto the dest tile. The intermediate is tracked
-    // so the blit waits for the render passes; the dest is the lone write here.
+    // Copy the finished composite onto the dest tile. The intermediate is
+    // tracked so the blit waits for the render passes; the dest is the lone
+    // write here.
     id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
     [blit copyFromTexture:interm
-                sourceSlice:0
-                sourceLevel:0
-               sourceOrigin:MTLOriginMake(0, 0, 0)
-                 sourceSize:MTLSizeMake((NSUInteger)iw, (NSUInteger)ih, 1)
-                  toTexture:destTex
-           destinationSlice:0
-           destinationLevel:0
-          destinationOrigin:MTLOriginMake(0, 0, 0)];
+              sourceSlice:0
+              sourceLevel:0
+             sourceOrigin:MTLOriginMake(0, 0, 0)
+               sourceSize:MTLSizeMake((NSUInteger)iw, (NSUInteger)ih, 1)
+                toTexture:destTex
+         destinationSlice:0
+         destinationLevel:0
+        destinationOrigin:MTLOriginMake(0, 0, 0)];
     [blit endEncoding];
     [cb commit];
     [cb waitUntilCompleted];
@@ -711,13 +723,13 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
 
   // "Fast" motion blur: per-layer velocity-buffer reconstruction (McGuire/
   // Guertin via the shared KKMotionBlurReconstruct). For each layer: render it
-  // ALONE over transparent (mbColorTex), emit its analytic screen-space velocity
-  // (mbVelocityTex) from the composed matrix at the current frac AND the shutter
-  // start, reconstruct into mbBlurredTex, then composite that over the dest. Cost
-  // is fixed in the tap count - independent of blur length - unlike the N-sample
-  // accumulate path below. The source frame is the un-blurred base (footage
-  // smear stays on the Accurate path). Returns NO on any setup failure so the
-  // caller falls through to accumulate.
+  // ALONE over transparent (mbColorTex), emit its analytic screen-space
+  // velocity (mbVelocityTex) from the composed matrix at the current frac AND
+  // the shutter start, reconstruct into mbBlurredTex, then composite that over
+  // the dest. Cost is fixed in the tap count - independent of blur length -
+  // unlike the N-sample accumulate path below. The source frame is the
+  // un-blurred base (footage smear stays on the Accurate path). Returns NO on
+  // any setup failure so the caller falls through to accumulate.
   BOOL (^runFastBlur)(void) = ^BOOL {
     if (!device)
       return NO;
@@ -747,9 +759,9 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                   fragmentShader:@"KKVelocityFragment"
                                        blendMode:KKBlendModeNone];
     // Additive accumulation pipeline: averages N sub-frame samples of a draw-on
-    // layer (each scaled by 1/N in the opacity fragment) into a scratch texture.
-    // Draw-on is "appearing" content on a possibly-curved path, which velocity
-    // reconstruction can't smear cleanly.
+    // layer (each scaled by 1/N in the opacity fragment) into a scratch
+    // texture. Draw-on is "appearing" content on a possibly-curved path, which
+    // velocity reconstruction can't smear cleanly.
     id<MTLRenderPipelineState> compositePS = [cache
         buildAndRegisterPipelineStateForPluginID:@"com.keyframeless"
                                                  @".Canvas.mbcomposite"
@@ -762,7 +774,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
     if (!velPS || !compositePS)
       return NO;
 
-    self.mbColorTex = CanvasEnsureScratchTex(self.mbColorTex, device, iw, ih, pf);
+    self.mbColorTex =
+        CanvasEnsureScratchTex(self.mbColorTex, device, iw, ih, pf);
     self.mbVelocityTex = CanvasEnsureScratchTex(self.mbVelocityTex, device, iw,
                                                 ih, MTLPixelFormatRG16Float);
     self.mbBlurredTex =
@@ -779,12 +792,11 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
             ? [sourceImages.firstObject metalTextureForDevice:device]
             : nil;
 
-    // Shutter-start clip fraction (the velocity is the displacement from here to
-    // `frac`). Fixed 90000 timescale so a sub-frame offset survives FCP's low
-    // playback timescales (same reason as KKMotionBlur sampleTimes).
-    double fPrev = fracForTime(
-        CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(mbState.shutterSec,
-                                                         90000)));
+    // Shutter-start clip fraction (the velocity is the displacement from here
+    // to `frac`). Fixed 90000 timescale so a sub-frame offset survives FCP's
+    // low playback timescales (same reason as KKMotionBlur sampleTimes).
+    double fPrev = fracForTime(CMTimeSubtract(
+        renderTime, CMTimeMakeWithSeconds(mbState.shutterSec, 90000)));
     const float marginPx = 64.0f; // cover stroke width; smear handled by tiles
     simd_uint2 vp = {(unsigned int)iw, (unsigned int)ih};
 
@@ -819,9 +831,9 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
         {{-iw / 2.0f, ih / 2.0f}, {0, 0}},
     };
 
-    // Composite mbBlurredTex over the dest (premultiplied "over"); shared by both
-    // the reconstruction and accumulation branches below. (`fsQuad` is captured
-    // via a pointer - blocks can't capture a C array by value.)
+    // Composite mbBlurredTex over the dest (premultiplied "over"); shared by
+    // both the reconstruction and accumulation branches below. (`fsQuad` is
+    // captured via a pointer - blocks can't capture a C array by value.)
     KKVertex2D *fsQuadP = fsQuad;
     void (^compositeBlurredOverDest)(id<MTLCommandBuffer>) =
         ^(id<MTLCommandBuffer> cb) {
@@ -843,8 +855,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
           [e setFragmentTexture:self.mbBlurredTex
                         atIndex:KKTextureIndex_InputImage];
           [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                  vertexStart:0
-                  vertexCount:4];
+                vertexStart:0
+                vertexCount:4];
           [e endEncoding];
         };
 
@@ -854,20 +866,21 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
 
       // Size this layer's blur reach (= tile size) to its actual screen-space
       // motion, so a faster layer gets a longer trail instead of clamping at a
-      // fixed radius. Sample count scales with trail length so a long blur stays
-      // smooth (no ghosting between taps). A still layer (vel ~0) reconstructs to
-      // a no-op, so the tile floor keeps it cheap.
-      float maxVel = CanvasLayerMaxVelocityPx(layers, i, frac, fPrev, outputWidth,
-                                              outputHeight, tileShiftX,
-                                              tileShiftY, nil, nil);
+      // fixed radius. Sample count scales with trail length so a long blur
+      // stays smooth (no ghosting between taps). A still layer (vel ~0)
+      // reconstructs to a no-op, so the tile floor keeps it cheap.
+      float maxVel = CanvasLayerMaxVelocityPx(layers, i, frac, fPrev,
+                                              outputWidth, outputHeight,
+                                              tileShiftX, tileShiftY, nil, nil);
       int tileSize = (int)fmaxf(16.0f, fminf(256.0f, ceilf(maxVel)));
       int taps = (int)fmaxf(9.0f, fminf(25.0f, ceilf((float)tileSize / 6.0f)));
 
-      // 1. Colour: the layer alone over transparent (clears, no source). Passing
-      // fPrev enables the analytic DRAW-ON reveal fade in the stroke shader, so a
-      // (curving) progressive reveal blurs here in ONE render - no accumulation,
-      // no gather. The velocity pass below still handles the layer's spatial
-      // motion (transform / morph / width / corners), composing with the fade.
+      // 1. Colour: the layer alone over transparent (clears, no source).
+      // Passing fPrev enables the analytic DRAW-ON reveal fade in the stroke
+      // shader, so a (curving) progressive reveal blurs here in ONE render - no
+      // accumulation, no gather. The velocity pass below still handles the
+      // layer's spatial motion (transform / morph / width / corners), composing
+      // with the fade.
       renderSampleOrdered(self.mbColorTex, cb, nil, frac, fPrev, @[ idxN ]);
 
       // 2. Velocity: the layer's analytic screen-space displacement.
@@ -889,7 +902,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                       outputHeight, tileShiftX, tileShiftY,
                                       marginPx, morphVelPS, nil, nil);
         // Animating stroke width: the edges move ⊥ even when the centreline
-        // doesn't. Overwrites the stroke region with transform + width velocity.
+        // doesn't. Overwrites the stroke region with transform + width
+        // velocity.
         CanvasEncodeStrokeWidthVelocity(layers, e, i, frac, fPrev, outputWidth,
                                         outputHeight, tileShiftX, tileShiftY,
                                         morphVelPS, nil, nil);
@@ -898,8 +912,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
         CanvasEncodeCornerFilletVelocity(layers, e, i, frac, fPrev, outputWidth,
                                          outputHeight, tileShiftX, tileShiftY,
                                          morphVelPS, nil, nil);
-        // Draw-on endpoint marker riding the tip (the stroke reveal itself blurs
-        // via the analytic alpha fade in the colour pass, but the marker
+        // Draw-on endpoint marker riding the tip (the stroke reveal itself
+        // blurs via the analytic alpha fade in the colour pass, but the marker
         // translates, so it blurs by velocity here).
         CanvasEncodeMarkerVelocity(layers, e, i, frac, fPrev, outputWidth,
                                    outputHeight, tileShiftX, tileShiftY,
@@ -939,8 +953,9 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // frame, so both the layer animation and the underlying content smear.
   if (mbState.enabled) {
     // Fast technique = per-layer velocity reconstruction (fixed cost). If it
-    // bails (setup failure), fall through to accumulate. Accurate technique skips
-    // straight to the accumulate path below (footage smear / heavy correctness).
+    // bails (setup failure), fall through to accumulate. Accurate technique
+    // skips straight to the accumulate path below (footage smear / heavy
+    // correctness).
     if (mbState.technique == KKMotionBlurTechniqueFast && runFastBlur())
       return YES;
     NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
@@ -966,8 +981,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                               ? fracs[sampleIndex].doubleValue
                               : frac;
                       // Each sample renders the full per-layer-ordered stack
-                      // (image/fill/stroke) over its time-matched source into the
-                      // sample texture; KKMotionBlur averages the samples.
+                      // (image/fill/stroke) over its time-matched source into
+                      // the sample texture; KKMotionBlur averages the samples.
                       renderSampleOrdered(sampleDest, commandBuffer,
                                           inputTextures.firstObject, f, -1.0,
                                           drawOrder);
@@ -993,29 +1008,27 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                        [enc setRenderPipelineState:imagePS];
                                        CanvasEncodeSourceTile(
                                            enc, inputs[0], outputWidth,
-                                           outputHeight, tileShiftX, tileShiftY);
+                                           outputHeight, tileShiftX,
+                                           tileShiftY);
                                      }];
 }
 
 // Maintain-timing persistence, Canvas flavour: Canvas keeps each layer's timing
 // in its own animationJSON inside the layer blob (kParamLayerData), not the
-// single kKKParamTimelineData the base retimes. Retime EVERY animated layer from
-// the old media anchor to the new clip range so the stored keyposes (and the
-// inspector graph) match the media-locked render. Return nil - the base's
+// single kKKParamTimelineData the base retimes. Retime EVERY animated layer
+// from the old media anchor to the new clip range so the stored keyposes (and
+// the inspector graph) match the media-locked render. Return nil - the base's
 // single-timeline graph push doesn't fit a multi-layer graph, so we reload the
 // layer list ourselves.
-- (KKTimeline *)_retimeMaintainTimingBlobWithParamID:(UInt32)timelineParamID
-                                              getAPI:
-                                                  (id<FxParameterRetrievalAPI_v6>)
-                                                      getAPI
-                                              setAPI:
-                                                  (id<FxParameterSettingAPI_v5>)
-                                                      setAPI
-                                           fromSrcIn:(double)fromSrcIn
-                                             fromDur:(double)fromDur
-                                             toSrcIn:(double)toSrcIn
-                                               toDur:(double)toDur
-                                             edgeEps:(double)edgeEps {
+- (KKTimeline *)
+    _retimeMaintainTimingBlobWithParamID:(UInt32)timelineParamID
+                                  getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                                  setAPI:(id<FxParameterSettingAPI_v5>)setAPI
+                               fromSrcIn:(double)fromSrcIn
+                                 fromDur:(double)fromDur
+                                 toSrcIn:(double)toSrcIn
+                                   toDur:(double)toDur
+                                 edgeEps:(double)edgeEps {
   NSString *b64 = KKReadCustomParamString(getAPI, timelineParamID);
   if (!b64.length)
     return nil;

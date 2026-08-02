@@ -600,27 +600,13 @@
   NSString *selfUUID = r.linkSelfUUID;
   KKLinkRefOverride refOverride =
       liveTl ? ^NSArray<NSNumber *> *(NSString *refName) {
-    // Identity-checked like the mini's -valuesForLabel: override: the uuid
-    // must be THIS clip (when known) and a layered ref only resolves against
-    // a lane whose layerKey matches - a cross-clip or other-layer ref with a
-    // coinciding label reads the bus.
-    NSArray<NSString *> *comps = [refName componentsSeparatedByString:@"."];
-    NSString *layerID = comps.count == 3 ? comps[1] : nil;
-    NSString *tail = comps.lastObject ?: refName;
-    if (selfUUID.length && comps.count >= 2 &&
-        ![comps.firstObject isEqualToString:selfUUID])
+    // Identity-checked like the mini's -valuesForLabel: override (same
+    // helper): a cross-clip or other-layer ref reads the bus.
+    KKLane *l = KKLinkSelfClipLaneForRef(refName, selfUUID, liveTl.lanes);
+    if (!l || l.linkExpression.length)
       return nil;
-    for (KKLane *l in liveTl.lanes) {
-      if (![l.key isEqualToString:tail])
-        continue;
-      if (layerID && ![l.layerKey isEqualToString:layerID])
-        continue;
-      // Display evaluation, matching the bus's committed-curve sampling.
-      return l.linkExpression.length
-                 ? nil
-                 : KKLaneDisplayValueAtFraction(l, evalFrac);
-    }
-    return nil;
+    // Display evaluation, matching the bus's committed-curve sampling.
+    return KKLaneDisplayValueAtFraction(l, evalFrac);
   }
              : nil;
              NSArray<NSNumber *> *res = KKLinkResolvedLaneValueWithOverride(

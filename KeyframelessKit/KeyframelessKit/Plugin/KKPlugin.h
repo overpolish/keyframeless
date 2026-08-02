@@ -121,7 +121,40 @@ NS_ASSUME_NONNULL_BEGIN
 /// KKLinkWriteManifest. No-op unless -linkableLanesForManifest returns lanes.
 /// Call from the render tick, where the clip's timeline position resolves.
 /// Cheap (idempotent skip-if-unchanged).
+///
+/// Prefer -writeLinkManifestWithClipStartSec:durationSec: on the render path:
+/// this form re-enters the host three times for a clip span the tick's render
+/// cache already holds. Kept for callers with no cache (the document-load
+/// registration, which runs on main inside an action scope).
 - (void)writeLinkManifest;
+
+/// -writeLinkManifest with the clip's absolute span supplied by the caller -
+/// `clipStartSec` = KKRenderCache.clipProjectStartSec, `clipDurSec` =
+/// KKRenderCache.effectDurSec, both resolved once per tick by
+/// KKRefreshRenderCache. Saves the three synchronous host re-entries
+/// (startTimeForEffect / durationTimeForEffect / timelineTime:fromInputTime:)
+/// this method would otherwise repeat, which cost tens of milliseconds each
+/// while Final Cut is busy playing back.
+///
+/// The lanes, the uuid and the document id are gathered on the CALLING thread
+/// (the FxPlug callback, the only place those APIs resolve); the manifest
+/// assembly, the per-lane curve serialization and the file writes hop to a
+/// serial background queue, so no publish cost lands on the render callback.
+- (void)writeLinkManifestWithClipStartSec:(double)clipStartSec
+                              durationSec:(double)clipDurSec;
+
+/// Change-or-heartbeat gate for the publish above: YES when `signature`
+/// differs from the last published one, or when the last publish is older than
+/// the bus's touch interval (the manifest file's mtime has to stay fresh or
+/// the orphan sweep collects it). NO on an unchanged, recently-published tick -
+/// which is nearly every tick of playback.
+///
+/// `signature` is the caller's fingerprint of everything the manifest says:
+/// the persisted timeline blob, whatever else feeds the lane set, and the
+/// clip's placement (so a moved or retrimmed clip republishes on the next tick
+/// rather than waiting out the heartbeat). Calling this UPDATES the gate, so
+/// call it exactly once per tick and publish iff it returns YES.
+- (BOOL)shouldPublishLinkManifestForSignature:(NSString *)signature;
 
 /// Convenience wrapper around KKMetalDeviceCache buildAndRegisterPipelineState.
 /// Call from renderDestinationImage: to get or build the pipeline state for
@@ -164,10 +197,9 @@ NS_ASSUME_NONNULL_BEGIN
     encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
                                sourceImages:
                                    (NSArray<FxImageTile *> *)sourceImages
-                                      setup:
-                                          (nullable void (^)(
-                                              id<MTLCommandBuffer>
-                                                  commandBuffer))setup
+                                      setup:(nullable void (^)(
+                                                id<MTLCommandBuffer>
+                                                    commandBuffer))setup
                                    commands:
                                        (void (^)(
                                            id<MTLRenderCommandEncoder> encoder,
@@ -193,10 +225,9 @@ NS_ASSUME_NONNULL_BEGIN
                                    (NSArray<FxImageTile *> *)sourceImages
                                commandQueue:
                                    (nullable id<MTLCommandQueue>)commandQueue
-                                      setup:
-                                          (nullable void (^)(
-                                              id<MTLCommandBuffer>
-                                                  commandBuffer))setup
+                                      setup:(nullable void (^)(
+                                                id<MTLCommandBuffer>
+                                                    commandBuffer))setup
                                    commands:
                                        (void (^)(
                                            id<MTLRenderCommandEncoder> encoder,

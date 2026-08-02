@@ -209,6 +209,7 @@ BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
   [timingAPI timelineTime:&effStartTL
             fromInputTime:CMTimeMakeWithSeconds(cache.effectStartSec, 600)];
   double clipProjectStart = CMTimeGetSeconds(effStartTL);
+  cache.clipProjectStartSec = clipProjectStart;
   if (fabs(clipProjectStart - cache.lastPushedClipProjectStart) > 0.0005 &&
       inspectorView) {
     cache.lastPushedClipProjectStart = clipProjectStart;

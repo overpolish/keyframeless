@@ -1195,6 +1195,37 @@ int main(void) {
                   slotsError == MirageSlotsDirectiveErrorStrayPlaceholder &&
                   [slotsDetail isEqualToString:@"#float"],
               @"{n} outside every block has no instance number to carry");
+    // ...including in `group=`, where it would otherwise head an ordinary
+    // control with a category nothing ever numbers.
+    groups = MirageSlotGroupsForSource(@"// #float label=\"Size\" "
+                                       @"group={\"Colour {n}\"}\n"
+                                       @"uniform float uSize;\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 0 &&
+                  slotsError == MirageSlotsDirectiveErrorStrayPlaceholder,
+              @"a stray {n} in group= is stray like any other");
+    // Inside a block it is ALLOWED and unremarked: `group=` is not one of the
+    // fields the placeholder is required in (a shared group is a legitimate
+    // answer), and writing it asks for one inspector group per instance.
+    groups = MirageSlotGroupsForSource(@"// #slots name=\"Colour\" max=4\n"
+                                       @"// #float label=\"Size {n}\" "
+                                       @"group={\"Colour {n}\", \"{n}.circle\"}"
+                                       @"\n"
+                                       @"uniform float uSize;\n"
+                                       @"// #slots-end\n",
+                                       &slotsError, &slotsDetail);
+    KKRequire(groups.count == 1 && slotsError == MirageSlotsDirectiveErrorNone,
+              @"a {n} group inside a block validates");
+    {
+      char grp[80] = {0}, sym[40] = {0};
+      MirageParseGroupAttr(@" label=\"Size {n}\" group={\"Colour {n}\", "
+                           @"\"{n}.circle\"}",
+                           grp, sizeof(grp), sym, sizeof(sym));
+      KKRequire([MirageSlotsSubstitute(@(grp), 2) isEqualToString:@"Colour 2"] &&
+                    [MirageSlotsSubstitute(@(sym), 2)
+                        isEqualToString:@"2.circle"],
+                @"a {n} group parses whole and numbers both halves");
+    }
 
     KKRequire(
         [MirageSlotsSubstitute(@"New Colour {n}", 3)

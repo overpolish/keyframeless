@@ -445,6 +445,131 @@ static void KKAppendColorHelpers(NSMutableString *s) {
           @"return clamp(color+d,0.0,1.0);}\n"];
 }
 
+// Does the source DEFINE this function itself (or shadow it with a macro)?
+// A definition sits at file scope with a GLSL type immediately before the name,
+// which is what separates `vec3 decodeToLinear(vec3 c)` from the call sites
+// (`return decodeToLinear(c);`, `vec3 lin = decodeToLinear(c);`) that name it
+// with a keyword or a variable in between. The type list is spelled out rather
+// than "any identifier" for exactly that reason: `return` would otherwise read
+// as a return type and turn every caller into a false definition.
+static BOOL KKSourceDefinesFunction(NSString *src, NSString *name) {
+  NSString *pat = [NSString
+      stringWithFormat:@"^[ \\t]*(?:(?:vec[234]|float|int|bool|mat[234]|void)[ "
+                       @"\\t]+%@[ \\t]*\\(|#[ \\t]*define[ \\t]+%@\\b)",
+                       name, name];
+  NSRegularExpression *re = [NSRegularExpression
+      regularExpressionWithPattern:pat
+                           options:NSRegularExpressionAnchorsMatchLines
+                             error:nil];
+  return [re firstMatchInString:src
+                        options:0
+                          range:NSMakeRange(0, src.length)] != nil;
+}
+
+// The colour-grading helpers every grading template used to paste in full: the
+// sRGB transfer pair, the Oklab round trip with its gamut chroma-pull, and the
+// two-knob colour balance. Bodies are the ones the templates shipped, verbatim,
+// so a template that drops its copy renders the same pixels it did before.
+//
+// Injected the way the `// #frames` samplers are - gated on the source actually
+// naming a member, so an ordinary shader carries none of it and the fast reject
+// is a substring scan. A false positive (the name inside a comment, or as part
+// of a longer identifier) costs a few unused lines.
+//
+// The gate is per FAMILY, not per function: the members call each other, so a
+// template that defines one of them must keep all of them. A source that
+// DEFINES any member therefore gets none of that family injected - which is
+// also what makes injection idempotent for a template that still carries its
+// own copy, since glslang rejects a redefinition outright.
+typedef struct {
+  const char *names[4];
+  NSString *source;
+} KKGradingFamily;
+
+static void KKAppendGradingLibrary(NSMutableString *s, NSString *userSource) {
+  const KKGradingFamily families[] = {
+      {{"decodeToLinear", "encodeFromLinear", NULL},
+       @"vec3 decodeToLinear(vec3 c) {\n"
+       @"  vec3 lo = c / 12.92;\n"
+       @"  vec3 hi = pow(max(c + 0.055, 0.0) / 1.055, vec3(2.4));\n"
+       @"  return mix(lo, hi, step(vec3(0.04045), c));\n}\n"
+       @"vec3 encodeFromLinear(vec3 c) {\n"
+       @"  c = max(c, 0.0);\n"
+       @"  vec3 lo = c * 12.92;\n"
+       @"  vec3 hi = 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055;\n"
+       @"  return mix(lo, hi, step(vec3(0.0031308), c));\n}\n"},
+      {{"linearToOklab", "oklabToLinearRaw", "oklabToLinear", NULL},
+       @"vec3 linearToOklab(vec3 c) {\n"
+       @"  float l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * "
+       @"c.b;\n"
+       @"  float m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * "
+       @"c.b;\n"
+       @"  float s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * "
+       @"c.b;\n"
+       @"  float lc = pow(max(l, 0.0), 1.0 / 3.0);\n"
+       @"  float mc = pow(max(m, 0.0), 1.0 / 3.0);\n"
+       @"  float sc = pow(max(s, 0.0), 1.0 / 3.0);\n"
+       @"  return vec3(0.2104542553 * lc + 0.7936177850 * mc - 0.0040720468 * "
+       @"sc,\n"
+       @"              1.9779984951 * lc - 2.4285922050 * mc + 0.4505937099 * "
+       @"sc,\n"
+       @"              0.0259040371 * lc + 0.7827717662 * mc - 0.8086757660 * "
+       @"sc);\n}\n"
+       @"vec3 oklabToLinearRaw(vec3 lab) {\n"
+       @"  float lc = lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z;\n"
+       @"  float mc = lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z;\n"
+       @"  float sc = lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z;\n"
+       @"  float l = lc * lc * lc;\n"
+       @"  float m = mc * mc * mc;\n"
+       @"  float s = sc * sc * sc;\n"
+       @"  return vec3(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * "
+       @"s,\n"
+       @"              -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * "
+       @"s,\n"
+       @"              -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * "
+       @"s);\n}\n"
+       // Out-of-gamut Lab pulls its CHROMA in, holding L and hue: a bisection
+       // on the a/b scale, six halvings deep, which lands inside a code value.
+       @"vec3 oklabToLinear(vec3 lab) {\n"
+       @"  vec3 rgb = oklabToLinearRaw(lab);\n"
+       @"  if (min(rgb.r, min(rgb.g, rgb.b)) >= -0.0001) return max(rgb, "
+       @"0.0);\n"
+       @"  float lo = 0.0;\n"
+       @"  float hi = 1.0;\n"
+       @"  for (int i = 0; i < 6; ++i) {\n"
+       @"    float mid = 0.5 * (lo + hi);\n"
+       @"    vec3 test = oklabToLinearRaw(vec3(lab.x, lab.y * mid, lab.z * "
+       @"mid));\n"
+       @"    if (min(test.r, min(test.g, test.b)) >= -0.0001) lo = mid;\n"
+       @"    else hi = mid;\n"
+       @"  }\n"
+       @"  return max(oklabToLinearRaw(vec3(lab.x, lab.y * lo, lab.z * lo)), "
+       @"0.0);\n}\n"},
+      {{"balanceGain", NULL},
+       @"vec3 balanceGain(float redCyan, float greenMagenta) {\n"
+       @"  float rc = redCyan / 100.0;\n"
+       @"  float gm = greenMagenta / 100.0;\n"
+       @"  return vec3(1.0 + 0.45 * rc - 0.22 * gm,\n"
+       @"              1.0 + 0.45 * gm - 0.22 * rc,\n"
+       @"              1.0 - 0.23 * rc - 0.23 * gm);\n}\n"},
+  };
+  for (size_t f = 0; f < sizeof(families) / sizeof(families[0]); f++) {
+    BOOL referenced = NO, defined = NO;
+    for (int i = 0; families[f].names[i]; i++) {
+      NSString *nm = @(families[f].names[i]);
+      if ([userSource rangeOfString:nm].location == NSNotFound)
+        continue;
+      referenced = YES;
+      if (KKSourceDefinesFunction(userSource, nm)) {
+        defined = YES;
+        break;
+      }
+    }
+    if (referenced && !defined)
+      [s appendString:families[f].source];
+  }
+}
+
 // The tail of main(): turn mainImage's output into what this pass must store.
 // The three display branches differ only in how alpha is treated. `// #alpha`
 // and two-input transition shaders both own their output coverage; forcing
@@ -587,6 +712,10 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                     @"vec4 getToColor(vec2 uv){ return texture(iChannel1, uv); "
                     @"}\n"];
   KKAppendColorHelpers(s);
+  // The shared grading library. Sees the source the pass will actually compile
+  // (Common already prepended, dialect shims already run), so a helper named
+  // only in the Common tab still gates it in.
+  KKAppendGradingLibrary(s, userSource);
   [s appendString:gradientFns]; // after kkGradBias, which the samplers call
   // The `// #slots` scalar arrays: declared here, filled at the top of main().
   // File scope, because the user's mainImage reads them and SPIRV-Cross threads

@@ -77,12 +77,6 @@
 /// once a frame.
 @property(nonatomic, copy, nullable) NSString *linkManifestLanesSignature;
 @property(nonatomic, copy, nullable) NSArray<KKLane *> *linkManifestLanesCache;
-/// Gate for the link-bus publish itself (NOT just the lane set above): the
-/// fingerprint last advertised and when. -writeLinkManifest re-enters the host
-/// several times and serializes every entry's lanes, which is far too much to
-/// repeat per frame for a clip that has not changed.
-@property(nonatomic, copy, nullable) NSString *linkPublishSignature;
-@property(nonatomic) double linkPublishTime;
 /// The persisted timeline THIS render tick read, raw and decoded, so one
 /// callback crosses XPC for it once instead of three times. Valid only inside
 /// the -pluginState: callback that filled them; cleared as it returns.

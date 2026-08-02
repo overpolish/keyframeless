@@ -297,17 +297,18 @@ static void KKLinkParamLists(NSArray<KKLane *> *lanes,
   *outDisplays = displays;
 }
 
-static KKLinkManifest *
-KKLinkBaseManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
-                   double clipStartSec, double clipDurSec, NSString *effectName,
-                   NSString *displayBaseName) {
-  NSString *uuid = KKInstanceUUIDForAPI(api);
+static KKLinkManifest *KKLinkBaseManifest(NSString *uuid, NSString *documentID,
+                                          NSArray<KKLane *> *lanes,
+                                          double clipStartSec,
+                                          double clipDurSec,
+                                          NSString *effectName,
+                                          NSString *displayBaseName) {
   if (uuid.length == 0)
     return nil; // no identity yet (fresh instance before any UI) - skip
   KKLinkManifest *m = [[KKLinkManifest alloc] init];
   m.uuid = uuid;
   m.effectName = effectName ?: @"";
-  m.documentID = KKLinkDocumentIDForAPI(api) ?: @"";
+  m.documentID = documentID ?: @"";
   // The instance's own name when it has one, else the effect's.
   NSString *base = displayBaseName.length
                        ? displayBaseName
@@ -326,8 +327,18 @@ KKLinkBaseManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
 void KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
                          double clipStartSec, double clipDurSec,
                          NSString *effectName, NSString *displayBaseName) {
-  KKLinkManifest *m = KKLinkBaseManifest(api, lanes, clipStartSec, clipDurSec,
-                                         effectName, displayBaseName);
+  KKLinkWriteManifestForUUID(KKInstanceUUIDForAPI(api),
+                             KKLinkDocumentIDForAPI(api), lanes, clipStartSec,
+                             clipDurSec, effectName, displayBaseName);
+}
+
+void KKLinkWriteManifestForUUID(NSString *uuid, NSString *documentID,
+                                NSArray<KKLane *> *lanes, double clipStartSec,
+                                double clipDurSec, NSString *effectName,
+                                NSString *displayBaseName) {
+  KKLinkManifest *m =
+      KKLinkBaseManifest(uuid, documentID, lanes, clipStartSec, clipDurSec,
+                         effectName, displayBaseName);
   if (m)
     [KKLinkBus writeManifest:m];
 }
@@ -338,9 +349,18 @@ void KKLinkWriteManifestWithLayers(id<PROAPIAccessing> api,
                                    double clipStartSec, double clipDurSec,
                                    NSString *effectName,
                                    NSString *displayBaseName) {
+  KKLinkWriteManifestWithLayersForUUID(
+      KKInstanceUUIDForAPI(api), KKLinkDocumentIDForAPI(api), topLevelLanes,
+      layers, clipStartSec, clipDurSec, effectName, displayBaseName);
+}
+
+void KKLinkWriteManifestWithLayersForUUID(
+    NSString *uuid, NSString *documentID, NSArray<KKLane *> *topLevelLanes,
+    NSArray<KKLinkLayerSource *> *layers, double clipStartSec,
+    double clipDurSec, NSString *effectName, NSString *displayBaseName) {
   KKLinkManifest *m =
-      KKLinkBaseManifest(api, topLevelLanes, clipStartSec, clipDurSec,
-                         effectName, displayBaseName);
+      KKLinkBaseManifest(uuid, documentID, topLevelLanes, clipStartSec,
+                         clipDurSec, effectName, displayBaseName);
   if (!m)
     return;
   NSMutableArray<KKLinkLayerSource *> *out =
@@ -364,7 +384,13 @@ void KKLinkWriteManifestWithLayers(id<PROAPIAccessing> api,
 void KKLinkPublishReferenceableLanes(id<PROAPIAccessing> api,
                                      NSArray<KKLane *> *lanes, double tlStart,
                                      double tlEnd) {
-  NSString *uuid = KKInstanceUUIDForAPI(api);
+  KKLinkPublishReferenceableLanesForUUID(KKInstanceUUIDForAPI(api), lanes,
+                                         tlStart, tlEnd);
+}
+
+void KKLinkPublishReferenceableLanesForUUID(NSString *uuid,
+                                            NSArray<KKLane *> *lanes,
+                                            double tlStart, double tlEnd) {
   if (uuid.length == 0)
     return; // no identity yet - the token another clip stores can't resolve
   for (KKLane *lane in lanes) {
@@ -384,7 +410,13 @@ void KKLinkPublishReferenceableLanes(id<PROAPIAccessing> api,
 void KKLinkPublishReferenceableLayer(id<PROAPIAccessing> api,
                                      KKLinkLayerSource *layer, double tlStart,
                                      double tlEnd) {
-  NSString *uuid = KKInstanceUUIDForAPI(api);
+  KKLinkPublishReferenceableLayerForUUID(KKInstanceUUIDForAPI(api), layer,
+                                         tlStart, tlEnd);
+}
+
+void KKLinkPublishReferenceableLayerForUUID(NSString *uuid,
+                                            KKLinkLayerSource *layer,
+                                            double tlStart, double tlEnd) {
   if (uuid.length == 0 || layer.layerID.length == 0)
     return;
   for (KKLane *lane in layer.lanes) {

@@ -27,6 +27,7 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
+#import <QuartzCore/QuartzCore.h>
 
 @interface KKPrincipalDelegate : NSObject <FxPrincipalDelegate>
 + (instancetype)shared;
@@ -139,11 +140,41 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   return [self linkManifestEffectName]; // no per-instance name by default
 }
 
+// One serial queue per process for every publish this plugin makes. Serial so
+// two ticks can never interleave their writes to the same manifest file (and so
+// the "last signature wins" order the gate establishes on the render thread is
+// the order the bus sees); background because nothing here needs the render
+// thread - the bus is file-based pub/sub that other clips poll, so a few
+// milliseconds of publish latency is invisible.
+static dispatch_queue_t KKLinkPublishQueue(void) {
+  static dispatch_queue_t q;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    q = dispatch_queue_create("co.overpolish.keyframeless.link-publish",
+                              dispatch_queue_attr_make_with_qos_class(
+                                  DISPATCH_QUEUE_SERIAL, QOS_CLASS_UTILITY, 0));
+  });
+  return q;
+}
+
+static const double kKKLinkRepublishSeconds = 10.0;
+
+- (BOOL)shouldPublishLinkManifestForSignature:(NSString *)signature {
+  double now = CACurrentMediaTime();
+  BOOL changed = ![signature isEqualToString:self.linkPublishSignature];
+  BOOL stale = self.linkPublishTimeMono <= 0.0 ||
+               (now - self.linkPublishTimeMono) > kKKLinkRepublishSeconds;
+  if (!changed && !stale)
+    return NO;
+  self.linkPublishSignature = signature;
+  self.linkPublishTimeMono = now;
+  return YES;
+}
+
 - (void)writeLinkManifest {
-  NSArray<KKLane *> *lanes = [self linkableLanesForManifest];
-  NSArray<KKLinkLayerSource *> *layers = [self linkableLayersForManifest];
-  if (lanes == nil && layers == nil)
-    return; // not a link source
+  if ([self linkableLanesForManifest] == nil &&
+      [self linkableLayersForManifest] == nil)
+    return; // not a link source - don't re-enter the host to find that out
   id<FxTimingAPI_v4> t =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   if (!t)
@@ -152,6 +183,16 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   [t startTimeForEffect:&effStart];
   [t durationTimeForEffect:&dur];
   [t timelineTime:&effStartTL fromInputTime:effStart];
+  [self writeLinkManifestWithClipStartSec:CMTimeGetSeconds(effStartTL)
+                              durationSec:CMTimeGetSeconds(dur)];
+}
+
+- (void)writeLinkManifestWithClipStartSec:(double)tlStart
+                              durationSec:(double)durSec {
+  NSArray<KKLane *> *lanes = [self linkableLanesForManifest];
+  NSArray<KKLinkLayerSource *> *layers = [self linkableLayersForManifest];
+  if (lanes == nil && layers == nil)
+    return; // not a link source
   // CMTimeGetSeconds returns NaN for an INVALID CMTime, and the timing API
   // hands one back when this fires before the clip is fully placed (applying
   // by DOUBLE-CLICK in the effects browser hits this; a drag-apply does not).
@@ -160,8 +201,6 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   // non-finite number. Uncaught, that kills the XPC process, and FCP then
   // aborts in POOnScreenControl hitCheckWithViewCoords: against the dead
   // connection on the next mouse move. Test finiteness explicitly.
-  double durSec = CMTimeGetSeconds(dur);
-  double tlStart = CMTimeGetSeconds(effStartTL);
   if (!isfinite(durSec) || !isfinite(tlStart)) {
     KKLogWarn(@"KKPlugin: link manifest skipped, timing not ready "
               @"(dur %f, tlStart %f)",
@@ -170,27 +209,41 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
   }
   if (durSec <= 0.0)
     return;
-  if (layers != nil) {
-    KKLinkWriteManifestWithLayers(
-        self.apiManager, lanes ?: @[], layers, tlStart, durSec,
-        [self linkManifestEffectName], [self linkManifestDisplayName]);
-    // Publish each layer's actual curves so a `${uuid.layerID.label}`
-    // reference on another clip resolves.
-    for (KKLinkLayerSource *layer in layers)
-      KKLinkPublishReferenceableLayer(self.apiManager, layer, tlStart,
-                                      tlStart + durSec);
-    if (lanes.count)
-      KKLinkPublishReferenceableLanes(self.apiManager, lanes, tlStart,
-                                      tlStart + durSec);
-    return;
-  }
-  KKLinkWriteManifest(self.apiManager, lanes, tlStart, durSec,
-                      [self linkManifestEffectName],
-                      [self linkManifestDisplayName]);
-  // Publish the same lanes' actual curves so a `${uuid.label}` reference on
-  // another clip resolves (the manifest only advertises the label set).
-  KKLinkPublishReferenceableLanes(self.apiManager, lanes, tlStart,
-                                  tlStart + durSec);
+  // Everything the host has to answer is resolved HERE, inside the callback:
+  // the instance uuid (a parameter read, memoized per api object) and the
+  // document id (an FxProjectAPI call, memoized per uuid). Both are near-free
+  // after the first tick, and neither is legal off this thread. What follows
+  // them - assembling the manifest, serializing every referenceable lane into
+  // its own curve file, and the writes - touches no FxPlug API at all, so it
+  // goes to the publish queue.
+  NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
+  if (uuid.length == 0)
+    return; // no identity yet (fresh instance before any UI) - skip
+  NSString *documentID = KKLinkDocumentIDForAPI(self.apiManager);
+  NSString *effectName = [self linkManifestEffectName];
+  NSString *displayName = [self linkManifestDisplayName];
+  dispatch_async(KKLinkPublishQueue(), ^{
+    if (layers != nil) {
+      KKLinkWriteManifestWithLayersForUUID(uuid, documentID, lanes ?: @[],
+                                           layers, tlStart, durSec, effectName,
+                                           displayName);
+      // Publish each layer's actual curves so a `${uuid.layerID.label}`
+      // reference on another clip resolves.
+      for (KKLinkLayerSource *layer in layers)
+        KKLinkPublishReferenceableLayerForUUID(uuid, layer, tlStart,
+                                               tlStart + durSec);
+      if (lanes.count)
+        KKLinkPublishReferenceableLanesForUUID(uuid, lanes, tlStart,
+                                               tlStart + durSec);
+      return;
+    }
+    KKLinkWriteManifestForUUID(uuid, documentID, lanes, tlStart, durSec,
+                               effectName, displayName);
+    // Publish the same lanes' actual curves so a `${uuid.label}` reference on
+    // another clip resolves (the manifest only advertises the label set).
+    KKLinkPublishReferenceableLanesForUUID(uuid, lanes, tlStart,
+                                           tlStart + durSec);
+  });
 }
 
 // FxPlug's ADD signal (FxTileableEffect, @optional): fires when this instance
@@ -314,9 +367,8 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
     encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
                                sourceImages:
                                    (NSArray<FxImageTile *> *)sourceImages
-                                      setup:
-                                          (void (^)(id<MTLCommandBuffer>
-                                                        commandBuffer))setup
+                                      setup:(void (^)(id<MTLCommandBuffer>
+                                                          commandBuffer))setup
                                    commands:
                                        (void (^)(
                                            id<MTLRenderCommandEncoder> encoder,
@@ -334,9 +386,8 @@ static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
                                sourceImages:
                                    (NSArray<FxImageTile *> *)sourceImages
                                commandQueue:(id<MTLCommandQueue>)suppliedQueue
-                                      setup:
-                                          (void (^)(id<MTLCommandBuffer>
-                                                        commandBuffer))setup
+                                      setup:(void (^)(id<MTLCommandBuffer>
+                                                          commandBuffer))setup
                                    commands:
                                        (void (^)(
                                            id<MTLRenderCommandEncoder> encoder,

@@ -551,36 +551,23 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
       // commit, so a derived lane (e.g. rotation = min(${...Split}, 90)) would
       // otherwise lag its source until mouse-up. When static the timeline and
       // bus agree, so this is byte-identical then; during an edit the timeline
-      // is live, so the derived lane tracks in real time. Identity-checked:
-      // the ref's uuid must match linkSelfUUID (when known) and a LAYERED ref
-      // (`uuid.layerID.label`) only resolves against a lane whose layerKey is
-      // that layer - a cross-clip or other-layer ref with a coinciding label
-      // falls through to the bus (republished by its source every tick), as
-      // does an expression-driven source (resolves recursively there).
+      // is live, so the derived lane tracks in real time. Identity-checked by
+      // KKLinkSelfClipLaneForRef: another clip, another layer, or a param with
+      // no lane here falls through to the bus (republished by its source every
+      // tick), as does an expression-driven source (resolved recursively
+      // there).
       KKTimeline *tl = self.timeline;
       double editFrac = self.editFraction;
       NSString *selfUUID = self.linkSelfUUID;
       KKLinkRefOverride refOverride =
           ^NSArray<NSNumber *> *(NSString *refName) {
-        NSArray<NSString *> *comps = [refName componentsSeparatedByString:@"."];
-        NSString *layerID = comps.count == 3 ? comps[1] : nil;
-        NSString *tail = comps.lastObject ?: refName;
-        if (selfUUID.length && comps.count >= 2 &&
-            ![comps.firstObject isEqualToString:selfUUID])
-          return nil; // another clip -> bus
-        for (KKLane *l in tl.lanes) {
-          if (![l.key isEqualToString:tail])
-            continue;
-          if (layerID && ![l.layerKey isEqualToString:layerID])
-            continue; // another layer (or untagged lane) -> bus
-          // Display evaluation, matching what the bus publishes for this
-          // source when static - a raw read here would skip the visual
-          // projection + join smoothing the committed curve carries.
-          return l.linkExpression.length
-                     ? nil
-                     : KKLaneDisplayValueAtFraction(l, editFrac);
-        }
-        return nil;
+        KKLane *l = KKLinkSelfClipLaneForRef(refName, selfUUID, tl.lanes);
+        if (!l || l.linkExpression.length)
+          return nil;
+        // Display evaluation, matching what the bus publishes for this
+        // source when static - a raw read here would skip the visual
+        // projection + join smoothing the committed curve carries.
+        return KKLaneDisplayValueAtFraction(l, editFrac);
       };
       NSArray<NSNumber *> *rv = KKLinkResolvedLaneValueWithOverride(
           lane, self.editFraction, self.linkTimelineSec,
