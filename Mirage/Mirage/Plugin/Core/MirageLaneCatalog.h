@@ -1360,6 +1360,16 @@ MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
       return RLoc(@"`#multi` takes at most 4 fields - split it into two "
                   @"controls",
                   @"Mirage too-many-multi-fields validation error.");
+    // A `#bool` default written as a word that names neither state. It used to
+    // read as off, so the control disagreed with the line declaring it and
+    // nothing said why.
+    NSString *badBoolDefault = MirageFirstInvalidBoolDefault(code);
+    if (badBoolDefault)
+      return [NSString
+          stringWithFormat:RLoc(@"`#bool` default=%@ isn't on or off - write "
+                                @"true/false, yes/no, on/off, or 1/0",
+                                @"Mirage bool-default validation error."),
+                           badBoolDefault];
     MirageMultipleChoiceErrorKind multipleKind = MirageMultipleChoiceErrorType;
     NSString *badMultiple =
         MirageFirstInvalidMultipleChoice(code, &multipleKind);

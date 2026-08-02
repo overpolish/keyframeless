@@ -109,6 +109,17 @@ Values are compared after rounding, matching choice indices and integer controls
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
 
+### `#bool` defaults
+
+A switch starts **off** unless its directive says otherwise. `default=` accepts `true` / `false`, `yes` / `no`, `on` / `off`, and `1` / `0`, in any capitalisation:
+
+```glsl
+// #bool label="Preserve Brightness" default=true
+uniform bool uPreserveLuma;
+```
+
+Anything else - `default=maybe` - is a compile error rather than a quiet off, because a switch that reads as on in the source and renders as off is the hardest kind of bug to see.
+
 ## Groups
 
 Every control lands in an inspector **group**. Without `group=` a control goes to **Options**. Name a group and the control moves there, creating it if it's the first to ask:

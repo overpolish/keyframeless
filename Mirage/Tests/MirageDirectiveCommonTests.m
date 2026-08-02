@@ -33,6 +33,19 @@ static NSString *KKPair(NSString *attrs, NSString *key) {
   return [NSString stringWithFormat:@"%s|%s", name, symbol];
 }
 
+/// The default a `#bool` lands on when its directive writes `default=<text>`.
+static double KKBoolDefault(NSString *written) {
+  MirageScalarProp p = {0};
+  int used = 0, truncated = 0;
+  NSString *source =
+      [NSString stringWithFormat:@"// #bool label=\"Switch\" default=%@\n"
+                                 @"uniform bool uSwitch;\n",
+                                 written];
+  if (MirageParseScalarProps(source, &p, 1, 0, &used, &truncated) != 1)
+    return -1.0;
+  return p.fdefault;
+}
+
 int main(void) {
   @autoreleasepool {
     KKRequire(MirageAttrHasBareFlag(@" dropdown multiple", @"dropdown"),
@@ -1221,10 +1234,10 @@ int main(void) {
       MirageParseGroupAttr(@" label=\"Size {n}\" group={\"Colour {n}\", "
                            @"\"{n}.circle\"}",
                            grp, sizeof(grp), sym, sizeof(sym));
-      KKRequire([MirageSlotsSubstitute(@(grp), 2) isEqualToString:@"Colour 2"] &&
-                    [MirageSlotsSubstitute(@(sym), 2)
-                        isEqualToString:@"2.circle"],
-                @"a {n} group parses whole and numbers both halves");
+      KKRequire(
+          [MirageSlotsSubstitute(@(grp), 2) isEqualToString:@"Colour 2"] &&
+              [MirageSlotsSubstitute(@(sym), 2) isEqualToString:@"2.circle"],
+          @"a {n} group parses whole and numbers both halves");
     }
 
     KKRequire(
@@ -1516,6 +1529,57 @@ int main(void) {
     // delete a real control's row.
     KKRequire(MirageSurfacePreviewOwnedKeys(onAFloat).count == 0,
               @"a mistyped marker claims no control");
+
+    // A `#bool` default written the way authors write one. `default=true` used
+    // to match a digits-only read of nothing at all, so a switch declared ON
+    // parsed as OFF and no validator said a word about it.
+    for (NSString *on in
+         @[ @"true", @"TRUE", @"True", @"yes", @"on", @"1", @"\"true\"", @"2" ])
+      KKRequire(
+          KKBoolDefault(on) == 1.0,
+          ([NSString stringWithFormat:@"#bool default=%@ reads as on", on]));
+    for (NSString *off in
+         @[ @"false", @"FALSE", @"no", @"off", @"0", @"\"false\"" ])
+      KKRequire(
+          KKBoolDefault(off) == 0.0,
+          ([NSString stringWithFormat:@"#bool default=%@ reads as off", off]));
+    MirageScalarProp noDefault = {0};
+    used = 0;
+    truncated = 0;
+    KKRequire(MirageParseScalarProps(@"// #bool label=\"Switch\"\n"
+                                     @"uniform bool uSwitch;\n",
+                                     &noDefault, 1, 0, &used,
+                                     &truncated) == 1 &&
+                  noDefault.fdefault == 0.0,
+              @"a #bool with no default starts off");
+
+    KKRequire(MirageAttrBool(@" default=maybe", @"default") ==
+                  kMirageAttrBoolInvalid,
+              @"a word that names neither state is invalid");
+    KKRequire(MirageAttrBool(@" label=\"On\"", @"default") ==
+                  kMirageAttrBoolAbsent,
+              @"an unwritten default is absent, not invalid");
+    KKRequire(
+        MirageAttrBool(@" label=\"default=maybe\"", @"default") ==
+            kMirageAttrBoolAbsent,
+        @"a quoted label mentioning the key does not count as writing it");
+
+    KKRequire([MirageFirstInvalidBoolDefault(@"// #bool label=\"Switch\" "
+                                             @"default=maybe\n"
+                                             @"uniform bool uSwitch;\n")
+                  isEqualToString:@"maybe"],
+              @"an unreadable #bool default is an error naming what was typed");
+    KKRequire(!MirageFirstInvalidBoolDefault(@"// #bool label=\"Switch\" "
+                                             @"default=true\n"
+                                             @"uniform bool uSwitch;\n"
+                                             @"// #bool label=\"Other\" "
+                                             @"default=0\n"
+                                             @"uniform bool uOther;\n"),
+              @"every accepted spelling passes validation");
+    KKRequire(!MirageFirstInvalidBoolDefault(@"// #choice options=\"A,B\" "
+                                             @"default=1\n"
+                                             @"uniform int uThing;\n"),
+              @"and the check is the #bool's alone");
   }
   return 0;
 }

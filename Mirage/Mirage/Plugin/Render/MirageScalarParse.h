@@ -231,7 +231,8 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
     break;
   }
   case MirageScalarKindBool: {
-    p->fdefault = MirageAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0) ? 1 : 0;
+    int def = MirageAttrBool(attrs, @"default");
+    p->fdefault = def > 0 ? 1 : 0; // absent or unreadable starts off
     break;
   }
   case MirageScalarKindAngle: {
@@ -590,6 +591,36 @@ static inline int MirageParseScalarProps(NSString *source,
   if (outUsed)
     *outUsed = pool - startOffset;
   return n;
+}
+
+/// The first `#bool` whose `default=` names neither state (`default=maybe`), as
+/// the author wrote it, or nil when every one reads. A switch is on or off and
+/// nothing else, so a word the reader cannot place has to be said out loud -
+/// falling back to off is exactly the silence this validator exists to end.
+static inline NSString *MirageFirstInvalidBoolDefault(NSString *source) {
+  if (!source.length)
+    return nil;
+  NSRegularExpression *re =
+      [NSRegularExpression regularExpressionWithPattern:
+                               @"(?m)^[ \\t]*//[ \\t]*#bool(?![-\\w])([^\\n]*)$"
+                                                options:0
+                                                  error:nil];
+  __block NSString *found = nil;
+  [re enumerateMatchesInString:source
+                       options:0
+                         range:NSMakeRange(0, source.length)
+                    usingBlock:^(NSTextCheckingResult *m, NSMatchingFlags f,
+                                 BOOL *stop) {
+                      NSString *attrs =
+                          [source substringWithRange:[m rangeAtIndex:1]];
+                      if (MirageAttrBool(attrs, @"default") !=
+                          kMirageAttrBoolInvalid)
+                        return;
+                      NSString *raw = MirageAttrRawValue(attrs, @"default");
+                      found = raw.length ? raw : @"";
+                      *stop = YES;
+                    }];
+  return found;
 }
 
 #endif // __METAL_VERSION__

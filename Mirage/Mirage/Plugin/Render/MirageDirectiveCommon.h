@@ -239,6 +239,81 @@ static inline BOOL MirageAttrHasKey(NSString *attrs, NSString *key) {
                           range:NSMakeRange(0, bare.length)] != nil;
 }
 
+/// The answers MirageAttrBool gives that are not a value: the key is not
+/// written at all, or it is written with something that names neither state.
+enum {
+  kMirageAttrBoolAbsent = -1,
+  kMirageAttrBoolInvalid = -2,
+};
+
+/// The literal text an attribute was written with, quoted or bare, or nil when
+/// the key is absent. Sign-tolerant and hyphen-tolerant so the token arrives
+/// whole - a validator has to see what the author actually typed to say why it
+/// was rejected.
+static inline NSString *MirageAttrRawValue(NSString *attrs, NSString *key) {
+  if (!attrs.length || !key.length)
+    return nil;
+  NSString *quoted = MirageAttrString(attrs, key);
+  if (quoted)
+    return quoted;
+  // The bare scan runs over the attributes with every quoted string removed,
+  // so a label quoting `default=maybe` is text and not a value the way it is
+  // for every other reader.
+  NSString *bare =
+      [[NSRegularExpression regularExpressionWithPattern:@"\"[^\"]*\""
+                                                 options:0
+                                                   error:nil]
+          stringByReplacingMatchesInString:attrs
+                                   options:0
+                                     range:NSMakeRange(0, attrs.length)
+                              withTemplate:@""];
+  NSString *pat = [NSString
+      stringWithFormat:@"\\b%@\\s*=\\s*([+-]?[A-Za-z0-9_][\\w.-]*)",
+                       [NSRegularExpression escapedPatternForString:key]];
+  NSTextCheckingResult *m =
+      [[NSRegularExpression regularExpressionWithPattern:pat
+                                                 options:0
+                                                   error:nil]
+          firstMatchInString:bare
+                     options:0
+                       range:NSMakeRange(0, bare.length)];
+  if (!m || [m rangeAtIndex:1].location == NSNotFound)
+    return nil;
+  return [bare substringWithRange:[m rangeAtIndex:1]];
+}
+
+/// An on/off attribute as 1 or 0: `1`/`0`, `true`/`false`, `yes`/`no`,
+/// `on`/`off`, in any case and quoted or bare. kMirageAttrBoolAbsent when the
+/// key isn't written, kMirageAttrBoolInvalid when it is written with a word
+/// that names neither state.
+///
+/// One reader for every on/off attribute, because the states have to agree
+/// wherever they are read. A digits-only read of `default=true` matched
+/// nothing, fell back to 0, and left a switch the author had written as ON
+/// silently OFF with nothing to explain it.
+static inline int MirageAttrBool(NSString *attrs, NSString *key) {
+  NSString *raw = MirageAttrRawValue(attrs, key);
+  if (!raw)
+    return MirageAttrHasKey(attrs, key) ? kMirageAttrBoolInvalid
+                                        : kMirageAttrBoolAbsent;
+  NSString *v = [[raw
+      stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet]
+      lowercaseString];
+  if ([v isEqualToString:@"1"] || [v isEqualToString:@"true"] ||
+      [v isEqualToString:@"yes"] || [v isEqualToString:@"on"])
+    return 1;
+  if ([v isEqualToString:@"0"] || [v isEqualToString:@"false"] ||
+      [v isEqualToString:@"no"] || [v isEqualToString:@"off"])
+    return 0;
+  // Any other whole number still reads as on/off the way it always did, so a
+  // shader written against the numeric spelling keeps its answer.
+  NSScanner *scanner = [NSScanner scannerWithString:v];
+  int number = 0;
+  if ([scanner scanInt:&number] && scanner.atEnd)
+    return number != 0;
+  return kMirageAttrBoolInvalid;
+}
+
 static inline void MirageParseGroupAttr(NSString *attrs, char *outGroup,
                                         size_t groupSize, char *outSymbol,
                                         size_t symbolSize) {

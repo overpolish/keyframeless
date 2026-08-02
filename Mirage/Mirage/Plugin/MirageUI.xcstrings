@@ -10333,6 +10333,48 @@
         }
       }
     },
+    "`#bool` default=%@ isn't on or off - write true/false, yes/no, on/off, or 1/0": {
+      "comment": "Mirage bool-default validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#bool` default=%@ ist weder an noch aus – schreibe true/false, yes/no, on/off oder 1/0"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#bool` default=%@ no es ni activado ni desactivado: escribe true/false, yes/no, on/off o 1/0"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#bool` default=%@ n'est ni activé ni désactivé : écrivez true/false, yes/no, on/off ou 1/0"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#bool` の default=%@ はオンでもオフでもありません。true/false、yes/no、on/off、1/0 のいずれかで書いてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#bool`의 default=%@는 켜짐도 꺼짐도 아닙니다. true/false, yes/no, on/off 또는 1/0으로 작성하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#bool` 的 default=%@ 既不是开也不是关，请写 true/false、yes/no、on/off 或 1/0"
+          }
+        }
+      }
+    },
     "`#multi` takes at most 4 fields - split it into two controls": {
       "comment": "Mirage too-many-multi-fields validation error.",
       "extractionState": "manual",
