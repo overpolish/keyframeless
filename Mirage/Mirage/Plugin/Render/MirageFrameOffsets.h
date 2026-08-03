@@ -85,7 +85,7 @@ MirageFrameOffsetsForSource(NSString *source,
   static dispatch_once_t onceFrames;
   dispatch_once(&onceFrames, ^{
     expression = [[NSRegularExpression alloc]
-        initWithPattern:@"(?m)^[ \\t]*//[ \\t]*#frames(?![-\\w])(.*)$"
+        initWithPattern:@"(?m)^[ \\t]*//[ \\t]*#frames(?![-\\w:])(.*)$"
                 options:0
                   error:nil];
   });

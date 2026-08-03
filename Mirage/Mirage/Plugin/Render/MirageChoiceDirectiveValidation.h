@@ -80,7 +80,7 @@ MirageFirstInvalidMultipleChoice(NSString *source,
   NSRegularExpression *re = [NSRegularExpression
       regularExpressionWithPattern:
           [NSString stringWithFormat:
-                        @"(?m)^[ \\t]*//[ \\t]*#(%@)(?![-\\w])([^\\n]*)$",
+                        @"(?m)^[ \\t]*//[ \\t]*#(%@)(?![-\\w:])([^\\n]*)$",
                         MirageScalarKindAlternation()]
                            options:0
                              error:nil];

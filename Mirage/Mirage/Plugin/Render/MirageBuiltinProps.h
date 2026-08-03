@@ -28,6 +28,12 @@ typedef struct MirageBuiltinProp {
   double fdefault;
   int hasSize;  // `#grain size=` only: seeds the Grain Size lane
   double fsize; // (grain owns two lanes, so it takes two defaults)
+  // `#grain min=` / `max=` bound the AMOUNT lane, the one `label=` renames.
+  // The size lane keeps its own 1..12 px range: grain owns two lanes but the
+  // author writes one directive, so a single unqualified pair of bounds can
+  // only sensibly be about the control the directive is named for.
+  int hasMin, hasMax;
+  double fmin, fmax;
 } MirageBuiltinProp;
 
 typedef struct MirageBuiltins {
@@ -42,7 +48,7 @@ static inline MirageBuiltins MirageParseBuiltins(NSString *source) {
     return b;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#(speed|seed|grain)(?![-\\w])([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#(speed|seed|grain)(?![-\\w:])([^\\n]*)$"
                            options:0
                              error:nil];
   NSArray<NSTextCheckingResult *> *dirs =
@@ -70,6 +76,12 @@ static inline MirageBuiltins MirageParseBuiltins(NSString *source) {
     double size = MirageAttrDouble(attrs, @"\\bsize\\s*=\\s*(-?[0-9.]+)", NAN);
     p->hasSize = !isnan(size);
     p->fsize = p->hasSize ? size : 0.0;
+    double mn = MirageAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", NAN);
+    double mx = MirageAttrDouble(attrs, @"\\bmax\\s*=\\s*(-?[0-9.]+)", NAN);
+    p->hasMin = !isnan(mn);
+    p->hasMax = !isnan(mx);
+    p->fmin = p->hasMin ? mn : 0.0;
+    p->fmax = p->hasMax ? mx : 0.0;
   }
   return b;
 }

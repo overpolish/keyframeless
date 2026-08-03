@@ -5,10 +5,12 @@
 
 #import <Foundation/Foundation.h>
 
+#import "MirageBuiltinProps.h"
 #import "MirageColorProps.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageDirectiveCommon.h"
 #import "MirageFrameOffsets.h"
+#import "MirageOSCBlock.h"
 #import "MirageScalarParse.h"
 #import "MirageSlotBudget.h"
 #import "MirageSurfaceResponse.h"
@@ -33,6 +35,25 @@ static NSString *KKPair(NSString *attrs, NSString *key) {
   return [NSString stringWithFormat:@"%s|%s", name, symbol];
 }
 
+/// One control's first-component unit, as "<spelling>|<semantic>": the label
+/// the field shows, and the px/% semantic byte ('p', '%', or 0 for a spelling
+/// that only labels). Both answers matter and they are not the same answer.
+static NSString *KKUnitLabel(NSString *kind, NSString *attrs) {
+  MirageScalarProp p;
+  memset(&p, 0, sizeof(p));
+  int used = 0, truncated = 0;
+  NSString *source = [NSString
+      stringWithFormat:@"// #%@ label=\"Field\" %@\nuniform float uField;\n",
+                       kind, attrs];
+  if (MirageParseScalarProps(source, &p, 1, 0, &used, &truncated) != 1)
+    return @"(unparsed)";
+  // Through @() rather than %s: the label is UTF-8 (`°` is two bytes) and %s
+  // decodes in the system encoding, which would mangle it into two characters
+  // and fail a test the parse had got right.
+  return [NSString
+      stringWithFormat:@"%@|%c", @(p.fieldUnitLabel[0]), p.fieldUnit[0] ?: '0'];
+}
+
 /// The default a `#bool` lands on when its directive writes `default=<text>`.
 static double KKBoolDefault(NSString *written) {
   MirageScalarProp p = {0};
@@ -44,6 +65,24 @@ static double KKBoolDefault(NSString *written) {
   if (MirageParseScalarProps(source, &p, 1, 0, &used, &truncated) != 1)
     return -1.0;
   return p.fdefault;
+}
+
+/// The single `// @osc` block parsed out of `source`, or a zeroed block when
+/// the source declares none.
+static MirageOSCBlock KKOnlyOSCBlock(NSString *source) {
+  MirageOSCBlock blocks[KK_SHADER_MAX_OSC_BLOCKS];
+  memset(blocks, 0, sizeof(blocks));
+  int n = MirageParseOSCBlocks(source, blocks, KK_SHADER_MAX_OSC_BLOCKS);
+  return n == 1 ? blocks[0] : (MirageOSCBlock){0};
+}
+
+/// The expression a block stored for `name`, or "-" when it kept no local by
+/// that name - so a reserved field reads as absent from the locals.
+static NSString *KKBlockLocal(const MirageOSCBlock *b, NSString *name) {
+  for (int i = 0; i < b->localCount; i++)
+    if ([@(b->localNames[i]) isEqualToString:name])
+      return @(b->localExprs[i]);
+  return @"-";
 }
 
 int main(void) {
@@ -1580,6 +1619,168 @@ int main(void) {
                                              @"default=1\n"
                                              @"uniform int uThing;\n"),
               @"and the check is the #bool's alone");
+
+    // `#grain min=`/`max=` bound the amount lane. They used to be read by
+    // nothing at all, so ten shipped templates carried a pair the parser
+    // dropped on the floor.
+    MirageBuiltins bounded =
+        MirageParseBuiltins(@"// #grain label=\"Grain\" min=0 max=40 "
+                            @"default=8 size=2\n");
+    KKRequire(bounded.grain.present && bounded.grain.hasMin &&
+                  bounded.grain.hasMax && bounded.grain.fmin == 0.0 &&
+                  bounded.grain.fmax == 40.0,
+              @"#grain reads min= and max=");
+    KKRequire(bounded.grain.hasDefault && bounded.grain.fdefault == 8.0 &&
+                  bounded.grain.hasSize && bounded.grain.fsize == 2.0,
+              @"and still reads default= and size= beside them");
+    MirageBuiltins unbounded =
+        MirageParseBuiltins(@"// #grain default=20 size=3\n");
+    KKRequire(unbounded.grain.present && !unbounded.grain.hasMin &&
+                  !unbounded.grain.hasMax,
+              @"an unwritten bound stays absent, so the lane keeps 0..100");
+
+    // `units=` carries whatever the author wrote. `px` and `%` keep their
+    // SEMANTICS (media scaling / divide by 100); every other spelling used to
+    // parse to nothing at all, so a field measured in stops or dB/oct read as
+    // a bare number with no way to say so.
+    KKRequire(
+        [KKUnitLabel(@"float", @"units=\"stops\"") isEqualToString:@"stops|0"],
+        @"a free-form unit is carried, with no px/% semantics attached");
+    KKRequire([KKUnitLabel(@"float", @"units=\"dB/oct\"")
+                  isEqualToString:@"dB/oct|0"],
+              @"...punctuation and all");
+    KKRequire([KKUnitLabel(@"float", @"units=\"°\"") isEqualToString:@"°|0"],
+              @"...and a multi-byte glyph survives whole");
+    KKRequire([KKUnitLabel(@"int", @"units=\"px\"") isEqualToString:@"px|p"],
+              @"px still means media pixels");
+    KKRequire([KKUnitLabel(@"float", @"units=\"%\"") isEqualToString:@"%|%"],
+              @"% still means percent");
+    KKRequire(
+        [KKUnitLabel(@"float", @"units=\"percent\"") isEqualToString:@"%|%"],
+        @"...and its long spelling normalises to the same one");
+    KKRequire([KKUnitLabel(@"float", @"units={px}") isEqualToString:@"px|p"],
+              @"the braced one-component spelling reads the same way");
+    KKRequire([KKUnitLabel(@"float", @"min=0 max=1") isEqualToString:@"|0"],
+              @"no units= at all stays unitless");
+
+    // Per-field on a `#multi`: each component keeps its own spelling, and a
+    // free-form one rides beside a px one without claiming its semantics.
+    MirageScalarProp multi;
+    memset(&multi, 0, sizeof(multi));
+    int multiUsed = 0, multiTruncated = 0;
+    KKRequire(MirageParseScalarProps(
+                  @"// #multi label=\"Offset\" fields={X,Y,Z} units={px,°,}\n"
+                  @"uniform vec3 uOffset;\n",
+                  &multi, 1, 0, &multiUsed, &multiTruncated) == 1,
+              @"the per-field units directive parses");
+    KKRequire([@(multi.fieldUnitLabel[0]) isEqualToString:@"px"] &&
+                  multi.fieldUnit[0] == 'p',
+              @"#multi field 0 keeps px and its semantics");
+    KKRequire([@(multi.fieldUnitLabel[1]) isEqualToString:@"°"] &&
+                  multi.fieldUnit[1] == 0,
+              @"#multi field 1 carries the free-form spelling alone");
+    KKRequire(multi.fieldUnitLabel[2][0] == 0 && multi.fieldUnit[2] == 0,
+              @"and an empty slot stays raw");
+
+    // `#color` takes `group=` on the same grammar the scalars use. Every
+    // colour used to orphan into the shared Colours group however the shader
+    // described its own UI.
+    MirageColorProp grouped[2];
+    memset(grouped, 0, sizeof(grouped));
+    int groupedPool = 0;
+    KKRequire(MirageParseColorProps(
+                  @"// #color label=\"Sky\" group={\"Sky\", \"cloud\"}\n"
+                  @"uniform vec4 uSky;\n"
+                  @"// #color label=\"Ground\"\n"
+                  @"uniform vec4 uGround;\n",
+                  grouped, 2, &groupedPool) == 2,
+              @"both colours parse");
+    KKRequire([@(grouped[0].group) isEqualToString:@"Sky"] &&
+                  [@(grouped[0].groupSymbol) isEqualToString:@"cloud"],
+              @"#color reads group= and its symbol");
+    KKRequire(grouped[1].group[0] == 0 && grouped[1].groupSymbol[0] == 0,
+              @"...and a colour that names none is left where it was");
+    MirageColorProp groupedArray[1];
+    memset(groupedArray, 0, sizeof(groupedArray));
+    int groupedArrayPool = 0;
+    KKRequire(
+        MirageParseColorProps(@"// #color label=\"Palette\" group=\"Set\" "
+                              @"min=1 max=6 default=3\n"
+                              @"uniform vec4 uPalette[6];\n",
+                              groupedArray, 1, &groupedArrayPool) == 1 &&
+            [@(groupedArray[0].group) isEqualToString:@"Set"] &&
+            groupedArray[0].isArray && groupedArray[0].maxCount == 6 &&
+            groupedArray[0].defaultCount == 3,
+        @"an ARRAY reads group= beside its count attributes");
+
+    // A comment that OPENS with a directive name is prose, not a directive.
+    // `// #gradient: nAt() returns the colour at t` bound a real gradient
+    // mid-pass, because nothing said a directive never writes a colon after
+    // its own name.
+    MirageScalarProp prose;
+    memset(&prose, 0, sizeof(prose));
+    int proseUsed = 0, proseTruncated = 0;
+    KKRequire(MirageParseScalarProps(@"// #float: how much of the effect to "
+                                     @"apply, 0 to 1\n"
+                                     @"uniform float uNotAControl;\n",
+                                     &prose, 1, 0, &proseUsed,
+                                     &proseTruncated) == 0,
+              @"a colon after the name makes it a sentence, not a control");
+    MirageColorProp proseColor[1];
+    memset(proseColor, 0, sizeof(proseColor));
+    int proseColorPool = 0;
+    KKRequire(MirageParseColorProps(@"// #color: the swatch the shader tints "
+                                    @"with\n"
+                                    @"uniform vec4 uNotASwatch;\n",
+                                    proseColor, 1, &proseColorPool) == 0,
+              @"...for every directive, not just the scalars");
+    KKRequire(MirageParseScalarProps(@"// #float min=0 max=1 label=\"Ratio: "
+                                     @"how much\"\n"
+                                     @"uniform float uRatio;\n",
+                                     &prose, 1, 0, &proseUsed,
+                                     &proseTruncated) == 1,
+              @"a colon anywhere else on the line is still just text");
+
+    // A rotate block's `angleOffset =` is a FIELD, not a local: it is the
+    // display-only angle the gizmo draws on top of its lane, so a shader that
+    // renders `preset + uRotation` can put the preset term there.
+    MirageOSCBlock rot =
+        KKOnlyOSCBlock(@"// @osc Rotation\n"
+                       @"//   primitive = rotate\n"
+                       @"//   binds = uRotation\n"
+                       @"//   axes = z\n"
+                       @"//   preset = uArrangement == 0 ? -0.45 : 0.12\n"
+                       @"//   angleOffset = -preset * 180.0 / pi\n"
+                       @"uniform float uRotation;\n");
+    KKRequire([@(rot.primitive) isEqualToString:@"rotate"] &&
+                  [@(rot.binds) isEqualToString:@"uRotation"],
+              @"the rotate block still reads its primitive and binding");
+    KKRequire([@(rot.angleOffset) isEqualToString:@"-preset * 180.0 / pi"],
+              @"angleOffset is kept verbatim as the block's display offset");
+    KKRequire([KKBlockLocal(&rot, @"angleOffset") isEqualToString:@"-"],
+              @"and is not also swept into the locals");
+    KKRequire([KKBlockLocal(&rot, @"preset")
+                  isEqualToString:@"uArrangement == 0 ? -0.45 : 0.12"] &&
+                  rot.localCount == 1,
+              @"the locals beside it are untouched");
+
+    MirageOSCBlock noOffset = KKOnlyOSCBlock(@"// @osc Rotation\n"
+                                             @"//   primitive = rotate\n"
+                                             @"//   binds = uRotation\n"
+                                             @"uniform float uRotation;\n");
+    KKRequire(strlen(noOffset.angleOffset) == 0,
+              @"an unwritten angleOffset stays empty, so nothing is offset");
+
+    MirageOSCBlock threeAxis =
+        KKOnlyOSCBlock(@"// @osc Orient\n"
+                       @"//   primitive = rotate\n"
+                       @"//   binds = uOrient\n"
+                       @"//   axes = z x y\n"
+                       @"//   angleOffset = vec3(10.0, 20.0, 30.0)\n"
+                       @"uniform vec3 uOrient;\n");
+    KKRequire(
+        [@(threeAxis.angleOffset) isEqualToString:@"vec3(10.0, 20.0, 30.0)"],
+        @"a multi-axis offset carries one component per listed axis");
   }
   return 0;
 }

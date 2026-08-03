@@ -365,12 +365,10 @@ int main(void) {
     // written before this had - so it is also the regression test that nothing
     // changed for them.
     KKAssertLegacyIdentity(kSlotsGroupedSource, @"grouped slots legacy");
-    KKTimeline *grouped =
-        KKTimelineWithCode(kMirageRackSentinelEntryID, kSlotsGroupedSource,
-                           nil);
-    NSArray<KKLane *> *groupedLanes =
-        MirageBuildAvailableLanesForSourceStamped(kSlotsGroupedSource, nil,
-                                                  grouped);
+    KKTimeline *grouped = KKTimelineWithCode(kMirageRackSentinelEntryID,
+                                             kSlotsGroupedSource, nil);
+    NSArray<KKLane *> *groupedLanes = MirageBuildAvailableLanesForSourceStamped(
+        kSlotsGroupedSource, nil, grouped);
     NSArray<NSString *> *weightIDs =
         KKTimelineSlotInstanceIDs(grouped, @"Colours");
     KKRequire(weightIDs.count == 2, @"the grouped block minted its default");
@@ -393,8 +391,8 @@ int main(void) {
     for (KKLane *lane in groupedLanes) {
       if (![lane.key hasSuffix:@".uSlotWeight"])
         continue;
-      NSString *n = [lane.categoryKey substringFromIndex:
-                                          lane.categoryKey.length - 1];
+      NSString *n =
+          [lane.categoryKey substringFromIndex:lane.categoryKey.length - 1];
       KKRequire([lane.categorySymbol
                     isEqualToString:[n stringByAppendingString:@".circle"]],
                 @"a `{n}` group icon is numbered with its header");
@@ -404,8 +402,8 @@ int main(void) {
     // Colour 2 rather than interleaving the two.
     NSMutableArray<NSString *> *catRuns = [NSMutableArray array];
     for (KKLane *lane in groupedLanes)
-      if (!catRuns.count || ![catRuns.lastObject isEqualToString:
-                                                     lane.categoryKey ?: @""])
+      if (!catRuns.count ||
+          ![catRuns.lastObject isEqualToString:lane.categoryKey ?: @""])
         [catRuns addObject:lane.categoryKey ?: @""];
     NSCountedSet *runCounts = [NSCountedSet setWithArray:catRuns];
     for (NSString *cat in runCounts)
@@ -418,11 +416,9 @@ int main(void) {
     // to both say "Colour 1". Their collapse identities stay separate because
     // the kit scopes a category's collapse key by the owning layer, and the
     // layer is the entry.
-    KKTimeline *groupedRack =
-        KKTimelineWithCode(kMirageRackSentinelEntryID, kSlotsGroupedSource,
-                           nil);
-    groupedRack =
-        KKTimelineWithCode(second, kSlotsGroupedSource, groupedRack);
+    KKTimeline *groupedRack = KKTimelineWithCode(kMirageRackSentinelEntryID,
+                                                 kSlotsGroupedSource, nil);
+    groupedRack = KKTimelineWithCode(second, kSlotsGroupedSource, groupedRack);
     groupedRack.slotGroups =
         @{kMirageRackGroupName : @[ kMirageRackSentinelEntryID, second ]};
     NSArray<KKLane *> *groupedRackLanes =
@@ -438,9 +434,9 @@ int main(void) {
       MirageRackParseLaneKey(lane.key, &entryID, &bare);
       if (![bare hasSuffix:@".uSlotWeight"])
         continue;
-      [([entryID isEqualToString:second] ? secondWeightCats
-                                         : sentinelWeightCats)
-          addObject:lane.categoryKey ?: @""];
+      [([entryID isEqualToString:second]
+            ? secondWeightCats
+            : sentinelWeightCats) addObject:lane.categoryKey ?: @""];
     }
     NSSet<NSString *> *bothCats =
         [NSSet setWithArray:(@[ @"Colour 1", @"Colour 2" ])];
@@ -453,6 +449,92 @@ int main(void) {
                                      groupedRack, MirageRackScopedSlotGroupName(
                                                       second, @"Colours"))],
               @"...while their registries stay separate");
+
+    // --- (e) `#color group=` and free-form `units=` ------------------------
+    //
+    // Both are lane-level answers: the parse can only say what the author
+    // wrote, and what matters is where the lane lands and what its field
+    // reads.
+    NSString *unitsAndGroupsSource =
+        @"// #template generator\n"
+        @"// #color label=\"Sky\" group={\"Sky\", \"cloud\"}\n"
+        @"uniform vec4 uSky;\n"
+        @"// #color label=\"Ramp\" group=\"Sky\" min=1 max=3 default=2\n"
+        @"uniform vec4 uRamp[3];\n"
+        @"// #color label=\"Loose\"\n"
+        @"uniform vec4 uLoose;\n"
+        @"// #float label=\"Exposure\" group=\"Tone\" units=\"stops\" min=-5 "
+        @"max=5 default=0\n"
+        @"uniform float uExposure;\n"
+        @"// #int label=\"Feather\" group=\"Tone\" units=\"px\" min=0 max=30 "
+        @"default=2\n"
+        @"uniform int uFeather;\n"
+        @"// #multi label=\"Offset\" group=\"Tone\" fields={X,Y} "
+        @"units={px,°}\n"
+        @"uniform vec2 uOffset;\n"
+        @"void mainImage(out vec4 o, in vec2 c) { o = uSky + uRamp[0] + "
+        @"uLoose + vec4(uExposure + float(uFeather) + uOffset.x); }\n";
+    KKTimeline *ug = KKTimelineWithCode(kMirageRackSentinelEntryID,
+                                        unitsAndGroupsSource, nil);
+    NSArray<KKLane *> *ugLanes = MirageBuildAvailableLanesForSourceStamped(
+        unitsAndGroupsSource, nil, ug);
+    KKLane *sky = KKLaneWithKey(ugLanes, @"uSky");
+    KKRequire([sky.categoryKey isEqualToString:@"Sky"] &&
+                  [sky.categorySymbol isEqualToString:@"cloud"],
+              @"a single #color lands in the group its directive named");
+    KKLane *loose = KKLaneWithKey(ugLanes, @"uLoose");
+    KKRequire([loose.categoryKey isEqualToString:@"Colors"],
+              @"...and one that names none is still in Colors");
+    // The count lane and every swatch of an array move TOGETHER: they are one
+    // control, and a count filed away from what it counts is worse than no
+    // grouping at all.
+    for (KKLane *lane in ugLanes) {
+      if (![lane.key hasPrefix:@"uRamp"])
+        continue;
+      KKRequire([lane.categoryKey isEqualToString:@"Sky"],
+                @"every lane of a grouped colour ARRAY lands in the group");
+    }
+    KKRequire(KKLaneWithKey(ugLanes, @"uRamp Count") != nil &&
+                  KKLaneWithKey(ugLanes, @"uRamp 3") != nil,
+              @"...count lane and swatches included");
+    KKLane *exposure = KKLaneWithKey(ugLanes, @"uExposure");
+    KKRequire([exposure.componentUnits isEqualToArray:(@[ @"stops" ])],
+              @"a free-form unit reaches the value field");
+    KKRequire(!exposure.integerValued && !exposure.componentsScaleWithMedia,
+              @"...as a LABEL: it rounds nothing and scales nothing");
+    KKLane *feather = KKLaneWithKey(ugLanes, @"uFeather");
+    KKRequire([feather.componentUnits isEqualToArray:(@[ @"px" ])] &&
+                  feather.integerValued,
+              @"px keeps the whole-pixel semantics it always had");
+    KKLane *offset = KKLaneWithKey(ugLanes, @"uOffset");
+    KKRequire([offset.componentUnits isEqualToArray:(@[ @"px", @"°" ])],
+              @"a #multi labels each component with its own spelling");
+    KKRequire(offset.componentsScaleWithMedia,
+              @"...and the px component still puts the lane in media pixels");
+
+    // A `{n}` group on a colour inside a `#slots` block composes the way a
+    // scalar's does: the substitution happens at stamping, so it reaches the
+    // colour lanes too.
+    NSString *slotColorSource =
+        @"// #template generator\n"
+        @"// #slots name=\"Colours\" max=4 min=1 default=2\n"
+        @"// #color label=\"Colour {n}\" group={\"Set {n}\", \"{n}.circle\"}\n"
+        @"uniform vec4 uSlotColor;\n"
+        @"// #slots-end\n"
+        @"void mainImage(out vec4 o, in vec2 c) { o = uSlotColor[0]; }\n";
+    KKTimeline *slotColor =
+        KKTimelineWithCode(kMirageRackSentinelEntryID, slotColorSource, nil);
+    NSArray<KKLane *> *slotColorLanes =
+        MirageBuildAvailableLanesForSourceStamped(slotColorSource, nil,
+                                                  slotColor);
+    NSArray<NSString *> *slotColorCats =
+        KKCategoriesForKeySuffix(slotColorLanes, @".uSlotColor");
+    KKRequire([slotColorCats isEqualToArray:(@[ @"Set 1", @"Set 2" ])],
+              @"a `{n}` colour group is stamped per instance");
+    for (KKLane *lane in slotColorLanes)
+      KKRequire(!MirageSlotsHasPlaceholder(lane.categoryKey) &&
+                    !MirageSlotsHasPlaceholder(lane.categorySymbol),
+                @"...leaving no literal `{n}` behind");
 
     // --- scale: the lane build at a full chain -----------------------------
     //

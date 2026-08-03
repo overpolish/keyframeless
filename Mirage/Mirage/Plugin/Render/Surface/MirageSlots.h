@@ -158,8 +158,9 @@ MirageSlotsDirectiveMatches(NSString *source) {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     dirRe = [NSRegularExpression
-        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#([A-Za-z_][\\w-]*)"
-                                     @"([^\\n]*)$"
+        regularExpressionWithPattern:
+            @"(?m)^[ \\t]*//[ \\t]*#([A-Za-z_][\\w-]*)(?![-\\w:])"
+            @"([^\\n]*)$"
                              options:0
                                error:nil];
   });
@@ -228,13 +229,13 @@ MirageSlotGroupsForSource(NSString *source, MirageSlotsDirectiveError *outError,
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     openRe = [NSRegularExpression
-        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#slots(?![-\\w])"
+        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#slots(?![-\\w:])"
                                      @"([^\\n]*)$"
                              options:0
                                error:nil];
     closeRe =
         [NSRegularExpression regularExpressionWithPattern:
-                                 @"(?m)^[ \\t]*//[ \\t]*#slots-end(?![-\\w])"
+                                 @"(?m)^[ \\t]*//[ \\t]*#slots-end(?![-\\w:])"
                                  @"[^\\n]*$"
                                                   options:0
                                                     error:nil];

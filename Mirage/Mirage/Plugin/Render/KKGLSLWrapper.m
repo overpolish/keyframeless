@@ -466,28 +466,32 @@ static BOOL KKSourceDefinesFunction(NSString *src, NSString *name) {
                           range:NSMakeRange(0, src.length)] != nil;
 }
 
-// The colour-grading helpers every grading template used to paste in full: the
-// sRGB transfer pair, the Oklab round trip with its gamut chroma-pull, and the
-// two-knob colour balance. Bodies are the ones the templates shipped, verbatim,
-// so a template that drops its copy renders the same pixels it did before.
+// The helpers whole families of templates used to paste in full: the grading
+// set (the sRGB transfer pair, the Oklab round trip with its gamut chroma-pull,
+// the two-knob colour balance) and the transition set (the two premultiplied
+// blends). Bodies are the ones the templates shipped, verbatim, so a template
+// that drops its copy renders the same pixels it did before.
 //
 // Injected the way the `// #frames` samplers are - gated on the source actually
 // naming a member, so an ordinary shader carries none of it and the fast reject
 // is a substring scan. A false positive (the name inside a comment, or as part
 // of a longer identifier) costs a few unused lines.
 //
-// The gate is per FAMILY, not per function: the members call each other, so a
-// template that defines one of them must keep all of them. A source that
+// The gate is per FAMILY, not per function: where the members call each other,
+// a template that defines one of them must keep all of them. A source that
 // DEFINES any member therefore gets none of that family injected - which is
 // also what makes injection idempotent for a template that still carries its
-// own copy, since glslang rejects a redefinition outright.
+// own copy, since glslang rejects a redefinition outright. Two helpers that do
+// NOT call each other belong in separate families, or a shader carrying its own
+// copy of one loses the other: mixTransitionColors and compositeTransitionLayer
+// are independent for exactly that reason.
 typedef struct {
   const char *names[4];
   NSString *source;
-} KKGradingFamily;
+} KKLibraryFamily;
 
-static void KKAppendGradingLibrary(NSMutableString *s, NSString *userSource) {
-  const KKGradingFamily families[] = {
+static void KKAppendSharedLibrary(NSMutableString *s, NSString *userSource) {
+  const KKLibraryFamily families[] = {
       {{"decodeToLinear", "encodeFromLinear", NULL},
        @"vec3 decodeToLinear(vec3 c) {\n"
        @"  vec3 lo = c / 12.92;\n"
@@ -552,6 +556,32 @@ static void KKAppendGradingLibrary(NSMutableString *s, NSString *userSource) {
        @"  return vec3(1.0 + 0.45 * rc - 0.22 * gm,\n"
        @"              1.0 + 0.45 * gm - 0.22 * rc,\n"
        @"              1.0 - 0.23 * rc - 0.23 * gm);\n}\n"},
+      // Crossfading two transition endpoints. Straight-alpha in and out, but
+      // the mix itself happens on PREMULTIPLIED colour: blending straight rgb
+      // would let a transparent endpoint's arbitrary colour bleed into the
+      // result, so an incoming clip fading up over nothing shows the black (or
+      // whatever the decoder left) that its own alpha says is not there.
+      {{"mixTransitionColors", NULL},
+       @"vec4 mixTransitionColors(vec4 fromColor, vec4 toColor, float amount) "
+       @"{\n"
+       @"  float outputAlpha = mix(fromColor.a, toColor.a, amount);\n"
+       @"  vec3 premultiplied = mix(fromColor.rgb * fromColor.a, toColor.rgb * "
+       @"toColor.a, amount);\n"
+       @"  vec3 outputColor = outputAlpha > 0.0001 ? premultiplied / "
+       @"outputAlpha : vec3(0.0);\n"
+       @"  return vec4(outputColor, outputAlpha);\n}\n"},
+      // Source-over of one transition layer on another, same straight-in,
+      // straight-out contract as the crossfade above.
+      {{"compositeTransitionLayer", NULL},
+       @"vec4 compositeTransitionLayer(vec4 background, vec4 foreground) {\n"
+       @"  float outputAlpha = foreground.a + background.a * (1.0 - "
+       @"foreground.a);\n"
+       @"  vec3 premultiplied = foreground.rgb * foreground.a;\n"
+       @"  premultiplied += background.rgb * background.a * (1.0 - "
+       @"foreground.a);\n"
+       @"  vec3 outputColor = outputAlpha > 0.0001 ? premultiplied / "
+       @"outputAlpha : vec3(0.0);\n"
+       @"  return vec4(outputColor, outputAlpha);\n}\n"},
   };
   for (size_t f = 0; f < sizeof(families) / sizeof(families[0]); f++) {
     BOOL referenced = NO, defined = NO;
@@ -712,10 +742,10 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                     @"vec4 getToColor(vec2 uv){ return texture(iChannel1, uv); "
                     @"}\n"];
   KKAppendColorHelpers(s);
-  // The shared grading library. Sees the source the pass will actually compile
+  // The shared helper library. Sees the source the pass will actually compile
   // (Common already prepended, dialect shims already run), so a helper named
   // only in the Common tab still gates it in.
-  KKAppendGradingLibrary(s, userSource);
+  KKAppendSharedLibrary(s, userSource);
   [s appendString:gradientFns]; // after kkGradBias, which the samplers call
   // The `// #slots` scalar arrays: declared here, filled at the top of main().
   // File scope, because the user's mainImage reads them and SPIRV-Cross threads

@@ -28,7 +28,7 @@ MirageFirstInvalidAudioWaveform(NSString *source,
     return nil;
   NSRegularExpression *directives = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#audio(?![-\\w])([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#audio(?![-\\w:])([^\\n]*)$"
                            options:0
                              error:nil];
   NSRegularExpression *waveWord =

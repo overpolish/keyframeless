@@ -19,8 +19,8 @@ NSString *KKSlotLaneKey(NSString *groupName, NSString *instanceID,
                         NSString *control);
 NSString *KKSlotLaneKey(NSString *groupName, NSString *instanceID,
                         NSString *control) {
-  return [NSString stringWithFormat:@"%@/%@/%@", groupName, instanceID,
-                                    control];
+  return
+      [NSString stringWithFormat:@"%@/%@/%@", groupName, instanceID, control];
 }
 
 static int gFailures = 0;
@@ -92,6 +92,38 @@ static void KKRunGradingLibraryTests(void) {
                    tailCall);
 }
 
+static void KKRunTransitionLibraryTests(void) {
+  NSString *callsBoth =
+      @"void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+      @"  vec2 uv = fragCoord / iResolution.xy;\n"
+      @"  vec4 a = texture(iChannel0, uv);\n"
+      @"  vec4 b = texture(iChannel1, uv);\n"
+      @"  vec4 m = mixTransitionColors(a, b, iProgress);\n"
+      @"  fragColor = compositeTransitionLayer(a, m);\n}\n";
+  KKExpectCompiles(@"a shader that only CALLS the transition helpers",
+                   callsBoth);
+
+  NSString *callsNone =
+      @"void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+      @"  fragColor = vec4(fragCoord / iResolution.xy, 0.0, 1.0);\n}\n";
+  KKExpectMSLContains(@"an unrelated shader carries no transition library",
+                      callsNone, @"mixTransitionColors", NO);
+
+  // The two are separate families: a shader owning one must still be handed the
+  // other, which a single combined family would suppress.
+  NSString *ownsMixOnly =
+      @"vec4 mixTransitionColors(vec4 a, vec4 b, float t) { return mix(a, b, "
+      @"t); }\n"
+      @"void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+      @"  vec2 uv = fragCoord / iResolution.xy;\n"
+      @"  vec4 a = texture(iChannel0, uv);\n"
+      @"  vec4 b = texture(iChannel1, uv);\n"
+      @"  fragColor = compositeTransitionLayer(a, mixTransitionColors(a, b, "
+      @"iProgress));\n}\n";
+  KKExpectCompiles(@"owning one transition helper still injects the other",
+                   ownsMixOnly);
+}
+
 static void KKRunInstalledTemplates(NSString *root) {
   NSFileManager *fm = NSFileManager.defaultManager;
   BOOL dir = NO;
@@ -105,25 +137,26 @@ static void KKRunInstalledTemplates(NSString *root) {
   for (NSString *uuid in uuids) {
     NSString *folder = [root stringByAppendingPathComponent:uuid];
     NSArray<NSString *> *files = [fm contentsOfDirectoryAtPath:folder
-                                                        error:nil];
+                                                         error:nil];
     if (!files.count)
       continue;
     NSString *common = @"";
     if ([files containsObject:@"common.glsl"])
-      common = [NSString
-                   stringWithContentsOfFile:
-                       [folder stringByAppendingPathComponent:@"common.glsl"]
-                                   encoding:NSUTF8StringEncoding
-                                      error:nil]
-                   ?: @"";
-    for (NSString *name in [files sortedArrayUsingSelector:@selector(compare:)]) {
+      common =
+          [NSString stringWithContentsOfFile:
+                        [folder stringByAppendingPathComponent:@"common.glsl"]
+                                    encoding:NSUTF8StringEncoding
+                                       error:nil]
+              ?: @"";
+    for (NSString *name in
+         [files sortedArrayUsingSelector:@selector(compare:)]) {
       if (![name.pathExtension isEqualToString:@"glsl"] ||
           [name isEqualToString:@"common.glsl"])
         continue;
       NSString *path = [folder stringByAppendingPathComponent:name];
       NSString *src = [NSString stringWithContentsOfFile:path
-                                               encoding:NSUTF8StringEncoding
-                                                  error:nil];
+                                                encoding:NSUTF8StringEncoding
+                                                   error:nil];
       if (!src.length)
         continue;
       if (common.length)
@@ -138,8 +171,7 @@ static void KKRunInstalledTemplates(NSString *root) {
       }
     }
   }
-  NSLog(@"ok: %lu installed template passes transpiled",
-        (unsigned long)ran);
+  NSLog(@"ok: %lu installed template passes transpiled", (unsigned long)ran);
 }
 
 int main(int argc, const char **argv) {
@@ -150,6 +182,7 @@ int main(int argc, const char **argv) {
                        stringByAppendingPathComponent:
                            @"Library/Application Support/Keyframeless/Shaders"];
     KKRunGradingLibraryTests();
+    KKRunTransitionLibraryTests();
     KKRunInstalledTemplates(root);
     if (gFailures) {
       NSLog(@"FAILED: %d", gFailures);

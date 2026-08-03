@@ -150,6 +150,14 @@ typedef struct MirageScalarProp {
     // or 0 (raw / unitless). A #multi is delivered RAW, so the shader owns the
     // conversion; a px field is a 0..1 fraction, a % field is 0..100.
     char fieldUnit[4];
+    // The unit as the author SPELLED it, per component, for display only:
+    // `units="stops"`, `units="dB/oct"`, `units="°"`, `units={px,°}`. `px` and
+    // `%` normalise to "px"/"%" here and keep the semantics above; every other
+    // spelling is a suffix on the value field and nothing else - no rounding,
+    // no media scaling, no division. A shader can label a field in the unit its
+    // maths is actually in without the parser having to know what that unit
+    // means, which is the only way a free-form spelling can be honest.
+    char fieldUnitLabel[4][16];
 } MirageScalarProp;
 
 #endif // __METAL_VERSION__

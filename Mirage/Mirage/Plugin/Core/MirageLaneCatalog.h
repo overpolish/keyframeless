@@ -72,6 +72,20 @@ static inline KKLane *MirageMakeColorLane(NSString *idLabel,
   return color;
 }
 
+// Put one colour lane in the group its directive named, or leave it in the
+// shared Colours group when it named none. Applied to every lane a `#color`
+// produces - the count lane and each swatch as well as a single colour - so a
+// grouped array arrives whole rather than scattered across two groups.
+static inline void MirageApplyColorGroup(KKLane *lane,
+                                         const MirageColorProp *p) {
+  NSString *grp = @(p->group);
+  if (!grp.length)
+    return; // the Colours group the lane was born in
+  lane.categoryKey = grp;
+  if (p->groupSymbol[0])
+    lane.categorySymbol = @(p->groupSymbol);
+}
+
 // Append one lane group per `// #color` property the shader declares, under a
 // single shared palette-generator bar (rerolls EVERY colour lane - both arrays'
 // swatches and the single colours - since all are paletteLockable).
@@ -105,7 +119,9 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
       // author's `default="#hex"` wins over the built-in palette (and is what
       // Reset reverts to).
       const float *seed = p->hasDefColors ? p->defColors[0] : pal[pi % 10];
-      [lanes addObject:MirageMakeColorLane(name, label, name, seed)];
+      KKLane *single = MirageMakeColorLane(name, label, name, seed);
+      MirageApplyColorGroup(single, p);
+      [lanes addObject:single];
       continue;
     }
 
@@ -146,6 +162,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
             [NSString stringWithFormat:@"%@ Colour", optionLabel], name, seed);
         color.visibleWhenKey = @(p->optionsByName);
         color.visibleWhenBitMask = (NSInteger)1 << i;
+        MirageApplyColorGroup(color, p);
         [lanes addObject:color];
       }
       continue;
@@ -166,6 +183,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
     count.groupKey = name; // joins its array's keypose-popover group
     count.categoryKey = kMirageColorCategory;
     count.categorySymbol = @"paintpalette";
+    MirageApplyColorGroup(count, p);
     [count insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[ @(p->defaultCount) ]]];
     [lanes addObject:count];
@@ -184,6 +202,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
       // the stored count is transiently above a just-lowered max.
       color.visibleWhenKey = countId;
       color.visibleWhenValues = MirageCountAtLeast(n, KK_SHADER_MAX_COLORS);
+      MirageApplyColorGroup(color, p);
       [lanes addObject:color];
     }
   }
@@ -258,6 +277,23 @@ static inline void MirageConfigureRotateLane(KKLane *lane,
   lane.componentLabelColors = colors;
   lane.autoSizesComponentLabels = YES;
   [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
+}
+
+// The authored `units=` spellings for a control's first `n` components, or nil
+// when it declared none. Free-form: `px` and `%` arrive here already normalised
+// (and carry their own semantics), everything else is the author's own word and
+// shows as a suffix on the value field, nothing more.
+static inline NSArray<NSString *> *
+MirageScalarUnitLabels(const MirageScalarProp *p, int n) {
+  NSMutableArray<NSString *> *units = [NSMutableArray array];
+  BOOL any = NO;
+  for (int k = 0; k < n && k < 4; k++) {
+    NSString *u = p->fieldUnitLabel[k][0] ? @(p->fieldUnitLabel[k]) : nil;
+    [units addObject:u ?: @""];
+    if (u.length)
+      any = YES;
+  }
+  return any ? units : nil;
 }
 
 static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
@@ -377,6 +413,15 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       // Unconstrained (accumulates past 360).
       lane.componentMin = @[];
       lane.componentMax = @[];
+      // An authored `units=` shows only where the lane isn't already labelled:
+      // a rotate OSC's dials come out of MirageConfigureRotateLane with their
+      // own per-axis "°", and a redundant `units="°"` beside one must not turn
+      // that into "°°".
+      if (!lane.componentUnits.count) {
+        NSArray<NSString *> *labels = MirageScalarUnitLabels(p, 1);
+        if (labels)
+          lane.componentUnits = labels;
+      }
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @(p->fdefault) ]]];
       break;
@@ -438,12 +483,8 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
           anyFieldPx = 1;
       }
       if (anyFieldUnit) {
-        NSMutableArray<NSString *> *units = [NSMutableArray array];
-        for (int k = 0; k < n; k++)
-          [units addObject:p->fieldUnit[k] == 'p'   ? @"px"
-                           : p->fieldUnit[k] == '%' ? @"%"
-                                                    : @""];
-        lane.componentUnits = units;
+        lane.componentUnits =
+            MirageScalarUnitLabels(p, n) ?: lane.componentUnits;
         // A px field stores a normalised 0..1 fraction - integerValued would
         // round that storage to 0/1 (the "maxes at 0" bug). Media-scaling
         // already gives whole-PIXEL display; only round storage when there are
@@ -461,6 +502,14 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       } else if (p->isInt) {
         lane.integerValued = YES; // whole-number fields
         lane.scrubStep = 1.0;
+      }
+      // A units= spelling that is neither px nor % (`units={°,°}`) is a LABEL
+      // and nothing else: it lands on the fields without claiming the rounding
+      // or the media scaling that the px/% branch above carries with it.
+      if (!anyFieldUnit) {
+        NSArray<NSString *> *labels = MirageScalarUnitLabels(p, n);
+        if (labels)
+          lane.componentUnits = labels;
       }
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
       break;
@@ -508,6 +557,14 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       } else if (p->fieldUnit[0] == '%') {
         lane.componentUnits = @[ @"%" ];
         lane.integerValued = YES;
+      } else {
+        // Any other spelling (`stops`, `dB/oct`, `°`, `×`) is the author's own
+        // word for what the field measures. It rides on the value field as a
+        // suffix and changes nothing else - the value stays exactly the float
+        // the shader reads, so naming a unit can never quietly re-scale it.
+        NSArray<NSString *> *labels = MirageScalarUnitLabels(p, 1);
+        if (labels)
+          lane.componentUnits = labels;
       }
       if (p->isInt) {
         lane.integerValued = YES; // whole-number slider
@@ -862,7 +919,8 @@ MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
   // Grain + Grain Size: the film-grain overlay (`// #grain`), applied in the
   // shader epilogue. One directive, two lanes - the amount and its cell size
   // are the same control to the author, so asking for the grain gives both.
-  // `default=` seeds the amount, `size=` the cell size. Opting in starts at a
+  // `default=` seeds the amount, `size=` the cell size, and `min=`/`max=` bound
+  // the amount the way they bound any other percentage. Opting in starts at a
   // subtle value that also breaks up 8-bit banding, and scales to stylistic.
   if (builtins.grain.present) {
     NSArray<NSNumber *> *allTypes = @[
@@ -877,7 +935,8 @@ MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
         {@"Grain",
          builtins.grain.hasDefault ? builtins.grain.fdefault
                                    : KK_CORE_GRAIN_DEFAULT * 100.0,
-         0.0, 100.0, @"%", NO},
+         builtins.grain.hasMin ? builtins.grain.fmin : 0.0,
+         builtins.grain.hasMax ? builtins.grain.fmax : 100.0, @"%", NO},
         {@"Grain Size",
          builtins.grain.hasSize ? builtins.grain.fsize
                                 : KK_CORE_GRAINSIZE_DEFAULT,
@@ -1301,14 +1360,15 @@ MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
                                 @"Mirage color-options count error."),
                            badColorOptions];
     }
-    // `group=` on a directive that already has a group of its own. Colours,
-    // audio bindings and gradients are collected into dedicated groups, so a
-    // group here would be silently dropped.
+    // `group=` on a directive that already has a group of its own. Audio
+    // bindings and gradients are collected into dedicated groups, so a group
+    // here would be silently dropped. (Colours are not on this list: `#color`
+    // honours `group=` for real.)
     NSString *badGroup = MirageFirstMisplacedGroup(code);
     if (badGroup.length)
       return [NSString
-          stringWithFormat:RLoc(@"`#%@` can't set a group: colours, audio and "
-                                @"gradients have their own",
+          stringWithFormat:RLoc(@"`#%@` can't set a group: audio and gradients "
+                                @"have their own",
                                 @"Mirage group-on-dedicated-directive "
                                 @"validation error."),
                            badGroup];

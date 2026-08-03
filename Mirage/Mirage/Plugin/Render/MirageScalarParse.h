@@ -19,6 +19,37 @@
 #import "MirageSlots.h"
 #import "MirageTypes.h"
 
+// Record one `units=` token on component `k`: the `px` / `%` SEMANTICS (which
+// the lane and the shader both act on) and, either way, the spelling to show
+// next to the value. Anything else is display alone - `stops`, `dB/oct`, `°`,
+// `×` name the unit the shader's maths is already in and change nothing about
+// how the value is stored, rounded or scaled, which is what makes accepting a
+// free-form spelling safe rather than a second set of semantics to guess at.
+//
+// A spelling too long for the buffer is dropped rather than truncated: `°` is
+// two bytes, so a hard cut could halve a character and leave a label that is
+// not valid UTF-8 at all.
+static inline void MirageScalarSetUnit(MirageScalarProp *p, int k,
+                                       NSString *raw) {
+  if (!p || k < 0 || k >= 4)
+    return;
+  NSString *t = [raw
+      stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+  if (!t.length)
+    return;
+  NSString *lower = [t lowercaseString];
+  if ([lower isEqualToString:@"%"] || [lower isEqualToString:@"percent"]) {
+    p->fieldUnit[k] = '%';
+    t = @"%";
+  } else if ([lower isEqualToString:@"px"]) {
+    p->fieldUnit[k] = 'p';
+    t = @"px";
+  }
+  const char *utf8 = t.UTF8String ?: "";
+  if (strlen(utf8) < sizeof(p->fieldUnitLabel[k]))
+    strncpy(p->fieldUnitLabel[k], utf8, sizeof(p->fieldUnitLabel[k]) - 1);
+}
+
 // Parse a braced per-field list `key={a,b,c,d}` into out[4]/has[4]. Partial
 // lists and empty slots are allowed: `{,,3,4}` sets only slots 2 and 3. A slot
 // with no number leaves has[k]=0 (fall back to the scalar attr / unbounded).
@@ -329,9 +360,12 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
       p->mmax[k] = pfHasMax[k] ? pfMax[k] : mx;
     }
     // Per-field units `units={%,px,...}`. Empty / absent slot = raw. "%" -> the
-    // lane shows a percent, the shader divides by 100; "px" -> media pixels.
-    for (int k = 0; k < 4; k++)
+    // lane shows a percent, the shader divides by 100; "px" -> media pixels;
+    // any other spelling is a display suffix on that component alone.
+    for (int k = 0; k < 4; k++) {
       p->fieldUnit[k] = 0;
+      p->fieldUnitLabel[k][0] = 0;
+    }
     NSTextCheckingResult *um = [[NSRegularExpression
         regularExpressionWithPattern:@"\\bunits\\s*=\\s*\\{([^}]*)\\}"
                              options:0
@@ -342,16 +376,8 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
     if (um && [um rangeAtIndex:1].location != NSNotFound) {
       NSArray<NSString *> *us = [[attrs substringWithRange:[um rangeAtIndex:1]]
           componentsSeparatedByString:@","];
-      for (int k = 0; k < 4 && k < (int)us.count; k++) {
-        NSString *t =
-            [[us[k] stringByTrimmingCharactersInSet:NSCharacterSet
-                                                        .whitespaceCharacterSet]
-                lowercaseString];
-        if ([t isEqualToString:@"%"] || [t isEqualToString:@"percent"])
-          p->fieldUnit[k] = '%';
-        else if ([t isEqualToString:@"px"])
-          p->fieldUnit[k] = 'p';
-      }
+      for (int k = 0; k < 4 && k < (int)us.count; k++)
+        MirageScalarSetUnit(p, k, us[k]);
     }
     double smn =
         MirageAttrDouble(attrs, @"\\bslidermin\\s*=\\s*(-?[0-9.]+)", NAN);
@@ -446,7 +472,7 @@ static inline int MirageParseScalarProps(NSString *source,
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
           [NSString stringWithFormat:
-                        @"(?m)^[ \\t]*//[ \\t]*#(%@)(?![-\\w])([^\\n]*)$",
+                        @"(?m)^[ \\t]*//[ \\t]*#(%@)(?![-\\w:])([^\\n]*)$",
                         MirageScalarKindAlternation()]
                            options:0
                              error:nil];
@@ -543,8 +569,9 @@ static inline int MirageParseScalarProps(NSString *source,
     MirageParseGroupAttr(attrs, p.group, sizeof(p.group), p.groupSymbol,
                          sizeof(p.groupSymbol));
     if (!p.isMulti) {
-      // Single-value `units="px"` / `units={px}`. `#multi` parses its own
-      // per-field list further down; this is the one-component spelling.
+      // Single-value `units="px"` / `units={px}` / `units="stops"`. `#multi`
+      // parses its own per-field list further down; this is the one-component
+      // spelling.
       NSString *u = MirageAttrString(attrs, @"units");
       if (!u.length) {
         NSTextCheckingResult *bm = [[NSRegularExpression
@@ -557,13 +584,7 @@ static inline int MirageParseScalarProps(NSString *source,
         if (bm && [bm rangeAtIndex:1].location != NSNotFound)
           u = [attrs substringWithRange:[bm rangeAtIndex:1]];
       }
-      u = [[u
-          stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet]
-          lowercaseString];
-      if ([u isEqualToString:@"px"])
-        p.fieldUnit[0] = 'p';
-      else if ([u isEqualToString:@"%"] || [u isEqualToString:@"percent"])
-        p.fieldUnit[0] = '%';
+      MirageScalarSetUnit(&p, 0, u ?: @"");
     }
     MirageSlotBinding slot = MirageSlotBindingValue(slotBindings[nm]);
     if (slot.maxCount > 0) {
@@ -600,11 +621,11 @@ static inline int MirageParseScalarProps(NSString *source,
 static inline NSString *MirageFirstInvalidBoolDefault(NSString *source) {
   if (!source.length)
     return nil;
-  NSRegularExpression *re =
-      [NSRegularExpression regularExpressionWithPattern:
-                               @"(?m)^[ \\t]*//[ \\t]*#bool(?![-\\w])([^\\n]*)$"
-                                                options:0
-                                                  error:nil];
+  NSRegularExpression *re = [NSRegularExpression
+      regularExpressionWithPattern:
+          @"(?m)^[ \\t]*//[ \\t]*#bool(?![-\\w:])([^\\n]*)$"
+                           options:0
+                             error:nil];
   __block NSString *found = nil;
   [re enumerateMatchesInString:source
                        options:0

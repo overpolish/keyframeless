@@ -102,7 +102,7 @@ MirageColorSurfaceAttrLines(NSString *source) {
     return out;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#color-surface(?![-\\w])([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#color-surface(?![-\\w:])([^\\n]*)$"
                            options:0
                              error:nil];
   for (NSTextCheckingResult *m in

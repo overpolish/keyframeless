@@ -63,7 +63,7 @@ MirageTemplateTypeForSource(NSString *source,
   static dispatch_once_t onceTemplate;
   dispatch_once(&onceTemplate, ^{
     expression = [[NSRegularExpression alloc]
-        initWithPattern:@"(?m)^[ \\t]*//[ \\t]*#template(?![-\\w])(.*)$"
+        initWithPattern:@"(?m)^[ \\t]*//[ \\t]*#template(?![-\\w:])(.*)$"
                 options:0
                   error:nil];
   });

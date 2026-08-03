@@ -746,6 +746,29 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   return [self canvasPointFromObjectPoint:oc];
 }
 
+// Place a rotate block's gizmo: its centre plus the block's DISPLAY-ONLY
+// `angleOffset` (degrees, expanded to canonical X/Y/Z), fed in as the gizmo's
+// base rotation - the pose it draws and drags in, while the value it writes
+// stays the lane's own angle. A shader rendering `preset + uRotation` puts
+// `preset` here and the rings read in phase with the pixels.
+- (void)_exprPlaceRotation:(KKRotationOSC *)rot
+                  forBlock:(MirageOSCBlockRuntime *)b
+                atFraction:(double)frac {
+  rot.center = [self _exprRotationCenterForBlock:b atFraction:frac];
+  if (!b.hasAngleOffset) {
+    rot.baseRotation = KKRotMatrixIdentity();
+    return;
+  }
+  double deg[3];
+  [b angleOffsetDegreesForBound:[self _exprValueForBlock:b atFraction:frac]
+                         aspect:[self _exprAspect]
+                            out:deg];
+  const double kDegToRad = M_PI / 180.0;
+  rot.baseRotation = KKBuildRotationMatrix((float)(deg[0] * kDegToRad),
+                                           (float)(deg[1] * kDegToRad),
+                                           (float)(deg[2] * kDegToRad));
+}
+
 // Push a ring block's current geometry into its KKRingOSC control.
 - (void)_exprUpdateRing:(KKRingOSC *)ring
                forBlock:(MirageOSCBlockRuntime *)b
@@ -904,7 +927,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
         }
       } else if ([b.primitive isEqualToString:@"rotate"]) {
         KKRotationOSC *rot = _exprControllers[_exprDragName];
-        rot.center = [self _exprRotationCenterForBlock:b atFraction:frac];
+        [self _exprPlaceRotation:rot forBlock:b atFraction:frac];
         [rot mouseDownAtX:x
                         y:y
                 modifiers:modifiers
@@ -1014,7 +1037,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     }
     if ([b.primitive isEqualToString:@"rotate"]) {
       KKRotationOSC *rot = _exprControllers[_exprDragName];
-      rot.center = [self _exprRotationCenterForBlock:b atFraction:frac];
+      [self _exprPlaceRotation:rot forBlock:b atFraction:frac];
       [rot mouseDraggedAtX:x
                          y:y
                  modifiers:modifiers
@@ -1177,7 +1200,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     if (![b.primitive isEqualToString:@"rotate"])
       continue;
     KKRotationOSC *rot = _exprControllers[_exprOrder[i]];
-    rot.center = [self _exprRotationCenterForBlock:b atFraction:ringFrac];
+    [self _exprPlaceRotation:rot forBlock:b atFraction:ringFrac];
     rot.rotationActivePart = kMirageExprPartBase + (NSInteger)i;
     rot.dragging = self.isDragging;
     rot.optRevealActive = self.optRevealActive;
@@ -1448,7 +1471,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
         // The gizmo gates its own visibility and sets its own rotate / eye
         // cursor, like the inline rotation loop.
         KKRotationOSC *rot = _exprControllers[name];
-        rot.center = [self _exprRotationCenterForBlock:b atFraction:frac];
+        [self _exprPlaceRotation:rot forBlock:b atFraction:frac];
         rot.rotationActivePart = kMirageExprPartBase + (NSInteger)i;
         rot.optRevealActive = self.optRevealActive;
         NSInteger ringHit = [rot hitTestRingAtX:positionX

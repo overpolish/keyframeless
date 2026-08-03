@@ -60,18 +60,22 @@ static inline NSString *MirageFirstDuplicateUniform(NSString *source) {
   return nil;
 }
 
-/// The first directive keyword (`color` / `audio` / `gradient`) that carries a
-/// `group=` it isn't allowed to, or nil when none does. These three land in
-/// dedicated groups of their own, so honouring a group would either be ignored
-/// silently or split a colour set away from its swatches. This is a
+/// The first directive keyword (`audio` / `gradient`) that carries a `group=`
+/// it isn't allowed to, or nil when none does. These land in dedicated groups
+/// of their own, so honouring a group would be silently ignored. This is a
 /// source-level scan rather than a model check because their parsers never read
 /// `group=` at all, so there is nothing on the parsed prop to inspect.
+///
+/// `#color` used to be rejected here on the same reasoning and is not any more:
+/// it reads `group=` for real now, count lane and swatches together, so a
+/// shader can file a colour beside the controls it belongs with instead of in
+/// the one shared Colours group.
 static inline NSString *MirageFirstMisplacedGroup(NSString *source) {
   if (!source.length)
     return nil;
   NSRegularExpression *re = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#(color|audio|gradient)(?![-\\w])([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#(audio|gradient)(?![-\\w:])([^\\n]*)$"
                            options:0
                              error:nil];
   NSRegularExpression *groupRe =
@@ -120,6 +124,10 @@ static inline NSString *MirageUnknownGroupSymbol(NSString *source) {
   for (int i = 0; i < m.scalarCount; i++)
     if (sp[i].groupSymbol[0])
       [symbols addObject:@(sp[i].groupSymbol)];
+  const MirageColorProp *cp = m.colorProps;
+  for (int i = 0; i < m.colorCount; i++)
+    if (cp[i].groupSymbol[0])
+      [symbols addObject:@(cp[i].groupSymbol)];
   MirageBuiltins b = m.builtins; // a local: `builtins` returns by value
   const MirageBuiltinProp *bp[] = {&b.speed, &b.seed, &b.grain};
   for (int i = 0; i < 3; i++)
@@ -141,7 +149,7 @@ static inline NSString *MirageFirstOverlongMulti(NSString *source) {
   NSRegularExpression *re = [NSRegularExpression
       regularExpressionWithPattern:
           @"(?m)^[ \\t]*//[ "
-          @"\\t]*#multi(?![-\\w])[^\\n]*?\\bfields\\s*=\\s*\\{([^}]*)\\}"
+          @"\\t]*#multi(?![-\\w:])[^\\n]*?\\bfields\\s*=\\s*\\{([^}]*)\\}"
                            options:0
                              error:nil];
   __block NSString *found = nil;

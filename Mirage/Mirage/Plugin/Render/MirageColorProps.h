@@ -42,6 +42,13 @@ typedef struct MirageColorProp {
   // swatch inherits the option's label, and it is visible only while that
   // option's bit is enabled.
   char optionsByName[64];
+  // Which inspector group the swatches land in (`group={"Sky", "cloud"}`, the
+  // symbol optional). Empty = the shared "Colors" group, which is where every
+  // colour went before this was read at all. An array puts its count lane and
+  // all of its swatches in the same group: they are one control, and splitting
+  // the count away from what it counts would be worse than no grouping.
+  char group[80];
+  char groupSymbol[40];
   int isArray;      // vec4 name[N] vs vec4 name
   int count;        // array dimension N (single = 1)
   int minCount;     // count lane min (arrays)
@@ -161,7 +168,7 @@ static inline int MirageParseColorProps(NSString *source,
     return 0;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#color(?![-\\w])([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#color(?![-\\w:])([^\\n]*)$"
                            options:0
                              error:nil];
   NSRegularExpression *uniRe = [NSRegularExpression
@@ -227,6 +234,11 @@ static inline int MirageParseColorProps(NSString *source,
             ? [attrs substringWithRange:[lm rangeAtIndex:1]]
             : MiragePrettifyUniformName(nm);
     strncpy(p.label, label.UTF8String ?: "", sizeof(p.label) - 1);
+    // Same `group=` grammar as the scalars, through the same parse - a colour
+    // is as much a control as a slider is, and a shader that puts its Sky
+    // colour beside its Sky controls is describing its own UI correctly.
+    MirageParseGroupAttr(attrs, p.group, sizeof(p.group), p.groupSymbol,
+                         sizeof(p.groupSymbol));
     NSTextCheckingResult *obm = [[NSRegularExpression
         regularExpressionWithPattern:@"\\boptionsby\\s*=\\s*([A-Za-z_]\\w*)"
                              options:0

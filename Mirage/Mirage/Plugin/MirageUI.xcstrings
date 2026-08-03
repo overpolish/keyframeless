@@ -10291,44 +10291,44 @@
         }
       }
     },
-    "`#%@` can't set a group: colours, audio and gradients have their own": {
+    "`#%@` can't set a group: audio and gradients have their own": {
       "comment": "Mirage group-on-dedicated-directive validation error.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "`#%@` kann keine Gruppe setzen: Farben, Audio und Verläufe haben ihre eigene"
+            "value": "`#%@` kann keine Gruppe setzen: Audio und Verläufe haben ihre eigene"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "`#%@` no puede definir un grupo: los colores, el audio y los degradados tienen el suyo"
+            "value": "`#%@` no puede definir un grupo: el audio y los degradados tienen el suyo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "`#%@` ne peut pas définir de groupe : les couleurs, l'audio et les dégradés ont le leur"
+            "value": "`#%@` ne peut pas définir de groupe : l'audio et les dégradés ont le leur"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "`#%@` はグループを指定できません。カラー、オーディオ、グラデーションには専用のグループがあります"
+            "value": "`#%@` はグループを指定できません。オーディオとグラデーションには専用のグループがあります"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "`#%@`은(는) 그룹을 설정할 수 없습니다. 색상, 오디오, 그라디언트에는 전용 그룹이 있습니다"
+            "value": "`#%@`은(는) 그룹을 설정할 수 없습니다. 오디오와 그라디언트에는 전용 그룹이 있습니다"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "`#%@` 无法设置分组：颜色、音频和渐变有各自的分组"
+            "value": "`#%@` 无法设置分组：音频和渐变有各自的分组"
           }
         }
       }

@@ -20,6 +20,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// A spec is a dict: `label` (lane identity), `axes` (KKRotationAxes bitmask,
 /// which rings this gizmo drives - the lane carries one component per axis in
 /// canonical X<Y<Z order), and `centerX`/`centerY` (object 0..1, default 0.5).
+/// `offsetDeg` (an [X,Y,Z] degrees array) or `offsetDegBlock` (the same,
+/// evaluated live per draw) add a DISPLAY-ONLY pose offset - the mini sibling
+/// of the viewer gizmo's `baseRotation`, for a shader that renders a preset
+/// angle on top of the lane's own.
 @interface KKRotationOSCSet : KKRadialOSCSet
 
 /// Replace the rotation specs (label / axes / centre).

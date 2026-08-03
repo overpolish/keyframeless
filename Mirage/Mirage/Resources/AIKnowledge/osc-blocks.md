@@ -64,6 +64,7 @@ Put the block anywhere in the source; it doesn't have to sit next to the uniform
 | `fromRect`     | box                  | Inverse: dragged rectangle (`rect`) -> value. Required for a box.                                                               |
 | `center`       | ring / rotate        | Object-space placement. A bare point-uniform name follows it live. Default = frame centre.                                      |
 | `axes`         | rotate               | Enabled axis subset, e.g. `z` / `y x` / `z x y`. Default `z`.                                                                   |
+| `angleOffset`  | rotate               | Degrees added to the **drawn** angle only, one per listed axis. A drag still writes the bound value alone.                      |
 | `linked`       | ring / box (2-field) | `true` aspect-links the two components (Shift inverts during a drag).                                                           |
 | `body`         | box                  | `none` disables the interior body-move (a centred box has no position to write).                                                |
 | any other      | all                  | A **local variable** (see Locals).                                                                                              |
@@ -223,6 +224,25 @@ uniform vec3 uOrient;
 ```
 
 This is what `osc={z,x,y}` synthesizes.
+
+**`angleOffset` - drawing an angle the shader adds.** When the render turns the thing by more than the lane (`presetAngle + uRotation`), the rings read out of phase with the pixels: the value is 0 but the card is visibly tilted. `angleOffset` is a **display-only** term in the lane's **degrees**, one component per listed axis (a scalar covers a single-axis gizmo), evaluated like any other block expression - so it can name locals, other uniforms, and branch on a `#choice`. The rings (and the direction they drag along) tilt by `angleOffset + value`; a drag still writes the bound value alone, so the lane keeps meaning "extra rotation on top of the preset".
+
+Cards uses it: its `#choice` picks a Fan / Cascade / Scatter arrangement whose per-card angle the shader adds to the Rotation lane. The preset is restated in the block, and negated-to-degrees because a `#angle` reaches the shader as `radians(-deg)`:
+
+```glsl
+// @osc Rotation
+//   primitive   = rotate
+//   binds       = uRotation
+//   axes        = z
+//   center      = cardCenter
+//   fanAngle     = -rank * 0.45
+//   cascadeAngle = rank * 0.12
+//   scatterAngle = sin((index + 1.0) * 8.3) * 0.22
+//   presetAngle  = uArrangement == 0 ? fanAngle : (uArrangement == 1 ? cascadeAngle : scatterAngle)
+//   angleOffset  = -presetAngle * 180.0 / pi
+```
+
+The preset lives in two places (the shader function and the block), which is the cost of the expression language not calling into GLSL. Keep them written the same way so a change to one is obvious in the other.
 
 ## What's not (yet) here
 

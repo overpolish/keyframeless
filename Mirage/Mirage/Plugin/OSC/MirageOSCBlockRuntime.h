@@ -38,6 +38,11 @@ extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
 @property(nonatomic, readonly)
     NSString *primitive; // "point"/"ring"/"box"/"rotate"/"position"
 @property(nonatomic, readonly) NSString *axes; // rotate: raw "x y z" subset
+/// The raw `angleOffset =` text ("" when not authored) - a rotate block's
+/// display-only pose offset. `hasAngleOffset` is the cheap test the surfaces
+/// gate on before wiring a per-draw evaluation.
+@property(nonatomic, readonly) NSString *angleOffsetSource;
+@property(nonatomic, readonly) BOOL hasAngleOffset;
 /// The raw `center =` text ("" when not authored). The mini's spec-driven sets
 /// map the two standard shapes (a bare uniform name -> live link, anything
 /// else -> a one-time constant eval); the viewer evaluates it live.
@@ -206,6 +211,15 @@ extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
 /// space (may follow another uniform), or the frame centre when none was
 /// authored.
 - (simd_float2)centerObjectForBound:(KKExprVal)bound aspect:(double)aspect;
+
+/// A rotate block's DISPLAY-ONLY pose offset, in degrees, expanded to the
+/// canonical [X, Y, Z] order the gizmos take (the expression's components
+/// follow the block's braced `axes` order, like the bound value; a scalar
+/// covers a single-axis gizmo). All zeroes when no `angleOffset =` was
+/// authored, so a caller may apply the result unconditionally.
+- (void)angleOffsetDegreesForBound:(KKExprVal)bound
+                            aspect:(double)aspect
+                               out:(double[_Nonnull 3])xyz;
 
 /// Ring forward: the `toR` radii for a bound value, in MIN-DIMENSION FRACTIONS
 /// (multiply by the surface's min dimension for pixels). Scalar = circle,

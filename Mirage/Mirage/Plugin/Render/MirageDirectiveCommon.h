@@ -17,6 +17,14 @@
 
 #import "MirageTypes.h"
 
+/// Every directive scan spells its name lookahead `(?![-\w:])` rather than
+/// `(?![-\w])`: no directive's grammar puts a colon after its own name, and
+/// prose does it constantly. A comment opening "// #gradient: nAt() returns the
+/// colour at t" used to parse as a real `#gradient` and bind the next uniform
+/// it found, so a line ABOUT a directive quietly became one. Rejecting the
+/// colon costs nothing a real directive can spell and takes the whole class of
+/// mistake off the table.
+///
 /// Shared timing defaults.
 #define KK_SHADER_GRAD_DEFAULT_SPEED 1.0f // time multiplier (1 = source rate)
 #define KK_SHADER_GRAD_DEFAULT_SEED 0.0f

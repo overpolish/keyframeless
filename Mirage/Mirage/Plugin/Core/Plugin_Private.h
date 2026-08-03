@@ -121,8 +121,11 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// A group the timeline has never registered is brought up to the declared
 /// `default=` here, which mutates `timeline` in place.
+///
+/// `source` is an OVERRIDE (the editor's uncommitted code); nil or empty means
+/// derive every entry from the timeline's stored code lanes.
 + (NSArray<KKLane *> *)
-    availableLanesForShaderSource:(NSString *)source
+    availableLanesForShaderSource:(nullable NSString *)source
                      audioTickets:
                          (nullable NSDictionary<NSString *, id> *)tickets
                          timeline:(nullable KKTimeline *)timeline;
@@ -130,7 +133,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// belongs to. nil = the sentinel entry, which is what an unracked project has
 /// and what a caller with no selection to offer means.
 + (NSArray<KKLane *> *)
-    availableLanesForShaderSource:(NSString *)source
+    availableLanesForShaderSource:(nullable NSString *)source
                      audioTickets:
                          (nullable NSDictionary<NSString *, id> *)tickets
                          timeline:(nullable KKTimeline *)timeline

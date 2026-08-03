@@ -53,6 +53,49 @@ Paste that into the code editor and it lands in the right tabs, marker lines str
 
 `// #tab` is **not a directive**. It never reaches the shader compiler or the directive parser, because it only exists between the marker being pasted and the text reaching a tab. Option-clicking **Copy Schema** exports the current template in exactly this format, so what the assistant reads is what it should write back.
 
+### Slider range vs field range
+
+`min=` and `max=` are the values the control will **accept**. `slidermin=` and `slidermax=` move the ends of the **slider** without touching them, so the handle spans the range the control is actually used in while the field still takes a typed value out past it:
+
+```glsl
+// #float label="Amount" min=0 max=300 slidermax=100 default=25
+uniform float uAmount;
+```
+
+The slider covers 0 to 100, where nearly every useful setting lives, and 250 is still reachable by typing it. Without the override a hard `max=300` spends two thirds of the handle's travel on values nobody drags to, and lowering the max to 100 instead takes the extreme away entirely.
+
+- Either may be given on its own. The end that is not overridden keeps its `min=` / `max=` bound.
+- On a control with no bound at all the slider uses the nominal range its kind gets, so `slidermax=` is also how an unbounded field gets a handle worth dragging.
+- Honoured by `#float`, `#percent`, `#int` and `#multi`. `#progress` ignores them for the same reason it ignores `min=` / `max=`: 0 to 100% is what progress means.
+- They are display only. Nothing about the stored value, the keyframes, or what the shader receives changes.
+
+### Units: `units=`
+
+`units=` says what the number **means**, and shows next to the field. Two spellings also carry behaviour; every other spelling is a label and nothing else:
+
+| `units=`               | What it does                                                                                                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"px"`                 | Pixels. On a single-value control the stored value **is** a pixel count (whole numbers), rescaled with the render so a proxy or half-res render matches. On a `#multi` component it is a 0..1 fraction of the frame, shown in pixels. |
+| `"%"` (or `"percent"`) | The field shows `%` and takes whole numbers. It does **not** divide - the shader gets what the field shows. Use the `#percent` kind (or `#multi percent`) when you want 0..1 in the shader.                                           |
+| anything else          | A **display suffix**: `stops`, `dB/oct`, `°`, `×`, `/s`, whatever fits. Nothing is rounded, scaled or divided - the shader receives exactly the value it would with no `units=` at all.                                               |
+
+```glsl
+// #float label="Exposure" units="stops" min=-5 max=5 default=0
+uniform float uExposure;
+
+// #float label="Hue Rotate" units="°" min=-180 max=180 default=0
+uniform float uHueRotate;
+```
+
+A `#multi` takes one per component in a braced list, and an empty slot leaves that component unitless:
+
+```glsl
+// #multi label="Offset" fields={X,Y} units={px,°}
+uniform vec2 uOffset;
+```
+
+A rotate OSC labels each of its dials in degrees already, so a `units="°"` beside one is ignored rather than doubled. A plain `#angle` has no suffix of its own, so `units="°"` there does add one.
+
 ### Reactive maximums
 
 A single-value numeric lane can make its effective upper bound follow another lane with `maxby=` and `maxvalues={}`:
@@ -134,6 +177,18 @@ uniform float uFalloff;
 
 Both forms are accepted: `group="Name"` on its own, or `group={"Name", "sf.symbol"}` to give the group an icon. The icon only has to be named **once** per group - any other control joining the group inherits it, so the short form is fine everywhere else. The symbol is any SF Symbol name macOS knows (the editor offers a curated list and flags a name that doesn't resolve).
 
+`#color` takes `group=` on the same grammar, so a swatch can sit with the controls it belongs to instead of in the shared **Colors** group:
+
+```glsl
+// #color label="Sky" group={"Sky", "cloud"}
+uniform vec4 uSky;
+
+// #color label="Ramp" group="Sky" min=1 max=4 default=2
+uniform vec4 uRamp[4];
+```
+
+A colour **array** moves whole - its count lane and every swatch land in the named group together. A `#color` with no `group=` stays in **Colors** exactly as before. `#audio` and `#gradient` still have dedicated groups of their own and reject `group=` as a compile error.
+
 ### Multiple-choice dropdowns
 
 `#choice` is pick-one by default. Add both `dropdown` and `multiple` to turn it into a searchable checklist:
@@ -171,7 +226,7 @@ Three controls the engine provides rather than the shader. They **stand alone** 
 ```
 
 - `#speed` multiplies `iTime`. `#seed` offsets where `iTime` starts.
-- `#grain` adds **two** lanes, the amount and its cell size. `default=` seeds the amount (a percentage), `size=` the cell size in pixels. `label=` renames the amount only.
+- `#grain` adds **two** lanes, the amount and its cell size. `default=` seeds the amount (a percentage), `size=` the cell size in pixels. `label=`, `min=` and `max=` all apply to the **amount only**, which is the lane the directive is named for. Leave the bounds out and the amount runs 0 to 100%. The size lane keeps its own 1 to 12 px range and is not authorable.
 - All three take `label=` and `group=` like any other control.
 
 ### `#alpha` (masking your own clip)
@@ -208,20 +263,14 @@ Without it, that shader can't work: the corner instance samples `iChannel0`, get
 Every shader gets a built-in **`iProgress`**: the clip fraction, `0` at the effect's first frame and `1` at its last, rising linearly. In a Motion transition template that window IS the transition, so `iProgress` is the GL Transitions `progress` with nothing to declare:
 
 ```glsl
-vec4 transitionMix(vec4 fromColor, vec4 toColor, float amount)
-{
-    float alpha = mix(fromColor.a, toColor.a, amount);
-    vec3 premultiplied = mix(fromColor.rgb * fromColor.a, toColor.rgb * toColor.a, amount);
-    vec3 color = alpha > 0.0001 ? premultiplied / alpha : vec3(0.0);
-    return vec4(color, alpha);
-}
-
 void mainImage(out vec4 O, in vec2 fc)
 {
     vec2 uv = fc / iResolution.xy;
-    O = transitionMix(texture(iChannel0, uv), texture(iChannel1, uv), iProgress);
+    O = mixTransitionColors(texture(iChannel0, uv), texture(iChannel1, uv), iProgress);
 }
 ```
+
+`mixTransitionColors` is injected, not declared. See **Injected helpers** below.
 
 `// #progress` gives the user **control over the curve**:
 
@@ -257,7 +306,7 @@ Every Image shader declares what it is:
 
 FxPlug does not report whether a transition side is genuinely absent, so the coverage choice is intentionally explicit. The empty side is a real transparent texture, not an unbound channel (whose normal Mirage fallback is procedural noise).
 
-Transition shaders can read `iTransitionMode` (`0` = Transition, `1` = In, `2` = Out) when an intentional background or source-specific embellishment must behave differently for a transparent endpoint. For ordinary blends, use premultiplied interpolation as in `transitionMix` above; raw `mix` darkens an image twice when its colour and alpha fade together.
+Transition shaders can read `iTransitionMode` (`0` = Transition, `1` = In, `2` = Out) when an intentional background or source-specific embellishment must behave differently for a transparent endpoint. For ordinary blends, call the injected `mixTransitionColors`; a raw `mix` darkens an image twice when its colour and alpha fade together.
 
 ### `#motionblur` (who owns the blur)
 
@@ -424,9 +473,11 @@ A binding also survives leaving the Mac it was made on. Published audio doesn't 
 
 See `audio-shader-directive` for shaping the levels into something that looks good, and `audio-sonar` for how a user publishes the audio in the first place, including the walkthrough for that warning.
 
-## Grading helpers (no directive, no declaration)
+## Injected helpers (no directive, no declaration)
 
-Colour work keeps needing the same three or four functions, so the wrapper supplies them. **Call them; do not paste a copy in.** They are injected only when the shader names one, so an ordinary shader carries none of it.
+Some functions every shader of a kind needs are supplied by the wrapper rather than pasted into each shader. **Call them; do not paste a copy in.** They are injected only when the shader names one, so a shader that needs neither set carries neither.
+
+### Grading
 
 | Function                                              | Does                                                                                                                                                                              |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -448,7 +499,25 @@ fragColor = vec4(encodeFromLinear(oklabToLinear(lab)), 1.0);
 
 A `// #template color-transform` shader already receives linear values and must not decode. See `#template` above.
 
+### Transitions
+
+Both endpoints of a transition can be transparent, so both of these take and return **straight** alpha and do the arithmetic on premultiplied colour. Blending straight `rgb` lets a transparent endpoint's leftover colour bleed into the result, which is what makes a raw `mix` darken an incoming clip that fades up over nothing.
+
+| Function                                                               | Does                                                                              |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `vec4 mixTransitionColors(vec4 fromColor, vec4 toColor, float amount)` | crossfades the two endpoints, `amount` 0 = from, 1 = to                           |
+| `vec4 compositeTransitionLayer(vec4 background, vec4 foreground)`      | source-over of one layer on another, for a wipe edge or glow drawn over the blend |
+
+```glsl
+vec4 blended = mixTransitionColors(fromColor, toColor, wipe);
+fragColor = compositeTransitionLayer(blended, edgeGlow);
+```
+
+### Defining one yourself
+
 The names are reserved in the sense that matters: a shader that **defines** one of them keeps its own version and gets none of that family injected, so an older template carrying its own copy still compiles. Redefining one to mean something else works but reads as a trap; pick another name.
+
+The suppression is per family, and the families are the groups that call each other: the sRGB pair, the Oklab trio, `balanceGain`, `mixTransitionColors`, `compositeTransitionLayer`. Owning one transition helper therefore still leaves the other injected.
 
 ## On-screen controls (`osc`)
 
@@ -563,6 +632,10 @@ The puck writes the shader's **real controls**. There is no hidden grading state
 
 `space=` is a declaration, not a conversion request: nothing here transforms the image. Normalise upstream with the Color Transform effect.
 
+**When `plain` is the right declaration.** Reach for it when the two axes are about neither light nor hue, so a painted ring would be a legend for the wrong quantity. A hue wheel under a pair of geometry axes says the drag is a colour move, and a luminance ramp under a warp's amount and direction says it is an exposure one. The plain outline claims nothing, which is exactly right when there is nothing to claim. What it does not do is measure: `light` and `hue` carry the frame's own distribution and `plain` carries none, so it is somewhere to put handles rather than a scope. That is also why it cannot be one of a declared pair, which exists to show two readings of the same frame.
+
+A surface with no `surface=` mapping on any control has nothing for its puck to drive, so declaring one purely to make the panel appear leaves a handle that moves and changes nothing. Declare the surface for the drag, not for the panel.
+
 ### Two rings at once
 
 A shader may declare the directive **twice**, once with `ring=hue` and once with `ring=light`. The panel then stacks both circles, in declaration order, and grows downward to fit them. A grade needs both readings of the frame - the cast is a hue problem and the exposure is a light one - and they are two measurements of the same picture rather than one control with a mode, so neither has to be put away to look at the other.
@@ -592,6 +665,10 @@ uniform float uSaturation;
 ```
 
 The number is the move **at full deflection, in the control's own units**: at full upward deflection that Threshold falls 14 percent. `r:` responds to the puck's distance from the centre, so the centre is always the control's declared default and the rim its full response. `a:` responds to the puck's bearing, its magnitude being the value at half a turn, so `a:+180` makes the bearing the angle directly. A `#color` control's response is in **degrees of hue**, which follows from its kind rather than needing its own syntax.
+
+**Cartesian or polar is decided per RING, not per control.** One `r:` or `a:` anywhere on a ring makes that whole ring polar, and every `x:` / `y:` mapping on it is then skipped rather than blended in. So a stray polar term does not add a third direction, it stops the cartesian controls responding to the puck at all. One grammar per ring.
+
+The ring kind has nothing to say about which grammar that is. `ring=` paints the outline and nothing else, so a polar `r:` on a `ring=light` surface is legal and means what it always means, the puck's distance from the centre, with the surface's `xaxis=` and `yaxis=` labels then describing directions no control reads. Pick the grammar from what the controls are: a bearing is worth aiming somewhere on a wheel, and a pair of independent directions reads as a cross.
 
 `default=`, `min=` and `max=` are part of the mapping, not decoration:
 
@@ -671,6 +748,8 @@ For a **hue-valued** control - a `#color` swatch driven through an angular `a:` 
 // #percent label="Pivot" min=1 max=99 default=18 pick=luma-linear
 uniform float uPivot;
 ```
+
+Both the eyedropper and Set from clip live on that panel, and the panel exists only for a shader declaring `#color-surface`. So `pick=` in a shader without one does nothing at all: there are no buttons for it to subscribe to. A picker therefore costs a surface, which means having something for the surface's axes to be about.
 
 | `pick=`       | What lands in the control                                                                                                                                                     |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -802,4 +881,5 @@ void mainImage(out vec4 O, in vec2 I) {
 
 - Reach for an OSC when a value is spatial (a position, a size, an angle) - it's faster than typing and reads at a glance. Keep purely numeric knobs as plain `#float` / `#int` sliders.
 - `#percent` is the friendliest way to expose a 0..1 factor: the artist sees 0-100%, the shader gets 0..1.
+- **Don't open a prose comment with a directive name.** `// #gradient: nAt() returns the colour at t` reads as a sentence to you and used to read as a real `#gradient` to the parser. A colon straight after the name is now rejected, but the habit to keep is to write `// The #gradient helper...` or `// nAt() returns...` instead of leading with the name.
 - Editing a directive live re-derives the control set (and its OSCs) without a clip reselect - add / rename / re-`osc` a uniform and the inspector + viewer update on the next commit.

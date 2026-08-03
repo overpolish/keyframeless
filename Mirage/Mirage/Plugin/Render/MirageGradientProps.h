@@ -157,7 +157,7 @@ static inline int MirageParseGradientProps(NSString *source,
     return 0;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#gradient(?![-\\w])([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#gradient(?![-\\w:])([^\\n]*)$"
                            options:0
                              error:nil];
   NSRegularExpression *uniRe = [NSRegularExpression

@@ -278,7 +278,7 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
   frame.thumbnail = sBuiltinThumbnails[@"Frame"];
   // Card values: Frame's border, glow and bloom all default to 0, so a
   // defaults bake shows the source frame with slightly rounded corners and
-  // nothing else. Pixel sizes are for the 320x180 bake.
+  // nothing else.
   frame.thumbnailValues = @{
     @"uSize" : @[ @56 ], // room for the glow to spread before the card edge
     @"uRadius" : @[ @30 ],

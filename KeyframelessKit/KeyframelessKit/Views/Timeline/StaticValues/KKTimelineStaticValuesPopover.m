@@ -1264,16 +1264,14 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   if (lane.componentsScaleWithMedia) {
     NSArray<NSString *> *units = lane.componentUnits;
     row.componentScale = ^double(NSInteger i) {
-      // Per-component units decide scaling: a "%" component is a literal
-      // percentage, and an EXPLICIT empty-string component (units={px,px,,})
-      // is a raw 0..1 value - neither is media-scaled. Only a "px" component
-      // (or an absent units array, the legacy scale-all default) scales with
-      // the media. Lets one lane mix px W/H with raw or % X/Y.
-      if (i < (NSInteger)units.count) {
-        NSString *u = units[i];
-        if ([u isEqualToString:@"%"] || u.length == 0)
-          return 1.0;
-      }
+      // Per-component units decide scaling: ONLY a "px" component (or an
+      // absent units array, the legacy scale-all default) scales with the
+      // media. A "%" is a literal percentage, an EXPLICIT empty-string
+      // component (units={px,px,,}) is a raw 0..1 value, and a plugin's own
+      // unit ("°", "stops") is a label on a raw number - none of them are
+      // pixels. Lets one lane mix px W/H with raw, % or labelled X/Y.
+      if (i < (NSInteger)units.count && ![units[i] isEqualToString:@"px"])
+        return 1.0;
       __strong typeof(weak) s = weak;
       CGSize m = s ? s->_miniViewer.sourceMediaSize : CGSizeZero;
       double scale = (i % 2 == 0) ? m.width : m.height;

@@ -97,12 +97,32 @@ static NSString *kkAxisLetter(int k) {
   return out;
 }
 
-- (KKRotMatrix3)_matrixForLabel:(NSString *)label axes:(KKRotationAxes)axes {
-  double e[3];
-  [self _eulerDegForLabel:label axes:axes out:e];
+// A spec's DISPLAY-ONLY pose offset as a matrix pre-applied to the drawn /
+// hit-tested / dragged frame (the viewer gizmo's `baseRotation`). `offsetDeg`
+// is a constant [X,Y,Z] in degrees; `offsetDegBlock` supplies the same live per
+// draw, for an offset derived from other lanes. The written value never sees
+// it - only where the rings sit.
+- (KKRotMatrix3)_baseMatrixForLabel:(NSString *)label {
+  NSDictionary *s = [self specForLabel:label];
+  NSArray<NSNumber *> * (^live)(void) = s[@"offsetDegBlock"];
+  NSArray<NSNumber *> *deg = live ? live() : s[@"offsetDeg"];
+  if (deg.count == 0)
+    return KKRotMatrixIdentity();
+  double e[3] = {0.0, 0.0, 0.0};
+  for (NSUInteger i = 0; i < deg.count && i < 3; i++)
+    e[i] = deg[i].doubleValue;
   return KKBuildRotationMatrix((float)(e[0] * kDegToRad),
                                (float)(e[1] * kDegToRad),
                                (float)(e[2] * kDegToRad));
+}
+
+- (KKRotMatrix3)_matrixForLabel:(NSString *)label axes:(KKRotationAxes)axes {
+  double e[3];
+  [self _eulerDegForLabel:label axes:axes out:e];
+  return KKRotMatrixMul([self _baseMatrixForLabel:label],
+                        KKBuildRotationMatrix((float)(e[0] * kDegToRad),
+                                              (float)(e[1] * kDegToRad),
+                                              (float)(e[2] * kDegToRad)));
 }
 
 // Ring `k`'s display frame: the full pose for a 3-axis gizmo, the NESTED
@@ -113,9 +133,10 @@ static NSString *kkAxisLetter(int k) {
                                ring:(int)k {
   double e[3];
   [self _eulerDegForLabel:label axes:axes out:e];
-  return KKRingDisplayMatrix((float)(e[0] * kDegToRad),
-                             (float)(e[1] * kDegToRad),
-                             (float)(e[2] * kDegToRad), (int)axes, k);
+  return KKRotMatrixMul(
+      [self _baseMatrixForLabel:label],
+      KKRingDisplayMatrix((float)(e[0] * kDegToRad), (float)(e[1] * kDegToRad),
+                          (float)(e[2] * kDegToRad), (int)axes, k));
 }
 
 - (CGFloat)_radiusForCanvas:(KKMiniViewerView *)canvas {

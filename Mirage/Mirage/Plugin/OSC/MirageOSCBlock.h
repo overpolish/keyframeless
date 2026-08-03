@@ -52,6 +52,13 @@ typedef struct MirageOSCBlock {
   char center[KK_SHADER_MAX_OSC_EXPRESSION_BYTES];
   // Rotate only: the enabled axis set, e.g. "x y z" / "z". Empty = z.
   char axes[16];
+  // Rotate only: a DISPLAY-ONLY angle offset in the lane's degrees, one
+  // component per axis in the block's braced `axes` order (a scalar covers a
+  // single-axis gizmo). Added to the drawn pose - the rings tilt by
+  // `angleOffset + value` while a drag still writes the bound value alone - so
+  // a shader that renders `presetAngle + uRotation` can put its preset term
+  // here and have the gizmo read in phase with what it draws.
+  char angleOffset[KK_SHADER_MAX_OSC_EXPRESSION_BYTES];
   // Ring/box ellipse fields: aspect-link the two components by default
   // (`linked = true`); Shift inverts during a drag.
   int linked;
@@ -206,6 +213,8 @@ static inline int MirageParseOSCBlocks(NSString *source, MirageOSCBlock *out,
       MirageOSCSetField(b->center, sizeof(b->center), val);
     else if ([key isEqualToString:@"axes"])
       MirageOSCSetField(b->axes, sizeof(b->axes), val);
+    else if ([key isEqualToString:@"angleOffset"])
+      MirageOSCSetField(b->angleOffset, sizeof(b->angleOffset), val);
     else if ([key isEqualToString:@"linked"])
       b->linked = [val isEqualToString:@"true"] ||
                   [val isEqualToString:@"yes"] || [val isEqualToString:@"1"];

@@ -39,8 +39,9 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
 
 @implementation MirageOSCBlockRuntime {
   KKLinkExpr *_forward;
-  KKLinkExpr *_inverse; // nil = numerically invert the forward
-  KKLinkExpr *_center;  // nil = frame centre (0.5, 0.5)
+  KKLinkExpr *_inverse;     // nil = numerically invert the forward
+  KKLinkExpr *_center;      // nil = frame centre (0.5, 0.5)
+  KKLinkExpr *_angleOffset; // rotate: nil = no display offset
   NSArray<NSString *> *_localNames;
   NSArray<KKLinkExpr *> *_localExprs;
   // Per-uniform lane-unit -> expr-unit divisors for every uniform the shader
@@ -110,6 +111,7 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
   r->_cursorName = @(blk->cursor);
   r->_axes = @(blk->axes);
   r->_centerSource = @(blk->center);
+  r->_angleOffsetSource = @(blk->angleOffset);
   r->_linked = blk->linked != 0;
   r->_bodyMove = blk->bodyDisabled == 0;
   r->_snaps = blk->skipSnapping == 0;
@@ -225,6 +227,16 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
     if (!r->_center)
       return nil;
   }
+  // Display-only pose offset (rotate). Compiled like any other block
+  // expression, so it may name the bound value, other uniforms, and the locals
+  // above - which is how a preset angle derived from a #choice reaches it.
+  if (isRotate && strlen(blk->angleOffset) > 0) {
+    r->_angleOffset = [KKLinkExpr compile:@(blk->angleOffset)
+                              allowedVars:allowed
+                                    error:&err];
+    if (!r->_angleOffset)
+      return nil;
+  }
   return r;
 }
 
@@ -234,6 +246,36 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
 
 - (BOOL)hasForward {
   return _forward != nil;
+}
+
+- (BOOL)hasAngleOffset {
+  return _angleOffset != nil;
+}
+
+- (void)angleOffsetDegreesForBound:(KKExprVal)bound
+                            aspect:(double)aspect
+                               out:(double[3])xyz {
+  xyz[0] = xyz[1] = xyz[2] = 0.0;
+  if (!_angleOffset)
+    return;
+  KKExprVal o =
+      [_angleOffset evalWithValue:bound
+                             vars:[self _varsForBound:bound
+                                               aspect:aspect
+                                                mouse:(simd_float2){0, 0}
+                                            haveMouse:NO
+                                                extra:nil
+                                                 frac:-1.0]];
+  // Component N belongs to the axis listed Nth, exactly like the bound value's
+  // components; the gizmos want canonical X/Y/Z.
+  MirageOSCBlock blk = {0};
+  MirageOSCSetField(blk.axes, sizeof(blk.axes), _axes ?: @"");
+  char axes[3];
+  int n = MirageOSCBlockAxes(&blk, axes);
+  for (int i = 0; i < n; i++) {
+    double v = (i < o.n) ? o.v[i] : 0.0;
+    xyz[axes[i] == 'x' ? 0 : (axes[i] == 'y' ? 1 : 2)] = v;
+  }
 }
 
 - (KKExprVal)boundValueFromLaneValues:(NSArray<NSNumber *> *)values {

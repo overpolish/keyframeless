@@ -138,7 +138,7 @@ static inline int MirageParseAudioProps(NSString *source,
     return 0;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ \\t]*#audio(?![-\\w])([^\\n]*)$"
+          @"(?m)^[ \\t]*//[ \\t]*#audio(?![-\\w:])([^\\n]*)$"
                            options:0
                              error:nil];
   NSRegularExpression *uniRe = [NSRegularExpression

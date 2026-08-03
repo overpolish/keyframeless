@@ -351,8 +351,9 @@ MirageSurfaceResponsesForSource(NSString *source) {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     dirRe = [NSRegularExpression
-        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*"
-                                     @"([^\\n]*)$"
+        regularExpressionWithPattern:
+            @"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*(?![-\\w:])"
+            @"([^\\n]*)$"
                              options:0
                                error:nil];
     uniRe = [NSRegularExpression
@@ -444,8 +445,9 @@ MirageSurfacePucksForSourceFiltered(NSString *source,
   if (!source.length)
     return @[ @{@"name" : @"", @"symbol" : @"", @"track" : @""} ];
   NSRegularExpression *dirRe = [NSRegularExpression
-      regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*"
-                                   @"([^\\n]*)$"
+      regularExpressionWithPattern:
+          @"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*(?![-\\w:])"
+          @"([^\\n]*)$"
                            options:0
                              error:nil];
   for (NSTextCheckingResult *m in
@@ -536,8 +538,9 @@ MirageFirstBadSurfaceRingBinding(NSString *source,
     return nil;
   BOOL dual = rings.count > 1;
   NSRegularExpression *dirRe = [NSRegularExpression
-      regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*"
-                                   @"([^\\n]*)$"
+      regularExpressionWithPattern:
+          @"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*(?![-\\w:])"
+          @"([^\\n]*)$"
                            options:0
                              error:nil];
   NSRegularExpression *uniRe = [NSRegularExpression
@@ -652,8 +655,9 @@ MirageSurfacePicksForSource(NSString *source) {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     dirRe = [NSRegularExpression
-        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*"
-                                     @"([^\\n]*)$"
+        regularExpressionWithPattern:
+            @"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*(?![-\\w:])"
+            @"([^\\n]*)$"
                              options:0
                                error:nil];
     uniRe = [NSRegularExpression
@@ -780,8 +784,9 @@ static inline NSString *MirageSurfacePreviewControlForSource(
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     dirRe = [NSRegularExpression
-        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#([A-Za-z_][\\w-]*)"
-                                     @"([^\\n]*)$"
+        regularExpressionWithPattern:
+            @"(?m)^[ \\t]*//[ \\t]*#([A-Za-z_][\\w-]*)(?![-\\w:])"
+            @"([^\\n]*)$"
                              options:0
                                error:nil];
     uniRe = [NSRegularExpression
@@ -903,8 +908,9 @@ MirageSurfacePuckNamesForSource(NSString *source) {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     dirRe = [NSRegularExpression
-        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*"
-                                     @"([^\\n]*)$"
+        regularExpressionWithPattern:
+            @"(?m)^[ \\t]*//[ \\t]*#[A-Za-z_][\\w-]*(?![-\\w:])"
+            @"([^\\n]*)$"
                              options:0
                                error:nil];
     uniRe = [NSRegularExpression

@@ -119,8 +119,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Which entry the inspector is on: moving it, everything that re-derives from
 /// it, and restoring it from the host. Implemented in
-/// MirageInspectorView+RackSelection.m.
-@interface MirageInspectorView (RackSelection)
+/// MirageInspectorView+RackSelection.m. Named apart from the PUBLIC
+/// (RackSelection) category in MirageInspectorView.h - one category name may
+/// only be declared once, and the public header owns that name for the one
+/// method the plugin calls.
+@interface MirageInspectorView (RackSelectionInternal)
 /// Move the selection and, when it actually moved, re-drive the scoped UI.
 /// `persist` YES = a USER-driven move, which is written to the UI-state blob
 /// and therefore costs one undo entry; NO = memory only (a programmatic heal,

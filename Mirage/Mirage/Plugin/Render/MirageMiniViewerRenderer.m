@@ -287,6 +287,25 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes);
           return CGPointMake(oc.x, oc.y);
         };
       }
+      // A DISPLAY-ONLY `angleOffset =` follows the same per-draw shape as an
+      // expression centre: it may read other lanes (a #choice preset), so it
+      // resolves live rather than baking a value from the source-change tick.
+      if (b.hasAngleOffset) {
+        __weak typeof(self) weakSelf = self;
+        MirageOSCBlockRuntime *rt = b;
+        spec[@"offsetDegBlock"] = ^NSArray<NSNumber *> *(void) {
+          __strong typeof(weakSelf) self = weakSelf;
+          if (!self)
+            return @[];
+          KKExprVal bound = [rt
+              boundValueFromLaneValues:[self rootValuesForLabel:rt.laneKey]];
+          CGSize media = self.canvas.sourceMediaSize;
+          double aspect = media.height > 0 ? media.width / media.height : 1.0;
+          double deg[3];
+          [rt angleOffsetDegreesForBound:bound aspect:aspect out:deg];
+          return @[ @(deg[0]), @(deg[1]), @(deg[2]) ];
+        };
+      }
       [rots addObject:spec];
     }
   }

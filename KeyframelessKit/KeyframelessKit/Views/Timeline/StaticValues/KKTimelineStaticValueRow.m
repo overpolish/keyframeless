@@ -70,6 +70,11 @@ NSTextField *_KKMakeCaption(NSString *s) {
 // trailing "px"/"%"). Prefix fits one caption character.
 static const CGFloat kPrefixSlotW = 13.0;
 static const CGFloat kSuffixSlotW = 17.0;
+// ...and how far the unit slot may grow past that when the unit is a word
+// rather than a glyph. A plugin can name any unit it likes ("stops",
+// "dB/oct"), and a fixed two-character slot would clip those into nonsense;
+// the cap keeps an over-long one from pushing the value column off the row.
+static const CGFloat kSuffixSlotMaxW = 46.0;
 
 // A right-aligned number field flanked by fixed-width prefix (caption) and
 // suffix (unit) slots. Both slots are always present so columns line up; pass
@@ -89,6 +94,7 @@ static const CGFloat kSuffixSlotW = 17.0;
   NSTextField *_prefix;
   NSTextField *_suffix;
   NSLayoutConstraint *_prefixWidth;
+  NSLayoutConstraint *_suffixWidth;
   BOOL _prefixAutoSizes;
 }
 - (instancetype)init {
@@ -111,6 +117,8 @@ static const CGFloat kSuffixSlotW = 17.0;
   // so several wide component labels compress into a fixed-width popover
   // instead of forcing the whole popover wider than its hardcoded size.
   _prefixWidth.priority = NSLayoutPriorityRequired - 1;
+  _suffixWidth = [_suffix.widthAnchor constraintEqualToConstant:kSuffixSlotW];
+  _suffixWidth.priority = NSLayoutPriorityRequired - 1;
   [NSLayoutConstraint activateConstraints:@[
     [_prefix.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_prefix.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
@@ -124,7 +132,10 @@ static const CGFloat kSuffixSlotW = 17.0;
     [_suffix.leadingAnchor constraintEqualToAnchor:_field.trailingAnchor
                                           constant:KKPaddingXS],
     [_suffix.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    [_suffix.widthAnchor constraintEqualToConstant:kSuffixSlotW],
+    _suffixWidth,
+    // Never collapse past the standard slot, so unitless rows still line up
+    // with united ones.
+    [_suffix.widthAnchor constraintGreaterThanOrEqualToConstant:kSuffixSlotW],
     [_suffix.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
   ]];
   return self;
@@ -159,6 +170,18 @@ static const CGFloat kSuffixSlotW = 17.0;
 }
 - (void)setSuffix:(NSString *)suffix {
   _suffix.stringValue = suffix ?: @"";
+  // Grow the slot to fit a worded unit, measuring the string against its font
+  // (fittingSize would just echo the active width constraint and never grow).
+  // "px" and "%" measure under the standard slot, so the common rows keep the
+  // exact column they had.
+  NSFont *font = _suffix.font
+                     ?: [NSFont systemFontOfSize:KKFontSizeSM
+                                          weight:NSFontWeightRegular];
+  CGFloat textW =
+      [_suffix.stringValue sizeWithAttributes:@{NSFontAttributeName : font}]
+          .width;
+  _suffixWidth.constant =
+      MIN(kSuffixSlotMaxW, MAX(kSuffixSlotW, ceil(textW) + 2.0));
 }
 @end
 

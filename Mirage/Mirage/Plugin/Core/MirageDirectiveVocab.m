@@ -205,7 +205,9 @@ MirageDirectiveAttributeKeys(void) {
           E(@"fields", @"fields={}",
             @"Names for each number of a #multi control.", @"fields={"),
           E(@"units", @"units={}",
-            @"How the value reads: % or px. One per field on a #multi, or "
+            @"How the value reads. % and px also change the value: % divides "
+            @"by 100, px scales with the media. Any other word (stops, °, "
+            @"dB/oct) just labels the field. One per field on a #multi, or "
             @"units=\"px\" on a single control.",
             @"units={"),
           E(@"center", @"center=",
@@ -558,6 +560,10 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageOSCFieldKeys(void) {
             @"center = "),
           E(@"axes", @"axes =", @"The axes a rotate control spins: x, y, z.",
             @"axes = "),
+          E(@"angleOffset", @"angleOffset =",
+            @"Degrees added to a rotate control's drawn angle only, so rings "
+            @"sit in phase with a preset the shader adds.",
+            @"angleOffset = "),
           E(@"linked", @"linked =",
             @"true keeps a two-field ring or box in proportion. Shift "
             @"inverts it.",

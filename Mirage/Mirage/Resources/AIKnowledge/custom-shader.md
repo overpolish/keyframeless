@@ -60,20 +60,14 @@ A shader can read a **second clip** on `iChannel1`, which is what makes real tra
 Fill the **"To"** image well in the inspector and it lands on `iChannel1`. Combined with `iProgress` (0 at the effect's first frame, 1 at its last) that's everything a cross-dissolve needs:
 
 ```glsl
-vec4 transitionMix(vec4 fromColor, vec4 toColor, float amount)
-{
-    float alpha = mix(fromColor.a, toColor.a, amount);
-    vec3 premultiplied = mix(fromColor.rgb * fromColor.a, toColor.rgb * toColor.a, amount);
-    vec3 color = alpha > 0.0001 ? premultiplied / alpha : vec3(0.0);
-    return vec4(color, alpha);
-}
-
 void mainImage(out vec4 O, in vec2 fc)
 {
     vec2 uv = fc / iResolution.xy;
-    O = transitionMix(texture(iChannel0, uv), texture(iChannel1, uv), iProgress);
+    O = mixTransitionColors(texture(iChannel0, uv), texture(iChannel1, uv), iProgress);
 }
 ```
+
+`mixTransitionColors` is an injected helper (see the built-in functions table): it interpolates in premultiplied space so a transition with an empty side fades cleanly instead of darkening. Call it, don't define it.
 
 **As a Final Cut transition** (dropped on a cut, both clips fed automatically): the Motion transition template keeps Mirage on its **Group**, wires **Drop Zone Transition A** into the hidden **From** well, and wires **Drop Zone Transition B** into the hidden **To** well. A `// #template transition` shader then receives those clean inputs as `iChannel0` and `iChannel1`; ordinary filters still receive the effect clip as `iChannel0`. Neither well is published, so the editor only sees the shared Transition / In / Out control.
 
@@ -99,7 +93,7 @@ With that one template declaration, the catalogue shader runs as it does on the 
 
 Transition output alpha is preserved automatically. This matters for a single-sided transition at the start or end of a connected clip: the missing side remains transparent, allowing the timeline beneath to show through instead of producing an opaque black frame.
 
-Interpolate transition colours in premultiplied space as in `transitionMix` above. A raw `mix(fromColor, toColor, amount)` is only equivalent when both inputs are opaque; with an empty side it darkens RGB while alpha is also fading.
+Interpolate transition colours in premultiplied space via the injected `mixTransitionColors`. A raw `mix(fromColor, toColor, amount)` is only equivalent when both inputs are opaque; with an empty side it darkens RGB while alpha is also fading.
 
 Two caveats. Its custom uniforms currently become **constants** at their authored defaults, so they aren't inspector controls yet - to expose one, rewrite it as a `// #float` directive (see `directives`). And `progress` is only special inside a GL transition; in an ordinary shader `progress` is an ordinary name you can use freely, and the built-in is `iProgress`.
 

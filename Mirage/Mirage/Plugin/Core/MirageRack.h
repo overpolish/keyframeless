@@ -145,8 +145,8 @@ MirageRackEntryIDOrSentinel(NSString *_Nullable entryID) {
 /// sibling uniform arrives bare).
 ///
 /// Distinct from `MirageRackLaneKey`, which is the unconditional composition:
-/// scoping a `~Rack#<a>.uOrigin` key to entry `b` through that would produce
-/// `~Rack#<b>.~Rack#<a>.uOrigin`. This is the guard both OSC runtimes need, so
+/// scoping a `~Rack#a.uOrigin` key to entry `b` through that would produce
+/// `~Rack#b.~Rack#a.uOrigin`. This is the guard both OSC runtimes need, so
 /// it lives here rather than being spelled out twice
 /// (`-[MirageOSC _scopedKey:]`, `-[MirageMiniViewerRenderer _oscScopedKey:]`).
 static inline NSString *MirageRackScopedLaneKey(NSString *entryID,
