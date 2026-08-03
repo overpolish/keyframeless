@@ -808,6 +808,16 @@ FOUNDATION_EXPORT KKTimeline *KKTimelineRetimedForMediaAnchor(
     KKTimeline *timeline, double fromSrcIn, double fromDur, double toSrcIn,
     double toDur, KKLaneFractionSampler _Nullable sampler, double edgeEps);
 
+/// Maintain-Timing transform with per-gap duration locks. Lanes without a
+/// locked interval keep the existing source-media anchoring behaviour. A lane
+/// with one or more locked intervals instead rebalances against the new clip
+/// duration: locked gaps keep their captured seconds and unlocked gaps absorb
+/// the remaining change. If the clip is too short, moving/transition gaps take
+/// priority over holds, then earlier gaps take priority within each group.
+FOUNDATION_EXPORT KKTimeline *KKTimelineRetimedForMaintainTiming(
+    KKTimeline *timeline, double fromSrcIn, double fromDur, double toSrcIn,
+    double toDur, KKLaneFractionSampler _Nullable sampler, double edgeEps);
+
 /// Returns a copy of `timeline` with `spatialSmooth` set to `on` on the
 /// keypose nearest `frac` in the lane named `label`. Nearest-match (not exact)
 /// so it is robust to a lane storing its endpoint a frame short of 0/1.
@@ -907,7 +917,18 @@ FOUNDATION_EXPORT BOOL KKLanesSpanMultipleLayers(NSArray<KKLane *> *lanes);
 /// keyposes hold the same value?" (drift / transition detection) so geometry
 /// lanes are handled correctly instead of always reading equal (empty values).
 FOUNDATION_EXPORT BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a,
-                                                KKKeyPose *b);
+                                                 KKKeyPose *b);
+
+/// Whether any interval in `lane` has an explicit duration lock.
+FOUNDATION_EXPORT BOOL KKLaneHasDurationLocks(KKLane *lane);
+
+/// Recaptures every duration-locked interval from the lane's current keypose
+/// spacing. Use after a manual time/topology edit so the dashed lock follows
+/// what the user just authored instead of retaining a stale pre-edit duration.
+/// Returns `lane` unchanged when the duration is unavailable or no gap is
+/// locked; otherwise returns a copy.
+FOUNDATION_EXPORT KKLane *KKLaneRefreshingDurationLocks(KKLane *lane,
+                                                        double clipDuration);
 
 /// The geometry snapshot a geometry lane (`oscEditedOnly`) DISPLAYS at `frac`:
 /// the surrounding keyposes' snapshots interpolated with the segment's easing

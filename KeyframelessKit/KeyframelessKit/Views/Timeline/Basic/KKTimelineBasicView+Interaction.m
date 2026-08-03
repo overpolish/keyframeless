@@ -289,9 +289,9 @@ static const CGFloat kScrubSnapInPx = 4.0;
     [self _openHoldPopover];
 }
 
-// Right-click on the Hold gap → "Link Endpoints" / "Unlink Endpoints".
-// In/Out sections have no link concept (the curve always spans those
-// phases as a single transition), so right-click there shows no menu.
+// Right-click any gap to lock/unlock its wall-clock duration. Basic phases are
+// shared, so the action fans out across every participating lane. Hold also
+// carries its existing Link Endpoints action.
 - (NSMenu *)menuForEvent:(NSEvent *)event {
   NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
   KKBasicProj p = [self _projection];
@@ -303,24 +303,32 @@ static const CGFloat kScrubSnapInPx = 4.0;
   if (diamond != 0)
     return [self _pillMenuForDiamond:diamond];
   KKBasicSection sec = [self _sectionAtPoint:pt];
-  if (sec != KKBasicSectionHold)
+  if (sec == KKBasicSectionNone)
     return nil;
   if (!p.anyAnimatable)
     return nil;
-  // Probe the first animatable lane's Hold interval to decide the verb -
-  // _toggleHoldLink mutates every animatable lane's Hold uniformly so this
-  // first-lane state is representative of the toggle's effect.
-  KKInterval *holdIv = nil;
-  for (KKLane *lane in _timeline.lanes)
-    if (lane.enabled && lane.keyposes.count >= 2) {
-      holdIv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
-      break;
-    }
-  if (!holdIv)
+  KKInterval *interval = [self _representativeIntervalForSection:sec];
+  if (!interval)
     return nil;
   NSMenu *menu = [[NSMenu alloc] init];
+  BOOL durationLocked = [self _sectionDurationLocked:sec];
+  NSMenuItem *durationItem =
+      [menu addItemWithTitle:
+                (durationLocked
+                     ? KKLoc(@"Unlock Duration",
+                             @"Context menu: unlock gap duration.")
+                     : KKLoc(@"Lock Duration",
+                             @"Context menu: lock gap duration."))
+                      action:@selector(_menuToggleDurationLock:)
+               keyEquivalent:@""];
+  durationItem.target = self;
+  durationItem.representedObject = @(sec);
+
+  if (sec != KKBasicSectionHold)
+    return menu;
+  [menu addItem:[NSMenuItem separatorItem]];
   NSString *title =
-      holdIv.endpointsLinked
+      interval.endpointsLinked
           ? KKLoc(@"Unlink Endpoints", @"Context menu: unlink endpoints.")
           : KKLoc(@"Link Endpoints", @"Context menu: link endpoints.");
   [menu addItemWithTitle:title
@@ -328,6 +336,28 @@ static const CGFloat kScrubSnapInPx = 4.0;
            keyEquivalent:@""]
       .target = self;
   return menu;
+}
+
+- (void)_menuToggleDurationLock:(NSMenuItem *)sender {
+  NSNumber *sectionNumber = sender.representedObject;
+  KKBasicSection section = (KKBasicSection)sectionNumber.integerValue;
+  BOOL lock = ![self _sectionDurationLocked:section];
+  double duration = [self _clipDuration];
+  if (lock && duration <= 0.0)
+    return;
+  KKBasicProj p = [self _projection];
+  double fraction = 0.0;
+  if (section == KKBasicSectionIn)
+    fraction = p.inEndFrac;
+  else if (section == KKBasicSectionHold)
+    fraction = p.outStartFrac - p.inEndFrac;
+  else if (section == KKBasicSectionOut)
+    fraction = 1.0 - p.outStartFrac;
+  double seconds = lock ? MAX(0.0, fraction * duration) : 0.0;
+  [self _mutateInterval:section
+                   with:^(KKInterval *iv) {
+                     iv.lockedSeconds = seconds;
+                   }];
 }
 
 - (void)_menuToggleHoldLink:(id)sender {

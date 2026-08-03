@@ -108,6 +108,54 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   return NO;
 }
 
+- (BOOL)_sectionHasDurationLock:(KKBasicSection)section {
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled || lane.keyposes.count < 2)
+      continue;
+    KKHoldShape s = KKShapeOfLane(lane);
+    NSInteger idx;
+    if (section == KKBasicSectionOut) {
+      if (!s.outEnabled)
+        continue;
+      idx = s.holdEnd;
+    } else if (section == KKBasicSectionHold) {
+      idx = s.holdStart;
+    } else {
+      if (!s.inEnabled)
+        continue;
+      idx = 0;
+    }
+    if (lane.keyposes[idx].outgoing.lockedSeconds > 0.0)
+      return YES;
+  }
+  return NO;
+}
+
+- (BOOL)_sectionDurationLocked:(KKBasicSection)section {
+  BOOL found = NO;
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled || lane.keyposes.count < 2)
+      continue;
+    KKHoldShape s = KKShapeOfLane(lane);
+    NSInteger idx;
+    if (section == KKBasicSectionOut) {
+      if (!s.outEnabled)
+        continue;
+      idx = s.holdEnd;
+    } else if (section == KKBasicSectionHold) {
+      idx = s.holdStart;
+    } else {
+      if (!s.inEnabled)
+        continue;
+      idx = 0;
+    }
+    found = YES;
+    if (lane.keyposes[idx].outgoing.lockedSeconds <= 0.0)
+      return NO;
+  }
+  return found;
+}
+
 // Toggle the Hold link across every enabled 4-keypose lane. Linking back on
 // collapses any drift to a single shared value (the hold-start value) so it
 // is a true Hold again.
@@ -249,7 +297,7 @@ static void KKBasicCopySpatial(KKKeyPose *dst, KKKeyPose *_Nullable src) {
     nl.holdShape = KKLaneHoldShapeOutOnly;
   else
     nl.holdShape = KKLaneHoldShapeNone;
-  return nl;
+  return KKLaneRefreshingDurationLocks(nl, clipDur);
 }
 
 - (void)_rebuildInOn:(BOOL)inOn

@@ -594,7 +594,7 @@
       if (idx >= 0 && idx < (NSInteger)nl.keyposes.count)
         [nl removeKeyposeAtIndex:idx];
     }
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     changed = YES;
   }
   if (!changed)
@@ -670,9 +670,9 @@
       if (kps[j] == moved) {
         newIdx = j;
         break;
-      }
+    }
     nl.keyposes = kps;
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     break;
   }
   if (newIdx < 0)

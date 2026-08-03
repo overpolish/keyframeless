@@ -21,7 +21,7 @@
 #import <KeyframelessKit/KKMotionBlurReconstruct.h>
 #import <KeyframelessKit/KKPlugin+MiniViewerFeed.h>
 #import <KeyframelessKit/KKShaderTypes.h>
-#import <KeyframelessKit/KKTimeline.h> // KKTimelineRetimedForMediaAnchor
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneDisplayValueAtFraction
 #import <KeyframelessKit/KKWatermark.h>
 
@@ -135,6 +135,26 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   BOOL hasTiming = KKRefreshRenderCache(
       self.apiManager, (KKTimelineInspectorView *)self.inspectorView,
       self.renderCache);
+  NSData *layerBlob = nil;
+  if (api) {
+    NSString *b64 = KKReadCustomParamString(api, kParamLayerData);
+    if (b64.length)
+      layerBlob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+  }
+  BOOL hasDurationLocks = NO;
+  if (!self.renderCache.maintainTimingEnabled && layerBlob.length) {
+    NSArray<KKLane *> *templates = [CanvasPlugin availableLanes];
+    for (KKBezierPath *path in [KKBezierPath pathsFromBlob:layerBlob]) {
+      KKTimeline *timeline = CanvasLayerTimelineForPath(path, templates);
+      for (KKLane *lane in timeline.lanes)
+        if (KKLaneHasDurationLocks(lane)) {
+          hasDurationLocks = YES;
+          break;
+        }
+      if (hasDurationLocks)
+        break;
+    }
+  }
   // Persist maintain-timing: when the clip range settles after a trim/grow,
   // retime each layer's animationJSON so the stored keyposes (and the inspector
   // graph) match the media-locked render. Canvas is per-layer, so it overrides
@@ -142,7 +162,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // layer blob instead of the single kKKParamTimelineData the base retimes.
   [self bakeMaintainTimingForCache:self.renderCache
                    timelineParamID:kParamLayerData
-                    uiStateParamID:kParamUIState];
+                    uiStateParamID:kParamUIState
+                  hasDurationLocks:hasDurationLocks];
   if (hasTiming) {
     KKPlayheadPoller *poller = self.playheadPoller;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -153,13 +174,6 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
   // Snapshot the layer stack into the state blob so the render reads no params.
   // The param value is base64 of +[KKBezierPath blobFromPaths:]; decode it back
   // to the raw blob here and hand the raw blob to render (pathsFromBlob:).
-  NSData *layerBlob = nil;
-  if (api) {
-    NSString *b64 = KKReadCustomParamString(api, kParamLayerData);
-    if (b64.length)
-      layerBlob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
-  }
-
   // Advertise this clip as a LAYERED link source (picker: Canvas > Layer >
   // Param; token: `${uuid.layerID.label}`). Each layer's EFFECTIVE timeline
   // (template-seeded when untouched) supplies its referenceable lanes.
@@ -1028,7 +1042,8 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                                  fromDur:(double)fromDur
                                  toSrcIn:(double)toSrcIn
                                    toDur:(double)toDur
-                                 edgeEps:(double)edgeEps {
+                                 edgeEps:(double)edgeEps
+                       durationLocksOnly:(BOOL)durationLocksOnly {
   NSString *b64 = KKReadCustomParamString(getAPI, timelineParamID);
   if (!b64.length)
     return nil;
@@ -1044,12 +1059,28 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
     KKTimeline *tl = CanvasLayerTimelineForPath(path, templates);
     if (!tl)
       continue;
-    KKTimeline *retimed = KKTimelineRetimedForMediaAnchor(
-        tl, fromSrcIn, fromDur, toSrcIn, toDur,
-        ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
-          return KKLaneDisplayValueAtFraction(lane, frac);
-        },
-        edgeEps);
+    KKTimeline *retimed = nil;
+    if (durationLocksOnly) {
+      double storedDuration = 0.0;
+      BOOL hasLocks = NO;
+      for (KKLane *lane in tl.lanes)
+        if (KKLaneHasDurationLocks(lane)) {
+          hasLocks = YES;
+          if (lane.lastKnownClipDuration > 0.0)
+            storedDuration = lane.lastKnownClipDuration;
+        }
+      if (!hasLocks || storedDuration <= 0.0 ||
+          fabs(storedDuration - toDur) < 1.0e-4)
+        continue;
+      retimed = KKTimelineRebalanced(tl, storedDuration, toDur);
+    } else {
+      retimed = KKTimelineRetimedForMaintainTiming(
+          tl, fromSrcIn, fromDur, toSrcIn, toDur,
+          ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
+            return KKLaneDisplayValueAtFraction(lane, frac);
+          },
+          edgeEps);
+    }
     CanvasApplyTimelineToPath(retimed, path);
     any = YES;
   }

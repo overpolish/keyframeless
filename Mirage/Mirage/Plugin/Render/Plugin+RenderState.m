@@ -462,9 +462,16 @@ static NSString *MirageRackFallbackEntryName(void) {
       self.renderCache);
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  BOOL hasDurationLocks = NO;
+  for (KKLane *lane in timeline.lanes)
+    if (KKLaneHasDurationLocks(lane)) {
+      hasDurationLocks = YES;
+      break;
+    }
   [self bakeMaintainTimingForCache:self.renderCache
                    timelineParamID:kKKParamTimelineData
-                    uiStateParamID:kParamUIState];
+                    uiStateParamID:kParamUIState
+                  hasDurationLocks:hasDurationLocks];
   double durSec = self.renderCache.effectDurSec;
   if (hasTiming)
     [self _publishClipTimelineStart];

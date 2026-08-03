@@ -213,6 +213,8 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 /// (in-start == hold) In reads accent, not warning.
 - (BOOL)_inIsTransition;
 - (BOOL)_outIsTransition;
+- (BOOL)_sectionHasDurationLock:(KKBasicSection)section;
+- (BOOL)_sectionDurationLocked:(KKBasicSection)section;
 - (void)_toggleHoldLink;
 - (KKLane *)_rebuiltLane:(KKLane *)lane
                     inOn:(BOOL)inOn

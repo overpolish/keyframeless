@@ -92,27 +92,31 @@
 }
 
 // Seconds the source range must hold steady after a trim before the bake
-// commits. The render-remap previews the move live throughout; this only delays
-// the destructive blob rewrite so a continuous clip-edge drag commits once on
-// release instead of churning every frame.
+// commits. This delays the destructive blob rewrite so a continuous clip-edge
+// drag commits once on release instead of churning every frame.
 static const double kKKMaintainTimingBakeSettleSecs = 0.3;
 
 - (void)bakeMaintainTimingForCache:(KKRenderCache *)cache
                    timelineParamID:(UInt32)timelineParamID
-                    uiStateParamID:(UInt32)uiStateParamID {
-  if (!cache.maintainTimingEnabled || cache.anchorDurSec <= 0 ||
-      cache.effectDurSec <= 0)
+                    uiStateParamID:(UInt32)uiStateParamID
+                  hasDurationLocks:(BOOL)hasDurationLocks {
+  if (cache.effectDurSec <= 0)
     return;
   double curSrcIn = cache.sourceInSec, curDur = cache.effectDurSec;
-  // Already aligned to the anchor → nothing pending.
-  if (fabs(curSrcIn - cache.anchorSrcInSec) < 1.0e-4 &&
+  BOOL maintainAll = cache.maintainTimingEnabled && cache.anchorDurSec > 0;
+  if (!maintainAll && !hasDurationLocks)
+    return;
+  if (maintainAll && fabs(curSrcIn - cache.anchorSrcInSec) < 1.0e-4 &&
       fabs(curDur - cache.anchorDurSec) < 1.0e-4)
     return;
   // Only (re)arm the settle timer when the range actually moves. A steady value
   // (drag released / paused) schedules nothing new, so the last-armed timer
   // fires and commits exactly once.
-  if (fabs(curSrcIn - cache.bakeLastSeenSrcInSec) < 1.0e-4 &&
-      fabs(curDur - cache.bakeLastSeenDurSec) < 1.0e-4)
+  BOOL unchanged = fabs(curDur - cache.bakeLastSeenDurSec) < 1.0e-4;
+  if (maintainAll)
+    unchanged = unchanged &&
+                fabs(curSrcIn - cache.bakeLastSeenSrcInSec) < 1.0e-4;
+  if (unchanged)
     return;
   cache.bakeLastSeenSrcInSec = curSrcIn;
   cache.bakeLastSeenDurSec = curDur;
@@ -175,10 +179,11 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
           ?: [NSMutableDictionary dictionary];
   double fromSrcIn = [st[@"maintainAnchorSrcIn"] doubleValue];
   double fromDur = [st[@"maintainAnchorDur"] doubleValue];
+  BOOL maintainAll = [st[@"maintainTiming"] boolValue] && fromDur > 0.0;
   KKTimeline *retimed = nil;
-  if (curDur > 0 && fromDur > 0 &&
-      (fabs(curSrcIn - fromSrcIn) > 1.0e-4 ||
-       fabs(curDur - fromDur) > 1.0e-4)) {
+  BOOL rangeChanged = fabs(curSrcIn - fromSrcIn) > 1.0e-4 ||
+                      fabs(curDur - fromDur) > 1.0e-4;
+  if (curDur > 0 && ((maintainAll && rangeChanged) || !maintainAll)) {
     retimed = [self _retimeMaintainTimingBlobWithParamID:timelineParamID
                                                   getAPI:getAPI
                                                   setAPI:setAPI
@@ -186,15 +191,18 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
                                                  fromDur:fromDur
                                                  toSrcIn:curSrcIn
                                                    toDur:curDur
-                                                 edgeEps:edgeEps];
-    st[@"maintainAnchorSrcIn"] = @(curSrcIn);
-    st[@"maintainAnchorDur"] = @(curDur);
-    NSString *stJSON = [[NSString alloc]
-        initWithData:[NSJSONSerialization dataWithJSONObject:st
-                                                     options:0
-                                                       error:nil]
-            encoding:NSUTF8StringEncoding];
-    KKWriteCustomParamString(setAPI, stJSON, uiStateParamID);
+                                                 edgeEps:edgeEps
+                                       durationLocksOnly:!maintainAll];
+    if (maintainAll) {
+      st[@"maintainAnchorSrcIn"] = @(curSrcIn);
+      st[@"maintainAnchorDur"] = @(curDur);
+      NSString *stJSON = [[NSString alloc]
+          initWithData:[NSJSONSerialization dataWithJSONObject:st
+                                                       options:0
+                                                         error:nil]
+              encoding:NSUTF8StringEncoding];
+      KKWriteCustomParamString(setAPI, stJSON, uiStateParamID);
+    }
   }
   retimedOut = retimed;
   });
@@ -219,17 +227,34 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
                                  fromDur:(double)fromDur
                                  toSrcIn:(double)toSrcIn
                                    toDur:(double)toDur
-                                 edgeEps:(double)edgeEps {
+                                 edgeEps:(double)edgeEps
+                       durationLocksOnly:(BOOL)durationLocksOnly {
   NSString *tlJSON = KKReadCustomParamString(getAPI, timelineParamID);
   KKTimeline *tl = tlJSON.length ? [KKTimeline timelineFromJSON:tlJSON] : nil;
   if (!tl)
     return nil;
-  KKTimeline *retimed = KKTimelineRetimedForMediaAnchor(
-      tl, fromSrcIn, fromDur, toSrcIn, toDur,
-      ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
-        return KKLaneDisplayValueAtFraction(lane, frac);
-      },
-      edgeEps);
+  KKTimeline *retimed = nil;
+  if (durationLocksOnly) {
+    double storedDuration = 0.0;
+    BOOL hasLocks = NO;
+    for (KKLane *lane in tl.lanes)
+      if (KKLaneHasDurationLocks(lane)) {
+        hasLocks = YES;
+        if (lane.lastKnownClipDuration > 0.0)
+          storedDuration = lane.lastKnownClipDuration;
+      }
+    if (!hasLocks || storedDuration <= 0.0 ||
+        fabs(storedDuration - toDur) < 1.0e-4)
+      return nil;
+    retimed = KKTimelineRebalanced(tl, storedDuration, toDur);
+  } else {
+    retimed = KKTimelineRetimedForMaintainTiming(
+        tl, fromSrcIn, fromDur, toSrcIn, toDur,
+        ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
+          return KKLaneDisplayValueAtFraction(lane, frac);
+        },
+        edgeEps);
+  }
   NSString *outJSON = [KKTimeline jsonFromTimeline:retimed];
   if (outJSON)
     KKWriteCustomParamString(setAPI, outJSON, timelineParamID);

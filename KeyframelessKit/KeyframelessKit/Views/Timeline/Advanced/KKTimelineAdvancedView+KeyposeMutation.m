@@ -38,7 +38,7 @@
       return;
     KKLane *nl = [lanes[i] copy];
     [nl removeKeyposeAtIndex:kpIdx];
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     changed = YES;
     break;
   }
@@ -108,7 +108,7 @@
       return;
     KKLane *nl = [src copy];
     [nl removeKeyposeAtIndex:kpIdx];
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     changed = YES;
     break;
   }
@@ -201,7 +201,7 @@
       kps[newIdx] = fixedNew;
       nl.keyposes = kps;
     }
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     changed = YES;
     break;
   }
@@ -240,7 +240,7 @@
         newIdx = j;
         break;
       }
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     break;
   }
   if (newIdx < 0)
@@ -299,7 +299,8 @@
   kps[targetIdx] = fixed;
   nl.keyposes = kps;
   [nl removeKeyposeAtIndex:dupIdx];
-  mLanes[laneArrIdx] = nl;
+  mLanes[laneArrIdx] =
+      KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
   t.lanes = mLanes;
   _timeline = t;
   [self setNeedsDisplay:YES];
@@ -468,7 +469,7 @@
     if (touched) {
       KKLane *nl = [src copy];
       nl.keyposes = kps;
-      lanes[i] = nl;
+      lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
       changed = YES;
     }
   }

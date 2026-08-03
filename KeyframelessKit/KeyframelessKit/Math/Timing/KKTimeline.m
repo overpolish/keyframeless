@@ -38,6 +38,38 @@ BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a, KKKeyPose *b) {
   return YES;
 }
 
+BOOL KKLaneHasDurationLocks(KKLane *lane) {
+  for (NSUInteger i = 0; i + 1 < lane.keyposes.count; i++)
+    if (lane.keyposes[i].outgoing.lockedSeconds > 0.0)
+      return YES;
+  return NO;
+}
+
+KKLane *KKLaneRefreshingDurationLocks(KKLane *lane, double clipDuration) {
+  if (!lane || clipDuration <= 0.0 || lane.keyposes.count < 2)
+    return lane;
+  NSMutableArray<KKKeyPose *> *keyposes = nil;
+  for (NSUInteger i = 0; i + 1 < lane.keyposes.count; i++) {
+    KKKeyPose *a = lane.keyposes[i];
+    if (a.outgoing.lockedSeconds <= 0.0)
+      continue;
+    if (!keyposes)
+      keyposes = [lane.keyposes mutableCopy];
+    KKKeyPose *newA = [keyposes[i] copy];
+    KKInterval *interval = [newA.outgoing copy];
+    interval.lockedSeconds =
+        MAX(0.0, (keyposes[i + 1].time - newA.time) * clipDuration);
+    newA.outgoing = interval;
+    keyposes[i] = newA;
+  }
+  if (!keyposes)
+    return lane;
+  KKLane *result = [lane copy];
+  result.keyposes = keyposes;
+  result.lastKnownClipDuration = clipDuration;
+  return result;
+}
+
 NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   if (kps.count == 0)

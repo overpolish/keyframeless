@@ -397,6 +397,9 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (void)_mutateIntervalInLaneLabel:(NSString *)label
                               aIdx:(NSInteger)aIdx
                               with:(void (^)(KKInterval *iv))mut;
+- (NSArray<NSString *> *)_menuTargetGapKeys;
+- (BOOL)_menuTargetGapsAreDurationLocked;
+- (void)_setMenuTargetGapsDurationLocked:(BOOL)locked;
 
 // Zoom notification used by the magnify/scroll handlers in the core .m.
 - (void)_notifyZoomChanged;

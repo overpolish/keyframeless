@@ -85,10 +85,8 @@
   // Phase dividers used to be drawn here; the boundary pills (further down)
   // serve as the divider now - one less stroke per frame.
 
-  // Stroke per section, all solid. A live transition (enabled In/Out) is
-  // "non-hold" - warn-tinted so it reads distinctly. A disabled In/Out is
-  // just the flat hold extended (hold color), so the whole thing looks
-  // like one continuous hold line with no dashing.
+  // Stroke per section. Duration-locked gaps use a subtle dash in the same
+  // value-derived colour; unlocked gaps remain solid.
   NSColor *hold = [NSColor accentMatchingHost];
   NSColor *warn = [NSColor warning];
   // Value-based colour (matches Advanced's per-keypose rule): a section/pill is
@@ -115,7 +113,7 @@
                     rect:g
                       lo:lo
                       hi:hi
-                  dashed:NO
+                  dashed:[self _sectionHasDurationLock:KKBasicSectionIn]
                    color:inTrans ? warn : hold];
   [self _strokeCurveFrom:p.inEndFrac
                       to:p.outStartFrac
@@ -124,7 +122,7 @@
                     rect:g
                       lo:lo
                       hi:hi
-                  dashed:NO
+                  dashed:[self _sectionHasDurationLock:KKBasicSectionHold]
                    color:holdC];
   [self _strokeCurveFrom:p.outStartFrac
                       to:1.0
@@ -133,7 +131,7 @@
                     rect:g
                       lo:lo
                       hi:hi
-                  dashed:NO
+                  dashed:[self _sectionHasDurationLock:KKBasicSectionOut]
                    color:outTrans ? warn : hold];
   [NSGraphicsContext restoreGraphicsState];
 

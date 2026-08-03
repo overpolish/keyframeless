@@ -214,8 +214,9 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _maintainTimingButton.hidden = (_selectedTab != KKTimelineTabAdvanced);
   _maintainTimingButton.toolTip =
       KKLoc(@"Maintain Timing",
-            @"Toolbar toggle: pin the animation to absolute time so trimming "
-            @"or splitting the clip keeps each keypose where it is.");
+            @"Preserve the whole animation while trimming or splitting. Gap "
+            @"locks set from the right-click menu work independently of this "
+            @"toggle.");
   _maintainTimingButton.onToggled = ^(BOOL isOn) {
     if (weak.onMaintainTimingToggled)
       weak.onMaintainTimingToggled(isOn);

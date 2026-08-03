@@ -42,7 +42,7 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
     for (NSUInteger i = 0; i < intervalCount; i++) {
       KKKeyPose *a = kps[i];
       KKKeyPose *b = kps[i + 1];
-      double frac = b.time - a.time;
+      double frac = MAX(0.0, b.time - a.time);
       double lockedSecs = a.outgoing.lockedSeconds;
       if (lockedSecs > 0) {
         double desiredFrac = lockedSecs / newDuration;
@@ -54,22 +54,32 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
       }
     }
 
-    // If locked intervals overflow, scale everything proportionally.
+    // Locked gaps normally retain their requested seconds while unlocked gaps
+    // divide the remainder proportionally. If the requested locks cannot all
+    // fit, preserve them by priority: transitions before holds, then timeline
+    // order. A lower-priority lock can temporarily compress to zero, but its
+    // stored lockedSeconds is untouched so it recovers when the clip grows.
     NSMutableArray<NSNumber *> *finalFracs =
         [NSMutableArray arrayWithCapacity:intervalCount];
     double totalSpan = kps.lastObject.time - kps.firstObject.time;
     double available = totalSpan;
 
     if (totalLocked > available) {
-      double scale = available / totalLocked;
-      for (NSUInteger i = 0; i < intervalCount; i++) {
-        KKKeyPose *a = kps[i];
-        if (a.outgoing.lockedSeconds > 0) {
-          [finalFracs addObject:@([targetFracs[i] doubleValue] * scale)];
-        } else {
-          [finalFracs addObject:@(0.0)];
+      for (NSUInteger i = 0; i < intervalCount; i++)
+        [finalFracs addObject:@(0.0)];
+      double remaining = available;
+      for (NSInteger transitionPass = 1; transitionPass >= 0; transitionPass--)
+        for (NSUInteger i = 0; i < intervalCount && remaining > 0.0; i++) {
+          KKKeyPose *a = kps[i], *b = kps[i + 1];
+          if (a.outgoing.lockedSeconds <= 0.0)
+            continue;
+          BOOL transition = !KKLaneKeyposeValuesEqual(newLane, a, b);
+          if (transition != (BOOL)transitionPass)
+            continue;
+          double granted = MIN([targetFracs[i] doubleValue], remaining);
+          finalFracs[i] = @(granted);
+          remaining -= granted;
         }
-      }
     } else {
       double unlockedAvailable = available - totalLocked;
       for (NSUInteger i = 0; i < intervalCount; i++) {
@@ -83,6 +93,22 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
                             : 0.0;
           [finalFracs addObject:@(frac)];
         }
+      }
+      // Every interval is locked: no flexible gap exists to absorb growth.
+      // Put the surplus into the lowest-priority (latest hold, otherwise latest
+      // transition) without changing its stored lock request.
+      if (totalUnlockedFrac <= 0.0 && unlockedAvailable > 0.0) {
+        NSInteger fallback = -1;
+        for (NSInteger i = (NSInteger)intervalCount - 1; i >= 0; i--)
+          if (kps[i].outgoing.lockedSeconds > 0.0 &&
+              KKLaneKeyposeValuesEqual(newLane, kps[i], kps[i + 1])) {
+            fallback = i;
+            break;
+          }
+        if (fallback < 0)
+          fallback = (NSInteger)intervalCount - 1;
+        finalFracs[fallback] =
+            @([finalFracs[fallback] doubleValue] + unlockedAvailable);
       }
     }
 
@@ -104,6 +130,31 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
   }
 
   result.lanes = newLanes;
+  return result;
+}
+
+KKTimeline *KKTimelineRetimedForMaintainTiming(
+    KKTimeline *timeline, double fromSrcIn, double fromDur, double toSrcIn,
+    double toDur, KKLaneFractionSampler sampler, double edgeEps) {
+  KKTimeline *media = KKTimelineRetimedForMediaAnchor(
+      timeline, fromSrcIn, fromDur, toSrcIn, toDur, sampler, edgeEps);
+  BOOL anyLocked = NO;
+  for (KKLane *lane in timeline.lanes)
+    if (KKLaneHasDurationLocks(lane)) {
+      anyLocked = YES;
+      break;
+    }
+  if (!anyLocked)
+    return media;
+
+  KKTimeline *balanced = KKTimelineRebalanced(timeline, fromDur, toDur);
+  KKTimeline *result = [media copy];
+  NSMutableArray<KKLane *> *lanes = [result.lanes mutableCopy];
+  NSUInteger count = MIN(timeline.lanes.count, balanced.lanes.count);
+  for (NSUInteger i = 0; i < count; i++)
+    if (KKLaneHasDurationLocks(timeline.lanes[i]))
+      lanes[i] = balanced.lanes[i];
+  result.lanes = lanes;
   return result;
 }
 

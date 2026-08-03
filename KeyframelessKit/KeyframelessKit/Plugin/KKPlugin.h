@@ -375,19 +375,15 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// position. All keys are written in one action scope (single undo entry).
 - (void)patchMaintainTimingEnabled:(BOOL)enabled paramID:(UInt32)paramID;
 
-/// "Maintain Timing" bake. Call from the render tick (after
-/// KKRefreshRenderCache populates `cache`). When the lock is on and the clip's
-/// source range has moved away from the stored anchor (a trim/grow surfaced
-/// this tick), it rewrites the timeline blob's keypose fractions to hold their
-/// absolute media position and advances the anchor - both in one action scope
-/// (dispatched to the main queue, since the render tick has no action scope).
-/// The blob write flows to the Advanced graph via the normal parameterChanged
-/// path, so the keyposes visibly move. A per-tick guard on `cache` makes it
-/// fire once per trim, not every frame while the async write is in flight.
-/// No-op when the lock is off, no anchor is set, or the range already matches.
+/// Duration persistence bake. Call from the render tick after
+/// KKRefreshRenderCache populates `cache`. Maintain Timing preserves the whole
+/// animation; otherwise `hasDurationLocks` enables only explicit gap-lock
+/// rebalancing. The write is dispatched into one main-queue action scope after
+/// the clip range settles.
 - (void)bakeMaintainTimingForCache:(KKRenderCache *)cache
                    timelineParamID:(UInt32)timelineParamID
-                    uiStateParamID:(UInt32)uiStateParamID;
+                    uiStateParamID:(UInt32)uiStateParamID
+                  hasDurationLocks:(BOOL)hasDurationLocks;
 
 /// The plugin's timeline inspector, if open. Override to return it so the bake
 /// can push the retimed timeline straight to the graph (the parameterChanged
@@ -428,13 +424,15 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
                                      error:(NSError **)error;
 
 /// Maintain-timing persistence override point. Retime the stored animation
-/// blob(s) from the old media anchor [fromSrcIn,fromDur] to the new clip range
-/// [toSrcIn,toDur], writing the result back under `timelineParamID`. The
-/// default retimes the single kKKParamTimelineData KKTimeline. A per-layer
-/// plugin (Canvas) overrides it to retime every layer's animationJSON in its
-/// layer blob. Return the timeline to push to the inspector graph, or nil to
-/// skip that push (a plugin that refreshes its own multi-layer graph returns
-/// nil). Called inside the bake's action scope.
+/// blob(s) from [fromSrcIn,fromDur] to [toSrcIn,toDur], writing the result back
+/// under `timelineParamID`. Lanes without duration-locked gaps stay anchored
+/// to source media; lanes with locks rebalance so those gaps take precedence.
+/// The default handles kKKParamTimelineData. A per-layer plugin (Canvas)
+/// overrides it for every layer's animationJSON. Return the timeline to push
+/// to the graph, or nil when the plugin refreshes its own multi-layer graph.
+/// When `durationLocksOnly` is YES, ignore the media anchor and rebalance only
+/// timelines containing explicit gap locks from their stored clip duration.
+/// Called inside the bake's action scope.
 - (nullable KKTimeline *)
     _retimeMaintainTimingBlobWithParamID:(UInt32)timelineParamID
                                   getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
@@ -443,7 +441,8 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
                                  fromDur:(double)fromDur
                                  toSrcIn:(double)toSrcIn
                                    toDur:(double)toDur
-                                 edgeEps:(double)edgeEps;
+                                 edgeEps:(double)edgeEps
+                       durationLocksOnly:(BOOL)durationLocksOnly;
 
 /// Override to provide help/keyboard-shortcut sections. Each section is
 /// rendered as a titled block with a tips bullet list and/or a 2-column

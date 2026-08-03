@@ -985,8 +985,9 @@ static const CGFloat kDragSnapPx = 14.0;
       stepWithMessage:KKLoc(
                           @"<accent>Maintain Timing</accent> locks the "
                           @"animation to absolute time - trimming or splitting "
-                          @"the clip then retimes the keyposes to hold their "
-                          @"position.",
+                          @"the clip then retimes the keyposes. Right-click a "
+                          @"gap to lock its duration independently; that lock "
+                          @"works even when Maintain Timing is off.",
                           @"Advanced timing guide: the Maintain Timing lock "
                           @"toggle.")
            targetView:nil];

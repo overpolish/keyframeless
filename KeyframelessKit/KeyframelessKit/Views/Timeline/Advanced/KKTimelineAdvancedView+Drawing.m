@@ -797,7 +797,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
         double n = KKAdvNormComponent(av[c].doubleValue, cMin, cMax, c);
         CGFloat y = round(yBot + (yTop - yBot) * n) + 0.5;
         NSPoint pts[2] = {NSMakePoint(xA, y), NSMakePoint(xB, y)};
-        KKStrokeTimelineCurve(pts, 2, lineW, NO, curveColorForComp(c));
+        KKStrokeTimelineCurve(pts, 2, lineW, iv.lockedSeconds > 0.0,
+                              curveColorForComp(c));
       }
       continue;
     }
@@ -834,7 +835,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       }
     }
     for (NSUInteger c = 0; c < compCount; c++) {
-      KKStrokeTimelineCurve(pts[c], n + 1, lineW, NO, curveColorForComp(c));
+      KKStrokeTimelineCurve(pts[c], n + 1, lineW,
+                            iv.lockedSeconds > 0.0, curveColorForComp(c));
       free(pts[c]);
     }
     free(pts);
