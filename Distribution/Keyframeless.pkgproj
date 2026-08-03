@@ -567,7 +567,7 @@
 				<key>USE_HFS+_COMPRESSION</key>
 				<false/>
 				<key>VERSION</key>
-				<string>3.0.1</string>
+				<string>3.1.0</string>
 			</dict>
 			<key>TYPE</key>
 			<integer>0</integer>
@@ -2554,7 +2554,7 @@
 										<key>LANGUAGE</key>
 										<string>English</string>
 										<key>VALUE</key>
-										<string>Final Cut Pro extension containing various apps, such as Captions.</string>
+										<string>Transcribe and style captions with Steno, and make effects react to audio with Sonar. Final Cut Pro workflow extension.</string>
 									</dict>
 								</array>
 								<key>OPTIONS</key>
@@ -2605,7 +2605,14 @@
 								<key>CHILDREN</key>
 								<array/>
 								<key>DESCRIPTION</key>
-								<array/>
+								<array>
+									<dict>
+										<key>LANGUAGE</key>
+										<string>English</string>
+										<key>VALUE</key>
+										<string>Run the Keyframeless assistant privately on your Mac with downloadable local AI models. Shared helper for Keyframeless plugins.</string>
+									</dict>
+								</array>
 								<key>OPTIONS</key>
 								<dict>
 									<key>HIDDEN</key>
@@ -2631,7 +2638,7 @@
 										<key>LANGUAGE</key>
 										<string>English</string>
 										<key>VALUE</key>
-										<string>Mirage plugin. Effect for use in Motion/Final Cut Pro.</string>
+										<string>Create filters, transitions, generators, and grading tools with customisable GLSL shaders. Effect and transition for use in Motion/Final Cut Pro.</string>
 									</dict>
 								</array>
 								<key>OPTIONS</key>

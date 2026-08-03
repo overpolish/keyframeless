@@ -56,8 +56,6 @@ if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ] && [ -f "$PLIST" ]; t
 	fi
 fi
 
-exit 0
-
 # One-time co.overpolish.* -> com.keyframeless.* migration. Matters most here:
 # this package installs the renamed LaunchAgent, so without it the superseded
 # agent stays loaded alongside the new one. Self-guarding and non-fatal.
@@ -65,3 +63,5 @@ MIGRATE="$(dirname "$0")/migrate-identifiers"
 if [ -f "$MIGRATE" ]; then
 	bash "$MIGRATE" || true
 fi
+
+exit 0

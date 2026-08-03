@@ -141,6 +141,12 @@ Per-product installers are named with their version, e.g. `Canvas-v2.0.0.pkg` (t
 version comes from the package's `.pkgproj` entry, the same one `bump-version.sh`
 maintains). `combined` still emits `Keyframeless.pkg`.
 
+Before packaging an app/plugin, the script verifies that the notarized app in
+`Distribution/release` exists and its `CFBundleShortVersionString` matches the package
+version. Re-archive and export after every version bump; the script will not package an
+older app under a newer installer version. The AI payload is built during packaging and
+its manifest and complete SwiftPM runtime-bundle set are validated separately.
+
 **Notarization credentials.** The scripts prefer a stored keychain profile named
 `keyframeless` so notarization is non-interactive. Create it once:
 
@@ -158,16 +164,17 @@ app-specific-password path, run with an empty profile name:
 KK_NOTARY_PROFILE= scripts/build-and-sign.sh all "<apple-id>" "<team-id>"
 ```
 
-**`keyframelessai` is a separate target and is NOT included in `all`.** Unlike the
-plugins (whose notarized `.app` is archived beforehand), its payload is the
-`kk-ai-helper` binary, so the target additionally runs `stage_ai_helper`: `xcodebuild`s
-the `kk-ai-helper` scheme in `KeyframelessAI/` (only the Metal toolchain compiles MLX's
-metallib), thins it to arm64 (MLX is Apple-Silicon only), Developer-ID signs it with the
-app-group + hardened-runtime entitlements, and stages it plus its SwiftPM resource
-bundles into `Distribution/helper/staging` where the `.pkgproj` payload points. Run it
-explicitly whenever the local-AI helper changes - `all` will not build it (and the
-`all` loop skips the staging step, so `keyframelessai` only builds correctly via its own
-target).
+The unified `combined` installer always runs `stage_ai_helper` before packaging, so
+Keyframeless AI cannot be omitted or picked up from a stale staging directory.
+`stage_ai_helper` `xcodebuild`s the `kk-ai-helper` scheme in `KeyframelessAI/` (only the
+Metal toolchain compiles MLX's metallib), thins it to arm64 (MLX is Apple-Silicon only),
+Developer-ID signs it with the app-group + hardened-runtime entitlements, and stages it
+plus its SwiftPM resource bundles into `Distribution/helper/staging` where the
+`.pkgproj` payload points.
+
+**`keyframelessai` remains a separate target and is NOT included in `all`.** Use that
+target only when producing the standalone AI installer. `all` means the standalone
+app/plugin packages; the supported suite installer is `combined`, which includes AI.
 
 To sign an already-built `.pkg` without rebuilding (base name, no `.pkg`):
 

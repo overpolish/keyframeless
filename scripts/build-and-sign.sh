@@ -9,7 +9,7 @@
 #   <target>:
 #     combined         the all-in-one Keyframeless.pkg (every plugin)
 #     all              every plugin as its own per-product .pkg
-#     <component>      one per-product .pkg (keyframelessx|canvas|shader|keyframelessai)
+#     <component>      one per-product .pkg (keyframelessx|canvas|mirage|keyframelessai)
 #
 # Per-product builds GENERATE the single-product .pkgproj and its uninstaller from
 # templates (split-pkgproj.py + uninstall.template), build, sign, then delete those
@@ -23,7 +23,7 @@ SPLIT="$ROOT/scripts/split-pkgproj.py"
 
 usage() {
   echo "Usage: build-and-sign.sh <target> <apple-id> <team-id>"
-  echo "  <target>: combined | all | keyframelessx | canvas | shader | keyframelessai"
+  echo "  <target>: combined | all | keyframelessx | canvas | mirage | keyframelessai"
   exit 1
 }
 
@@ -79,9 +79,47 @@ stage_ai_helper() {
   # mlx-swift_Cmlx (default.metallib), swift-transformers_Hub, swift-crypto_Crypto.
   # Ship the exact set xcodebuild produced.
   cp -R "$prod"/*.bundle "$AI_STAGE/"
+  local required_bundles=(
+    KeyframelessAI_KeyframelessAI.bundle
+    mlx-swift_Cmlx.bundle
+    swift-transformers_Hub.bundle
+    swift-crypto_Crypto.bundle
+  )
+  local bundle base known required
+  for base in "${required_bundles[@]}"; do
+    [[ -d "$AI_STAGE/$base" ]] || {
+      echo "Error: AI build is missing required runtime bundle $base"
+      rm -rf "$dd"
+      exit 1
+    }
+  done
+  # The Packages project names each runtime bundle explicitly. Fail if SwiftPM
+  # adds another one, rather than silently building a helper that works here but
+  # traps after installation because its new bundle was not packaged.
+  for bundle in "$AI_STAGE"/*.bundle; do
+    base="${bundle##*/}"
+    known=false
+    for required in "${required_bundles[@]}"; do
+      [[ "$base" == "$required" ]] && known=true
+    done
+    [[ "$known" == true ]] || {
+      echo "Error: unlisted AI runtime bundle $base; add it to Keyframeless.pkgproj"
+      rm -rf "$dd"
+      exit 1
+    }
+  done
   # Version manifest: installs beside the helper so KKUpdateChecker can read the
   # installed CFBundleShortVersionString (the "Keyframeless AI" update check).
   cp "$ROOT/Distribution/helper/kk-ai-helper.plist" "$AI_STAGE/kk-ai-helper.plist"
+  local expected_version manifest_version
+  expected_version="$(python3 "$SPLIT" --version keyframelessai)"
+  manifest_version="$(/usr/libexec/PlistBuddy -c \
+    'Print :CFBundleShortVersionString' "$AI_STAGE/kk-ai-helper.plist")"
+  [[ "$manifest_version" == "$expected_version" ]] || {
+    echo "Error: Keyframeless AI manifest is $manifest_version; package is $expected_version"
+    rm -rf "$dd"
+    exit 1
+  }
   codesign -dvv "$AI_STAGE/kk-ai-helper" 2>&1 | grep -m1 Authority || true
   rm -rf "$dd"
 }
@@ -89,6 +127,27 @@ stage_ai_helper() {
 unstage_ai_helper() {
   rm -f "$AI_STAGE/kk-ai-helper" "$AI_STAGE/mlx.metallib" \
     "$AI_STAGE/kk-ai-helper.plist"
+}
+
+# Plugin/app payloads are archived and notarized before this script runs. A
+# package-version bump cannot update an old archive, and changing the archived
+# app's plist here would invalidate its signature, so fail before packaging.
+validate_archived_app() {
+  local component="$1" name="$2" expected app plist actual
+  expected="$(python3 "$SPLIT" --version "$component")"
+  app="$ROOT/Distribution/release/$name.app"
+  plist="$app/Contents/Info.plist"
+  [[ -f "$plist" ]] || {
+    echo "Error: missing archived payload $app"
+    echo "Archive, notarize, and export $name $expected into Distribution/release."
+    exit 1
+  }
+  actual="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
+  [[ "$actual" == "$expected" ]] || {
+    echo "Error: archived $name.app is $actual; package is $expected"
+    echo "Archive, notarize, and export $name $expected into Distribution/release."
+    exit 1
+  }
 }
 
 build_combined() {
@@ -106,6 +165,9 @@ build_product() {
   local component="$1" name version
   name="$(python3 "$SPLIT" --name "$component")"
   version="$(python3 "$SPLIT" --version "$component")"
+  if [[ "$component" != "keyframelessai" ]]; then
+    validate_archived_app "$component" "$name"
+  fi
 
   # Generate the single-product project + its uninstaller, then ensure they're
   # cleaned up even if the build or signing fails.
@@ -132,7 +194,12 @@ build_product() {
 
 case "$TARGET" in
   combined)
+    validate_archived_app keyframelessx "Keyframeless X"
+    validate_archived_app canvas "Canvas"
+    validate_archived_app mirage "Mirage"
+    stage_ai_helper
     build_combined
+    unstage_ai_helper
     ;;
   all)
     for component in $(python3 "$SPLIT" --components); do

@@ -24,7 +24,7 @@ Usage:
   scripts/split-pkgproj.py --version <component>           print the product version
   scripts/split-pkgproj.py --components                    list component keys
 
-Components: keyframelessx canvas shader
+Components: keyframelessx canvas mirage
 Output:    Distribution/<Name>.pkgproj   (builds to build/<Name>.pkg)
 
 Build one unsigned:  packagesbuild "Distribution/<Name>.pkgproj"
@@ -44,7 +44,7 @@ UNINSTALL_TEMPLATE = ROOT / "scripts" / "uninstall.template"
 COMPONENT_ID = {
     "keyframelessx": "com.keyframeless.Keyframeless-X.Keyframeless-X-FCP",
     "canvas": "com.keyframeless.Canvas",
-    "shader": "com.keyframeless.Shader",
+    "mirage": "com.keyframeless.Mirage",
     # The shared local-AI engine (helper + LaunchAgent to /Library). Not a plugin
     # (no .app / Motion Template), so `--components` (which drives `all`) excludes it;
     # build it explicitly. build-and-sign.sh stages the helper before packaging.
