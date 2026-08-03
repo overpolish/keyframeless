@@ -263,6 +263,11 @@ struct TimelineAxisRenderer {
 		let w: CGFloat
 	}
 
+	private struct RoleLabelLayout {
+		let text: String
+		let rect: CGRect
+	}
+
 	private func drawClipBackground(_ state: ClipDrawState, in ctx: CGContext) {
 		let isDimmed = dimmedIndices.contains(state.index)
 		let isHoverDimmed = hoveredClipIndex != nil && hoveredClipIndex != state.index && !isDimmed
@@ -326,6 +331,14 @@ struct TimelineAxisRenderer {
 			&& state.laneHeight >= minHeightForControls
 			&& state.w > playBtnSize + 8
 			&& state.clip.url != nil
+		let showsTitle = hasAudioControls || (state.laneHeight >= 16 && state.w > 30)
+		let titleX =
+			hasAudioControls
+			? state.rect.minX + 4 + playBtnSize + 10
+			: state.rect.minX + 6
+		let roleLayout = roleLabelLayout(
+			for: state, titleMinX: showsTitle ? titleX : nil)
+		let titleMaxX = roleLayout.map { $0.rect.minX - 5 } ?? state.rect.maxX - 6
 
 		if showWaveforms, !skipWaveforms, let samples = waveforms[state.index], !samples.isEmpty {
 			drawClipWaveform(
@@ -335,11 +348,13 @@ struct TimelineAxisRenderer {
 		}
 
 		if hasAudioControls {
-			drawAudioControls(state, in: ctx)
+			drawAudioControls(state, titleMaxX: titleMaxX, in: ctx)
 		} else if state.laneHeight >= 16 && state.w > 30 {
-			drawClipTitle(state, in: ctx)
+			drawClipTitle(state, titleMaxX: titleMaxX, in: ctx)
 		}
-		drawRoleLabel(state, in: ctx)
+		if let roleLayout {
+			drawRoleLabel(roleLayout, in: ctx)
+		}
 	}
 
 	private func drawLoadingPlaceholder(
@@ -408,7 +423,9 @@ struct TimelineAxisRenderer {
 		}
 	}
 
-	private func drawAudioControls(_ state: ClipDrawState, in ctx: CGContext) {
+	private func drawAudioControls(
+		_ state: ClipDrawState, titleMaxX: CGFloat, in ctx: CGContext
+	) {
 		let isPlaying = playingIndex == state.index
 		let playBtnRect = CGRect(
 			x: state.rect.minX + 4, y: state.rect.minY + 4,
@@ -416,7 +433,7 @@ struct TimelineAxisRenderer {
 		drawPlayButton(in: playBtnRect, context: ctx, isPlaying: isPlaying)
 
 		let titleX = state.rect.minX + 4 + playBtnSize + 10
-		let titleW = state.rect.maxX - titleX - 6
+		let titleW = titleMaxX - titleX
 		if titleW > 10 {
 			drawInlineTitle(
 				state.clip.name, x: titleX, width: titleW,
@@ -427,7 +444,9 @@ struct TimelineAxisRenderer {
 		drawScrubBar(in: state.rect, context: ctx)
 	}
 
-	private func drawClipTitle(_ state: ClipDrawState, in ctx: CGContext) {
+	private func drawClipTitle(
+		_ state: ClipDrawState, titleMaxX: CGFloat, in ctx: CGContext
+	) {
 		let isSelected = selectedClips.contains(state.index)
 		let para = NSMutableParagraphStyle()
 		para.lineBreakMode = .byTruncatingTail
@@ -440,7 +459,7 @@ struct TimelineAxisRenderer {
 		let titleH = titleStr.size(withAttributes: titleAttrs).height
 		let titleRect = CGRect(
 			x: state.rect.minX + 6, y: state.rect.midY - titleH / 2,
-			width: state.rect.width - 12, height: titleH)
+			width: max(0, titleMaxX - state.rect.minX - 6), height: titleH)
 		titleStr.draw(
 			with: titleRect, options: .usesLineFragmentOrigin,
 			attributes: titleAttrs, context: nil)
@@ -571,22 +590,57 @@ struct TimelineAxisRenderer {
 		return clip.isCompound ? base.compound() : base
 	}
 
-	/// The clip's audio role, drawn top-right. Paired with role colouring so a
-	/// user whose roles are recoloured can still read what each clip is.
-	private func drawRoleLabel(_ state: ClipDrawState, in ctx: CGContext) {
-		guard showRoleLabels, state.laneHeight >= minHeightForControls,
-			let text = RoleColors.label(for: state.clip.role)
-		else { return }
-		let attrs: [NSAttributedString.Key: Any] = [
+	private var roleLabelAttributes: [NSAttributedString.Key: Any] {
+		let paragraph = NSMutableParagraphStyle()
+		paragraph.lineBreakMode = .byTruncatingTail
+		return [
 			.font: NSFont.systemFont(ofSize: 9, weight: .semibold),
 			.foregroundColor: NSColor.white.withAlphaComponent(0.6),
+			.paragraphStyle: paragraph,
 		]
-		let str = text as NSString
-		let size = str.size(withAttributes: attrs)
-		guard state.w > size.width + 14 else { return }
-		str.draw(
-			at: CGPoint(x: state.rect.maxX - size.width - 5, y: state.rect.minY + 3),
-			withAttributes: attrs)
+	}
+
+	/// The clip's audio role, drawn top-right. Paired with role colouring so a
+	/// user whose roles are recoloured can still read what each clip is.
+	private func roleLabelLayout(
+		for state: ClipDrawState, titleMinX: CGFloat?
+	) -> RoleLabelLayout? {
+		guard showRoleLabels, state.laneHeight >= minHeightForControls,
+			let text = RoleColors.label(for: state.clip.role)
+		else { return nil }
+
+		let attrs = roleLabelAttributes
+		let naturalWidth = (text as NSString).size(withAttributes: attrs).width
+		let rightX = state.rect.maxX - 5
+		var availableWidth = rightX - state.rect.minX - 5
+		if let titleMinX {
+			let titleAttrs: [NSAttributedString.Key: Any] = [
+				.font: NSFont.systemFont(ofSize: 10, weight: .medium)
+			]
+			let firstTitleCharacter = state.clip.name.first.map(String.init) ?? ""
+			let minimumTitle = ((firstTitleCharacter + "…") as NSString)
+				.size(withAttributes: titleAttrs).width
+			availableWidth = rightX - titleMinX - minimumTitle - 5
+		}
+
+		let firstRoleCharacter = text.first.map(String.init) ?? ""
+		let minimumRole = ((firstRoleCharacter + "…") as NSString)
+			.size(withAttributes: attrs).width
+		guard availableWidth >= minimumRole else { return nil }
+
+		let width = min(naturalWidth, availableWidth)
+		let height = (text as NSString).size(withAttributes: attrs).height
+		return RoleLabelLayout(
+			text: text,
+			rect: CGRect(
+				x: rightX - width, y: state.rect.minY + 3,
+				width: width, height: height))
+	}
+
+	private func drawRoleLabel(_ layout: RoleLabelLayout, in ctx: CGContext) {
+		(layout.text as NSString).draw(
+			with: layout.rect, options: .usesLineFragmentOrigin,
+			attributes: roleLabelAttributes, context: nil)
 	}
 
 	private func laneAssignments(for clips: [FCPXMLParser.AudioClip]) -> [Int] {
