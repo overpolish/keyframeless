@@ -56,6 +56,10 @@
       _KKManageRow *row = [self appendRowWithLabel:label
                                        categoryKey:cat
                                        indentLevel:(si == 0 ? 0 : 1)];
+      // Display labels can't be resolved through the base's key-indexed layer
+      // map, so the row names its owner itself - otherwise every compound would
+      // show on every layer page.
+      row.layerKey = lane.layerKey;
       row.checked =
           (si < (NSInteger)_states[ci].count) ? _states[ci][si].boolValue : NO;
       NSInteger capCI = ci, capSI = si;

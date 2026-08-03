@@ -89,4 +89,27 @@
   [self _commitRename];
 }
 
+// Enter commits, Esc reverts - both drop focus, which ends editing and runs the
+// commit in controlTextDidEndEditing. Esc doesn't reach the field editor's
+// cancelOperation on its own in this child panel, so handle both here.
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)selector {
+  if (control != _editingField)
+    return NO;
+  if (selector == @selector(cancelOperation:)) {
+    if (_editingIndex >= 0 && (NSUInteger)_editingIndex < _paths.count) {
+      NSString *orig = _paths[_editingIndex].name;
+      _editingField.stringValue = orig.length ? orig : @"Layer";
+    }
+    [_editingField.window makeFirstResponder:nil];
+    return YES;
+  }
+  if (selector == @selector(insertNewline:)) {
+    [_editingField.window makeFirstResponder:nil];
+    return YES;
+  }
+  return NO;
+}
+
 @end

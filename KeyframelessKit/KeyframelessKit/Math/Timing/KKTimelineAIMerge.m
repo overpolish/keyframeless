@@ -165,13 +165,21 @@ NSString *KKTimelineAIMergeMutationJSON(NSString *currentTimelineJSON,
       ![curLanes isKindOfClass:[NSMutableArray class]])
     return nil;
 
+  // Ops address lanes by IDENTITY (the serialized "key"). The model echoes
+  // whatever identifier the timeline JSON gave it; index both key and label
+  // so a display-name echo still lands on the right lane when unambiguous -
+  // but key always wins, and key is what the AI docs instruct.
+  NSMutableDictionary *byKey = [NSMutableDictionary dictionary];
   NSMutableDictionary *byLabel = [NSMutableDictionary dictionary];
   for (NSUInteger i = 0; i < curLanes.count; i++) {
     NSDictionary *L = curLanes[i];
     if (![L isKindOfClass:[NSDictionary class]])
       continue;
+    NSString *key = L[@"key"];
+    if ([key isKindOfClass:[NSString class]] && !byKey[key])
+      byKey[key] = @(i);
     NSString *label = L[@"label"];
-    if ([label isKindOfClass:[NSString class]])
+    if ([label isKindOfClass:[NSString class]] && !byLabel[label])
       byLabel[label] = @(i);
   }
 
@@ -181,9 +189,9 @@ NSString *KKTimelineAIMergeMutationJSON(NSString *currentTimelineJSON,
     NSString *label = op[@"lane"];
     if (![label isKindOfClass:[NSString class]])
       continue;
-    NSNumber *idxN = byLabel[label];
+    NSNumber *idxN = byKey[label] ?: byLabel[label];
     if (!idxN) {
-      KKLogWarn(@"AI tried to write unknown lane label: %@", label);
+      KKLogWarn(@"AI tried to write unknown lane key: %@", label);
       continue;
     }
     NSMutableDictionary *target =

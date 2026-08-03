@@ -7,9 +7,9 @@
 
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimelineInspectorButtons.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
-#import <KeyframelessKit/KKTimingStage.h>
 
 @protocol PROAPIAccessing;
 @protocol KKMiniViewerDelegate;
@@ -89,6 +89,12 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 @property(nonatomic, copy, nullable)
     NSArray<NSArray<NSNumber *> *> *_Nonnull (^oscVisibilityElementStates)(void)
         ;
+/// Scope for the OSC popover's "Make Default" / "Reset" pair. nil = the
+/// process-wide active scope (this plugin, plus the shader template in Mirage).
+/// A plugin whose owners differ in which controls apply - Canvas's vector paths
+/// vs images - sets a suffixed scope per kind so one kind's default can't leave
+/// another with nothing visible.
+@property(nonatomic, copy, nullable) NSString *oscDefaultsScope;
 /// A pill was toggled: compound + segment index into `oscVisibilityCompounds`
 /// and its new state. The host updates its per-instance cache + persists.
 @property(nonatomic, copy, nullable) void (^oscVisibilityElementToggled)
@@ -106,11 +112,60 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
      KKMotionBlurTechnique technique);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
+/// Source-derived lanes: when set, the inspector re-derives its available-lanes
+/// set from a code lane's committed text and refreshes the rows live (no
+/// reselect). Return the full lane set for the given shader/code source. Used
+/// by generators whose lanes are declared in the shader (e.g. a `// #color`
+/// directive). Not set == the lane set is fixed at init.
+///
+/// `timeline` is the one the templates must be derived AGAINST, for a host
+/// whose lane set is a function of the project as well as of the source -
+/// Mirage's `#slots` groups stand for one lane set per stamped instance, and
+/// the instances live in the timeline. Pass nil to mean "whatever you are
+/// showing", which is what the internal code-commit path does: a commit changes
+/// the source under a timeline that is already current. A caller deriving for a
+/// timeline that has NOT been applied yet - the pre-apply hook that has to fix
+/// the templates before the rows are filtered against them - passes it
+/// explicitly, or the derive answers about the timeline being replaced.
+@property(nonatomic, copy, nullable)
+    NSArray<KKLane *> * (^availableLanesProvider)
+        (NSString *code, KKTimeline *_Nullable timeline);
+
+/// Swap in an available-lanes set directly: hold it, and rebuild the rows from
+/// it. What the code-commit re-derive does with the provider's answer, exposed
+/// so a host that called `availableLanesProvider` itself - with a timeline of
+/// its own choosing - can apply the result without going through a code commit
+/// that did not happen.
+- (void)applyAvailableLanes:(NSArray<KKLane *> *)lanes;
+
+/// When YES, a persisted lane whose key matches NO available-lane template is
+/// hidden from the rows. For a source-derived lane set (see
+/// `availableLanesProvider`) that is a lane the shader has stopped declaring -
+/// its directive was renamed, commented out, or deleted - and without this it
+/// keeps showing as a live row under its raw uniform key, editing nothing.
+///
+/// Hidden, never deleted: the lane stays in the timeline, so restoring the
+/// directive brings its keyframes back intact. Shader editing is iterative and
+/// a stray keystroke in a uniform name would otherwise destroy animation.
+///
+/// Default NO, because it is only meaningful when the templates are the
+/// complete authority on what exists. A plugin whose timeline legitimately
+/// carries lanes with no template (Canvas's per-layer lanes, which are minted
+/// per layer rather than declared) must leave this off or its rows vanish.
+@property(nonatomic) BOOL hidesLanesWithoutTemplate;
+/// Fired AFTER a code lane commit re-derives the available-lanes set (see
+/// `availableLanesProvider`), on the main thread, with the committed source.
+/// Lets a host whose ON-SCREEN-CONTROL set is also source-derived (e.g. a
+/// shader declaring `osc` directives) re-wire its OSC-visibility checklist to
+/// the new element set so it doesn't go stale. Not set == no extra work on
+/// commit.
+@property(nonatomic, copy, nullable) void (^onCodeCommitted)(NSString *code);
 /// A CONTENT preset was applied (one carrying a `payloadKind`): the plugin
 /// inserts the decoded content rather than applying a timeline curve (e.g.
 /// Canvas decodes a `"canvasLayers"` payload into a new layer). Only fired for
-/// presets with a payload; timeline presets use the normal apply path. `atPlayhead`
-/// mirrors the preset apply intent (the plugin decides what it means).
+/// presets with a payload; timeline presets use the normal apply path.
+/// `atPlayhead` mirrors the preset apply intent (the plugin decides what it
+/// means).
 @property(nonatomic, copy, nullable) void (^onApplyPresetPayload)
     (NSString *payloadKind, NSString *payloadJSON, BOOL atPlayhead);
 /// Fired right before the Constants popover opens (button tap), so a
@@ -195,6 +250,14 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// publishing it as the viewer-OSC snapshot, so keypose-proximity visibility
 /// uses a one-frame epsilon instead of a blind fallback.
 - (double)clipDurationSeconds;
+/// This clip's absolute project-start time (seconds, fraction 0), pushed from
+/// the render tick. Feeds parameter-link resolution in the mini-viewer at the
+/// feed rate (it is constant, so it isn't starved by the playhead poller).
+/// Negative = unknown. Every plugin gets link feed-locking for free by having
+/// its render cache push this (KKRefreshRenderCache does it automatically).
+- (void)setClipProjectStartSec:(double)seconds;
+/// The clip project-start last set (seconds), negative if never.
+- (double)clipProjectStartSec;
 /// Live frame duration (seconds) - bounds the scrubber to the last frame.
 - (void)setFrameDurationSeconds:(double)seconds;
 /// Live playhead position (clip fraction 0–1; < 0 hides) for the scrubber.
@@ -221,10 +284,11 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 - (BOOL)showsMotionBlurRow;
 
 /// Whether the host plugin can render the Fast (velocity-reconstruction)
-/// technique. Default NO (only the universal Accurate accumulate path). Override
-/// to YES in a plugin that emits a velocity buffer (per-object analytic motion,
-/// e.g. Canvas / MagicMove); the settings popover then shows the Fast/Accurate
-/// Quality pill. A NO host always runs Accurate and hides the pill.
+/// technique. Default NO (only the universal Accurate accumulate path).
+/// Override to YES in a plugin that emits a velocity buffer (per-object
+/// analytic motion); the settings popover then shows
+/// the Fast/Accurate Quality pill. A NO host always runs Accurate and hides the
+/// pill.
 - (BOOL)motionBlurSupportsFastTechnique;
 
 /// The default Accurate-path sample count (2–128) for this plugin - the initial

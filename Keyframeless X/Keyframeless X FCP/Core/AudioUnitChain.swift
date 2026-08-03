@@ -34,6 +34,24 @@ final class AudioUnitChain {
 
 	var isEmpty: Bool { nodes.isEmpty }
 
+	/// Total processing latency the chain adds, in seconds.
+	///
+	/// An AU with lookahead (compressors, limiters) emits audio later than it
+	/// took it in, so a buffer handed to the player node carries audio from
+	/// `latencySeconds` earlier than the schedule position suggests. Anything
+	/// deriving a playhead from that position has to subtract this or it runs
+	/// ahead of the sound.
+	var latencySeconds: Double {
+		nodes.reduce(0) { total, node in
+			var latency: Float64 = 0
+			var size = UInt32(MemoryLayout<Float64>.size)
+			let status = AudioUnitGetProperty(
+				node.au, kAudioUnitProperty_Latency, kAudioUnitScope_Global, 0, &latency,
+				&size)
+			return total + (status == noErr ? latency : 0)
+		}
+	}
+
 	init(filters: [FCPXMLParser.AudioFilter], format: AVAudioFormat) throws {
 		FCPAudioUnitLoader.ensureLoaded()
 

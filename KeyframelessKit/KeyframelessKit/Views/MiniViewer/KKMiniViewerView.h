@@ -37,14 +37,42 @@ NS_ASSUME_NONNULL_BEGIN
                  ghostAlpha:(CGFloat)ghostAlpha;
 @end
 
+/// One 3-ring rotation gizmo, as a drawable descriptor. The mini-viewer's
+/// built-in single rotation path fills a `KKRotationOSCParams` from renderer
+/// accessors; a plugin with MANY independent rotation OSCs (e.g. a shader
+/// declaring several `osc={..}` uniforms) instead returns an array of these via
+/// -miniViewer:rotationOSCsForContentRect:, each drawn through the same encode.
+/// Center is in overlay points (y-up); radiusPx in overlay points.
+@interface KKMiniRotation : NSObject
+@property(nonatomic) CGPoint center;
+@property(nonatomic) CGFloat radiusPx;
+@property(nonatomic) KKRotationOSCParams params;
++ (instancetype)rotationWithCenter:(CGPoint)center
+                          radiusPx:(CGFloat)radiusPx
+                            params:(KKRotationOSCParams)params;
+@end
+
+@class KKMiniElement;
+
 /// Plugin-supplied interaction delegate. Hooks are declared now and wired in
 /// later phases (handle drawing, hit-testing, drag deltas reported as value
 /// mutations). Points are clip-normalized: (0,0) top-left, (1,1) bottom-right.
 @protocol KKMiniViewerDelegate <NSObject>
 @optional
+/// THE aggregate OSC surface: every drawable element as ONE typed
+/// `KKMiniElement` array (glyphs, boxes, rings, rotations, motion paths),
+/// each carrying its own ghost `alpha` / emphasis / style. When implemented,
+/// the canvas draws OSC elements ONLY from this array through one generic
+/// loop - the per-kind draw hooks below are never consulted for drawing.
+/// `KKMiniViewerRenderer` implements it by assembling from the legacy hooks,
+/// so subclasses keep working unchanged while new code targets descriptors.
+/// Array order = draw order (bottom to top), except box BORDERS, which are
+/// drawn under every glyph/ring/path first (viewer layering parity).
+- (NSArray<KKMiniElement *> *)miniViewer:(KKMiniViewerView *)canvas
+                  elementsForContentRect:(CGRect)contentRect;
 /// YES if the effect should be rendered into a processed texture sized to the
 /// DISPLAY resolution (downscaled to the content rect, capped at source) rather
-/// than the full source size. Only soft / bounds-expanding effects (e.g. Glow)
+/// than the full source size. Only soft / bounds-expanding effects
 /// benefit - rendering at display res preserves their soft falloff. A transform
 /// shader that normalizes the fragment position by the dest texture's own pixel
 /// dims must return NO (the default), or a smaller dest would zoom it in.
@@ -57,6 +85,26 @@ NS_ASSUME_NONNULL_BEGIN
     processSourceTexture:(id<MTLTexture>)source
              intoTexture:(id<MTLTexture>)dest
            commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
+/// Generator variant: produce the preview pixels from the delegate's own state
+/// with NO input frame. A generator (e.g. a mesh gradient) has no source clip,
+/// so nothing is published into the feed; the canvas instead allocates a dest
+/// texture sized to the content rect (clip aspect) and asks the delegate to
+/// render straight into it. Implement THIS instead of (not in addition to)
+/// -processSourceTexture: for a source-less plugin. Return YES if a pass was
+/// encoded.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    generateIntoTexture:(id<MTLTexture>)dest
+          commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
+/// Filmstrip / onion support for a source-less generator. A source-based plugin
+/// gets its N keypose frames from FCP (the feed publishes one slot per boundary
+/// time); a generator has no feed, so the canvas asks the delegate directly for
+/// the sorted, de-duplicated keypose fractions (0..1) to fan out. Return the
+/// distinct keypose times across the animated lanes, or nil/empty (or a single
+/// [0]) for a constant-only timeline (one cell). Only consulted for generators
+/// (delegates that implement -generateIntoTexture:) when renderMode != Off. The
+/// canvas renders each returned fraction by setting `editFraction` to it before
+/// the per-slot -generateIntoTexture: call.
+- (NSArray<NSNumber *> *)miniViewerKeyposeFractions:(KKMiniViewerView *)canvas;
 /// Center of the point handle in overlay points (y-up), given the image's
 /// `contentRect` (same space). Return NO for no handle. The canvas draws it
 /// with the shared `KKPointOSC` shader so it's pixel-identical to the viewer
@@ -64,17 +112,66 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
           contentRect:(CGRect)contentRect;
+/// The active point handle's centre for a GUIDE spotlight/target, WITHOUT
+/// implying a drawable primary handle. A multi-point renderer (Shader) paints
+/// its handles via `extraPointHandleGlyphs` and has no single primary, so it
+/// leaves `pointHandleCenter` unanswered (else the draw loop would paint an
+/// opaque primary over its dim ghosts) and answers this instead. Same space +
+/// contract as `pointHandleCenter`. `pointHandleScreenRect` falls back here.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    activePointHandleCenter:(out CGPoint *)outCenter
+                contentRect:(CGRect)contentRect;
+/// As above, at explicit lane values (the guide's drag destination). Falls back
+/// from `pointHandleScreenRectForValues:`.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    activePointHandleCenter:(out CGPoint *)outCenter
+                  forValues:(NSArray<NSNumber *> *)values
+                contentRect:(CGRect)contentRect;
 /// Extra point handles (e.g. crop corners/edges) beyond the single
 /// `pointHandleCenter`, in overlay points (y-up). Each is drawn with the same
 /// shared `KKPointOSC` glyph. Return nil/empty for none.
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     extraHandleCentersForContentRect:(CGRect)contentRect;
+/// Additional PRIMARY-style point handles beyond the single
+/// `pointHandleCenter`, for a dynamic plugin that exposes more than one point
+/// OSC at once (e.g. Shader's multiple `#point osc` lanes - the mini sibling of
+/// the viewer drawing every KKPositionOSC). Each is drawn with the delegate's
+/// `pointHandleStyle` glyph (arc / dot), same as the primary handle; the
+/// delegate owns their hit-test / drag. Each element is a bundle: `@"center"` =
+/// NSValue point (overlay points, y-up), `@"alpha"` = NSNumber ghost alpha
+/// (< 1 dims an Opt-revealed hidden handle). Return nil/empty for none.
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                   extraPointHandleGlyphsForContentRect:(CGRect)contentRect;
+/// Fixed-glyph handles whose GLYPH is chosen PER handle (unlike
+/// `extraPointHandleGlyphs`, which paints every one with the delegate's single
+/// `pointHandleStyle`). A dynamic plugin that maps a custom OSC to an arbitrary
+/// glyph (e.g. Shader's `// @osc` blocks: a `style=hollow` radius handle draws
+/// the shared radius-widget ring) returns one bundle each: `@"center"` =
+/// NSValue point (overlay points, y-up), `@"style"` = NSNumber
+/// KKMiniHandleStyle, and optional `@"alpha"` = NSNumber ghost alpha (< 1 dims
+/// an Opt-revealed hidden handle). The delegate owns their hit-test / drag.
+/// Return nil/empty for none.
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                         extraFixedGlyphsForContentRect:(CGRect)contentRect;
+/// Additional motion paths (one per extra point OSC), so every animated point
+/// lane draws its OWN trajectory - not just the first. Sibling of
+/// `extraPointHandleGlyphsForContentRect:`; without it, whichever lane is first
+/// would own the single motion path and the rest would look constant. Each
+/// element is a bundle: `@"poly"` = polyline `NSArray<NSValue*>` (empty for a
+/// constant lane), `@"segs"` = flattened tangent segments, `@"anchors"` =
+/// keypose dots (all overlay points, y-up), and optional `@"alpha"` = NSNumber
+/// ghost alpha for an Opt-revealed hidden path. Return nil/empty for none.
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                         extraMotionPathsForContentRect:(CGRect)contentRect;
 /// Scale-box handle centres (overlay points, y-up): 0-3 corners BL/BR/TR/TL,
 /// 4-7 edges. Empty/nil if the delegate draws no scale box. Lets a guide
 /// spotlight a scale handle; the drag itself reuses the generic handle path.
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     scaleHandleCentersForContentRect:(CGRect)contentRect;
-/// Motion-path overlay (Magic Move). Polyline points (overlay points, y-up) for
+/// Motion-path overlay. Polyline points (overlay points, y-up) for
 /// the red trajectory line through the Position keyposes. Empty for none.
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathPolylineForContentRect:(CGRect)contentRect;
@@ -99,7 +196,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     backgroundClickAtPoint:(CGPoint)point
                contentRect:(CGRect)contentRect;
-/// Anchor-point pivot square (Magic Move). Centre in overlay points (y-up),
+/// Anchor-point pivot square. Centre in overlay points (y-up),
 /// drawn with the shared `KKSquarePointOSC` glyph so it matches the viewer.
 /// Return NO for none. Dimming for a revealed ghost comes from the renderer's
 /// `anchorSquareGhostAlpha`.
@@ -107,7 +204,7 @@ NS_ASSUME_NONNULL_BEGIN
     anchorSquareCenter:(out CGPoint *)outCenter
            contentRect:(CGRect)contentRect;
 /// A secondary Position handle (the arc glyph) for a plugin whose main point
-/// handle is something else (e.g. Glow's radius ring). Centre in overlay points
+/// handle is something else (e.g. a radius ring). Centre in overlay points
 /// (y-up), drawn with the shared arc glyph so it matches the viewer's Position
 /// handle. Return NO for none. Dimming for a revealed ghost comes from the
 /// renderer's `positionHandleGhostAlpha`; the active (pressed) emphasis from
@@ -121,6 +218,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// nil/empty for none.
 - (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
                  boxesForContentRect:(CGRect)contentRect;
+/// All 3-ring rotation gizmos to draw, as `KKMiniRotation` descriptors. Use
+/// this (instead of the single -miniViewer:rotationOSCCenter:... path) when a
+/// plugin has MANY independent rotation OSCs. Drawn through the same encode as
+/// the single path. nil/empty for none.
+- (NSArray<KKMiniRotation *> *)miniViewer:(KKMiniViewerView *)canvas
+               rotationOSCsForContentRect:(CGRect)contentRect;
 /// An optional alignment grid to draw UNDER the OSC handles, matching the in-
 /// viewer grid. Return NO for no grid. `outSpacingX`/`outSpacingY` are the cell
 /// size as a FRACTION of the content rect (already adaptively adjusted by the
@@ -163,8 +266,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
               toolbarCursorForTag:(NSInteger)tag;
 /// Rect (overlay view points, y-up) of the toolbar item with `tag`, or
-/// `NSZeroRect` if absent. Lets a guide spotlight a specific toolbar button (the
-/// view maps it to screen via -guideToolbarButtonScreenRectForTag:). Optional.
+/// `NSZeroRect` if absent. Lets a guide spotlight a specific toolbar button
+/// (the view maps it to screen via -guideToolbarButtonScreenRectForTag:).
+/// Optional.
 - (NSRect)miniViewer:(KKMiniViewerView *)canvas
     toolbarButtonViewRectForTag:(NSInteger)tag;
 /// A key was pressed while the mini is the key window (the toolbar's tool
@@ -202,8 +306,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// The in-progress pen point count (a held first point counts as 1), 0 when the
 /// pen is idle or has just finished a path. Lets a guide advance per click.
 - (NSInteger)miniViewerGuidePenPointCount:(KKMiniViewerView *)canvas;
-/// The last placed in-progress pen point in view points (NSZeroPoint when idle),
-/// so a guide can target the finish click on the actual anchor.
+/// The last placed in-progress pen point in view points (NSZeroPoint when
+/// idle), so a guide can target the finish click on the actual anchor.
 - (NSPoint)miniViewerGuideLastPenPointView:(KKMiniViewerView *)canvas;
 /// Draw the tool's in-progress overlay (pen anchors / handles / curve / ghost)
 /// in the Metal pass, on top of everything. The delegate encodes via the
@@ -213,7 +317,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// encoder armed for the duration.
 - (void)miniViewerDrawToolOverlay:(KKMiniViewerView *)canvas
                       contentRect:(CGRect)contentRect;
-/// An elliptical ring OSC to draw (e.g. Glow's radius), centred at `outCenter`
+/// An elliptical ring OSC to draw (e.g. a radius ring), centred at `outCenter`
 /// with per-axis pixel radii `outRadiusX`/`outRadiusY`, all in overlay points
 /// (y-up). Return NO for none. The canvas strokes it in the Metal pass like the
 /// box borders; the delegate owns hit-testing + the drag-to-value mapping
@@ -233,6 +337,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// revealed ghost of a hidden ring, so the canvas dims it like the other ghost
 /// handles. Default 1.0 when the delegate doesn't implement it.
 - (CGFloat)miniViewerRingGhostAlpha:(KKMiniViewerView *)canvas;
+/// Multiple ring OSCs to draw at once - the mini sibling of a viewer drawing
+/// every KKRingOSC in a loop (e.g. Shader's `osc=ring` scalar lanes). Each
+/// element is a bundle: `@"center"` = NSValue point (overlay points, y-up),
+/// `@"radiusX"`/`@"radiusY"` = NSNumber pixel radii, `@"emphasis"` = NSNumber
+/// (0 idle / 1 hover / 2 active), `@"alpha"` = NSNumber ghost alpha (< 1 dims
+/// an Opt-revealed hidden ring). The canvas strokes each like the single ring;
+/// the delegate owns hit-test + drag through the generic handle methods.
+/// Sibling of `extraPointHandleGlyphsForContentRect:`. Return nil/empty for
+/// none.
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                               extraRingsForContentRect:(CGRect)contentRect;
 /// Push externally-edited constant values (slider/field) into the delegate
 /// so the preview updates live, without persisting (the host coalesces the
 /// real write). `values` is the lane's value array (Float: [v]; Crop:
@@ -341,8 +457,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// the render side to a small JSON descriptor file - and displays it. The
 /// render and view sides live in separate XPC processes, so the only shared
 /// primitive is the `IOSurface` (looked up here by global ID). Shader
-/// compositing, handles and value editing arrive in later phases. See
-/// Rounded/PLAN.md "Cross-process transport".
+/// compositing, handles and value editing arrive in later phases.
 @interface KKMiniViewerView : MTKView
 
 /// Path to the JSON descriptor: `{ ioSurfaceID, width, height, generation }`.
@@ -391,9 +506,115 @@ NS_ASSUME_NONNULL_BEGIN
 /// or zero until the source resolves. Used to show crop in pixel units.
 @property(nonatomic, readonly) CGSize sourceMediaSize;
 
+/// A SECOND source texture, when the feed published one via
+/// `-[KKMiniViewerFeed updateChannel1WithSourceTexture:...]`; nil otherwise.
+///
+/// Separate from the filmstrip slots, which are the same source at different
+/// TIMES. This is a different source entirely - Shader uses it for the "To"
+/// image well (a transition's incoming clip) so a two-texture shader previews
+/// properly instead of falling through to the noise fallback. Renderers reach
+/// it via `self.canvas.channel1Texture`. Raw, like the slot textures: the
+/// caller applies its own colour handling.
+@property(nonatomic, readonly, nullable) id<MTLTexture> channel1Texture;
+
+/// AUXILIARY source textures the feed published via
+/// `-[KKMiniViewerFeed updateAuxTexture:atIndex:...]`, indexed positionally in
+/// the order the publisher wrote them. Zero for every feed that publishes none.
+///
+/// Mirage uses them for a `// #frames` shader's neighbour frames, so the mini
+/// previews a temporal shader on the real neighbours. They keep the LAST
+/// pumped frames between renders on purpose - a parked playhead must still
+/// preview while the user tunes - so a consumer treats a count that disagrees
+/// with what it expects as "not mine yet" and falls back rather than
+/// mis-indexing. Raw, like the slot textures: the caller applies its own
+/// colour handling.
+@property(nonatomic, readonly) NSUInteger auxTextureCount;
+- (nullable id<MTLTexture>)auxTextureAtIndex:(NSUInteger)index;
+
+/// The publisher's frame counter for an aux index, or 0 when unresolved.
+///
+/// THE cache key for anything derived from an aux texture. The MTLTexture
+/// object is not one: the feed rewrites the same IOSurface in place, so the
+/// wrapper object stays identical across new frames and only this value moves.
+/// A consumer that colour-converts a neighbour caches the result against
+/// (texture, generation) and reconverts only when a pump lands.
+- (uint64_t)auxTextureGenerationAtIndex:(NSUInteger)index;
+
+/// The active slot's rendered FINAL frame - the effect's output the mini-viewer
+/// is currently displaying (BGRA8). Exposed so the thumbnail bake can capture
+/// the real composited result directly (transitions, picture-in-picture,
+/// audio visualisers) instead of re-running the shader on a stand-in source.
+/// nil before the first draw / when no slot is loaded. Carries the trial
+/// watermark when the host set `watermarkProductID` - a bake that wants clean
+/// pixels re-renders from `sourceTexture` instead.
+@property(nonatomic, readonly, nullable) id<MTLTexture> processedTexture;
+
+/// Where the image is actually drawn inside this view, in view points, honouring
+/// aspect, zoom and pan. Public so a host can map a click in the preview to a
+/// position in the frame - the Grading surface's grey picker needs exactly that.
+/// Bottom-left origin, like the view and like the processed texture.
+- (CGRect)contentRectInViewPoints;
+
+/// The active slot's RAW input frame (this clip's real footage, as delivered
+/// by the feed). The effect has not run on it and the watermark never touches
+/// it, so a bake can re-render clean output from here.
+@property(nonatomic, readonly, nullable) id<MTLTexture> sourceTexture;
+
+/// Before/after comparison, drawn ONLY here.
+///
+/// Both modes are a draw-time composite of the two textures above and never
+/// reach the plugin's render path, so a split can't be exported as half-graded
+/// footage. Both are session-only VIEW state - not parameters, not lanes, not
+/// keyframable, not undoable - because every honoured param write in this
+/// codebase costs an undo entry, and a draggable divider stored as one would
+/// bury the user's actual grade under a hundred Cmd-Z steps.
+///
+/// Off by default and entirely opt-in: a plugin that never touches these
+/// properties draws exactly as before.
+
+/// YES when there IS an ungraded frame to compare against (the active slot
+/// resolved a source texture). NO for a source-less generator, where "before"
+/// would only be black - a host hides its compare controls on this, and both
+/// modes below no-op rather than drawing a black frame.
+@property(nonatomic, readonly) BOOL compareAvailable;
+
+/// Split compare: graded (`processedTexture`) LEFT of the divider, ungraded
+/// (`sourceTexture`) RIGHT of it, with a draggable divider drawn as one more
+/// on-screen control. Ignored while `compareAvailable` is NO.
+@property(nonatomic) BOOL compareSplitEnabled;
+
+/// Divider position as a fraction of the content rect's width (0 = left edge,
+/// 1 = right edge). Defaults to 0.5; clamped just inside the edges so the
+/// divider never becomes ungrabbable.
+@property(nonatomic) CGFloat compareSplitFraction;
+
+/// Hold-to-bypass: while YES the whole preview draws `sourceTexture`, restoring
+/// on release. Independent of the split - a host drives it from a press-and-hold
+/// button. Ignored while `compareAvailable` is NO.
+@property(nonatomic) BOOL compareBypassing;
+
+/// Fired on the main thread when `compareAvailable`, `compareSplitEnabled` or
+/// `compareBypassing` changes. Availability is the one a host can't otherwise
+/// see: the feed resolves its first frame well after the UI is built, so a
+/// control gated on it would stay hidden forever without this.
+@property(nonatomic, copy, nullable) void (^onCompareStateChanged)(void);
+
 /// Fired when `sourceMediaSize` first resolves (or changes) - lets a host
 /// re-render any pixel-scaled UI that depends on it.
 @property(nonatomic, copy, nullable) void (^onSourceResolved)(void);
+
+/// Fired on the main thread after a frame's effect render has actually COMPLETED
+/// on the GPU, so `processedTexture` holds finished pixels.
+///
+/// For a consumer that measures the rendered frame (the Grading surfaces' scopes)
+/// rather than displays it. Polling on a timer is the wrong tool: an NSTimer in
+/// the default run-loop mode does not fire while the mouse is down, so a scope
+/// driven that way freezes for the whole of a parameter drag and only catches up
+/// on mouse-up - which is exactly when the user has stopped needing it.
+///
+/// Called once per rendered frame while the view is drawing, so a handler must be
+/// cheap or throttle itself.
+@property(nonatomic, copy, nullable) void (^onProcessedFrameReady)(void);
 
 /// Which kind of view-transform gesture the user performed - lets a guide
 /// teach pan and zoom as separate steps (the signal alone can't otherwise tell
@@ -415,7 +636,7 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 @property(nonatomic, copy, nullable) void (^onViewReset)(void);
 
 /// Fired when a double-click was consumed by the delegate (i.e. it returned YES
-/// from -miniViewer:doubleClickAtPoint:contentRect: - e.g. Magic Move toggling
+/// from -miniViewer:doubleClickAtPoint:contentRect: - e.g. a plugin toggling
 /// a keypose's corner/smooth handling) instead of falling through to a view
 /// reset. A guide uses this to advance a "double-click to curve a keypose"
 /// step.
@@ -438,6 +659,17 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// the popover header pill sets; mapped 1:1 to KKMiniViewerRenderMode by
 /// the popover so the canvas stays free of the lanes-view import cycle.
 @property(nonatomic) NSInteger renderMode;
+
+/// Live-playback preview: while the host reports FCP is playing back, the mini
+/// shows the effect at the moving playhead instead of the frozen keypose it's
+/// editing, and every on-screen control is suppressed so the preview reads as a
+/// clean frame. When YES, each source frame is rendered at ITS OWN feed tag
+/// (the clip fraction that frame represents), so the effect transform stays
+/// locked to the footage the feed delivered rather than trailing a
+/// separately-polled playhead; the poll also speeds up to keep pace with the
+/// feed. Default NO restores the edited-keypose frame with its controls on the
+/// next redraw.
+@property(nonatomic) BOOL livePlaybackActive;
 
 /// When YES, a click in the mini makes the mini the window's first responder
 /// (instead of resigning to nil), so an NSPopover-hosted mini becomes the key
@@ -528,13 +760,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 - (NSRect)pointHandleScreenRect;
 
 /// Screen-space rect of the floating toolbar button with `tag` (e.g. the Pen
-/// tool), or `NSZeroRect` if the delegate exposes none. Lets a guide spotlight a
-/// mini toolbar button.
+/// tool), or `NSZeroRect` if the delegate exposes none. Lets a guide spotlight
+/// a mini toolbar button.
 - (NSRect)guideToolbarButtonScreenRectForTag:(NSInteger)tag;
 
-/// Synthesize a toolbar press at `screenPoint` (the XPC overlay swallows the raw
-/// click, exactly as the handle-drag methods), performing the item's action.
-/// Returns YES if a toolbar item was hit. Use from a guide's
+/// Synthesize a toolbar press at `screenPoint` (the XPC overlay swallows the
+/// raw click, exactly as the handle-drag methods), performing the item's
+/// action. Returns YES if a toolbar item was hit. Use from a guide's
 /// `spotlightMouseDown` to drive a tool/button selection in the mini.
 - (BOOL)guidePressToolbarAtScreenPoint:(NSPoint)screenPoint;
 

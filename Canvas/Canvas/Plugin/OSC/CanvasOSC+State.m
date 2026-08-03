@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 #import "CanvasLayerTimeline.h"
 #import "CanvasOSC_Private.h"
 #import "Constants.h"
@@ -128,12 +129,6 @@
 // parameterChanged, and we republish the snapshot so a follow-up write sees the
 // new value before the round-trip. The single home for OSC-side UIState writes.
 - (void)_writeUIStateMerging:(void (^)(NSMutableDictionary *state))mutate {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!actionAPI || !setAPI)
-    return;
   NSMutableDictionary *state = [[self _uiStateDict] mutableCopy];
   mutate(state);
   NSString *newJSON = [[NSString alloc]
@@ -141,10 +136,15 @@
                                                    options:0
                                                      error:nil]
           encoding:NSUTF8StringEncoding];
-  [actionAPI startAction:self];
-  KKWriteCustomParamString(setAPI, newJSON, kParamUIState);
-  [actionAPI endAction:self];
-  CanvasSetUIStateSnapshot(newJSON);
+  BOOL scoped = KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (setAPI)
+          KKWriteCustomParamString(setAPI, newJSON, kParamUIState);
+      });
+  if (scoped)
+    CanvasSetUIStateSnapshot(newJSON);
 }
 
 // Master-on opt-click over a handle toggles that element's visibility. The kit

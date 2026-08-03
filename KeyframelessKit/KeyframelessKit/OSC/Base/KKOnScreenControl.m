@@ -5,13 +5,16 @@
 
 #import "KKOnScreenControl.h"
 #import "KKOSCShaderTypes.h"
+#import "KKOSCVisibilityModel.h"
 #import "KKResizeCursor.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 #import <KeyframelessKit/KKPluginInstanceState.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
@@ -210,22 +213,27 @@
   return 201; // the established kParamUIState id, shared across plugins
 }
 
-- (BOOL)kkOSCElementVisible:(NSString *)label {
+// The viewer's inputs to the shared visibility rules. No lock concept
+// viewer-side; no per-instance state yet reads as everything-visible (the
+// pre-toggle default).
+- (KKOSCVisibilityState)kkVisibilityState {
   KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
-  if (!st)
-    return YES; // no per-instance state yet => visible (pre-toggle default)
-  if (!st.oscMasterVisible)
-    return NO;
-  return !(st.hiddenOSCElements && [st.hiddenOSCElements containsObject:label]);
+  return (KKOSCVisibilityState){.locked = NO,
+                                .masterOff = st && !st.oscMasterVisible,
+                                .revealActive = self.optRevealActive};
+}
+
+- (BOOL)kkOSCElementVisible:(NSString *)label {
+  return KKOSCVisibilityEnabled(
+      [self kkVisibilityState], [self kkOSCElementIndividuallyHidden:label]);
 }
 
 - (BOOL)kkOSCMasterOff {
-  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
-  return st && !st.oscMasterVisible;
+  return [self kkVisibilityState].masterOff;
 }
 
 - (float)kkRevealGhostAlpha {
-  return [self kkOSCMasterOff] ? 1.0f : 0.3f;
+  return KKOSCVisibilityGhostAlpha([self kkVisibilityState], YES);
 }
 
 - (NSCursor *)kkVisibilityCursorForLabel:(NSString *)label {
@@ -244,25 +252,12 @@
 
 - (BOOL)kkOSCElementIndividuallyHidden:(NSString *)label {
   KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
-  NSSet<NSString *> *hidden = st.hiddenOSCElements;
-  if (!hidden || !label)
-    return NO;
-  if ([hidden containsObject:label])
-    return YES;
-  // An ancestor being hidden hides its children too, via the dot hierarchy
-  // ("Rotation" hides "Rotation.X"). Mirrors the inspector compound pills.
-  NSRange dot = [label rangeOfString:@"." options:NSBackwardsSearch];
-  return dot.location != NSNotFound &&
-         [hidden containsObject:[label substringToIndex:dot.location]];
+  return KKOSCLabelHiddenInSet(st.hiddenOSCElements, label);
 }
 
 - (BOOL)kkOSCRevealEligible:(NSString *)label {
-  BOOL hidden = [self kkOSCElementIndividuallyHidden:label];
-  // master on  -> Opt-hold reveals the elements you HID (dim re-show ghosts).
-  // master off -> Opt-hold "peek" reveals the elements left ENABLED; the ones
-  //               you turned off stay off (peek = a transient flip to
-  //               master-on).
-  return [self kkOSCMasterOff] ? !hidden : hidden;
+  return KKOSCVisibilityRevealEligible(
+      [self kkVisibilityState], [self kkOSCElementIndividuallyHidden:label]);
 }
 
 - (void)kkUpdateOptRevealWithModifiers:(NSUInteger)modifiers
@@ -280,6 +275,21 @@
 
 - (void)kkResetOptHideArming {
   _kkInteractionArmed = NO;
+}
+
+const NSInteger KKOSCBackgroundPart = NSIntegerMax - 1;
+
+- (NSInteger)kkOSCBackgroundPartFallbackForActivePart:(NSInteger)activePart {
+  if (activePart != 0 || [KKHostInfo isRunningInFinalCut])
+    return activePart;
+  // Nothing hittable under the cursor and we're in Motion: reset any stale
+  // reveal/eye cursor a control left behind, then claim the background part so
+  // the host keeps a "part" under the cursor everywhere and reports OPTION on
+  // hover (Motion only reports it while the hit-test claims a part).
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  [oscAPI setCursor:[NSCursor arrowCursor]];
+  return KKOSCBackgroundPart;
 }
 
 // FCP doesn't hand the viewer a reliable mouseDown, but it drives the press /
@@ -326,40 +336,36 @@
     [hidden addObject:key];
   st.hiddenOSCElements = hidden;
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  UInt32 paramID = [self oscVisibilityParamID];
-  NSMutableDictionary *state = [st.lastUIState mutableCopy];
-  if (!state) {
-    NSString *existing = KKReadCustomParamString(getAPI, paramID);
-    state = [(existing.length
-                  ? [NSJSONSerialization
-                        JSONObjectWithData:
-                            [existing dataUsingEncoding:NSUTF8StringEncoding]
-                                   options:0
-                                     error:nil]
-                  : nil) ?: @{} mutableCopy];
-  }
-  NSMutableDictionary<NSString *, NSNumber *> *els =
-      [NSMutableDictionary dictionary];
-  for (NSString *k in [self oscElementKeys])
-    els[k] = @(![hidden containsObject:k]);
-  state[@"oscElements"] = els;
-  st.lastUIState = state;
-  NSString *json = [[NSString alloc]
-      initWithData:[NSJSONSerialization dataWithJSONObject:state
-                                                   options:0
-                                                     error:nil]
-          encoding:NSUTF8StringEncoding];
-  KKWriteCustomParamString(setAPI, json, paramID);
-  [actionAPI endAction:self];
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        UInt32 paramID = [self oscVisibilityParamID];
+        NSMutableDictionary *state = [st.lastUIState mutableCopy];
+        if (!state) {
+          NSString *existing = KKReadCustomParamString(getAPI, paramID);
+          state = [(existing.length
+                        ? [NSJSONSerialization
+                              JSONObjectWithData:
+                                  [existing
+                                      dataUsingEncoding:NSUTF8StringEncoding]
+                                         options:0
+                                           error:nil]
+                        : nil) ?: @{} mutableCopy];
+        }
+        NSMutableDictionary<NSString *, NSNumber *> *els =
+            [NSMutableDictionary dictionary];
+        for (NSString *k in [self oscElementKeys])
+          els[k] = @(![hidden containsObject:k]);
+        state[@"oscElements"] = els;
+        st.lastUIState = state;
+        NSString *json = [[NSString alloc]
+            initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                         options:0
+                                                           error:nil]
+                encoding:NSUTF8StringEncoding];
+        KKWriteCustomParamString(setAPI, json, paramID);
+      });
 }
 
 @end

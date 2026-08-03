@@ -11,7 +11,7 @@
 // layer-list reorder, which archives an NSIndexSet; a single int suffices here
 // since the property list is single-select).
 static NSString *const kKKReorderDragType =
-    @"co.overpolish.keyframeless.reorderRow";
+    @"com.keyframeless.reorderRow";
 
 static const CGFloat kRowH = 28.0;
 static const CGFloat kRowGap = 2.0;

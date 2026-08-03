@@ -15,6 +15,18 @@ public enum AIPluginResultKind: Int {
 	/// layers exist. Only produced when the caller passed
 	/// `supportsLayerCreation: true` (Canvas); other plugins never see it.
 	case createLayers = 2
+	/// The user asked to WRITE or EDIT the shader's GLSL source. `shaderSource`
+	/// holds the complete shader the host writes into its code lane (which
+	/// re-transpiles and re-derives its controls). Only produced when the caller
+	/// used the code-authoring entry point (Mirage); other plugins never see it.
+	case authorCode = 3
+	/// The user asked to drive one or more properties from a FORMULA. `expressionOps`
+	/// is JSON `{ "operations": [{ "lane": "...", "expression": "..." }] }`; the host
+	/// sets each named lane's `linkExpression` and writes the timeline back (which
+	/// re-derives the driven values). Cross-clip `${Clip.Param}` refs come back in the
+	/// friendly display form the host translates to stored ids. Only produced when the
+	/// caller enabled expression authoring.
+	case authorExpression = 4
 }
 
 /// Returned by `AIPluginAgent.run(...)`. Either `.answer(String)` (Q&A reply),
@@ -30,6 +42,8 @@ public final class AIPluginResult: NSObject {
 	@objc public let mutationJSON: String?
 	@objc public let createSVG: String?
 	@objc public let createAnimatePrompt: String?
+	@objc public let shaderSource: String?
+	@objc public let expressionOps: String?
 
 	init(answer: String) {
 		self.kind = .answer
@@ -37,6 +51,8 @@ public final class AIPluginResult: NSObject {
 		self.mutationJSON = nil
 		self.createSVG = nil
 		self.createAnimatePrompt = nil
+		self.shaderSource = nil
+		self.expressionOps = nil
 		super.init()
 	}
 
@@ -46,6 +62,8 @@ public final class AIPluginResult: NSObject {
 		self.mutationJSON = mutationJSON
 		self.createSVG = nil
 		self.createAnimatePrompt = nil
+		self.shaderSource = nil
+		self.expressionOps = nil
 		super.init()
 	}
 
@@ -55,6 +73,30 @@ public final class AIPluginResult: NSObject {
 		self.mutationJSON = nil
 		self.createSVG = createSVG
 		self.createAnimatePrompt = animatePrompt
+		self.shaderSource = nil
+		self.expressionOps = nil
+		super.init()
+	}
+
+	init(shaderSource: String) {
+		self.kind = .authorCode
+		self.answer = nil
+		self.mutationJSON = nil
+		self.createSVG = nil
+		self.createAnimatePrompt = nil
+		self.shaderSource = shaderSource
+		self.expressionOps = nil
+		super.init()
+	}
+
+	init(expressionOps: String) {
+		self.kind = .authorExpression
+		self.answer = nil
+		self.mutationJSON = nil
+		self.createSVG = nil
+		self.createAnimatePrompt = nil
+		self.shaderSource = nil
+		self.expressionOps = expressionOps
 		super.init()
 	}
 }
@@ -105,6 +147,79 @@ public final class AIPluginAgent: NSObject {
 		}
 	}
 
+	/// Generator variant of `run`: the host also passes its Type catalog (an
+	/// "index = name (blurb)" list) and palette cap, which enables the styling
+	/// fast-path for "make a look" prompts (one call sets Type + the whole
+	/// palette). Q&A, animation, and vague prompts route exactly as `run` does.
+	@MainActor
+	@objc public static func runGenerator(
+		prompt: String,
+		productContext: String,
+		laneSchemaText: String,
+		currentTimelineJSON: String,
+		clipDurationSeconds: Double,
+		currentInspectorMode: String,
+		typeCatalog: String,
+		maxColors: Int,
+		completion: @escaping (AIPluginResult?, Error?) -> Void
+	) {
+		Task { @MainActor in
+			do {
+				let result = try await runAsync(
+					prompt: prompt,
+					productContext: productContext,
+					laneSchemaText: laneSchemaText,
+					currentTimelineJSON: currentTimelineJSON,
+					clipDurationSeconds: clipDurationSeconds,
+					currentInspectorMode: currentInspectorMode,
+					supportsCreate: false,
+					generatorTypeCatalog: typeCatalog,
+					generatorMaxColors: maxColors)
+				completion(result, nil)
+			} catch {
+				completion(nil, error)
+			}
+		}
+	}
+
+	/// Code-authoring variant of `run` (Mirage): the host also passes the shader's
+	/// current GLSL source, which enables the `code` route - "write a shader for a
+	/// wavy look", "add a glow to this". The agent returns a `.authorCode` result
+	/// whose `shaderSource` the host writes into its code lane. Q&A, animation
+	/// (mutation), and vague prompts route exactly as `run` does; only prompts that
+	/// ask to change the shader's actual look/effect become code.
+	@MainActor
+	@objc public static func runCodeAuthoring(
+		prompt: String,
+		productContext: String,
+		laneSchemaText: String,
+		currentTimelineJSON: String,
+		clipDurationSeconds: Double,
+		currentInspectorMode: String,
+		currentShaderSource: String,
+		availableSources: String,
+		completion: @escaping (AIPluginResult?, Error?) -> Void
+	) {
+		Task { @MainActor in
+			do {
+				let result = try await runAsync(
+					prompt: prompt,
+					productContext: productContext,
+					laneSchemaText: laneSchemaText,
+					currentTimelineJSON: currentTimelineJSON,
+					clipDurationSeconds: clipDurationSeconds,
+					currentInspectorMode: currentInspectorMode,
+					supportsCode: true,
+					currentShaderSource: currentShaderSource,
+					supportsExpressions: true,
+					availableSources: availableSources)
+				completion(result, nil)
+			} catch {
+				completion(nil, error)
+			}
+		}
+	}
+
 	/// Canvas targeted routing (see `runCanvasTargetedAsync`). Declared in the
 	/// main class body - not an extension - so the `@objc` entry point reliably
 	/// lands in the generated ObjC header the plugin imports.
@@ -141,7 +256,13 @@ public final class AIPluginAgent: NSObject {
 		currentTimelineJSON: String,
 		clipDurationSeconds: Double,
 		currentInspectorMode: String,
-		supportsCreate: Bool = false
+		supportsCreate: Bool = false,
+		supportsCode: Bool = false,
+		currentShaderSource: String = "",
+		supportsExpressions: Bool = false,
+		availableSources: String = "",
+		generatorTypeCatalog: String? = nil,
+		generatorMaxColors: Int = 0
 	) async throws -> AIPluginResult {
 		AIDraftState.shared.routingStatus = AILoc("Reading prompt")
 		// Pass 0a: classify. No docs in this prompt - classifier is just a
@@ -155,7 +276,30 @@ public final class AIPluginAgent: NSObject {
 			fallbackSchemaText: laneSchemaText)
 		let classification = try await classify(
 			prompt: prompt, productContext: productContext, laneLabels: labels,
-			supportsCreate: supportsCreate)
+			supportsCreate: supportsCreate, supportsCode: supportsCode,
+			supportsExpressions: supportsExpressions)
+		// The user wants to write or edit the shader's GLSL. Generate the source
+		// (editing the current shader when there is one and the ask implies it);
+		// the host writes it into its code lane, which re-transpiles and rebuilds
+		// the controls.
+		if classification.kind == "code" {
+			AIDraftState.shared.routingStatus = AILoc("Writing shader")
+			let source = try await generateShaderCode(
+				prompt: prompt, productContext: productContext,
+				currentShaderSource: currentShaderSource)
+			return AIPluginResult(shaderSource: source)
+		}
+		// The user wants a property driven by a formula (procedural motion, a
+		// math relationship, or a link to another clip). Generate one expression
+		// per target lane; the host sets each lane's linkExpression.
+		if classification.kind == "expression" {
+			AIDraftState.shared.routingStatus = AILoc("Writing expression")
+			let ops = try await generateExpressionOps(
+				prompt: prompt, productContext: productContext,
+				currentTimelineJSON: currentTimelineJSON,
+				availableSources: availableSources, laneLabels: labels)
+			return AIPluginResult(expressionOps: ops)
+		}
 		// The user wants a new shape drawn. Hand back an SVG (+ optional follow-up
 		// animation request); the host parses it into layers and, if asked, runs
 		// the animation once they exist.
@@ -168,6 +312,7 @@ public final class AIPluginAgent: NSObject {
 		}
 		if classification.kind == "answer" {
 			let docs = await renderDocs(for: prompt)
+			AIDraftState.shared.routingStatus = AILoc("Answering")
 			let reply = try await answerQuestion(
 				prompt: prompt, productContext: productContext, docs: docs)
 			return AIPluginResult(answer: reply)
@@ -184,6 +329,24 @@ public final class AIPluginAgent: NSObject {
 				? "Could you be a bit more specific about what you'd like to change?"
 				: clarification
 			return AIPluginResult(answer: reply)
+		}
+
+		// Generator styling fast-path: a "make a look" request (a Type + a
+		// palette) resolves in ONE focused call instead of the per-lane timing
+		// pipeline - fast on local, and it sets the Type reliably. Only when the
+		// host is a generator (it passed its Type catalog + palette cap).
+		if classification.template == "style",
+			let catalog = generatorTypeCatalog, generatorMaxColors > 0
+		{
+			AIDraftState.shared.routingStatus = AILoc("Choosing a look")
+			if let mutation = try await resolveGeneratorStyle(
+				prompt: prompt, productContext: productContext,
+				typeCatalog: catalog, maxColors: generatorMaxColors,
+				enableThinking: classification.complexity == "complex")
+			{
+				return AIPluginResult(mutationJSON: mutation)
+			}
+			// Resolver returned nothing usable - fall through to the full pipeline.
 		}
 
 		// Template fast-path: classifier resolved a known shape, Swift builds
@@ -206,7 +369,10 @@ public final class AIPluginAgent: NSObject {
 			prompt: prompt,
 			productContext: productContext,
 			laneSchemaText: laneSchemaText,
-			currentTimelineJSON: currentTimelineJSON,
+			// Compact timeline (labels + keyposes only) - the passes read only
+			// those, so dropping lane metadata keeps this, the one prompt that
+			// embeds the whole timeline, lean: fewer tokens, faster local prefill.
+			currentTimelineJSON: compactTimelineForAI(currentTimelineJSON),
 			clipDurationSeconds: clipDurationSeconds,
 			currentInspectorMode: currentInspectorMode,
 			enableThinking: classification.complexity == "complex"

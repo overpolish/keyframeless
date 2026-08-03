@@ -4,7 +4,7 @@
  */
 
 #import <Foundation/Foundation.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -38,6 +38,13 @@ FOUNDATION_EXPORT double KKLaneSpatialArcParam(NSArray<KKKeyPose *> *kps,
 FOUNDATION_EXPORT NSArray<NSValue *> *
 KKLanePositionPathPoints(KKLane *lane, NSUInteger samplesPerSegment);
 
+/// KKLanePositionPathPoints plus each sample's clip FRACTION (segment keypose
+/// times lerped by the tessellation parameter - approximate under easing),
+/// so a warped position OSC can evaluate time-varying references per sample.
+FOUNDATION_EXPORT NSArray<NSValue *> *KKLanePositionPathPointsWithFractions(
+    KKLane *lane, NSUInteger samplesPerSegment,
+    NSArray<NSNumber *> *_Nullable __autoreleasing *_Nullable outFractions);
+
 /// Effective spatial tangent handles for keypose `index`, in object space, as
 /// offsets from the anchor: the manual inHandle/outHandle when set, otherwise
 /// the auto-derived (Catmull-Rom) tangent the curve actually uses. Lets the OSC
@@ -56,5 +63,11 @@ KKLaneSpatialHandlesForKeypose(KKLane *lane, NSUInteger index,
 /// converts the returned object-space points into its own coordinate space.
 FOUNDATION_EXPORT NSArray<NSValue *> *
 KKLaneCoalescedAnchors(KKLane *lane, NSInteger skipIndex);
+
+/// KKLaneCoalescedAnchors plus each kept anchor's keypose FRACTION, for the
+/// warped position OSC's per-anchor mapping.
+FOUNDATION_EXPORT NSArray<NSValue *> *KKLaneCoalescedAnchorsWithFractions(
+    KKLane *lane, NSInteger skipIndex,
+    NSArray<NSNumber *> *_Nullable __autoreleasing *_Nullable outFractions);
 
 NS_ASSUME_NONNULL_END

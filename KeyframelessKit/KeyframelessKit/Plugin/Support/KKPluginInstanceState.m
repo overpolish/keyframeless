@@ -6,22 +6,15 @@
 #import "KKPluginInstanceState.h"
 #import "KKConstants.h"
 #import "KKDataBlob.h"
+#import "KKLog.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <objc/runtime.h>
-
-@implementation KKTimingViewRefs
-- (BOOL)isAlive {
-  return _seqView != nil;
-}
-@end
 
 @implementation KKPluginInstanceState
 
 - (instancetype)init {
   self = [super init];
   if (self) {
-    _pendingPlayheadFraction = -1;
-    _pendingPlayheadDuration = -1;
     _oscMasterVisible = YES;
   }
   return self;
@@ -100,6 +93,8 @@ KKPluginInstanceState *KKInstanceStateEnsureForAPI(id<PROAPIAccessing> api) {
     id<FxParameterSettingAPI_v5> setAPI =
         [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     [setAPI setStringParameterValue:newUUID toParameter:kKKParamInstanceID];
+    KKLogWarn(@"[UUID] re-minted %@ -> %@ (duplicate-owner detection)", uuid,
+              newUUID);
     objc_setAssociatedObject(api, &kKKInstanceUUIDAssocKey, newUUID,
                              OBJC_ASSOCIATION_COPY_NONATOMIC);
     state = KKInstanceStateForUUID(newUUID);
@@ -110,4 +105,25 @@ KKPluginInstanceState *KKInstanceStateEnsureForAPI(id<PROAPIAccessing> api) {
 
 NSArray<KKPluginInstanceState *> *KKAllInstanceStates(void) {
   return sInstanceStates.allValues ?: @[];
+}
+
+void KKInstanceUUIDHandleParameterChanged(id<PROAPIAccessing> api,
+                                          UInt32 parameterID) {
+  if (parameterID != kKKParamInstanceID || !api)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+  NSString *uuid = nil;
+  [getAPI getStringParameterValue:&uuid fromParameter:kKKParamInstanceID];
+  if (!uuid.length)
+    return;
+  NSString *cached = objc_getAssociatedObject(api, &kKKInstanceUUIDAssocKey);
+  if ([cached isEqualToString:uuid])
+    return;
+  KKLogInfo(@"[UUID] instance id param changed %@ -> %@, cache refreshed",
+            cached ?: @"(none)", uuid);
+  objc_setAssociatedObject(api, &kKKInstanceUUIDAssocKey, uuid,
+                           OBJC_ASSOCIATION_COPY_NONATOMIC);
 }

@@ -10,11 +10,10 @@
 # Usage: bump-version.sh <component> <breaking|major|minor|alpha|release>
 #
 # Components:
-#   rounded        Rounded plugin
-#   magicmove      MagicMove plugin
 #   keyframelessx  Keyframeless X app
+#   mirage         Mirage plugin
 #   canvas         Canvas plugin
-#   glow           Glow plugin
+#   ai             Keyframeless AI (standalone local helper)
 
 set -euo pipefail
 
@@ -24,11 +23,10 @@ usage() {
   echo "Usage: bump-version.sh <component> <breaking|major|minor|alpha|release>"
   echo ""
   echo "Components:"
-  echo "  rounded        Rounded plugin"
-  echo "  magicmove      MagicMove plugin"
   echo "  keyframelessx  Keyframeless X app"
+  echo "  mirage         Mirage plugin"
   echo "  canvas         Canvas plugin"
-  echo "  glow           Glow plugin"
+  echo "  ai             Keyframeless AI (standalone local helper)"
   echo ""
   echo "Version format: BREAKING.MAJOR.MINOR[-vN]"
   echo ""
@@ -49,7 +47,7 @@ COMPONENT="$1"
 BUMP="$2"
 
 case "$COMPONENT" in
-  rounded | magicmove | glow | canvas | keyframelessx) ;;
+  canvas | mirage | keyframelessx | ai) ;;
   *)
     echo "Unknown component: $COMPONENT"
     usage
@@ -60,11 +58,21 @@ esac
 # stores its version in the .pbxproj instead).
 plist_for_component() {
   case "$1" in
-    rounded)       echo "Rounded/Rounded/Plugin/Info.plist" ;;
-    magicmove)     echo "MagicMove/MagicMove/Plugin/Info.plist" ;;
-    glow)          echo "Glow/Glow/Plugin/Info.plist" ;;
     canvas)        echo "Canvas/Canvas/Plugin/Info.plist" ;;
+    mirage)        echo "Mirage/Mirage/Plugin/Info.plist" ;;
+    ai) echo "Distribution/helper/kk-ai-helper.plist" ;;
     keyframelessx) echo "" ;;
+  esac
+}
+
+# The site folder a component's release notes live in. This is the SITE slug,
+# which is not always the component name: the update check derives its own slug
+# from the bundle id (keyframelessx, ai) while the site uses the product names.
+# The generated alias pages keep those paths resolving.
+changelog_slug_for_component() {
+  case "$1" in
+    ai) echo "keyframeless-ai" ;;
+    *)  echo "$1" ;;
   esac
 }
 
@@ -152,6 +160,13 @@ bump_pkgproj() {
   local identifier="$1"
   local pkgproj="Distribution/Keyframeless.pkgproj"
   echo "  $pkgproj ($identifier)"
+  # Fail loudly on an identifier the pkgproj doesn't contain. The perl below
+  # silently does nothing on no match, which is how the Shader -> Mirage rename
+  # left the installer pinned to a stale version without anyone noticing.
+  if ! grep -q "<string>$identifier</string>" "$ROOT/$pkgproj"; then
+    echo "Error: $identifier not found in $pkgproj" >&2
+    exit 1
+  fi
   perl -i -0pe \
     "s|(<key>IDENTIFIER</key>\s*<string>\Q$identifier\E</string>.*?<key>VERSION</key>\s*<string>)[^<]*(</string>)|\${1}$VERSION\${2}|s" \
     "$ROOT/$pkgproj"
@@ -160,10 +175,12 @@ bump_pkgproj() {
 # Create a prefilled release-notes .md for this version (the changelog site + the
 # kk-version meta tag both derive from this file). Never clobbers an existing one.
 create_changelog_md() {
-  local dir="$ROOT/docs/changelog/$COMPONENT"
+  local slug
+  slug="$(changelog_slug_for_component "$COMPONENT")"
+  local dir="$ROOT/docs/changelog/$slug"
   local md="$dir/$VERSION.md"
   if [[ -f "$md" ]]; then
-    echo "  changelog: docs/changelog/$COMPONENT/$VERSION.md already exists (left as-is)"
+    echo "  changelog: docs/changelog/$slug/$VERSION.md already exists (left as-is)"
     return
   fi
   mkdir -p "$dir"
@@ -176,40 +193,33 @@ create_changelog_md() {
 
 ### Fixed
 EOF
-  echo "  changelog: created docs/changelog/$COMPONENT/$VERSION.md"
+  echo "  changelog: created docs/changelog/$slug/$VERSION.md"
 }
 
 echo "Bumping $COMPONENT: $CURRENT -> $VERSION"
 
 case "$COMPONENT" in
-  rounded)
-    bump_plist "Rounded/Rounded/Wrapper Application/Info.plist"
-    bump_plist "Rounded/Rounded/Plugin/Info.plist"
-    bump_fxplug "Rounded/Rounded/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Rounded"
-    ;;
-
-  magicmove)
-    bump_plist "MagicMove/MagicMove/Wrapper Application/Info.plist"
-    bump_plist "MagicMove/MagicMove/Plugin/Info.plist"
-    bump_fxplug "MagicMove/MagicMove/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.MagicMove"
-    ;;
-
-  glow)
-    bump_plist "Glow/Glow/Wrapper Application/Info.plist"
-    bump_plist "Glow/Glow/Plugin/Info.plist"
-    bump_fxplug "Glow/Glow/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Glow"
-    ;;
-
   canvas)
     bump_plist "Canvas/Canvas/Wrapper Application/Info.plist"
     bump_plist "Canvas/Canvas/Plugin/Info.plist"
     bump_fxplug "Canvas/Canvas/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Canvas"
+    bump_pkgproj "com.keyframeless.Canvas"
     ;;
 
+
+  mirage)
+    bump_plist "Mirage/Mirage/Wrapper Application/Info.plist"
+    bump_plist "Mirage/Mirage/Plugin/Info.plist"
+    bump_fxplug "Mirage/Mirage/Plugin/Info.plist"
+    bump_pkgproj "com.keyframeless.Mirage"
+    ;;
+
+  ai)
+    # Standalone "Keyframeless AI" helper: the version manifest (staged beside
+    # the helper, read by KKUpdateChecker) + the pkg component version.
+    bump_plist "Distribution/helper/kk-ai-helper.plist"
+    bump_pkgproj "com.keyframeless.KeyframelessAI"
+    ;;
   keyframelessx)
     proj="Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"
     echo "  $proj"
@@ -218,7 +228,7 @@ case "$COMPONENT" in
     sed -i '' \
       "s/MARKETING_VERSION = $current;/MARKETING_VERSION = $VERSION;/g" \
       "$ROOT/$proj"
-    bump_pkgproj "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP"
+    bump_pkgproj "com.keyframeless.Keyframeless-X.Keyframeless-X-FCP"
     ;;
 esac
 

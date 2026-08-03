@@ -8,8 +8,7 @@
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
-#import <KeyframelessKit/KKTimingLane.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <Metal/Metal.h>
 
 @class FxImageTile;
@@ -18,8 +17,8 @@
 @class KKHelpSection;
 @class KKHelpShortcut;
 @class KKHelpGuide;
-@class KKTimingLane;
-@class KKTimingSegment;
+@class KKDragUndoSession;
+@class KKLinkLayerSource;
 @class KKRenderCache;
 @class KKTimelineInspectorView;
 @class NSBezierPath;
@@ -46,21 +45,43 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 
-/// Set while a continuous mini-viewer / inspector handle drag is coalescing its
-/// per-tick timeline writes into one undo group. Toggled by the standard
-/// inspector onDragBegin/onDragEnd callbacks (see KKPlugin+InspectorCallbacks).
-@property(nonatomic) BOOL miniDragUndoStarted;
+/// Runs `block` inside a bare parameter action scope (`startAction:self` ...
+/// `endAction:self`) - the one correct place to resolve any API that returns
+/// nil OUTSIDE a scope (get/set/timing/command/undo; the #1 FxPlug mistake). A
+/// no-op (block not run) when the action API is unavailable; early-returning
+/// from the block still ends the action. Use -kkInParamAction: when you only
+/// need get/set.
+- (void)kkInActionScope:(void (^)(void))block;
+
+/// -kkInActionScope: with the parameter get/set APIs and the action's current
+/// time resolved inside the scope and handed to `block` (the time is what most
+/// `getXValue:...atTime:` / `setXValue:...atTime:` reads and writes want). Any
+/// param may be used or ignored.
+- (void)kkInParamAction:(void (^)(id<FxParameterRetrievalAPI_v6> getAPI,
+                                  id<FxParameterSettingAPI_v5> setAPI,
+                                  CMTime actionTime))block;
+
+/// The mini-viewer drag's undo session (group-only mode: begin/end each in
+/// their own brief scope, per-tick writes self-scope). Owned here so the
+/// standard inspector callbacks and any teardown path share one lifecycle;
+/// the session's dealloc safety net closes an interrupted drag's group.
+@property(nonatomic, strong, nullable) KKDragUndoSession *miniDragSession;
 
 /// The mini-viewer source feed published from renderDestinationImage: and the
 /// descriptor path it was created with. Managed by the shared feed-publish
 /// helper (see KKPlugin+MiniViewerFeed); recreated when the path changes.
 @property(nonatomic, strong, nullable) KKMiniViewerFeed *miniViewerFeed;
 @property(nonatomic, copy, nullable) NSString *miniViewerFeedPath;
-
-/// Extra parameter IDs to show/hide alongside the timing group's children.
-/// Set before the first render pass (e.g. in addParametersWithError:).
-@property(nonatomic, copy, nullable)
-    NSArray<NSNumber *> *timingGroupExtraParamIDs;
+/// Smoothed lead of the render stream over the playhead, in clip fractions,
+/// maintained by the feed helper. < 0 until a first sample lands.
+///
+/// The raw playhead sample is far COARSER than the frame tags (measured: ~15Hz
+/// against a 60Hz tag stream, because the poller is a main-queue timer in a
+/// process that is busy rendering), so subtracting it directly quantised the
+/// animation into 4-frame steps. The lead itself is near-constant, so smoothing
+/// it and subtracting from the per-frame tag keeps 60Hz smoothness AND
+/// playhead-correct timing.
+@property(atomic) double miniViewerPlayheadLead;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 
@@ -69,6 +90,71 @@ NS_ASSUME_NONNULL_BEGIN
 /// identifier - stable and unique per plugin. Override only to share a preset
 /// namespace between plugins.
 - (NSString *)presetPluginKey;
+
+/// Parameter-link discovery: the EFFECTIVE referenceable lanes this clip
+/// exposes as a link source (directive-seeded constants for Shader, the static
+/// param set for others). Default nil = this plugin doesn't advertise
+/// (opt-out). Override to opt in, then call -writeLinkManifest from the render
+/// tick. The kit filters out non-referenceable lanes (code / palette bars), so
+/// return the full set.
+- (nullable NSArray<KKLane *> *)linkableLanesForManifest;
+/// Layered link discovery (layers are "sub-clips": Canvas layers). Default
+/// nil = a flat source. Override to advertise per-layer params: return one
+/// KKLinkLayerSource per layer (stable layerID + display name + that layer's
+/// EFFECTIVE `lanes`); tokens store `${uuid.layerID.label}` and the picker
+/// shows Clip > Layer > Param. Combines with -linkableLanesForManifest for
+/// any clip-wide params (either may be nil, not both).
+- (nullable NSArray<KKLinkLayerSource *> *)linkableLayersForManifest;
+/// Display name for this plugin in the reference picker ("<name> @
+/// <timecode>"). Defaults to the bundle name. Override to force a specific
+/// label.
+- (NSString *)linkManifestEffectName;
+/// What the picker SHOWS for this instance, as "<name> @ <timecode>". Defaults
+/// to -linkManifestEffectName. Override when an instance has a name of its own
+/// (Mirage returns the running shader's name), so a project with several of the
+/// same effect reads as its content rather than N identical rows. Distinct from
+/// -linkManifestEffectName on purpose: that one is the bus's scoping key and
+/// must stay constant per plugin.
+- (NSString *)linkManifestDisplayName;
+/// Advertise this clip as a link source: compute its absolute span from the
+/// timing API and write its manifest (uuid + display name + params) via
+/// KKLinkWriteManifest. No-op unless -linkableLanesForManifest returns lanes.
+/// Call from the render tick, where the clip's timeline position resolves.
+/// Cheap (idempotent skip-if-unchanged).
+///
+/// Prefer -writeLinkManifestWithClipStartSec:durationSec: on the render path:
+/// this form re-enters the host three times for a clip span the tick's render
+/// cache already holds. Kept for callers with no cache (the document-load
+/// registration, which runs on main inside an action scope).
+- (void)writeLinkManifest;
+
+/// -writeLinkManifest with the clip's absolute span supplied by the caller -
+/// `clipStartSec` = KKRenderCache.clipProjectStartSec, `clipDurSec` =
+/// KKRenderCache.effectDurSec, both resolved once per tick by
+/// KKRefreshRenderCache. Saves the three synchronous host re-entries
+/// (startTimeForEffect / durationTimeForEffect / timelineTime:fromInputTime:)
+/// this method would otherwise repeat, which cost tens of milliseconds each
+/// while Final Cut is busy playing back.
+///
+/// The lanes, the uuid and the document id are gathered on the CALLING thread
+/// (the FxPlug callback, the only place those APIs resolve); the manifest
+/// assembly, the per-lane curve serialization and the file writes hop to a
+/// serial background queue, so no publish cost lands on the render callback.
+- (void)writeLinkManifestWithClipStartSec:(double)clipStartSec
+                              durationSec:(double)clipDurSec;
+
+/// Change-or-heartbeat gate for the publish above: YES when `signature`
+/// differs from the last published one, or when the last publish is older than
+/// the bus's touch interval (the manifest file's mtime has to stay fresh or
+/// the orphan sweep collects it). NO on an unchanged, recently-published tick -
+/// which is nearly every tick of playback.
+///
+/// `signature` is the caller's fingerprint of everything the manifest says:
+/// the persisted timeline blob, whatever else feeds the lane set, and the
+/// clip's placement (so a moved or retrimmed clip republishes on the next tick
+/// rather than waiting out the heartbeat). Calling this UPDATES the gate, so
+/// call it exactly once per tick and publish iff it returns YES.
+- (BOOL)shouldPublishLinkManifestForSignature:(NSString *)signature;
 
 /// Convenience wrapper around KKMetalDeviceCache buildAndRegisterPipelineState.
 /// Call from renderDestinationImage: to get or build the pipeline state for
@@ -88,6 +174,60 @@ NS_ASSUME_NONNULL_BEGIN
     encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
                                sourceImages:
                                    (NSArray<FxImageTile *> *)sourceImages
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures))commands;
+
+/// As above, plus a `setup` block handed THIS pass's command buffer before the
+/// render encoder is created, for GPU work the draw depends on.
+///
+/// The point is round trips. Preparing an input on its own command buffer means
+/// commit + wait before the render can even be encoded, and that scheduling
+/// latency dwarfs the work itself when the passes are small - measured at
+/// several ms per round trip against 0.1ms of actual GPU time. Encoded here
+/// instead, the preparation rides the render's own buffer: Metal runs the
+/// passes in encode order and hazard-tracks the textures between them, so the
+/// existing single wait at the end covers everything.
+///
+/// The block must END every encoder it opens - a command buffer allows one live
+/// encoder, and the render encoder is created immediately after this returns.
+- (BOOL)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                               sourceImages:
+                                   (NSArray<FxImageTile *> *)sourceImages
+                                      setup:(nullable void (^)(
+                                                id<MTLCommandBuffer>
+                                                    commandBuffer))setup
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures))commands;
+
+/// As above, on a CALLER-SUPPLIED queue.
+///
+/// For a render that had to submit earlier work of its own (a multi-pass
+/// chain's buffer passes) and needs this pass to run after it. Command buffers
+/// on one queue execute in commit order, so the caller commits its work
+/// WITHOUT waiting, hands the same queue here, and this pass's mandatory wait
+/// covers both - one round trip for the frame instead of one per submission.
+/// Queues from the shared cache pool are interchangeable, so two separately
+/// checked-out queues give no such ordering: it must be the same object.
+///
+/// A supplied queue is NOT returned to the cache - the caller owns its
+/// lifetime. Pass nil to check one out and return it, which is the behaviour of
+/// every variant above.
+- (BOOL)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                               sourceImages:
+                                   (NSArray<FxImageTile *> *)sourceImages
+                               commandQueue:
+                                   (nullable id<MTLCommandQueue>)commandQueue
+                                      setup:(nullable void (^)(
+                                                id<MTLCommandBuffer>
+                                                    commandBuffer))setup
                                    commands:
                                        (void (^)(
                                            id<MTLRenderCommandEncoder> encoder,
@@ -127,21 +267,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// KKHostInfo. Pass to +[FxPrincipal startServicePrincipalWithDelegate:] in
 /// main().
 + (id)servicePrincipalDelegate;
-
-/// Registers only the multi-stage timing params - Timing separator, curve
-/// preview, enabled toggle (always YES, hidden), JSON data, selected
-/// property/stage, and instance ID. Call this from
-/// `addParametersWithError:` in plugins that are fully multi-stage (no
-/// classic ease-in/hold/ease-out UI).
-- (BOOL)addMultiStageParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
-                                 error:(NSError **)error;
-
-/// Registers multi-stage params (via `addMultiStageParametersWithAPI:`)
-/// plus the classic animate-in / hold / animate-out toggles, durations,
-/// intensities, frequencies, and interpolation popups. Use for plugins
-/// that still expose classic-timing UI.
-- (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
-                                error:(NSError **)error;
 
 /// Registers the shared motion-blur param group (Enabled toggle + Shutter
 /// and Quality sliders) at IDs 9924–9926. Add to `addParametersWithError:`
@@ -199,327 +324,10 @@ NS_ASSUME_NONNULL_BEGIN
                               withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
 
-/// Updates timing parameter visibility based on the timing group's expand
-/// state. Call from updateParameterVisibilityAtTime: in subclasses that use
-/// animation.
-- (void)updateTimingParameterVisibility;
-
-/// Updates the selected segment of the lane matching `label` with `values`
-/// and persists. Used by `parameterChanged:` to translate slider drags into
-/// segment edits. Plugin owns the `paramID → (label, values)` mapping -
-/// no `KKAnimatableProperty` lookup is performed.
-///
-/// Returns YES when a lane matched and was updated; NO when no enabled
-/// lane has the label, or no segment is selected, or the persist scope
-/// isn't available. Stamps the "recent parameter change" timestamp so the
-/// pump's playhead-suppression heuristics still apply.
-- (BOOL)multiStageUpdateSelectedSegmentForLabel:(NSString *)label
-                                         values:(NSArray<NSNumber *> *)values;
-
-/// Coalesced + deferred + host-undo-aware variant of
-/// `multiStageUpdateSelectedSegmentForLabel:values:` for use from
-/// `parameterChanged:`-driven live-update paths.
-///
-/// Schedules the underlying write on a 16ms `dispatch_after` so that:
-///  - During a host cmd-Z, the multi-stage param's MS-REFRESH lands
-///    first and sets `hostUndoSuppressionPending`; this method then
-///    correctly skips its write instead of layering a stale animatable
-///    revert into a fresh undo entry.
-///  - During a continuous drag, multiple calls per runloop coalesce
-///    via `liveUpdatePending` (last-wins per label in
-///    `pendingLiveUpdates`), so a 60fps drag produces ~60 writes
-///    instead of 60×(num linked params) writes.
-///
-/// Plugins should call this from their `_xxxHandleAnimatableParameter
-/// Change:` switch instead of the synchronous variant. The synchronous
-/// variant remains for code paths that need an immediate write (e.g.
-/// segment-selection write-back, opt-drag commit) where the caller
-/// already owns the action scope.
-- (void)multiStageDeferLiveUpdateForLabel:(NSString *)label
-                                   values:(NSArray<NSNumber *> *)values;
-
-/// Returns the active segment of the lane matching `label` at `time`. Lets
-/// plugins reach per-segment data (e.g. `pathData`) - the only remaining
-/// pump-side accessor since `multiStageValuesAtTime:` was retired in
-/// favour of `KKTimingLaneValueAtFraction`.
-///
-/// `outSegments` (optional) is the lane's segments array - useful for
-/// `KKTimingBoundaryBefore/After` when interpreting transitions.
-/// `outLocalT` (optional) is the un-eased `t` inside the segment's range
-/// (0 at segment start, 1 at end). Plugins typically pass it through
-/// `KKApplyEasing(...)` to get the eased t for interpolation.
-///
-/// Returns nil when multi-stage is disabled, no lanes are loaded, or the
-/// label doesn't match any lane.
-- (nullable KKTimingSegment *)
-    multiStageActiveSegmentForLabel:(NSString *)label
-                             atTime:(CMTime)time
-                           segments:(NSArray<KKTimingSegment *> *_Nullable
-                                         *_Nullable)outSegments
-                             localT:(double *_Nullable)outLocalT;
-
-/// Whether any enabled multi-stage lane is currently inside a Transition
-/// segment at `time`. Used by motion blur (and similar features) to skip
-/// expensive per-frame work during pure Hold portions where nothing is
-/// actually moving. Returns NO when multi-stage is disabled.
-- (BOOL)multiStageAnyLaneInTransitionAtTime:(CMTime)time;
-
-/// Persists `pathData` (or nil to clear) onto the segment at `segmentIndex`
-/// inside the lane matching `label`. Pushes the updated lanes through the
-/// same path as user edits - re-renders the sequencer view, broadcasts to
-/// other instances, persists the JSON. Returns YES on success.
-- (BOOL)multiStageSetPathData:(nullable NSData *)pathData
-                     forLabel:(NSString *)label
-                 segmentIndex:(NSInteger)segmentIndex;
-
-/// Call once per `drawOSC` tick. Flushes pending lanes, syncs from params
-/// (undo/redo detection), and pumps playheads - all broadcast across every
-/// live plugin instance on the timeline.
-+ (void)multiStageDrawOSCTickForAPI:(id<PROAPIAccessing>)apiManager
-                             atTime:(CMTime)time;
-
-/// Call once per `renderDestinationImage:` tick. Converts the effect-local
-/// `renderTime` to timeline time, flushes pending lanes, and pumps playheads
-/// - subordinate to drawOSC (skipped if drawOSC pumped recently, and briefly
-/// after any `parameterChanged:` to avoid FCP's warm-up renders flickering
-/// the playhead to frame 0).
-+ (void)multiStageRenderTickForAPI:(id<PROAPIAccessing>)apiManager
-                            atTime:(CMTime)renderTime
-                            sender:(id)sender;
-
-/// Individual pump primitives beneath the consolidated ticks above. Most
-/// plugins should call the `*TickForAPI:atTime:` methods instead of these;
-/// they're exposed for cases that need to compose or skip parts of a tick.
-+ (void)multiStageFlushPendingLanes;
-+ (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager;
-
-/// Force-refresh path for *external* changes to `kKKParamMultiStageData`
-/// (host cmd-Z reverts the param outside our action scopes). The hot
-/// `multiStageSyncFromParams` short-circuits on a stale in-memory snapshot
-/// + lastPushed pointer; this method busts those caches and re-reads JSON
-/// straight from the param, then pushes to seq. Plugins should call from
-/// their `parameterChanged:` when `parameterID == kKKParamMultiStageData`.
-+ (void)multiStageRefreshFromParamForAPI:(id<PROAPIAccessing>)apiManager;
-
-/// Force-refresh path for `kKKParamTimingLoopEnabled` - read the current
-/// param value and push it to all rulers' `loopEnabled`. Plugins call from
-/// `parameterChanged:` when the loopback param changes (host cmd-Z, etc).
-+ (void)multiStageRefreshLoopFromParamForAPI:(id<PROAPIAccessing>)apiManager;
-+ (void)multiStageUpdatePlayheadsForAPI:(id<PROAPIAccessing>)apiManager
-                                 atTime:(CMTime)time;
-+ (void)multiStageUpdatePlayheadsFromRenderForAPI:
-            (id<PROAPIAccessing>)apiManager
-                                           atTime:(CMTime)time
-                                           sender:(id)sender;
-
-/// Returns whether the OSC for the animatable property with `label` should
-/// be drawn. Returns NO only when the user has toggled that lane's OSC off
-/// in the sequencer. Returns YES otherwise (lane not found, classic mode,
-/// or OSC explicitly on). Plugins call this at the top of their drawOSC
-/// path to skip individual OSC parts.
-+ (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
-                             label:(NSString *)label;
-
-/// Per-layer variant: scopes the lookup to the lane whose `groupKey`
-/// matches. Use when a plugin has multiple lanes sharing a property label
-/// (one per layer/group). When `groupKey` is nil, behaves like the
-/// label-only overload.
-+ (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
-                             label:(NSString *)label
-                          groupKey:(nullable NSString *)groupKey;
-
-/// Pairs of parameter IDs that maintain their aspect ratio when the user
-/// holds Cmd while dragging either slider. Set before first use (e.g. in
-/// addParametersWithError:). Each element is @[@(paramA), @(paramB)].
-@property(nonatomic, copy, nullable)
-    NSArray<NSArray<NSNumber *> *> *linkedParameterPairs;
-
-/// Call from parameterChanged:atTime:error: for any parameter that may be
-/// part of a linked pair. Returns YES if the change was handled (the other
-/// parameter in the pair was updated to maintain ratio). Returns NO if the
-/// parameter is not part of a pair or Cmd is not held.
-- (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time;
-
-/// After `handleLinkedParameterChanged:` writes the partner via
-/// `setFloatValue:`, FCP does NOT echo a separate `parameterChanged:` for
-/// the partner (FCP suppresses recursive echoes). This means
-/// `parameterChanged:`-driven persistence (e.g. Canvas's
-/// `kkPushParamToLane:`) never runs for the partner, and any backing
-/// blob/path-side effect for it is skipped - the inspector value updates
-/// but the persistent state lags. Plugins that mirror inspector values
-/// to a backing blob should query this after `handleLinkedParameterChanged:`
-/// returns and run the same per-edit hook for the partner ID. Returns 0
-/// when the last call did not write a partner.
-- (UInt32)linkedPartnerWrittenForLastChange;
-
-/// Returns the current "live" values for the lane labeled `label` from the
-/// plugin's source of truth (FxPlug params for built-in plugins, per-layer
-/// state for Canvas, etc). Used by the segment-select handler to write back
-/// any in-flight inspector edits into the previously selected segment
-/// before switching. Returns nil when the label is unknown.
-/// `groupKey` is the lane's `groupKey` (Canvas: layer UUID) or nil for
-/// flat plugins where the propertyLabel uniquely identifies the lane.
-- (nullable NSArray<NSNumber *> *)
-    currentValuesForLaneLabel:(NSString *)label
-                     groupKey:(nullable NSString *)groupKey
-                       atTime:(CMTime)time;
-
-/// Disables (or re-enables) inspector editing for the lane's underlying
-/// params. Called when a lane's selected segment is an HTH transition
-/// (whose values are derived from the surrounding holds, so editing them
-/// would be a no-op). Plugins toggle `kFxParameterFlag_DISABLED` on each
-/// underlying paramID; Canvas-style plugins with no per-lane FxPlug params
-/// can no-op. `groupKey` disambiguates lanes sharing a propertyLabel.
-- (void)setEditingDisabled:(BOOL)disabled
-              forLaneLabel:(NSString *)label
-                  groupKey:(nullable NSString *)groupKey;
-
-/// Pushes lane values back into the plugin's source of truth so the
-/// inspector reflects the newly selected segment (and downstream non-FxPlug
-/// UI like the gradient control stays in sync). Plugins are responsible
-/// for clearing any DISABLED flags they had set on involved params, since
-/// FxPlug silently drops writes to disabled params. Returns YES if the
-/// label was recognized. `groupKey` disambiguates lanes sharing a
-/// propertyLabel.
-- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
-               forLabel:(NSString *)label
-               groupKey:(nullable NSString *)groupKey
-                 atTime:(CMTime)time;
-
-/// Override to return the seed lanes used when no persisted JSON exists.
-/// Each lane should have `propertyLabel`, `valueComponentKinds`, and a
-/// single Hold segment whose `values` reflects the current FxPlug param
-/// state. Returns nil/empty when the plugin has no animation lanes.
-- (nullable NSArray<KKTimingLane *> *)
-    defaultLanesAtTime:(CMTime)time
-           paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI;
-
-/// Override for plugins whose lane set tracks an external source (Canvas:
-/// the layer list). Receives the lanes just read from JSON and returns a
-/// reconciled array - typically by matching existing lanes against the
-/// current source items via `groupKey`, updating labels, dropping stale
-/// entries, and seeding lanes for new items. Default returns `existing`
-/// unchanged. The framework persists the new array when it differs from
-/// the input.
-- (nullable NSArray<KKTimingLane *> *)
-    reconcileLanes:(NSArray<KKTimingLane *> *)existing
-            atTime:(CMTime)time
-       paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI;
-
-/// Optional cheap fingerprint of the inputs `reconcileLanes:` would consume
-/// (for Canvas: layerIDs + the path bits that flip lane visibility/labels).
-/// Computed from in-memory state - must NOT do FCP param I/O. The pump
-/// short-circuits the reconcile (skipping the JSON read + plugin call)
-/// when the fingerprint matches the previous successful reconcile.
-/// Default returns nil → no caching, current behavior preserved.
-- (nullable NSString *)kkReconcileFingerprintForAPI:
-    (id<PROAPIAccessing>)apiManager;
-
 /// Override to return YES when the plugin registers motion blur params
 /// via `addMotionBlurParametersWithAPI:`. Default NO. Used to auto-include
 /// the Motion Blur section in the help window.
 - (BOOL)usesMotionBlur;
-
-/// Override to hide specific animatable-property lanes from the multi-stage
-/// sequencer based on current parameter state (e.g. a Color lane should
-/// disappear when the plugin is in gradient-only mode). Segment data stays
-/// in JSON - the lane reappears when the set no longer contains its label.
-/// Call `-multiStageRefreshLaneVisibility` after any param change that would
-/// affect the return value; the pump applies the filter on every push.
-- (NSSet<NSString *> *)hiddenAnimatablePropertyLabels;
-
-/// Override to declare which animatable-property labels render an on-screen
-/// control (OSC) on canvas. Lanes in this set get a visibility-toggle icon
-/// in the sequencer row; their OSC code checks `lane.oscVisible` before
-/// drawing.
-- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC;
-
-/// Override to declare labels whose lane should seed with `oscVisible = NO`.
-/// Used for OSC parts that are only shown via a modifier (e.g. rotation X/Y
-/// rings revealed by holding Opt) and shouldn't appear by default. Returns an
-/// empty set by default.
-- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff;
-
-/// Override to drive the sequencer's "selected group" highlight - return
-/// the `groupKey` (typically a layer/object ID) of the currently-selected
-/// item, or nil for none. The default returns nil.
-///
-/// When selection changes, call `-kkRefreshSequencerSelectedGroup` to push
-/// the new value into all active sequencer views.
-- (nullable NSString *)kkSelectedGroupKey;
-
-/// Override to handle a track-side click on a group header in the sequencer
-/// (the summary span bar, not the chevron/label). The default falls back
-/// to toggling the group's collapse state - i.e. behaves identically to
-/// clicking the label. Plugins that want a custom action (e.g. selecting
-/// the underlying object so editing is faster while animating) override
-/// this and dispatch their own selection write.
-- (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey;
-
-/// Identifies how the sequencer's segment-add/remove handlers mutated a
-/// lane. Passed to the subclass hook below.
-typedef NS_ENUM(NSInteger, KKLaneSegmentMutation) {
-  KKLaneSegmentMutationInserted = 0,
-  KKLaneSegmentMutationRemoved = 1,
-};
-
-/// Subclass hook: invoked inside the action scope after a sequencer-driven
-/// segment add/remove has been written to a lane, before
-/// `timingGraphApplyState`. Plugins override this to keep out-of-band
-/// per-segment storage in sync (e.g. Canvas's path-morph snapshots, which live
-/// on the path blob rather than in the lane's `values`). `lane` is the
-/// post-mutation lane; `index` is the inserted or removed segment index. The
-/// default implementation does nothing.
-- (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
-                               lane:(KKTimingLane *)lane
-                            atIndex:(NSInteger)index
-                             getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                             setAPI:(id<FxParameterSettingAPI_v5>)setAPI;
-
-/// Subclass hook: invoked inside the action scope after `selectedSegment`
-/// changes on a lane, before applyState. Plugins override this to load
-/// out-of-band per-segment state into the source of truth (e.g. Canvas
-/// loads `morphTargets[segment]` into the path's points so the canvas
-/// shows the segment's authored geometry while the user edits it). The
-/// default implementation does nothing. Mirrors `applyLaneValues:` but
-/// runs alongside it for non-scalar payloads.
-- (void)kkLoadLaneSegmentForLabel:(NSString *)label
-                         groupKey:(NSString *)groupKey
-                          segment:(NSInteger)segmentIndex
-                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI;
-
-/// Subclass hook: invoked inside the action scope after a sequencer
-/// opt-drag value-copy on a lane. Plugins override this to mirror
-/// out-of-band per-segment payloads alongside the scalar values copy
-/// (e.g. Canvas duplicates path-morph snapshots). Default no-op.
-- (void)kkCopyLaneSegmentForLabel:(NSString *)label
-                         groupKey:(NSString *)groupKey
-                      fromSegment:(NSInteger)srcSegmentIndex
-                        toSegment:(NSInteger)dstSegmentIndex
-                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI;
-
-/// Pushes `[self kkSelectedGroupKey]` into every active sequencer view
-/// (primary + any additional timing views). Call this whenever your
-/// selection state changes.
-- (void)kkRefreshSequencerSelectedGroup;
-
-/// Override to supply the empty-state message shown when the sequencer has
-/// zero lanes (e.g. Canvas with no layers). Return nil (default) to leave
-/// the empty view hidden in that case.
-- (nullable NSString *)emptyLanesMessageWhenNoLanes;
-
-/// SF Symbol name paired with `emptyLanesMessageWhenNoLanes`. Default
-/// `rectangle.on.rectangle.slash` matches the "all lanes hidden" state.
-- (NSString *)emptyLanesIconNameWhenNoLanes;
-
-/// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
-/// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return
-/// from updateParameterVisibilityAtTime: when this returns YES.
-- (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
-                               paramIDs:(NSArray<NSNumber *> *)paramIDs
-                                 atTime:(CMTime)time;
 
 /// Subclass hook: return YES when the plugin's "Force Show All Parameters"
 /// toggle is on. `updateTimingParameterVisibility` and
@@ -534,10 +342,10 @@ typedef NS_ENUM(NSInteger, KKLaneSegmentMutation) {
 typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
   /// No wrapping required - clips can take the effect directly.
   KKClipWrappingModeNone = 0,
-  /// Effect samples underlying frames (Glow, etc.) - needs an Adjustment
+  /// Effect samples underlying frames - needs an Adjustment
   /// Clip or Compound Clip so it sees moving content.
   KKClipWrappingModeAdjustmentOrCompound,
-  /// Effect transforms a single clip past its natural bounds (Magic Move)
+  /// Effect transforms a single clip past its natural bounds
   /// - needs a Compound Clip to avoid being clipped.
   KKClipWrappingModeCompound,
 };
@@ -567,33 +375,64 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// position. All keys are written in one action scope (single undo entry).
 - (void)patchMaintainTimingEnabled:(BOOL)enabled paramID:(UInt32)paramID;
 
-/// "Maintain Timing" bake. Call from the render tick (after
-/// KKRefreshRenderCache populates `cache`). When the lock is on and the clip's
-/// source range has moved away from the stored anchor (a trim/grow surfaced
-/// this tick), it rewrites the timeline blob's keypose fractions to hold their
-/// absolute media position and advances the anchor - both in one action scope
-/// (dispatched to the main queue, since the render tick has no action scope).
-/// The blob write flows to the Advanced graph via the normal parameterChanged
-/// path, so the keyposes visibly move. A per-tick guard on `cache` makes it
-/// fire once per trim, not every frame while the async write is in flight.
-/// No-op when the lock is off, no anchor is set, or the range already matches.
+/// Duration persistence bake. Call from the render tick after
+/// KKRefreshRenderCache populates `cache`. Maintain Timing preserves the whole
+/// animation; otherwise `hasDurationLocks` enables only explicit gap-lock
+/// rebalancing. The write is dispatched into one main-queue action scope after
+/// the clip range settles.
 - (void)bakeMaintainTimingForCache:(KKRenderCache *)cache
                    timelineParamID:(UInt32)timelineParamID
-                    uiStateParamID:(UInt32)uiStateParamID;
+                    uiStateParamID:(UInt32)uiStateParamID
+                  hasDurationLocks:(BOOL)hasDurationLocks;
 
 /// The plugin's timeline inspector, if open. Override to return it so the bake
 /// can push the retimed timeline straight to the graph (the parameterChanged
 /// round-trip from a self-write isn't always reliable). Default nil.
 - (nullable KKTimelineInspectorView *)maintainTimingInspectorView;
 
+/// The plugin's inspector custom-UI view, set by createViewForParameterID:.
+/// Owned by the BASE class so shared kit hooks (maintain-timing, group-header
+/// sync, param-changed pushes) can reach the inspector without every subclass
+/// re-plumbing it. Subclasses redeclare it covariantly (their concrete
+/// KKTimelineInspectorView subclass) with `@dynamic inspectorView;` so typed
+/// access rides this one storage.
+@property(nonatomic, weak, nullable) KKTimelineInspectorView *inspectorView;
+
+/// Returns a copy of `timeline` with every lane's lastKnownClipDuration
+/// stamped to the effect's CURRENT duration (via FxTimingAPI), so
+/// locked-seconds rebalancing sees the real clip length. Passthrough when
+/// `timeline` is nil or the duration is unavailable. Call sites must be in a
+/// scope where FxTimingAPI resolves.
+- (nullable KKTimeline *)timelineStampedWithClipDuration:
+    (nullable KKTimeline *)timeline;
+
+/// Registers the standard hidden-param spine every timeline plugin needs, in
+/// canonical order: the logo banner, the full-width inspector custom UI
+/// (`inspectorUIID`, disabled until the view exists), the UI-state blob, the
+/// timeline blob (kKKParamTimelineData), the render-nudge blob, the
+/// motion-blur blob (kKKParamMotionBlurData, seeded with
+/// `motionBlurDefaultJSON` when non-nil), and the per-instance UUID string
+/// (kKKParamInstanceID). Returns the creation API for the plugin's domain
+/// params, or nil with `error` set. Visible domain params registered after
+/// this call land after the inspector UI, matching the previous per-plugin
+/// registration order.
+- (nullable id<FxParameterCreationAPI_v5>)
+    kkAddStandardParametersWithInspectorUI:(UInt32)inspectorUIID
+                                   uiState:(UInt32)uiStateID
+                               renderNudge:(UInt32)renderNudgeID
+                     motionBlurDefaultJSON:(nullable NSString *)mbDefaultJSON
+                                     error:(NSError **)error;
+
 /// Maintain-timing persistence override point. Retime the stored animation
-/// blob(s) from the old media anchor [fromSrcIn,fromDur] to the new clip range
-/// [toSrcIn,toDur], writing the result back under `timelineParamID`. The
-/// default retimes the single kKKParamTimelineData KKTimeline. A per-layer
-/// plugin (Canvas) overrides it to retime every layer's animationJSON in its
-/// layer blob. Return the timeline to push to the inspector graph, or nil to
-/// skip that push (a plugin that refreshes its own multi-layer graph returns
-/// nil). Called inside the bake's action scope.
+/// blob(s) from [fromSrcIn,fromDur] to [toSrcIn,toDur], writing the result back
+/// under `timelineParamID`. Lanes without duration-locked gaps stay anchored
+/// to source media; lanes with locks rebalance so those gaps take precedence.
+/// The default handles kKKParamTimelineData. A per-layer plugin (Canvas)
+/// overrides it for every layer's animationJSON. Return the timeline to push
+/// to the graph, or nil when the plugin refreshes its own multi-layer graph.
+/// When `durationLocksOnly` is YES, ignore the media anchor and rebalance only
+/// timelines containing explicit gap locks from their stored clip duration.
+/// Called inside the bake's action scope.
 - (nullable KKTimeline *)
     _retimeMaintainTimingBlobWithParamID:(UInt32)timelineParamID
                                   getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
@@ -602,7 +441,8 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
                                  fromDur:(double)fromDur
                                  toSrcIn:(double)toSrcIn
                                    toDur:(double)toDur
-                                 edgeEps:(double)edgeEps;
+                                 edgeEps:(double)edgeEps
+                       durationLocksOnly:(BOOL)durationLocksOnly;
 
 /// Override to provide help/keyboard-shortcut sections. Each section is
 /// rendered as a titled block with a tips bullet list and/or a 2-column
@@ -663,6 +503,11 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// (no AI button).
 - (nullable NSView *)aiAccessoryView;
 
+/// Override to attach a license-activation accessory (built via
+/// `KeyframelessAI`'s `KKLicenseBannerHost`) after the banner's built-in
+/// buttons. Default: nil (no license button).
+- (nullable NSView *)licenseAccessoryView;
+
 /// Generic host remote-window presenter. Runs the required action scope,
 /// resolves FxRemoteWindowAPI, attaches to the correctly-sized superview,
 /// clears any prior remote content, and wraps `contentProvider()`'s view in a
@@ -712,18 +557,6 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// no header was registered for that paramID.
 - (void)syncGroupHeaderExpandedForExpandedParamID:(UInt32)expandedParamID;
 
-/// Writes `lanes` to `kKKParamMultiStageData` (KKDataBlob, undoable) and
-/// the lockstep `kKKParamMultiStageDataMirror` (native string, OSC/render
-/// readable), and updates the per-instance lanesSnapshot. Plugins that
-/// mutate lanes outside the standard kit handlers (e.g. routing inspector
-/// slider edits into the selected segment) MUST use this rather than
-/// writing the blob directly - otherwise the mirror trails and the render
-/// scope reads stale lane values until something else triggers a write.
-/// Caller must already be inside an FxCustomParameterActionAPI_v4 scope.
-/// Convenience wrapper around the C-level `KKWriteLanesJSON`.
-- (void)kkWriteLanesJSON:(NSArray<KKTimingLane *> *)lanes
-                  setAPI:(id<FxParameterSettingAPI_v5>)setAPI;
-
 /// Re-reads `enabledParamID` (a native bool toggle) and pushes the result
 /// into the matching group header's `isEnabled` (checkbox). Counterpart
 /// to `syncGroupHeaderExpandedForExpandedParamID:` for plugins whose
@@ -752,13 +585,6 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 
 @end
 
-/// C-callable counterpart to `-[KKPlugin kkWriteLanesJSON:setAPI:]` for
-/// callers outside the plugin instance (e.g. an OSC principal with its
-/// own apiManager). Caller must already be inside an action scope.
-extern void KKWriteLanesJSON(NSArray<KKTimingLane *> *_Nonnull lanes,
-                             id<FxParameterSettingAPI_v5> _Nonnull setAPI,
-                             id<PROAPIAccessing> _Nullable apiManager);
-
 /// Stack-style undo grouping. Pair every `KKBeginUndoGroup` with exactly
 /// one `KKEndUndoGroup` along every code path (including early returns).
 /// Returns YES if the group was actually started - pass that BOOL into
@@ -770,11 +596,51 @@ extern BOOL KKBeginUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
 extern void KKEndUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
                            BOOL started);
 
-@interface KKPlugin (MultiStageInstance)
-/// Recomputes `-hiddenAnimatablePropertyLabels`; if it differs from the last
-/// snapshot, re-pushes the filtered lanes to the sequencer view. Safe to
-/// over-call.
-- (void)multiStageRefreshLaneVisibility;
-@end
+/// One undoable mutation: opens an FxCustomParameterActionAPI scope for
+/// `principal` (the plugin instance, or an OSC principal with its own
+/// apiManager), begins a host undo group named `name` (nil = scope-only, for
+/// the per-tick OSC drag model that relies on FCP's implicit same-target
+/// coalescing), resolves the get/set APIs, and runs `block`. Scope and group
+/// close in @finally, so nothing `block` does can leak an open scope (which
+/// wedges FCP's undo - its next beginWithUndoState aborts). Returns NO when
+/// the action API is unavailable (block not run). Free function so
+/// non-plugin classes (inspector views, layer lists) can use it too.
+/// Bracket a MULTI-WRITE mutation in one host undo group where each write in
+/// `block` manages its OWN action scope. The group begin/end each get a brief
+/// scope; holding one scope across the block would nest the writes' scopes
+/// (FFUIAction assert). Complement to KKPerformUndoable below.
+extern void KKWithHostUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
+                                id _Nonnull principal, NSString *_Nonnull name,
+                                void (^_Nonnull block)(void));
+
+extern BOOL KKPerformUndoable(
+    id<PROAPIAccessing> _Nullable apiManager, id _Nonnull principal,
+    NSString *_Nullable name,
+    void (^_Nonnull block)(id<FxParameterRetrievalAPI_v6> _Nullable getAPI,
+                           id<FxParameterSettingAPI_v5> _Nullable setAPI,
+                           CMTime actionTime));
+
+/// Localized labels for host undo groups (FCP shows "Undo <label>" in the
+/// Edit menu). The one table for undo wording: every label lives here and in
+/// KKLocalizable.xcstrings - never pass an inline string literal as a group
+/// name at a call site.
+FOUNDATION_EXPORT NSString *KKUndoLabelAdjust(NSString *productName);
+FOUNDATION_EXPORT NSString *KKUndoLabelEditGradient(void);
+FOUNDATION_EXPORT NSString *KKUndoLabelDuplicateLayer(void);
+FOUNDATION_EXPORT NSString *KKUndoLabelDeleteLayer(void);
+FOUNDATION_EXPORT NSString *KKUndoLabelGroupLayers(void);
+FOUNDATION_EXPORT NSString *KKUndoLabelMoveLayer(BOOL up);
+
+/// The `sourceImages` tile belonging to an image-well parameter, or nil when
+/// the well is empty or was never requested.
+///
+/// Found by parameter ID rather than by INDEX, which is the whole point: a
+/// plug-in's `-scheduleInputs:` can return a varying number of effect-clip
+/// tiles (motion-blur sub-frames, a boundary preview), so a well's position in
+/// the array moves under you. The tile is only present at all if
+/// `-scheduleInputs:` asked for it with `kFxImageTileRequestSourceParameter`
+/// and this ID.
+FOUNDATION_EXPORT FxImageTile *_Nullable KKImageTileForParameterID(
+    NSArray<FxImageTile *> *_Nullable sourceImages, UInt32 parameterID);
 
 NS_ASSUME_NONNULL_END

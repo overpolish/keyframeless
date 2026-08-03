@@ -17,6 +17,10 @@
 #import <simd/simd.h>
 
 static const NSTimeInterval kPollInterval = 1.0 / 15.0;
+// During live playback the feed streams new source frames up to 60fps; the idle
+// 15fps poll would stutter the footage, so poll near the feed's rate while it
+// plays and drop back to idle when it stops.
+static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
 
 @implementation KKMiniBox
 + (instancetype)boxWithRect:(CGRect)rect
@@ -29,6 +33,18 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   b.readout = readout;
   b.ghostAlpha = ghostAlpha;
   return b;
+}
+@end
+
+@implementation KKMiniRotation
++ (instancetype)rotationWithCenter:(CGPoint)center
+                          radiusPx:(CGFloat)radiusPx
+                            params:(KKRotationOSCParams)params {
+  KKMiniRotation *r = [[KKMiniRotation alloc] init];
+  r.center = center;
+  r.radiusPx = radiusPx;
+  r.params = params;
+  return r;
 }
 @end
 
@@ -45,11 +61,126 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return _sourceMediaSize;
 }
 
+- (id<MTLTexture>)channel1Texture {
+  return _channel1Slot.sourceTexture;
+}
+
+- (NSUInteger)auxTextureCount {
+  return _auxSlots.count;
+}
+
+- (id<MTLTexture>)auxTextureAtIndex:(NSUInteger)index {
+  if (index >= _auxSlots.count)
+    return nil;
+  return _auxSlots[index].sourceTexture;
+}
+
+- (uint64_t)auxTextureGenerationAtIndex:(NSUInteger)index {
+  if (index >= _auxSlots.count)
+    return 0;
+  return _auxSlots[index].generation;
+}
+
+// The compare flags live HERE, on the view, and nowhere else. They are not
+// parameters, not lanes and not kParamUIState: an honoured FxPlug write is one
+// undo entry, so a divider dragged across the frame would push a hundred of
+// them in front of the grade the user actually wants to undo. They are not
+// carried on KKPluginInstanceState either - a rebuilt mini is a new look at the
+// frame, and a split silently still on from the last popover reads as a broken
+// preview.
+- (BOOL)compareAvailable {
+  NSUInteger i = [self _activeSlotIndex];
+  if (i >= _filmstripSlots.count)
+    return NO;
+  return _filmstripSlots[i].sourceTexture != nil;
+}
+
+- (void)setCompareSplitEnabled:(BOOL)enabled {
+  if (_compareSplitEnabled == enabled)
+    return;
+  _compareSplitEnabled = enabled;
+  [self setNeedsDisplay:YES];
+  [self _compareStateChanged];
+}
+
+- (void)setCompareBypassing:(BOOL)bypassing {
+  if (_compareBypassing == bypassing)
+    return;
+  _compareBypassing = bypassing;
+  [self setNeedsDisplay:YES];
+  [self _compareStateChanged];
+}
+
+// Clamped just inside the content rect: a divider flush against an edge has no
+// grab band left on one side and can't be dragged back. No state callback -
+// this fires on every tick of a drag, and the host's controls don't depend on
+// it.
+- (void)setCompareSplitFraction:(CGFloat)fraction {
+  CGFloat f = MIN(MAX(fraction, 0.02), 0.98);
+  if (fabs(_compareSplitFraction - f) < 1e-6)
+    return;
+  _compareSplitFraction = f;
+  [self setNeedsDisplay:YES];
+}
+
 - (void)setRenderMode:(NSInteger)mode {
   if (_renderMode == mode)
     return;
   _renderMode = mode;
+  // A generator drives its own slot count from keypose fractions (no feed), so
+  // the filmstrip/onion fan-out must be (re)built the instant the pill flips
+  // rather than waiting for the next descriptor poll.
+  if ([self _isGeneratorDelegate])
+    [self _rebuildGeneratorSlots];
   [self setNeedsDisplay:YES];
+}
+
+- (BOOL)_isGeneratorDelegate {
+  // A generator is any delegate that implements -generateIntoTexture:. Do NOT
+  // also require !processSourceTexture: - the base KKMiniViewerRenderer
+  // provides processSourceTexture: as a passthrough default, so EVERY renderer
+  // responds to it; only a real source-less generator (Mirage) implements
+  // generateIntoTexture: (the base does not).
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
+  return del &&
+         [del respondsToSelector:
+                  @selector(miniViewer:generateIntoTexture:commandBuffer:)];
+}
+
+- (BOOL)_rebuildGeneratorSlots {
+  if (![self _isGeneratorDelegate])
+    return NO;
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
+  NSArray<NSNumber *> *fracs = nil;
+  if (_renderMode != 0 &&
+      [del respondsToSelector:@selector(miniViewerKeyposeFractions:)])
+    fracs = [del miniViewerKeyposeFractions:self];
+  if (fracs.count == 0)
+    fracs = @[ @0.0 ]; // Off, or a constant-only timeline: a single cell
+  NSUInteger n = fracs.count;
+  BOOL changed = (_filmstripSlots.count != n);
+  while (_filmstripSlots.count < n)
+    [_filmstripSlots addObject:[[_KKMiniFilmSlot alloc] init]];
+  while (_filmstripSlots.count > n)
+    [_filmstripSlots removeLastObject];
+  for (NSUInteger i = 0; i < n; i++) {
+    _KKMiniFilmSlot *s = _filmstripSlots[i];
+    double tag = fracs[i].doubleValue;
+    if (fabs(s.tag - tag) > 1e-9)
+      changed = YES;
+    s.tag = tag;
+    // Surfaceless: the generate path fills processedTexture per slot. Clear any
+    // stale source so a slot never wanders down the effect path.
+    if (s.surface) {
+      CFRelease(s.surface);
+      s.surface = NULL;
+    }
+    s.sourceTexture = nil;
+    s.sid = 0;
+    s.generation = 0;
+  }
+  [self _syncSlot0Aliases];
+  return changed;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -59,6 +190,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     return nil;
 
   _clipAspect = 16.0 / 9.0;
+  _compareSplitFraction = 0.5;
   _zoom = kKKMiniInitialZoom;
   _panPixels = CGPointZero;
   _filmstripSlots = [NSMutableArray array];
@@ -132,11 +264,11 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   [_pollTimer invalidate];
   [self _teardownKeyMonitors];
   // NOTE: do NOT CFRelease(_sourceSurface) here. It is only ever an unowned
-  // alias of the active filmstrip slot's surface (-_selectActiveSlot:); the slot
-  // owns that +1 and releases it in -[_KKMiniFilmSlot dealloc]. Releasing it here
-  // too is an over-release - latent for as long as this view leaked (never
-  // deallocated), and the crash that surfaced once the popover-close path started
-  // freeing the view.
+  // alias of the active filmstrip slot's surface (-_selectActiveSlot:); the
+  // slot owns that +1 and releases it in -[_KKMiniFilmSlot dealloc]. Releasing
+  // it here too is an over-release - latent for as long as this view leaked
+  // (never deallocated), and the crash that surfaced once the popover-close
+  // path started freeing the view.
 }
 
 - (void)_teardownKeyMonitors {
@@ -156,27 +288,49 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
-  [_pollTimer invalidate];
-  _pollTimer = nil;
   [self _teardownKeyMonitors];
+  [self _startPollTimer];
   if (self.window) {
-    // Weak block (NOT target:self) - a target:self repeating timer retains the
-    // view, so it only deallocs when the timer is invalidated (window-leave /
-    // dealloc). The guide's popover juggling (content moving to the overlay /
-    // passthrough window, deferred closes) can leave the view in a window with
-    // a live timer, so it never deallocs and its MTKView CAMetalLayer drawables
-    // (multi-MB IOSurfaces) leak, accumulating per guide run. A weak block lets
-    // the view dealloc as soon as its popover releases it; dealloc invalidates
-    // the timer.
-    __weak typeof(self) weakSelf = self;
-    _pollTimer = [NSTimer scheduledTimerWithTimeInterval:kPollInterval
-                                                 repeats:YES
-                                                   block:^(NSTimer *t) {
-                                                     [weakSelf _poll];
-                                                   }];
     [self _poll];
     [self _installKeyMonitor];
   }
+}
+
+// (Re)arm the descriptor poll at the rate for the current playback state. Also
+// called when live playback flips so the footage keeps up (see
+// kPollIntervalLive).
+- (void)_startPollTimer {
+  [_pollTimer invalidate];
+  _pollTimer = nil;
+  if (!self.window)
+    return;
+  // Weak block (NOT target:self) - a target:self repeating timer retains the
+  // view, so it only deallocs when the timer is invalidated (window-leave /
+  // dealloc). The guide's popover juggling (content moving to the overlay /
+  // passthrough window, deferred closes) can leave the view in a window with
+  // a live timer, so it never deallocs and its MTKView CAMetalLayer drawables
+  // (multi-MB IOSurfaces) leak, accumulating per guide run. A weak block lets
+  // the view dealloc as soon as its popover releases it; dealloc invalidates
+  // the timer.
+  __weak typeof(self) weakSelf = self;
+  NSTimeInterval iv = _livePlaybackActive ? kPollIntervalLive : kPollInterval;
+  _pollTimer = [NSTimer scheduledTimerWithTimeInterval:iv
+                                               repeats:YES
+                                                 block:^(NSTimer *t) {
+                                                   [weakSelf _poll];
+                                                 }];
+}
+
+- (void)setLivePlaybackActive:(BOOL)active {
+  if (_livePlaybackActive == active)
+    return;
+  _livePlaybackActive = active;
+  // Space pressed mid-drag: the overlay's hit-test gate only stops NEW grabs,
+  // so a drag already latched would keep tracking handles that just went
+  // invisible.
+  if (active)
+    [_overlay endInteractionForLivePlayback];
+  [self _startPollTimer];
 }
 
 // Cmd-0 snaps zoom/pan back to fit, matching double-click and the inspector's
@@ -312,7 +466,8 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 - (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot
                  sid:(uint32_t)sid
                  gen:(uint64_t)gen
-                 tag:(double)tag {
+                 tag:(double)tag
+         pixelFormat:(NSString *)format {
   if (sid == 0)
     return NO;
   if (sid == slot.sid && gen == slot.generation && slot.sourceTexture) {
@@ -328,13 +483,16 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     }
     NSUInteger w = IOSurfaceGetWidth(surf);
     NSUInteger h = IOSurfaceGetHeight(surf);
-    MTLTextureDescriptor *td = [MTLTextureDescriptor
-        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
-                                     width:w
-                                    height:h
-                                 mipmapped:NO];
+    MTLPixelFormat pixelFormat = [format isEqualToString:@"rgba16Float"]
+                                     ? MTLPixelFormatRGBA16Float
+                                     : MTLPixelFormatBGRA8Unorm;
+    MTLTextureDescriptor *td =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
+                                                           width:w
+                                                          height:h
+                                                       mipmapped:NO];
     // PixelFormatView so a renderer can take an sRGB view for a linear-light
-    // working pass (e.g. Glow blurs in linear, not gamma-encoded, space).
+    // working pass (e.g. a blur runs in linear, not gamma-encoded, space).
     td.usage = MTLTextureUsageShaderRead | MTLTextureUsagePixelFormatView;
     td.storageMode = MTLStorageModeShared;
     id<MTLTexture> tex = [self.device newTextureWithDescriptor:td
@@ -414,12 +572,81 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (![desc isKindOfClass:NSDictionary.class])
     return;
 
+  // Where the PLAYHEAD was when this descriptor was published, or < 0 when the
+  // publisher had no fresh sample / wasn't playing. Live playback evaluates the
+  // effect at this rather than the frame's own tag - see the +Draw.m note.
+  NSNumber *phNum = desc[@"playheadFrac"];
+  _feedPlayheadFrac =
+      [phNum isKindOfClass:NSNumber.class] ? phNum.doubleValue : -1.0;
+
   CGSize prevMedia = _sourceMediaSize;
   _sourceMediaSize = CGSizeMake([desc[@"srcWidth"] doubleValue],
                                 [desc[@"srcHeight"] doubleValue]);
   if (!CGSizeEqualToSize(prevMedia, _sourceMediaSize) &&
       _sourceMediaSize.width > 0 && self.onSourceResolved)
     self.onSourceResolved();
+
+  // A second texture (Shader's "To" image well), independent of the slots and
+  // of the generator/filter split - resolve it before either path returns.
+  // Absent from the descriptor for every feed that never publishes one.
+  NSDictionary *ch1 = desc[@"channel1"];
+  if ([ch1 isKindOfClass:NSDictionary.class]) {
+    if (!_channel1Slot)
+      _channel1Slot = [[_KKMiniFilmSlot alloc] init];
+    uint32_t sid = (uint32_t)[ch1[@"ioSurfaceID"] unsignedIntValue];
+    uint64_t gen = (uint64_t)[ch1[@"generation"] unsignedLongLongValue];
+    if (sid != _channel1Slot.sid || gen != _channel1Slot.generation)
+      [self _resolveSlot:_channel1Slot
+                     sid:sid
+                     gen:gen
+                     tag:0.0
+             pixelFormat:ch1[@"pixelFormat"]];
+  } else if (_channel1Slot) {
+    _channel1Slot = nil; // feed stopped publishing it
+  }
+
+  // Auxiliary textures (Mirage's `// #frames` neighbours), positional and
+  // independent of the slots. Resolved before either return path, like
+  // channel 1. Absent from the descriptor for every feed that publishes none,
+  // and the array is only replaced wholesale - a consumer indexing into it must
+  // never see a half-updated set.
+  NSArray *auxEntries = desc[@"aux"];
+  if ([auxEntries isKindOfClass:NSArray.class] && auxEntries.count > 0) {
+    if (!_auxSlots)
+      _auxSlots = [NSMutableArray array];
+    while (_auxSlots.count < auxEntries.count)
+      [_auxSlots addObject:[[_KKMiniFilmSlot alloc] init]];
+    while (_auxSlots.count > auxEntries.count)
+      [_auxSlots removeLastObject];
+    for (NSUInteger i = 0; i < auxEntries.count; i++) {
+      NSDictionary *e = auxEntries[i];
+      if (![e isKindOfClass:NSDictionary.class])
+        continue;
+      uint32_t sid = (uint32_t)[e[@"ioSurfaceID"] unsignedIntValue];
+      uint64_t gen = (uint64_t)[e[@"generation"] unsignedLongLongValue];
+      _KKMiniFilmSlot *slot = _auxSlots[i];
+      if (sid != slot.sid || gen != slot.generation)
+        [self _resolveSlot:slot
+                       sid:sid
+                       gen:gen
+                       tag:0.0
+               pixelFormat:e[@"pixelFormat"]];
+    }
+  } else if (_auxSlots.count) {
+    [_auxSlots removeAllObjects]; // feed stopped publishing them
+  }
+
+  // Generator: the descriptor carries only the media size (empty `slots`),
+  // because there is no source feed. Build the filmstrip/onion slots from the
+  // delegate's keypose fractions instead of the descriptor, and take the clip
+  // aspect from the published media size (no slot-0 surface to read it from).
+  if ([self _isGeneratorDelegate]) {
+    if (_sourceMediaSize.width > 0 && _sourceMediaSize.height > 0)
+      _clipAspect = _sourceMediaSize.width / _sourceMediaSize.height;
+    if ([self _rebuildGeneratorSlots])
+      [self setNeedsDisplay:YES];
+    return;
+  }
 
   // Walk the multi-slot array if present; fall back to the top-level
   // single-slot keys (descriptor format pre-onion-skin).
@@ -429,6 +656,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
       @"ioSurfaceID" : desc[@"ioSurfaceID"] ?: @0,
       @"generation" : desc[@"generation"] ?: @0,
       @"tag" : @0,
+      @"pixelFormat" : desc[@"pixelFormat"] ?: @"bgra8",
     };
     slotEntries = @[ one ];
   }
@@ -447,7 +675,11 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     double tag = [e[@"tag"] doubleValue];
     _KKMiniFilmSlot *slot = _filmstripSlots[i];
     if (sid != slot.sid || gen != slot.generation || tag != slot.tag) {
-      if ([self _resolveSlot:slot sid:sid gen:gen tag:tag])
+      if ([self _resolveSlot:slot
+                         sid:sid
+                         gen:gen
+                         tag:tag
+                 pixelFormat:e[@"pixelFormat"]])
         anyChange = YES;
     }
   }
@@ -533,20 +765,52 @@ static const NSUInteger kFilmstripGridCols = 5;
                     cellH);
 }
 
-- (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot {
-  if (!slot.sourceTexture)
-    return;
+- (BOOL)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot {
+  if (!slot.sourceTexture) {
+    // Generator path: no source frame. Size the target to the content rect's
+    // pixel size (clip aspect) so the delegate can render straight into it.
+    id<KKMiniViewerDelegate> genDel = self.canvasDelegate;
+    if (![genDel respondsToSelector:
+                     @selector(miniViewer:generateIntoTexture:commandBuffer:)])
+      return NO;
+    CGRect content = [self _contentRectInDrawable];
+    // Cap to the drawable (visible) size. Zooming in grows the content rect
+    // without bound; sizing the texture to it would exceed Metal's max texture
+    // dimension and abort in -[MTLTextureDescriptorInternal
+    // validateWithDevice:] (the zoom-in crash). The gradient is smooth, so
+    // rendering at viewport resolution and mapping it across the (larger)
+    // content-rect quad is visually identical. Zoomed out, content < drawable,
+    // so use content.
+    CGSize dr = self.drawableSize;
+    double capW = dr.width > 0 ? dr.width : content.size.width;
+    double capH = dr.height > 0 ? dr.height : content.size.height;
+    NSUInteger gW = (NSUInteger)MAX(1.0, round(MIN(content.size.width, capW)));
+    NSUInteger gH = (NSUInteger)MAX(1.0, round(MIN(content.size.height, capH)));
+    if (slot.processedTexture && slot.processedTexture.width == gW &&
+        slot.processedTexture.height == gH)
+      return NO;
+    MTLTextureDescriptor *gtd = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                     width:gW
+                                    height:gH
+                                 mipmapped:NO];
+    gtd.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget |
+                MTLTextureUsagePixelFormatView;
+    gtd.storageMode = MTLStorageModePrivate;
+    slot.processedTexture = [self.device newTextureWithDescriptor:gtd];
+    return YES;
+  }
   // Render the effect at DISPLAY resolution (the content rect's pixel size in
   // the drawable), aspect-preserved and capped at the source size so we never
   // upscale. The processed texture is only ever blitted 1:1 into its cell, so
   // rendering it at full source res and then minifying into the small popover
-  // throws away the soft falloff of effects like Glow - making the preview read
-  // as a tighter/dimmer glow than the viewer. Rendering at the size it's shown
-  // keeps it faithful. (Handles/OSC use the content rect, not these pixels, so
-  // this is display-only.)
+  // throws away the soft falloff of soft/bounds effects - making the preview
+  // read as a tighter/dimmer glow than the viewer. Rendering at the size it's
+  // shown keeps it faithful. (Handles/OSC use the content rect, not these
+  // pixels, so this is display-only.)
   //
   // OPT-IN: only soft/bounds effects benefit. A renderer that normalizes by the
-  // dest texture's own pixel size (e.g. MagicMove's transform shader divides
+  // dest texture's own pixel size (e.g. a transform shader divides
   // the framebuffer position by the texture dims) would zoom in by source/dest
   // if the dest shrank, so it keeps the full source size (the pre-display-res
   // default). Renderers opt in via -prefersDisplayResolutionProcessing.
@@ -567,7 +831,7 @@ static const NSUInteger kFilmstripGridCols = 5;
   }
   if (slot.processedTexture && slot.processedTexture.width == tW &&
       slot.processedTexture.height == tH)
-    return;
+    return NO;
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
                                    width:tW
@@ -577,6 +841,7 @@ static const NSUInteger kFilmstripGridCols = 5;
              MTLTextureUsagePixelFormatView;
   td.storageMode = MTLStorageModePrivate;
   slot.processedTexture = [self.device newTextureWithDescriptor:td];
+  return YES;
 }
 
 - (void)_ensureProcessedTexture {

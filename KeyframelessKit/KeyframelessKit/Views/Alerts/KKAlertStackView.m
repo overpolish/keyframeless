@@ -4,6 +4,7 @@
  */
 
 #import "KKAlertStackView.h"
+#import "KKPlugin.h" // KKPerformUndoable
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
@@ -44,14 +45,14 @@
     _persistParameterID = parameterID;
 
     if (apiManager && parameterID != 0) {
-      id<FxCustomParameterActionAPI_v4> actionAPI =
-          [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actionAPI startAction:self];
-      id<FxParameterRetrievalAPI_v6> paramGetAPI =
-          [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      NSString *saved = nil;
-      [paramGetAPI getStringParameterValue:&saved fromParameter:parameterID];
-      [actionAPI endAction:self];
+      __block NSString *saved = nil;
+      KKPerformUndoable(apiManager, self, nil,
+                        ^(id<FxParameterRetrievalAPI_v6> paramGetAPI,
+                          id<FxParameterSettingAPI_v5> setAPI,
+                          CMTime actionTime) {
+                          [paramGetAPI getStringParameterValue:&saved
+                                                 fromParameter:parameterID];
+                        });
       if (saved.length > 0)
         _selectedTag = [saved copy];
     }
@@ -228,14 +229,14 @@
 - (void)_persistSelectedTag {
   if (!_apiManager || _persistParameterID == 0 || !_selectedTag)
     return;
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [paramSetAPI setStringParameterValue:_selectedTag
-                           toParameter:_persistParameterID];
-  [actionAPI endAction:self];
+  KKPerformUndoable(_apiManager, self, nil,
+                    ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                      id<FxParameterSettingAPI_v5> paramSetAPI,
+                      CMTime actionTime) {
+                      [paramSetAPI
+                          setStringParameterValue:self->_selectedTag
+                                      toParameter:self->_persistParameterID];
+                    });
 }
 
 @end

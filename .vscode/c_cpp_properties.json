@@ -6,9 +6,6 @@
         "${workspaceFolder}/KeyframelessKit/**",
         "${workspaceFolder}/Canvas/**",
         "${workspaceFolder}/CanvasRenderer/**",
-        "${workspaceFolder}/MagicMove/**",
-        "${workspaceFolder}/Glow/**",
-        "${workspaceFolder}/Rounded/**",
         "${workspaceFolder}/MotionTemplates/**",
         "${workspaceFolder}/Template/**",
         "${workspaceFolder}/Keyframeless X/**"
@@ -18,9 +15,6 @@
           "${workspaceFolder}/KeyframelessKit",
           "${workspaceFolder}/Canvas",
           "${workspaceFolder}/CanvasRenderer",
-          "${workspaceFolder}/MagicMove",
-          "${workspaceFolder}/Glow",
-          "${workspaceFolder}/Rounded",
           "${workspaceFolder}/MotionTemplates",
           "${workspaceFolder}/Template",
           "${workspaceFolder}/Keyframeless X"

@@ -22,12 +22,33 @@ done
 # builds carry a `PLUGIN="..."` line; the suite bundle's uninstall has none, so it
 # falls back to "Keyframeless".
 SCRIPT_DIR="$(dirname "$0")"
-UNINSTALL=$(ls "$SCRIPT_DIR"/uninstall* 2>/dev/null | head -1)
+# The legacy-plugin uninstaller is copied separately below, so keep it out of the
+# primary "Uninstall <product>" selection (per-product builds rename the main one
+# to uninstall-<component>, which would otherwise sort after uninstall-legacy-*).
+UNINSTALL=$(ls "$SCRIPT_DIR"/uninstall* 2>/dev/null | grep -v 'uninstall-legacy-plugins' | head -1)
 if [ -n "$UNINSTALL" ] && [ -d "$2" ]; then
     PLUGIN_NAME=$(sed -n 's/^PLUGIN="\(.*\)"$/\1/p' "$UNINSTALL" | head -1)
     [ -z "$PLUGIN_NAME" ] && PLUGIN_NAME="Keyframeless"
     cp "$UNINSTALL" "$2/Uninstall $PLUGIN_NAME"
     chmod +x "$2/Uninstall $PLUGIN_NAME"
+fi
+
+# The retired Rounded / Magic Move / Glow standalone plugins ship a dedicated
+# uninstaller (bundled with Mirage). Drop it beside the app when present, so an
+# install/update offers to clean up the old standalone plugins.
+LEGACY="$SCRIPT_DIR/uninstall-legacy-plugins"
+if [ -f "$LEGACY" ] && [ -d "$2" ]; then
+    cp "$LEGACY" "$2/Uninstall Legacy Plugins"
+    chmod +x "$2/Uninstall Legacy Plugins"
+fi
+
+# One-time migration for the co.overpolish.* -> com.keyframeless.* rename:
+# moves the app group + transcription models onto the new identifiers and
+# clears the superseded LaunchAgents and retired plugins. Self-guarding (marker
+# file), non-fatal, and a no-op once it has run.
+MIGRATE="$SCRIPT_DIR/migrate-identifiers"
+if [ -f "$MIGRATE" ]; then
+    bash "$MIGRATE" || true
 fi
 
 exit 0

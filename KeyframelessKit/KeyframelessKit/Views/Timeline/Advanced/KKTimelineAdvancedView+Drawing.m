@@ -8,6 +8,7 @@
 #import "KKKeyposeSymbol.h"
 #import "KKLocalized.h"
 #import "KKLog.h"
+#import "KKTimelineHintText.h"
 #import "KKTimelineScale.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
@@ -110,11 +111,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // the collapse affordance, mirroring the layer header). Indented under the
 // layer header when the timeline has a layer level, giving a layer > category
 // > lane tree.
-- (void)_drawCategoryHeaderRowForLane:(KKLane *)lane
-                                inRow:(NSRect)row
-                            collapsed:(BOOL)collapsed {
+- (void)_drawCategoryHeaderRow:(KKAdvancedRow *)hrow
+                        inRect:(NSRect)row
+                     collapsed:(BOOL)collapsed {
   NSColor *ink = [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
-  NSString *name = KKLocalizedParamName(lane.categoryKey ?: @"");
+  NSString *name = KKLocalizedParamName(hrow.headerTitle ?: @"");
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:kGroupDividerFontSize
                                             weight:NSFontWeightSemibold],
@@ -132,9 +133,9 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
           [NSImageSymbolConfiguration configurationWithHierarchicalColor:ink]];
 
   CGFloat x = NSMinX(g) + kRowLabelInset +
-              (lane.layerKey.length ? kCategoryHeaderIndent : 0.0);
-  if (lane.categorySymbol.length) {
-    NSImage *icon = [[NSImage imageWithSystemSymbolName:lane.categorySymbol
+              (hrow.headerIndented ? kCategoryHeaderIndent : 0.0);
+  if (hrow.headerSymbol.length) {
+    NSImage *icon = [[NSImage imageWithSystemSymbolName:hrow.headerSymbol
                                accessibilityDescription:nil]
         imageWithSymbolConfiguration:cfg];
     if (icon) {
@@ -163,11 +164,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // a lane label so the layer reads as the outer grouping level. The symbol shows
 // FILLED when the layer is collapsed, outline when expanded (so the row doubles
 // as the collapse affordance). Defaults to a stacked-squares glyph.
-- (void)_drawLayerHeaderRowForLane:(KKLane *)lane
-                             inRow:(NSRect)row
-                         collapsed:(BOOL)collapsed {
+- (void)_drawLayerHeaderRow:(KKAdvancedRow *)hrow
+                     inRect:(NSRect)row
+                  collapsed:(BOOL)collapsed {
   NSColor *ink = [[NSColor inspectorLabel] colorWithAlphaComponent:0.9];
-  NSString *name = lane.layerLabel.length ? lane.layerLabel : @"";
+  NSString *name = hrow.headerTitle ?: @"";
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:kGroupDividerFontSize
                                             weight:NSFontWeightBold],
@@ -187,7 +188,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       configurationByApplyingConfiguration:
           [NSImageSymbolConfiguration configurationWithHierarchicalColor:ink]];
 
-  NSString *base = lane.layerSymbol.length ? lane.layerSymbol : @"square.stack";
+  NSString *base =
+      hrow.headerSymbol.length ? hrow.headerSymbol : @"square.stack";
   NSString *symbol = collapsed ? [base stringByAppendingString:@".fill"] : base;
   NSImage *icon =
       [[NSImage imageWithSystemSymbolName:symbol
@@ -205,7 +207,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // Locked layer: a lock glyph between the layer icon and its name marks the
   // whole layer read-only (the lanes below are washed instead of overlaid
   // here).
-  if (lane.locked) {
+  if (hrow.headerLocked) {
     NSImage *lockImg = [[NSImage imageWithSystemSymbolName:@"lock.fill"
                                   accessibilityDescription:nil]
         imageWithSymbolConfiguration:cfg];
@@ -242,7 +244,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
   [track fill];
 
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
   NSRect tracks = [self _tracksRect];
 
   NSDictionary *labelAttrs = @{
@@ -258,24 +260,24 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [NSGraphicsContext saveGraphicsState];
   [track addClip];
 
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    KKLane *lane = lanes[i];
-    NSRect row = [self _rowRectForIndex:i count:lanes.count];
+  for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
+    KKAdvancedRow *r = rows[i];
+    KKLane *lane = r.lane;
+    NSRect row = [self _rowRectForIndex:i count:rows.count];
     // A header row draws a name + collapse glyph in place of a lane
     // label/curve - the category header for a categorised run, otherwise the
     // layer (owner) header.
-    if (lane.headerPlaceholder) {
-      if (lane.categoryHeader)
-        [self _drawCategoryHeaderRowForLane:lane
-                                      inRow:row
-                                  collapsed:[_collapsedCategoryKeys
-                                                containsObject:lane.label]];
+    if (r.isHeader) {
+      if (r.kind == KKAdvancedRowCategoryHeader)
+        [self _drawCategoryHeaderRow:r
+                              inRect:row
+                           collapsed:[_collapsedCategoryKeys
+                                         containsObject:r.collapseKey]];
       else
-        [self _drawLayerHeaderRowForLane:lane
-                                   inRow:row
-                               collapsed:[_collapsedLayerKeys
-                                             containsObject:lane.layerKey
-                                                                ?: @""]];
+        [self _drawLayerHeaderRow:r
+                           inRect:row
+                        collapsed:[_collapsedLayerKeys
+                                      containsObject:r.collapseKey ?: @""]];
       continue;
     }
     if (i == _hoverLaneRow) {
@@ -289,7 +291,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       [[[NSColor inspectorLabel] colorWithAlphaComponent:0.05] setFill];
       [hi fill];
     }
-    NSString *label = KKLocalizedParamName(lane.label ?: @"");
+    NSString *label = KKLocalizedParamName(lane.displayName ?: @"");
     NSSize lsz = [label sizeWithAttributes:labelAttrs];
     NSPoint lp =
         NSMakePoint(NSMinX(g) + kRowLabelInset, NSMidY(row) - lsz.height * 0.5);
@@ -306,12 +308,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   CGFloat clipL = NSMinX(tracks) - edgePad;
   [NSGraphicsContext saveGraphicsState];
   NSRectClip(NSMakeRect(clipL, NSMinY(g), NSMaxX(g) - clipL, NSHeight(g)));
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    KKLane *lane = lanes[i];
-    if (lane.headerPlaceholder)
+  for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
+    if (rows[i].isHeader)
       continue;
-    NSRect row = [self _rowRectForIndex:i count:lanes.count];
-    [self _drawLane:lane inRow:row tracks:tracks];
+    NSRect row = [self _rowRectForIndex:i count:rows.count];
+    [self _drawLane:rows[i].lane inRow:row tracks:tracks];
   }
   [NSGraphicsContext restoreGraphicsState]; // curve clip
 
@@ -319,21 +320,33 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // toward the background so they read as disabled but still visible.
   NSColor *lockWash =
       [[NSColor inspectorBackground] colorWithAlphaComponent:0.6];
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+  for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
     // Lane rows wash to read as disabled; the layer HEADER row is left clean
-    // and instead shows a lock glyph (drawn in _drawLayerHeaderRowForLane:).
-    if (!lanes[i].locked || lanes[i].headerPlaceholder)
+    // and instead shows a lock glyph (drawn in _drawLayerHeaderRow:).
+    if (rows[i].isHeader || !rows[i].lane.locked)
       continue;
-    NSRect row = [self _rowRectForIndex:i count:lanes.count];
+    NSRect row = [self _rowRectForIndex:i count:rows.count];
     NSRect wash = NSInsetRect(row, -kPillW * 0.5, 0);
     [lockWash setFill];
     NSRectFillUsingOperation(wash, NSCompositingOperationSourceOver);
   }
   [NSGraphicsContext restoreGraphicsState]; // outer rows clip
 
+  // Active-keypose highlight in its own pass, drawn AFTER both clips are lifted
+  // (mirrors Basic drawing the ring unclipped) so the ring isn't shaved at the
+  // track edges or the container's top/bottom. The scroll fades and ruler paint
+  // afterwards, covering any ring that strays toward a scrolled-off edge. Rings
+  // the keypose(s) the open value popover edits.
+  [self _drawActiveKeyposeHighlightForRows:rows tracks:tracks];
+
   // Fade shadows over the rows go under the ruler / playhead so those stay
   // crisp; the row content above/below fades into a shadow when it scrolls.
   [self _drawScrollFadesInRect:g];
+
+  // Empty state: no lanes to draw, but the ruler + playhead below still render
+  // so the timeline stays scrubbable. The message sits where the rows would.
+  if (self.emptyMessage.length && rows.count == 0)
+    KKTimelineDrawCenteredHint(self.emptyMessage, g);
 
   [self _drawRulerInRect:g tracks:tracks];
   [self _drawDurationOverlayInRect:g tracks:tracks];
@@ -425,7 +438,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   if (singleDrag) {
     KKLane *lane = nil;
     for (KKLane *l in _timeline.lanes)
-      if ([l.label isEqualToString:_pressLaneLabel] && l.enabled) {
+      if ([l.key isEqualToString:_pressLaneLabel] && l.enabled) {
         lane = l;
         break;
       }
@@ -467,7 +480,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   if (_hoverGapLabel && _hoverGapAIdx >= 0) {
     KKLane *lane = nil;
     for (KKLane *l in _timeline.lanes)
-      if ([l.label isEqualToString:_hoverGapLabel] && l.enabled) {
+      if ([l.key isEqualToString:_hoverGapLabel] && l.enabled) {
         lane = l;
         break;
       }
@@ -544,9 +557,9 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // full-height guide would zigzag. Draw it only inside the dragged lane's row
   // at that lane's warped x; linear mode keeps the full-height guide.
   if (_dynamicDisplay && _pressLaneLabel) {
-    NSArray<KKLane *> *anim = [self _animatableLanes];
+    NSArray<KKAdvancedRow *> *anim = [self _rows];
     for (NSInteger i = 0; i < (NSInteger)anim.count; i++) {
-      if (![anim[i].label isEqualToString:_pressLaneLabel])
+      if (![anim[i].lane.key isEqualToString:_pressLaneLabel])
         continue;
       NSRect row = [self _rowRectForIndex:i count:anim.count];
       CGFloat y0 = MAX(NSMinY(row), NSMinY(g));
@@ -554,7 +567,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       if (y1 <= y0)
         return;
       CGFloat lx = round([self _xForFrac:_dragSnapFrac
-                                  inLane:anim[i]
+                                  inLane:anim[i].lane
                                 inTracks:tracks]) +
                    0.5;
       NSBezierPath *line = [NSBezierPath bezierPath];
@@ -626,8 +639,9 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // out-of-range edits expand the visual scale instead of clipping into the row
   // edges). Prefer the SLIDER bounds when set: they're the intended display
   // range, decoupled from a deliberately huge value clamp (draw-on Offset's
-  // field is ~unbounded so it can spin past 100 %, but the curve must plot on the
-  // 0..100 % scale, not a million-wide one that renders every transition flat).
+  // field is ~unbounded so it can spin past 100 %, but the curve must plot on
+  // the 0..100 % scale, not a million-wide one that renders every transition
+  // flat).
   NSMutableArray<NSNumber *> *plotMin =
       lane.sliderMin ? [@[ lane.sliderMin ] mutableCopy]
                      : (lane.componentMin ? [lane.componentMin mutableCopy]
@@ -652,7 +666,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     KKKeyPose *ka = kps[i];
     KKKeyPose *kb = kps[i + 1];
     BOOL flat =
-        KKAdvValuesEqual(ka.values, kb.values) &&
+        KKLaneKeyposeValuesEqual(lane, ka, kb) &&
         (!ka.outgoing || ka.outgoing.modulation == KKIntervalModulationNone);
     NSInteger samples = flat ? 1 : 16;
     for (NSInteger k = 0; k <= samples; k++) {
@@ -760,7 +774,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     if (i + 1 == (NSInteger)kps.count - 1)
       xB += innerEdgePad;
     KKInterval *iv = a.outgoing;
-    BOOL anyDiffer = !KKAdvValuesEqual(a.values, b.values);
+    BOOL anyDiffer = !KKLaneKeyposeValuesEqual(lane, a, b);
     BOOL hasModulation = iv && iv.modulation != KKIntervalModulationNone;
     NSColor *base = anyDiffer ? warn : neutral;
     NSColor *color = [base colorWithAlphaComponent:compAlpha];
@@ -783,7 +797,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
         double n = KKAdvNormComponent(av[c].doubleValue, cMin, cMax, c);
         CGFloat y = round(yBot + (yTop - yBot) * n) + 0.5;
         NSPoint pts[2] = {NSMakePoint(xA, y), NSMakePoint(xB, y)};
-        KKStrokeTimelineCurve(pts, 2, lineW, NO, curveColorForComp(c));
+        KKStrokeTimelineCurve(pts, 2, lineW, iv.lockedSeconds > 0.0,
+                              curveColorForComp(c));
       }
       continue;
     }
@@ -820,7 +835,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       }
     }
     for (NSUInteger c = 0; c < compCount; c++) {
-      KKStrokeTimelineCurve(pts[c], n + 1, lineW, NO, curveColorForComp(c));
+      KKStrokeTimelineCurve(pts[c], n + 1, lineW,
+                            iv.lockedSeconds > 0.0, curveColorForComp(c));
       free(pts[c]);
     }
     free(pts);
@@ -835,7 +851,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     pillBot = NSMinY(row);
   }
   BOOL isTopLane = _topLaneLabel &&
-                   [lane.label isEqualToString:_topLaneLabel] &&
+                   [lane.key isEqualToString:_topLaneLabel] &&
                    _topKPIdx >= 0 && _topKPIdx < (NSInteger)kps.count;
   for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
     if (isTopLane && i == _topKPIdx)
@@ -876,8 +892,13 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // the boundary pill's outer half - same edge the lane line uses, so the
   // highlight and the line agree on where the visible row "ends".
   CGFloat innerEdgePad = kPillW * 0.5;
+  BOOL laneHasActiveGap =
+      _gapPopoverShowing && [lane.key isEqualToString:_activeGapLabel];
   for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
-    if (![self _gapSelected:lane aIdx:i])
+    // Highlight a gap when the user has it selected OR it's the exact gap the
+    // open curve/modulation popover edits - same translucent column either way.
+    BOOL active = laneHasActiveGap && i == _activeGapAIdx;
+    if (![self _gapSelected:lane aIdx:i] && !active)
       continue;
     CGFloat xA = [self _xForFrac:kps[i].time inLane:lane inTracks:tracks];
     CGFloat xB = [self _xForFrac:kps[i + 1].time inLane:lane inTracks:tracks];
@@ -887,7 +908,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       xA -= innerEdgePad;
     if (i + 1 == (NSInteger)kps.count - 1)
       xB += innerEdgePad;
-    BOOL transition = !KKAdvValuesEqual(kps[i].values, kps[i + 1].values);
+    BOOL transition = !KKLaneKeyposeValuesEqual(lane, kps[i], kps[i + 1]);
     NSColor *tint =
         [(transition ? warn : neutral) colorWithAlphaComponent:0.15];
     NSRect col = NSMakeRect(xA, NSMinY(row), xB - xA, NSHeight(row));
@@ -907,7 +928,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     KKInterval *iv = kps[i].outgoing;
     if (!iv || !iv.endpointsLinked)
       continue;
-    if (!KKAdvValuesEqual(kps[i].values, kps[i + 1].values))
+    if (!KKLaneKeyposeValuesEqual(lane, kps[i], kps[i + 1]))
       continue;
     CGFloat xA = [self _xForFrac:kps[i].time inLane:lane inTracks:tracks];
     CGFloat xB = [self _xForFrac:kps[i + 1].time inLane:lane inTracks:tracks];
@@ -937,10 +958,10 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   KKKeyPose *kp = kps[i];
   CGFloat x = [self _xForFrac:kp.time inLane:lane inTracks:tracks];
   BOOL warnHere = NO;
-  if (i > 0 && !KKAdvValuesEqual(kps[i - 1].values, kp.values))
+  if (i > 0 && !KKLaneKeyposeValuesEqual(lane, kps[i - 1], kp))
     warnHere = YES;
   if (!warnHere && i + 1 < (NSInteger)kps.count &&
-      !KKAdvValuesEqual(kp.values, kps[i + 1].values))
+      !KKLaneKeyposeValuesEqual(lane, kp, kps[i + 1]))
     warnHere = YES;
   CGFloat pillX = round(x) - kPillW * 0.5 + 0.5;
   NSRect pill = NSMakeRect(pillX, pillBot, kPillW, pillTop - pillBot);
@@ -955,6 +976,57 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     halo.lineWidth = 1.5;
     [[NSColor inspectorLabel] setStroke];
     [halo stroke];
+  }
+}
+
+- (void)_drawActiveKeyposeHighlightForRows:(NSArray<KKAdvancedRow *> *)rows
+                                    tracks:(NSRect)tracks {
+  if (!_valuePopoverShowing)
+    return;
+  NSColor *neutral = [NSColor accentMatchingHost];
+  NSColor *warn = [NSColor warning];
+  for (NSInteger li = 0; li < (NSInteger)rows.count; li++) {
+    KKLane *lane = rows[li].lane;
+    if (rows[li].isHeader || lane.locked)
+      continue;
+    // Only the clicked lane's keypose, NOT every lane at this time - matches
+    // the single-pill selection halo (you selected one keypose, not the
+    // column).
+    if (![lane.key isEqualToString:_topLaneLabel])
+      continue;
+    NSArray<KKKeyPose *> *kps = lane.keyposes;
+    for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
+      KKKeyPose *kp = kps[i];
+      if (fabs(kp.time - _currentPopoverFrac) >= 1.0e-4)
+        continue;
+      // Colour tracks the pill's own value colour (warn when an adjacent
+      // endpoint differs, accent when flat) - same rule as
+      // _drawPillForKPInLane.
+      BOOL warnHere = NO;
+      if (i > 0 && !KKLaneKeyposeValuesEqual(lane, kps[i - 1], kp))
+        warnHere = YES;
+      if (!warnHere && i + 1 < (NSInteger)kps.count &&
+          !KKLaneKeyposeValuesEqual(lane, kp, kps[i + 1]))
+        warnHere = YES;
+      NSRect row = [self _rowRectForIndex:li count:rows.count];
+      CGFloat pillTop = NSMaxY(row) - kPillInsetY;
+      CGFloat pillBot = NSMinY(row) + kPillInsetY;
+      if (pillTop <= pillBot) {
+        pillTop = NSMaxY(row);
+        pillBot = NSMinY(row);
+      }
+      CGFloat x = [self _xForFrac:kp.time inLane:lane inTracks:tracks];
+      CGFloat pillX = round(x) - kPillW * 0.5 + 0.5;
+      NSRect pill = NSMakeRect(pillX, pillBot, kPillW, pillTop - pillBot);
+      NSBezierPath *hl =
+          [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(pill, -3.0, -3.0)
+                                          xRadius:kPillW
+                                          yRadius:kPillW];
+      hl.lineWidth = 2.0;
+      [(warnHere ? warn : neutral) setStroke];
+      [hl stroke];
+      break;
+    }
   }
 }
 
@@ -1017,12 +1089,12 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     // Lanes warp independently, so a single cross-lane line would lie. Draw a
     // per-lane playback line at this real time's warped position in each row;
     // only the ruler thumb spans the linear axis above.
-    NSArray<KKLane *> *lanes = [self _animatableLanes];
-    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      KKLane *lane = lanes[i];
-      if (lane.headerPlaceholder)
+    NSArray<KKAdvancedRow *> *prows = [self _rows];
+    for (NSInteger i = 0; i < (NSInteger)prows.count; i++) {
+      if (prows[i].isHeader)
         continue;
-      NSRect row = [self _rowRectForIndex:i count:lanes.count];
+      KKLane *lane = prows[i].lane;
+      NSRect row = [self _rowRectForIndex:i count:prows.count];
       CGFloat y0 = MAX(NSMinY(row), NSMinY(g));
       CGFloat y1 = MIN(NSMaxY(row), NSMaxY(g));
       if (y1 <= y0)

@@ -5,19 +5,18 @@
 
 #import "KKScaleMiniController.h"
 #import <KeyframelessKit/KKScaleGizmo.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 static const CGFloat kHandleHitTolPt = 12.0;
 // Cmd-fine drag multiplier (matches the viewer KKScaleOSC).
-static const double kMiniScaleFineFactor = 0.2;
 
 @implementation KKScaleMiniController {
   BOOL _grabbed;
   NSInteger _grabHandle; // 0-7
   CGPoint _pressCenter;
   double _pressSclX, _pressSclY;
-  CGPoint _effCursor; // starts at the grabbed handle (no press snap)
-  CGPoint _lastCursor;
+  KKScaleDragCursor _dragCursor; // effective cursor starts at the grabbed
+                                 // handle (no press snap)
   CGPoint _pressFrac; // anchor frac captured at press (scale fixed point)
 }
 
@@ -38,7 +37,7 @@ static const double kMiniScaleFineFactor = 0.2;
 
 - (nullable KKLane *)_liveLane {
   for (KKLane *lane in self.renderer.timeline.lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -185,14 +184,13 @@ static const double kMiniScaleFineFactor = 0.2;
   // Effective cursor starts at the grabbed handle (no press snap).
   CGPoint h[8];
   [self _handlePositions:h forContentRect:cr];
-  _effCursor = h[idx];
-  _lastCursor = p;
+  _dragCursor.effCursor = h[idx];
+  _dragCursor.lastCursor = p;
   return YES;
 }
 
-// Absolute drag (effective cursor tracks the grabbed handle; Cmd = fine) with
-// link-aware coupling (Shift inverts) and integer snapping - mirrors the
-// viewer.
+// One shared gizmo drag tick (Cmd-fine cursor, anchor-fixed percents,
+// link-aware coupling with Shift invert) - identical rule set to the viewer.
 - (void)applyDragToPoint:(CGPoint)p
              contentRect:(CGRect)cr
                modifiers:(NSEventModifierFlags)modifiers
@@ -200,30 +198,15 @@ static const double kMiniScaleFineFactor = 0.2;
   NSInteger h = _grabHandle;
   if (h < 0 || cr.size.width <= 0 || cr.size.height <= 0)
     return;
-  double rawDx = p.x - _lastCursor.x, rawDy = p.y - _lastCursor.y;
-  _lastCursor = p;
-  double fine =
-      (modifiers & NSEventModifierFlagCommand) ? kMiniScaleFineFactor : 1.0;
-  _effCursor =
-      CGPointMake(_effCursor.x + rawDx * fine, _effCursor.y + rawDy * fine);
-  CGPoint c = _pressCenter;
   double crMin = MIN(cr.size.width, cr.size.height);
   double e0 = crMin * KKScaleGizmoE0Frac, span = crMin * KKScaleGizmoSpanFrac;
-  // Distance from the ANCHOR (c) / |sign - frac| so the anchor is the fixed
-  // point (frac 0 = symmetric). A degenerate axis (handle on the anchor) holds.
-  double tX = KKScaleGizmoPercentForHandle(
-      _effCursor.x, c.x, KKScaleHandleSignX(h), _pressFrac.x, e0, span);
-  double tY = KKScaleGizmoPercentForHandle(
-      _effCursor.y, c.y, KKScaleHandleSignY(h), _pressFrac.y, e0, span);
-  if (tX < 0)
-    tX = _pressSclX;
-  if (tY < 0)
-    tY = _pressSclY;
-  BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
-  BOOL effLinked = [self _aspectLinked] ^ shift;
+  BOOL effLinked =
+      [self _aspectLinked] ^ ((modifiers & NSEventModifierFlagShift) != 0);
   double newX = 0, newY = 0;
-  KKScaleValuesForHandleDrag(h, _pressSclX, _pressSclY, tX, tY, effLinked,
-                             &newX, &newY);
+  KKScaleDragTick(&_dragCursor, p,
+                  (modifiers & NSEventModifierFlagCommand) != 0, h,
+                  _pressCenter, _pressFrac, _pressSclX, _pressSclY, effLinked,
+                  e0, span, &newX, &newY);
   [self.renderer commitValues:@[ @(newX), @(newY) ]
                      forLabel:self.laneLabel
                        canvas:canvas];

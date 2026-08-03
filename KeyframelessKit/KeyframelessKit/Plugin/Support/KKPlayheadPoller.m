@@ -127,6 +127,18 @@
   // is a longer count, so a real pause flips the button off before polling
   // stops.
   BOOL playing = (nowWall - _lastMoveWall) < 0.3;
+  // Publish the sample for the mini-viewer live preview (see KKRenderCache).
+  //
+  // Measured 2026-07-26: this is a COARSE clock, and deliberately used only to
+  // estimate a slowly-varying OFFSET, never as a per-frame time. The timer is
+  // armed at the frame rate but `currentTime` advances in ~4-frame steps
+  // (~71ms, so ~14Hz) no matter how often it's sampled, and the run loop stalls
+  // intermittently on top of that (measured gaps of 0.3s mid-playback, seconds
+  // while idle). Anything that needs a smooth per-frame playhead has to
+  // interpolate; see the lead-subtraction in KKPlugin+MiniViewerFeed.
+  _cache.playheadFrac = ph;
+  _cache.playheadPlaying = playing;
+  _cache.playheadSampleWall = CACurrentMediaTime();
   if (playing != _lastPushedPlaying) {
     _lastPushedPlaying = playing;
     [iv setPlaying:playing];

@@ -3,12 +3,8 @@
   "name": "keyframeless-feedback",
   "main": "src/index.js",
   "compatibility_date": "2026-05-20",
-  // The static form (public/index.html) is served at / and the Worker handles
-  // POST /submit - same origin, so no CORS. Static assets are matched first;
-  // a request with no matching file (i.e. /submit) falls through to the Worker.
-  "assets": {
-    "directory": "./public",
-  },
+  // No static assets: the form is a page on the site
+  // (docs/feedback/index.html). This Worker is only the POST endpoint.
   // Screenshot uploads land here; the form embeds their public URLs in the issue.
   "r2_buckets": [
     {
@@ -25,7 +21,11 @@
   // Secrets - set with `wrangler secret put NAME`, never committed:
   //   TURNSTILE_SECRET   Cloudflare Turnstile secret key
   //   GITHUB_TOKEN       fine-grained PAT, issues:write on GITHUB_REPO only
+  // EXACT paths, not /feedback/* - a wildcard would shadow the form page
+  // itself, which must keep coming from GitHub Pages. Requires keyframeless.com
+  // to be PROXIED through Cloudflare (orange cloud) in front of Pages.
   "routes": [
-    { "pattern": "feedback.keyframeless.overpolish.co", "custom_domain": true },
+    { "pattern": "keyframeless.com/feedback/submit", "zone_name": "keyframeless.com" },
+    { "pattern": "keyframeless.com/feedback/github-webhook", "zone_name": "keyframeless.com" },
   ],
 }

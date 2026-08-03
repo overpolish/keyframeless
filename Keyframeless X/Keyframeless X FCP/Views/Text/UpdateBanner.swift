@@ -61,7 +61,7 @@ struct UpdateBanner: View {
 			UpdateBanner(
 				version: "2.2.0",
 				currentVersion: "2.1.0",
-				url: URL(string: "https://update.keyframeless.overpolish.co/keyframelessx/"),
+				url: URL(string: "https://keyframeless.com/keyframelessx/"),
 				onDismiss: {}
 			)
 			UpdateBanner(version: "3.0.0", currentVersion: "2.1.0", url: nil, onDismiss: {})

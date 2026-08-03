@@ -9,7 +9,7 @@
 #   <target>:
 #     combined         the all-in-one Keyframeless.pkg (every plugin)
 #     all              every plugin as its own per-product .pkg
-#     <component>      one per-product .pkg (rounded|keyframelessx|magicmove|glow|canvas|keyframelessai)
+#     <component>      one per-product .pkg (keyframelessx|canvas|shader|keyframelessai)
 #
 # Per-product builds GENERATE the single-product .pkgproj and its uninstaller from
 # templates (split-pkgproj.py + uninstall.template), build, sign, then delete those
@@ -23,7 +23,7 @@ SPLIT="$ROOT/scripts/split-pkgproj.py"
 
 usage() {
   echo "Usage: build-and-sign.sh <target> <apple-id> <team-id>"
-  echo "  <target>: combined | all | rounded | keyframelessx | magicmove | glow | canvas | keyframelessai"
+  echo "  <target>: combined | all | keyframelessx | canvas | shader | keyframelessai"
   exit 1
 }
 
@@ -70,7 +70,7 @@ stage_ai_helper() {
   lipo "$prod/kk-ai-helper" -thin arm64 -output "$AI_STAGE/kk-ai-helper" 2>/dev/null \
     || cp "$prod/kk-ai-helper" "$AI_STAGE/kk-ai-helper"
   codesign --force --options runtime --timestamp \
-    --identifier co.overpolish.keyframeless.aihelper \
+    --identifier com.keyframeless.aihelper \
     --entitlements "$ROOT/Distribution/helper/kk-ai-helper.entitlements" \
     --sign "Developer ID Application" "$AI_STAGE/kk-ai-helper"
   chmod 0755 "$AI_STAGE/kk-ai-helper"
@@ -79,12 +79,16 @@ stage_ai_helper() {
   # mlx-swift_Cmlx (default.metallib), swift-transformers_Hub, swift-crypto_Crypto.
   # Ship the exact set xcodebuild produced.
   cp -R "$prod"/*.bundle "$AI_STAGE/"
+  # Version manifest: installs beside the helper so KKUpdateChecker can read the
+  # installed CFBundleShortVersionString (the "Keyframeless AI" update check).
+  cp "$ROOT/Distribution/helper/kk-ai-helper.plist" "$AI_STAGE/kk-ai-helper.plist"
   codesign -dvv "$AI_STAGE/kk-ai-helper" 2>&1 | grep -m1 Authority || true
   rm -rf "$dd"
 }
 
 unstage_ai_helper() {
-  rm -f "$AI_STAGE/kk-ai-helper" "$AI_STAGE/mlx.metallib"
+  rm -f "$AI_STAGE/kk-ai-helper" "$AI_STAGE/mlx.metallib" \
+    "$AI_STAGE/kk-ai-helper.plist"
 }
 
 build_combined() {
@@ -119,7 +123,7 @@ build_product() {
   echo ""
   "$ROOT/scripts/sign-pkg.sh" "$name" "$APPLE_ID" "$TEAM_ID"
 
-  # Stamp the product version onto the final installer (e.g. Rounded-v4.0.0.pkg).
+  # Stamp the product version onto the final installer (e.g. Canvas-v2.0.0.pkg).
   mv "$BUILD_DIR/$name.pkg" "$BUILD_DIR/$name-v$version.pkg"
   echo "  -> $name-v$version.pkg"
 

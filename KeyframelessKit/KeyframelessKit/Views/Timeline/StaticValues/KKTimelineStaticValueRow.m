@@ -4,18 +4,23 @@
  */
 
 #import "KKCheckboxView.h"
+#import "KKChoiceChecklistView.h"
+#import "KKCodeEditorView.h"
 #import "KKColorWellView.h"
 #import "KKGradientBarView.h"
 #import "KKGradientControl.h"
 #import "KKGradientSampling.h"
+#import "KKLinkBus.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKSeedView.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKTimelineStaticValueRow_Private.h" // @package ivars for categories
 #import "KKTokens.h"
 #import "KKValueTextField.h"
 #import "NSColor+KKColors.h"
@@ -23,8 +28,20 @@
 #import <QuartzCore/QuartzCore.h>
 
 const CGFloat kFloatRowH = 30.0;
+// The choice popover's opening height. It hugs its rows and grows/shrinks from
+// here as a search narrows the list, so this is a floor rather than a cap.
+// ~6 rows before a long `#choice` option list scrolls behind the edge fades.
+const CGFloat kChoiceListMaxBody = 168.0;
+// The dropdown trigger's width. FIXED, not content-sized: the trigger sits in
+// the value column with every other row's field, and a width that tracked the
+// current pick would shuffle that column every time the pick changed. Long
+// picks tail-truncate at the chevron instead - and an audio source reads
+// "<name> - <project>", so it wants the room.
+static const CGFloat kChoiceTriggerW = 200.0;
 static const CGFloat kCropRowH = 30.0;     // single-line W/H/X/Y hstack
 static const CGFloat kGradientRowH = 42.0; // 36pt gradient control + padding
+static const CGFloat kCodeRowH =
+    258.0; // multi-line code editor (title + ~9 lines)
 static const CGFloat kStaticFieldW = 40.0;
 static const CGFloat kWrapLineExtra =
     25.0; // +height per extra wrapped pill line
@@ -38,7 +55,9 @@ static NSTextField *_KKMakeNumberField(void) {
 }
 
 NSTextField *_KKMakeCaption(NSString *s) {
-  NSTextField *l = [NSTextField labelWithString:s];
+  // labelWithString: throws on a nil string; an absent caption (e.g. an
+  // excluded row with no message) is valid, so coalesce to empty.
+  NSTextField *l = [NSTextField labelWithString:s ?: @""];
   l.translatesAutoresizingMaskIntoConstraints = NO;
   l.font = [NSFont systemFontOfSize:KKFontSizeSM weight:NSFontWeightRegular];
   l.textColor = [NSColor inspectorLabel];
@@ -51,6 +70,11 @@ NSTextField *_KKMakeCaption(NSString *s) {
 // trailing "px"/"%"). Prefix fits one caption character.
 static const CGFloat kPrefixSlotW = 13.0;
 static const CGFloat kSuffixSlotW = 17.0;
+// ...and how far the unit slot may grow past that when the unit is a word
+// rather than a glyph. A plugin can name any unit it likes ("stops",
+// "dB/oct"), and a fixed two-character slot would clip those into nonsense;
+// the cap keeps an over-long one from pushing the value column off the row.
+static const CGFloat kSuffixSlotMaxW = 46.0;
 
 // A right-aligned number field flanked by fixed-width prefix (caption) and
 // suffix (unit) slots. Both slots are always present so columns line up; pass
@@ -70,6 +94,7 @@ static const CGFloat kSuffixSlotW = 17.0;
   NSTextField *_prefix;
   NSTextField *_suffix;
   NSLayoutConstraint *_prefixWidth;
+  NSLayoutConstraint *_suffixWidth;
   BOOL _prefixAutoSizes;
 }
 - (instancetype)init {
@@ -86,11 +111,20 @@ static const CGFloat kSuffixSlotW = 17.0;
   [self addSubview:_prefix];
   [self addSubview:_field];
   [self addSubview:_suffix];
+  _prefixWidth = [_prefix.widthAnchor constraintEqualToConstant:kPrefixSlotW];
+  // Not required (and set before activation - a constraint can't cross the
+  // required boundary afterwards): an auto-sized label slot is a preference,
+  // so several wide component labels compress into a fixed-width popover
+  // instead of forcing the whole popover wider than its hardcoded size.
+  _prefixWidth.priority = NSLayoutPriorityRequired - 1;
+  _suffixWidth = [_suffix.widthAnchor constraintEqualToConstant:kSuffixSlotW];
+  _suffixWidth.priority = NSLayoutPriorityRequired - 1;
   [NSLayoutConstraint activateConstraints:@[
     [_prefix.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_prefix.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    (_prefixWidth =
-         [_prefix.widthAnchor constraintEqualToConstant:kPrefixSlotW]),
+    _prefixWidth,
+    // Never collapse past the standard one-character slot.
+    [_prefix.widthAnchor constraintGreaterThanOrEqualToConstant:kPrefixSlotW],
     [_field.leadingAnchor constraintEqualToAnchor:_prefix.trailingAnchor
                                          constant:KKPaddingXS],
     [_field.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
@@ -98,7 +132,10 @@ static const CGFloat kSuffixSlotW = 17.0;
     [_suffix.leadingAnchor constraintEqualToAnchor:_field.trailingAnchor
                                           constant:KKPaddingXS],
     [_suffix.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    [_suffix.widthAnchor constraintEqualToConstant:kSuffixSlotW],
+    _suffixWidth,
+    // Never collapse past the standard slot, so unitless rows still line up
+    // with united ones.
+    [_suffix.widthAnchor constraintGreaterThanOrEqualToConstant:kSuffixSlotW],
     [_suffix.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
   ]];
   return self;
@@ -133,6 +170,18 @@ static const CGFloat kSuffixSlotW = 17.0;
 }
 - (void)setSuffix:(NSString *)suffix {
   _suffix.stringValue = suffix ?: @"";
+  // Grow the slot to fit a worded unit, measuring the string against its font
+  // (fittingSize would just echo the active width constraint and never grow).
+  // "px" and "%" measure under the standard slot, so the common rows keep the
+  // exact column they had.
+  NSFont *font = _suffix.font
+                     ?: [NSFont systemFontOfSize:KKFontSizeSM
+                                          weight:NSFontWeightRegular];
+  CGFloat textW =
+      [_suffix.stringValue sizeWithAttributes:@{NSFontAttributeName : font}]
+          .width;
+  _suffixWidth.constant =
+      MIN(kSuffixSlotMaxW, MAX(kSuffixSlotW, ceil(textW) + 2.0));
 }
 @end
 
@@ -153,61 +202,103 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return b;
 }
 
-@implementation _KKStaticValueRow {
-  KKLaneValueType _valueType;
-  NSArray<NSNumber *> *_cmin;
-  NSArray<NSNumber *> *_cmax;
-  NSArray<NSString *> *_cunits;
-  KKSliderView *_slider;            // Float only
-  NSArray<NSSlider *> *_angleKnobs; // Angle only - one per component
-  NSMutableArray<NSNumber *>
-      *_prevKnobValues; // last seen knob position per knob
-  BOOL _angleKnobDragging;
-  NSArray<NSTextField *> *_fields;     // Float: 1; Angle: N; Crop: 4 (w,h,x,y)
-  NSMutableArray<NSNumber *> *_values; // normalized, authoritative
-  NSButton *_reset;                    // reset-to-default, right of the label
-  NSButton *_removeBtn;                // leading "−" gutter (Advanced only)
-  NSButton *_addBtn;                   // leading curve-glyph gutter (constants)
-  NSArray<NSNumber *> *_defaultValues;
-  NSButton *_smoothBtn; // curve toggle, left of the value fields
-  BOOL _smoothOn;
-  NSButton *_linkBtn; // aspect-link toggle, left of the value fields
-  BOOL _linkOn;
-  BOOL _integerValued;            // fields display + round to whole numbers
-  BOOL _componentsScaleWithMedia; // display = norm x media px
-                                  // (Position/Anchor/Crop)
-  double _laneScrubStep;          // lane's explicit scrub increment (0 = auto)
-  KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
-  BOOL _seedField;
-  KKPillToggleRowView *_choicePill;   // grouped radio pill, choiceLabels only
-  NSArray<NSString *> *_choiceLabels; // English identifiers (count >= 2)
-  NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
-  BOOL _wrapsChoicePills;             // pill wraps to multiple lines
-  NSLayoutConstraint *_pillWidthConstraint; // wrapping pill width (= wrapW)
-  CGFloat _rowHeight;              // resolved height (wrapping pill rows)
-  CGFloat _contentWidth;           // popover content width (for pill wrap)
-  KKCheckboxView *_toggleCheckbox; // single on/off checkbox, isToggle only
-  BOOL _isToggle;                  // value row is a single checkbox (0/1)
-  BOOL _autoSizesComponentLabels;  // prefix captions hug text (Start/End)
-  BOOL _oscEditedOnly; // geometry-style lane: message instead of value fields
-  KKColorWellView *_colorWell;         // swatch, KKLaneValueTypeColor only
-  KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
-  BOOL
-      _suppressGradientRefresh; // mid own-edit: don't reset the control's stops
-  BOOL _gradientWithTypeAngle;  // value = [type, angle, <flat stops>]
-  KKPillToggleRowView *_gradientTypePill; // radial/linear, composite only
-  NSView *_gradientAngleContainer;        // knob + field, hidden unless linear
-  NSSlider *_gradientAngleKnob;
-  NSTextField *_gradientAngleField;
-  BOOL _gradientAngleKnobDragging;
-  CGFloat _labelColumnW; // uniform label-column width (0 = natural)
-  BOOL _locked;          // locked layer: row is read-only (dimmed, no input)
+// A caption prefixed with a warning glyph, as ONE label: an attachment keeps
+// the glyph and its text on a single baseline without a second view, a second
+// set of constraints, and a spacing constant to keep in step with the font.
+NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
+  NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
+      configurationWithPointSize:KKFontSizeSM
+                          weight:NSFontWeightMedium]
+      configurationByApplyingConfiguration:
+          [NSImageSymbolConfiguration configurationWithHierarchicalColor:tint]];
+  // Plain, not `.fill`: the same glyph Sonar puts on its own warnings, in the
+  // same `warning` colour. A user meeting both in one workflow - a shader that
+  // can't find its source, then Sonar telling them what it couldn't read -
+  // should be looking at one idea, not two.
+  NSImage *glyph = [[NSImage
+      imageWithSystemSymbolName:@"exclamationmark.triangle"
+       accessibilityDescription:text] imageWithSymbolConfiguration:cfg];
+  NSMutableAttributedString *out = [[NSMutableAttributedString alloc] init];
+  if (glyph) {
+    NSTextAttachment *att = [[NSTextAttachment alloc] init];
+    att.image = glyph;
+    [out appendAttributedString:[NSAttributedString
+                                    attributedStringWithAttachment:att]];
+    [out appendAttributedString:[[NSAttributedString alloc]
+                                    initWithString:@" "]];
+  }
+  [out
+      appendAttributedString:[[NSAttributedString alloc]
+                                 initWithString:text
+                                     attributes:@{
+                                       NSForegroundColorAttributeName : tint,
+                                       NSFontAttributeName : [NSFont
+                                           systemFontOfSize:KKFontSizeSM
+                                                     weight:NSFontWeightRegular]
+                                     }]];
+  return out;
 }
+
+@implementation _KKStaticValueRow
 
 // A locked lane's row shows its values but takes no input: swallow every mouse
 // event (so no field/slider/well/pill responds) and dim to read as disabled.
 - (NSView *)hitTest:(NSPoint)point {
   return _locked ? nil : [super hitTest:point];
+}
+
+- (BOOL)isCodeRow {
+  return _valueType == KKLaneValueTypeCode;
+}
+
+- (BOOL)isPaletteBar {
+  return _paletteGeneratorBar;
+}
+
+- (CGFloat)labelColumnWidth {
+  return _labelColumnW;
+}
+
+- (BOOL)renderShapeMatchesLane:(KKLane *)lane {
+  // The field editors, seed control, choice pill, checkbox, and unit/decimal
+  // formatting are all built once from the lane. A directive edit that changes
+  // any of these (float->percent adds % + integer; seed->float swaps the dice
+  // for a field; ->choice swaps in a pill) can't be applyLane'd in place - the
+  // caller must remake the row.
+  if (_valueType != lane.valueType)
+    return NO;
+  if (_paletteGeneratorBar != lane.paletteGeneratorBar)
+    return NO;
+  if (_seedField != lane.seedField)
+    return NO;
+  if (_isToggle != lane.isToggle)
+    return NO;
+  if (_integerValued != lane.integerValued)
+    return NO;
+  if (![(_choiceLabels ?: @[]) isEqualToArray:(lane.choiceLabels ?: @[])])
+    return NO;
+  if (_choiceUsesDropdown !=
+      (lane.choiceUsesDropdown && lane.choiceLabels.count >= 1))
+    return NO;
+  if (_choiceAllowsMultiple !=
+      (lane.choiceAllowsMultiple && lane.choiceLabels.count >= 1))
+    return NO;
+  if (![(_cunits ?: @[]) isEqualToArray:(lane.componentUnits ?: @[])])
+    return NO;
+  if (_cmax.count != (lane.componentMax ?: @[]).count)
+    return NO;
+  // Per-component captions are built once in the row init; a directive edit
+  // that renames them (e.g. #multi fields={Width,Height} -> {W,H}) can't be
+  // applyLane'd in place, so treat it as a shape change and remake the row.
+  if (![(_clabels ?: @[]) isEqualToArray:(KKLaneComponentLabels(lane) ?: @[])])
+    return NO;
+  // The aspect-link toggle is created once (only when aspectLinkable); adding
+  // or removing `linked` flips whether the button exists, which can't be
+  // applied in place. `_linkBtn` is non-nil iff the row was built
+  // aspect-linkable.
+  if ((_linkBtn != nil) != lane.aspectLinkable)
+    return NO;
+  return YES;
 }
 
 - (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
@@ -222,8 +313,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 // Reset is only meaningful when a default exists AND the current value
 // differs from it - hidden otherwise so a row at default has no clutter.
 - (void)_updateResetVisibility {
-  if (_oscEditedOnly) {
-    _reset.hidden = YES; // geometry lane: nothing to reset
+  if (_oscEditedOnly || _valueType == KKLaneValueTypeCode) {
+    _reset.hidden = YES; // geometry / code lane: nothing scalar to reset
     return;
   }
   BOOL atDefault =
@@ -255,97 +346,78 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     self.onAddToAnimated();
 }
 
-// Curve glyph that flips this keypose corner↔smooth. Same SF Symbol the gap
-// popover uses for its "Curve" header, so the spatial-curve and timing-curve
-// affordances read consistently. Lit/accent = smooth, dim = corner.
-- (NSButton *)_makeSmoothToggle {
-  NSImage *img = [NSImage
-      imageWithSystemSymbolName:@"point.topleft.down.to.point.bottomright."
-                                @"curvepath"
-       accessibilityDescription:nil];
-  if (!img)
-    img = [NSImage imageWithSystemSymbolName:@"scribble"
-                    accessibilityDescription:nil];
-  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
-                                   target:self
-                                   action:@selector(_smoothTapped:)];
-  b.translatesAutoresizingMaskIntoConstraints = NO;
-  b.bordered = NO;
-  b.bezelStyle = NSBezelStyleShadowlessSquare;
-  b.imageScaling = NSImageScaleProportionallyDown;
-  b.toolTip = KKLoc(@"Smooth path through this keypose",
-                    @"Tooltip: per-keypose curve toggle on the Position row.");
-  [NSLayoutConstraint activateConstraints:@[
-    [b.widthAnchor constraintEqualToConstant:15.0],
-    [b.heightAnchor constraintEqualToConstant:15.0],
-  ]];
-  return b;
+// Parameter linking (expression-driven lanes). The lane's own value + keyposes
+// are untouched; an optional `linkExpression` layers a transform on top
+// (`value` = this lane's value, `${...}` = another source). Right-click the
+// label to add/ remove one; the label tints with the host accent while an
+// expression is set.
+- (void)_applyExpressionState {
+  // Only numeric value lanes can be expression-driven - not the code editor
+  // (source text), a gradient (variable-length stop array an expression's <=4
+  // components can't produce), an OSC-edited geometry lane (Points: morph
+  // snapshots, not values), a palette-generator bar, or a position-OSC lane
+  // whose value is authored by its on-screen editable path (an expression
+  // would override the drawn path). Mirrors the manifest's referenceable
+  // filter.
+  BOOL referenceable = _valueType != KKLaneValueTypeCode &&
+                       _valueType != KKLaneValueTypeGradient &&
+                       !_oscEditedOnly && !_paletteGeneratorBar &&
+                       !_positionPathDriven;
+  BOOL driven = referenceable && _linkExpression != nil;
+  _titleField.textColor =
+      driven ? [NSColor accentMatchingHost] : [NSColor inspectorLabel];
+  if (!referenceable) {
+    _titleField.menu = nil;
+    return;
+  }
+  NSMenu *menu = [[NSMenu alloc] init];
+  NSString *title =
+      driven
+          ? KKLoc(
+                @"Remove Expression",
+                @"Lane label right-click: clear the parameter-link expression")
+          : KKLoc(@"Add Expression",
+                  @"Lane label right-click: make this lane expression-driven");
+  NSMenuItem *item =
+      [[NSMenuItem alloc] initWithTitle:title
+                                 action:@selector(_toggleExpressionMenu:)
+                          keyEquivalent:@""];
+  item.target = self;
+  [menu addItem:item];
+  // Formatting only makes sense once there's an expression to tidy.
+  if (driven) {
+    NSMenuItem *fmt = [[NSMenuItem alloc]
+        initWithTitle:KKLoc(
+                          @"Format Expression",
+                          @"Lane label right-click: normalize the expression's "
+                          @"spacing / parentheses")
+               action:@selector(_formatExpressionMenu:)
+        keyEquivalent:@""];
+    fmt.target = self;
+    [menu addItem:fmt];
+  }
+  _titleField.menu = menu;
 }
 
-- (void)_updateSmoothTint {
-  _smoothBtn.contentTintColor =
-      _smoothOn ? [NSColor accentMatchingHost]
-                : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+- (void)_formatExpressionMenu:(id)sender {
+  // The inline editor owns the live text, so the popover does the actual
+  // reformat.
+  if (self.onFormatExpression)
+    self.onFormatExpression();
 }
 
-- (void)_smoothTapped:(id)sender {
-  [self.window makeFirstResponder:nil];
-  _smoothOn = !_smoothOn;
-  [self _updateSmoothTint];
-  if (self.onSmoothToggled)
-    self.onSmoothToggled(_smoothOn);
+- (void)_toggleExpressionMenu:(id)sender {
+  // Add -> a passthrough starter ("value", edited in the inline editor next
+  // increment); Remove -> nil (back to a plain lane). Update in place so the
+  // accent + menu flip immediately, then persist up through the host.
+  BOOL driven = _linkExpression != nil;
+  NSString *newExpr = driven ? nil : @"value";
+  _linkExpression = [newExpr copy];
+  [self _applyExpressionState];
+  if (self.onSetLinkExpression)
+    self.onSetLinkExpression(newExpr);
 }
 
-- (void)applySmooth:(BOOL)on {
-  _smoothOn = on;
-  [self _updateSmoothTint];
-}
-
-// Link glyph that aspect-locks the two components: editing one scales the other
-// by the same factor, preserving their current ratio. Global per-lane toggle.
-// Lit/accent = linked, dim = unlinked.
-- (NSButton *)_makeLinkToggle {
-  NSImage *img = [NSImage imageWithSystemSymbolName:@"link"
-                           accessibilityDescription:nil];
-  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
-                                   target:self
-                                   action:@selector(_linkTapped:)];
-  b.translatesAutoresizingMaskIntoConstraints = NO;
-  b.bordered = NO;
-  b.bezelStyle = NSBezelStyleShadowlessSquare;
-  b.imageScaling = NSImageScaleProportionallyDown;
-  b.toolTip = KKLoc(@"Link X and Y (lock aspect ratio)",
-                    @"Tooltip: aspect-link toggle on the Scale row.");
-  [NSLayoutConstraint activateConstraints:@[
-    [b.widthAnchor constraintEqualToConstant:15.0],
-    [b.heightAnchor constraintEqualToConstant:15.0],
-  ]];
-  return b;
-}
-
-- (void)_updateLinkTint {
-  _linkBtn.contentTintColor =
-      _linkOn ? [NSColor accentMatchingHost]
-              : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
-}
-
-- (void)_linkTapped:(id)sender {
-  [self.window makeFirstResponder:nil];
-  _linkOn = !_linkOn;
-  [self _updateLinkTint];
-  if (self.onLinkToggled)
-    self.onLinkToggled(_linkOn);
-}
-
-- (void)applyLink:(BOOL)on {
-  _linkOn = on;
-  [self _updateLinkTint];
-}
-
-// A toggle row is one big click target (like KKCheckboxRowView): the inner
-// KKCheckboxView's NSClickGestureRecognizer doesn't fire reliably inside FCP's
-// ApplicationDefined popovers, so handle the click at the row level. Non-toggle
-// rows fall through to AppKit so their fields/pills keep working.
 - (BOOL)acceptsFirstMouse:(NSEvent *)event {
   return _isToggle ? YES : [super acceptsFirstMouse:event];
 }
@@ -409,6 +481,10 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 + (CGFloat)heightForLane:(KKLane *)lane {
   if (lane.valueType == KKLaneValueTypeGradient)
     return kGradientRowH;
+  if (lane.valueType == KKLaneValueTypeCode)
+    // A savable code lane adds the save bar (name + Save) below the editor;
+    // grow the row so the code area keeps its full height.
+    return kCodeRowH + (lane.codeSavable ? 34.0 : 0.0);
   return KKLaneComponentLabels(lane).count >= 2 ? kCropRowH : kFloatRowH;
 }
 
@@ -483,6 +559,17 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   }
 }
 
+- (void)updateLabelColumnWidth:(CGFloat)labelColumnWidth {
+  if (fabs(labelColumnWidth - _labelColumnW) <= 0.5)
+    return;
+  _labelColumnW = labelColumnWidth;
+  _titleWidthConstraint.constant =
+      labelColumnWidth > 0 ? labelColumnWidth : 54.0;
+  // A wrapping pill row's block width (and so its height) derives from the
+  // column - re-derive through the same path a popover resize uses.
+  [self updateContentWidth:_contentWidth];
+}
+
 - (double)_clamp:(double)v index:(NSInteger)i {
   if (i < (NSInteger)_cmin.count && v < _cmin[i].doubleValue)
     v = _cmin[i].doubleValue;
@@ -501,6 +588,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // Round to the displayed precision first, then squash -0 → 0 so a tiny
   // negative never shows as "-0".
   dv = intFmt ? round(dv) : round(dv * 100.0) / 100.0;
+
   if (dv == 0.0)
     dv = 0.0;
   return [NSString stringWithFormat:(intFmt ? @"%.0f" : @"%.2f"), dv];
@@ -513,12 +601,85 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   };
   CGFloat w = 0;
   for (KKLane *lane in lanes) {
-    NSString *name = KKLocalizedParamName(lane.label);
+    NSString *name = KKLocalizedParamName(lane.displayName);
     w = MAX(w, ceil([name sizeWithAttributes:attrs].width));
   }
   // Trailing breathing room so the value controls never butt up against the
   // widest label, capped so a very long localized name can't eat the row.
   return w > 0 ? MIN(w + KKPaddingMD, kMaxLabelColW) : w;
+}
+
+- (instancetype)initEditorRowWithContentView:(NSView *)contentView
+                                    leftView:(NSView *)leftView
+                                   rightView:(NSView *)rightView
+                                  firstLineH:(CGFloat)firstLineH
+                                      height:(CGFloat)height {
+  self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, height)];
+  if (!self)
+    return nil;
+  _rowHeight = height; // drives intrinsicContentSize (see -setEditorRowHeight:)
+  // Mirror the value-row geometry EXACTLY so a supplementary editor row lines
+  // up with every other row: the leading gutter view sits in the remove/add-to-
+  // animated glyph slot (leading + KKPaddingMD, 15pt), the content starts
+  // KKPaddingSM after it (the label column), the trailing gutter view takes the
+  // reset column (trailing - KKPaddingLG, 15pt) and the content ends
+  // KKPaddingLG before it (where value controls end). Gutter views
+  // optical-centre on the FIRST line so they don't drift down when the row
+  // grows (expanded state). Callers size the gutter views 15pt to match the
+  // real glyphs.
+  CGFloat firstLineCenter = firstLineH / 2.0;
+  contentView.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:contentView];
+  NSMutableArray<NSLayoutConstraint *> *cs = [NSMutableArray arrayWithArray:@[
+    [contentView.topAnchor constraintEqualToAnchor:self.topAnchor
+                                          constant:KKPaddingXS],
+    [contentView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                             constant:-KKPaddingXS],
+  ]];
+  if (leftView) {
+    leftView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:leftView];
+    [cs addObjectsFromArray:@[
+      [leftView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                             constant:KKPaddingMD],
+      [leftView.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                             constant:firstLineCenter],
+      [contentView.leadingAnchor constraintEqualToAnchor:leftView.trailingAnchor
+                                                constant:KKPaddingSM],
+    ]];
+  } else {
+    // No override: reserve the same label column as a gutter-button row.
+    [cs addObject:[contentView.leadingAnchor
+                      constraintEqualToAnchor:self.leadingAnchor
+                                     constant:KKPaddingMD + 15.0 +
+                                              KKPaddingSM]];
+  }
+  if (rightView) {
+    rightView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:rightView];
+    [cs addObjectsFromArray:@[
+      [rightView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                               constant:-KKPaddingLG],
+      [rightView.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                              constant:firstLineCenter],
+      [contentView.trailingAnchor
+          constraintEqualToAnchor:rightView.leadingAnchor
+                         constant:-KKPaddingLG],
+    ]];
+  } else {
+    [cs addObject:[contentView.trailingAnchor
+                      constraintEqualToAnchor:self.trailingAnchor
+                                     constant:-KKPaddingLG]];
+  }
+  [NSLayoutConstraint activateConstraints:cs];
+  return self;
+}
+
+- (void)setEditorRowHeight:(CGFloat)height {
+  if (fabs(height - _rowHeight) < 0.5)
+    return;
+  _rowHeight = height;
+  [self invalidateIntrinsicContentSize];
 }
 
 - (instancetype)initWithLane:(KKLane *)lane
@@ -538,34 +699,61 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _rowHeight = h;
   _contentWidth = cw;
   _wrapsChoicePills = KKLaneWrapsChoicePills(lane);
-  _laneLabel = [lane.label copy];
+  // One option is enough for a DROPDOWN, unlike the pills below. Its option set
+  // is data the plugin discovers at runtime - Shader's `#audio` lane lists
+  // whatever Sonar has published - so "None" alone is a real state, not a
+  // degenerate one. Demanding two dropped the row to a raw number field showing
+  // the stored key: on a Mac where nothing is published, a lane bound to a
+  // source rendered as a slider reading "16483925".
+  _choiceUsesDropdown = lane.choiceUsesDropdown && lane.choiceLabels.count >= 1;
+  _choiceAllowsMultiple =
+      lane.choiceAllowsMultiple && lane.choiceLabels.count >= 1;
+  _laneLabel = [lane.key copy];
+  _linkExpression = [lane.linkExpression copy];
   _valueType = lane.valueType;
   _cmin = lane.componentMin ?: @[];
   _cmax = lane.componentMax ?: @[];
   _cunits = lane.componentUnits ?: @[];
   _integerValued = lane.integerValued;
+  // A dynamic-max lane (its slider top tracks another lane) also clamps its
+  // displayed value to that max - unlike normal lanes, whose field may exceed
+  // the slider's end. Keeps the readout consistent with the reactive track.
+  _clampsDisplayToMax = lane.maxControllerKey.length > 0;
   _componentsScaleWithMedia = lane.componentsScaleWithMedia;
   _laneScrubStep = lane.scrubStep;
   _seedField = lane.seedField;
   _choiceLabels = [lane.choiceLabels copy];
+  _choiceValues = [lane.choiceValues copy];
+  _choiceUnknownLabels = [lane.choiceUnknownLabels copy];
+  _choiceUnknownBadge = [lane.choiceUnknownBadge copy];
   _choiceIcons = [lane.choiceIcons copy];
   _isToggle = lane.isToggle;
   _autoSizesComponentLabels = lane.autoSizesComponentLabels;
   _oscEditedOnly = lane.oscEditedOnly;
+  _positionPathDriven = lane.positionPathDriven;
+  _paletteLockable = lane.paletteLockable;
+  _paletteGeneratorBar = lane.paletteGeneratorBar;
   _labelColumnW = labelColumnWidth;
 
-  NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
+  NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.displayName));
+  _titleField = title;
   // Truncate a too-long localized name to an ellipsis (the column is capped);
   // the full name is on hover so nothing is lost.
   title.lineBreakMode = NSLineBreakByTruncatingTail;
   title.usesSingleLineMode = YES;
-  title.toolTip = KKLocalizedParamName(lane.label);
+  title.toolTip = KKLocalizedParamName(lane.displayName);
   [self addSubview:title];
+  // Parameter linking: right-click the label to add/remove an expression, and
+  // tint it with the host accent while one is set (the "expression-driven"
+  // signal).
+  [self _applyExpressionState];
   // Uniform label column so the value controls line up across rows regardless
-  // of label length (widest localized name); 54 is the legacy fallback.
-  [title.widthAnchor
-      constraintEqualToConstant:(_labelColumnW > 0 ? _labelColumnW : 54.0)]
-      .active = YES;
+  // of label length (widest localized name); 54 is the legacy fallback. Kept
+  // restretchable (updateLabelColumnWidth:) so a relabel that moves the
+  // column updates rows in place instead of remaking them.
+  _titleWidthConstraint = [title.widthAnchor
+      constraintEqualToConstant:(_labelColumnW > 0 ? _labelColumnW : 54.0)];
+  _titleWidthConstraint.active = YES;
 
   // Leading gutter, shared slot. Keypose popover (Advanced) uses "−" to
   // remove this lane's KP at the open fraction; constants popover uses the
@@ -668,9 +856,124 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     return self;
   }
 
+  // Code lane: a tall, full-width multi-line editor (no numeric value fields).
+  // The text is the lane's `codeString`; edits fire onCodeChanged (debounced).
+  if (_valueType == KKLaneValueTypeCode) {
+    _reset.hidden = YES; // no scalar value to reset
+    KKCodeEditorView *editor =
+        [[KKCodeEditorView alloc] initWithFrame:NSZeroRect];
+    _codeEditor = editor; // so applyLane: can re-sync it (undo/redo, presets)
+    editor.translatesAutoresizingMaskIntoConstraints = NO;
+    editor.codeValidator =
+        lane.codeValidator; // set before text so it validates
+    editor.validationSourceComposer = lane.codeValidationComposer;
+    editor.codeFormatter = lane.codeFormatter;
+    editor.schemaProvider = lane.codeSchemaProvider;
+    editor.completionProvider = lane.codeCompletionProvider;
+    editor.directiveKeywords = lane.codeDirectiveKeywords;
+    editor.directiveKinds = lane.codeDirectiveKinds;
+    editor.savable = lane.codeSavable;
+    editor.saveCategoryLabels = lane.codeSaveCategories;
+    editor.saveNamePlaceholder = lane.codeSaveNamePlaceholder;
+    editor.saveName = lane.codeSaveName;
+    __weak typeof(self) weak = self;
+    editor.onSaveNameChange = ^(NSString *name) {
+      __strong typeof(weak) s = weak;
+      if (s.onCodeSaveNameChanged)
+        s.onCodeSaveNameChanged(name);
+    };
+    if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
+      // Tabbed: section 0 is Image (the lane's codeString), then any added
+      // extra sections from codeTabs. `codeTabCatalog` feeds the "+" menu.
+      // Edits + tab add/remove persist the whole section set.
+      NSMutableArray<NSDictionary<NSString *, NSString *> *> *sections =
+          [NSMutableArray array];
+      [sections
+          addObject:@{@"name" : @"Image", @"code" : lane.codeString ?: @""}];
+      [sections addObjectsFromArray:lane.codeTabs ?: @[]];
+      editor.addableTabNames = lane.codeTabCatalog;
+      [editor setSections:sections];
+      editor.onSectionsChange =
+          ^(NSArray<NSDictionary<NSString *, NSString *> *> *secs) {
+            __strong typeof(weak) s = weak;
+            if (s.onCodeSectionsChanged)
+              s.onCodeSectionsChanged(secs);
+          };
+    } else {
+      editor.codeText = lane.codeString ?: @"";
+      editor.onChange = ^(NSString *code) {
+        __strong typeof(weak) s = weak;
+        if (s.onCodeChanged)
+          s.onCodeChanged(code);
+      };
+    }
+    [self addSubview:editor];
+    // Title sits top-left; the editor fills the row below it, edge to edge.
+    // `codeHidesTitle` drops the title and hands the editor that space too -
+    // the row height is unchanged, so the code area simply grows.
+    _codeTitleHidden = lane.codeHidesTitle;
+    title.hidden = _codeTitleHidden;
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.topAnchor constraintEqualToAnchor:self.topAnchor
+                                      constant:KKPaddingSM],
+      [editor.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                           constant:KKPaddingLG],
+      [editor.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                            constant:-KKPaddingLG],
+      [editor.topAnchor
+          constraintEqualToAnchor:(_codeTitleHidden ? self.topAnchor
+                                                    : title.bottomAnchor)
+                         constant:KKPaddingSM],
+      [editor.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                          constant:-KKPaddingSM],
+    ]];
+    _locked = lane.locked;
+    self.alphaValue = _locked ? 0.5 : 1.0;
+    return self;
+  }
+
   NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
+  _clabels = caps; // remembered so a later componentLabels edit remakes the row
   NSArray<NSColor *> *capColors = lane.componentLabelColors;
-  if (_isToggle) {
+  if (_paletteGeneratorBar) {
+    // Not a value editor: a row of momentary mode buttons that reroll the
+    // palette. Each tap fires onPaletteGenerate(mode); the host regenerates the
+    // visible colour lanes (keeping locked swatches).
+    _reset.hidden = YES;
+    NSArray<NSString *> *syms =
+        @[ @"sun.max", @"cloud", @"circle.lefthalf.filled", @"dice" ];
+    NSArray<NSString *> *names = @[ @"Bright", @"Dull", @"Shades", @"Chaotic" ];
+    NSMutableArray<NSView *> *btns = [NSMutableArray array];
+    for (NSInteger m = 0; m < (NSInteger)names.count; m++)
+      [btns addObject:[self _makePaletteModeButton:m
+                                            symbol:syms[m]
+                                              name:names[m]]];
+    // "Vary" button: nudges the current palette instead of rerolling.
+    NSButton *vary =
+        [self _makePaletteButtonSymbol:@"wand.and.stars"
+                                  name:@"Vary"
+                                   tag:0
+                                action:@selector(_paletteRefineTapped:)];
+    [btns addObject:vary];
+    NSStackView *hs = [NSStackView stackViewWithViews:btns];
+    hs.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    hs.alignment = NSLayoutAttributeCenterY;
+    hs.distribution = NSStackViewDistributionFillEqually;
+    hs.spacing = KKPaddingSM;
+    hs.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:hs];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [hs.leadingAnchor constraintEqualToAnchor:title.trailingAnchor
+                                       constant:KKPaddingMD],
+      [hs.trailingAnchor constraintEqualToAnchor:_reset.trailingAnchor],
+      [hs.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    ]];
+  } else if (_isToggle) {
     // A structural on/off: a single right-aligned checkbox (the shared
     // KKCheckboxView, same glyph as the global-settings / motion-blur rows -
     // not a raw AppKit checkbox). The lane's single value is 0 (off) or 1 (on);
@@ -699,6 +1002,34 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
       [_toggleCheckbox.heightAnchor constraintEqualToConstant:12.0],
     ]];
     _reset.hidden = YES; // a toggle resets via the checkbox itself
+  } else if (_choiceUsesDropdown && _choiceLabels.count >= 1) {
+    // A long or open-ended enum (a shader's `#choice ... dropdown`): a head
+    // showing the pick, expanding a searchable list in place. Pinned to the top
+    // band rather than centred, so the row can grow downwards when it opens
+    // without the head drifting.
+    // The Animated dropdown's own trigger, not a lookalike: text + chevron, no
+    // border, no background, tail-truncating at the chevron, and it already
+    // dims itself when nothing is picked.
+    _choiceField = [[_KKDropdownTrigger alloc] init];
+    _choiceField.translatesAutoresizingMaskIntoConstraints = NO;
+    // The value column is right-aligned, so the pick sits against the chevron
+    // with every other row's field rather than adrift at the column's left.
+    _choiceField.rightAligned = YES;
+    __weak typeof(self) weak = self;
+    _choiceField.onTapped = ^{
+      [weak _toggleChoiceList];
+    };
+    [self addSubview:_choiceField];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_choiceField.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_choiceField.heightAnchor constraintEqualToConstant:kFloatRowH],
+      [_choiceField.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
+                                                  constant:-KKPaddingLG],
+      [_choiceField.widthAnchor constraintEqualToConstant:kChoiceTriggerW],
+    ]];
   } else if (_choiceLabels.count >= 2) {
     // A structural enum (e.g. a colour mode): a grouped radio pill, one segment
     // per choice, instead of a number field. The lane's single value is the
@@ -721,8 +1052,10 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     _choicePill.translatesAutoresizingMaskIntoConstraints = NO;
     __weak typeof(self) weak = self;
     _choicePill.onToggled = ^(NSInteger index, BOOL isOn) {
-      if (isOn)
-        [weak _setValues:@[ @((double)index) ] emit:YES];
+      if (!isOn)
+        return;
+      typeof(self) strong = weak;
+      [strong _setValues:@[ @([strong _storedForChoiceIndex:index]) ] emit:YES];
     };
     [self addSubview:_choicePill];
     [NSLayoutConstraint activateConstraints:@[
@@ -772,19 +1105,38 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
         ss.onColorEditing(editing);
     };
     [self addSubview:_colorWell];
-    [NSLayoutConstraint activateConstraints:@[
+    NSMutableArray<NSLayoutConstraint *> *cc = [NSMutableArray arrayWithArray:@[
       [title.leadingAnchor constraintEqualToAnchor:titleLead
                                           constant:titleLeadInset],
       [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [_colorWell.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
                                                 constant:-KKPaddingLG],
-      [_colorWell.leadingAnchor
-          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
-                                      constant:KKPaddingMD],
       [_colorWell.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [_colorWell.widthAnchor constraintEqualToConstant:28.0],
       [_colorWell.heightAnchor constraintEqualToConstant:16.0],
     ]];
+    if (_paletteLockable) {
+      // Padlock just left of the swatch: pins this colour so a palette reroll
+      // leaves it untouched. State is transient (the host popover tracks it).
+      _lockBtn = [self _makePaletteLockToggle];
+      [self _updatePaletteLockAppearance];
+      [self addSubview:_lockBtn];
+      [cc addObjectsFromArray:@[
+        [_lockBtn.trailingAnchor
+            constraintEqualToAnchor:_colorWell.leadingAnchor
+                           constant:-KKPaddingSM],
+        [_lockBtn.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+        [_lockBtn.leadingAnchor
+            constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                        constant:KKPaddingMD],
+      ]];
+    } else {
+      [cc addObject:[_colorWell.leadingAnchor
+                        constraintGreaterThanOrEqualToAnchor:title
+                                                                 .trailingAnchor
+                                                    constant:KKPaddingMD]];
+    }
+    [NSLayoutConstraint activateConstraints:cc];
   } else if (_valueType == KKLaneValueTypeGradient) {
     // The shared gradient editor (bar + favourites/reverse/distribute). Stored
     // as a flat [pos, r, g, b, mid] per stop; the row converts to/from
@@ -1008,6 +1360,49 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
         [arranged addObject:div];
       }
     }
+    // ColorPoint: a trailing RGBA swatch after the numeric fields. The leading
+    // fields cover components [0..n-1]; the swatch edits [n..n+3].
+    if (_valueType == KKLaneValueTypeColorPoint) {
+      _swatchOffset = n;
+      NSView *div = [[NSView alloc] init];
+      div.translatesAutoresizingMaskIntoConstraints = NO;
+      div.wantsLayer = YES;
+      div.layer.backgroundColor =
+          [[NSColor inspectorLabel] colorWithAlphaComponent:0.25].CGColor;
+      [div.widthAnchor constraintEqualToConstant:1.0].active = YES;
+      [div.heightAnchor constraintEqualToConstant:16.0].active = YES;
+      [arranged addObject:div];
+
+      _colorWell = [[KKColorWellView alloc] initWithFrame:NSZeroRect];
+      _colorWell.translatesAutoresizingMaskIntoConstraints = NO;
+      [_colorWell.widthAnchor constraintEqualToConstant:28.0].active = YES;
+      [_colorWell.heightAnchor constraintEqualToConstant:16.0].active = YES;
+      __weak typeof(self) weakCP = self;
+      _colorWell.onColorChanged = ^(NSColor *c) {
+        __strong typeof(weakCP) ss = weakCP;
+        if (!ss)
+          return;
+        NSColor *sc =
+            [c colorUsingColorSpace:[NSColorSpace sRGBColorSpace]] ?: c;
+        CGFloat r = 0, g = 0, b = 0, a = 1;
+        [sc getRed:&r green:&g blue:&b alpha:&a];
+        NSMutableArray<NSNumber *> *v = [ss->_values mutableCopy];
+        NSInteger o = ss->_swatchOffset;
+        while ((NSInteger)v.count < o + 4)
+          [v addObject:@0];
+        v[o] = @(r);
+        v[o + 1] = @(g);
+        v[o + 2] = @(b);
+        v[o + 3] = @(a);
+        [ss _setValues:v emit:YES];
+      };
+      _colorWell.onColorEditingChanged = ^(BOOL editing) {
+        __strong typeof(weakCP) ss = weakCP;
+        if (ss.onColorEditing)
+          ss.onColorEditing(editing);
+      };
+      [arranged addObject:_colorWell];
+    }
     // Curve toggle rides just left of the X/Y fields (reset stays trailing).
     if (showsSmooth) {
       _smoothOn =
@@ -1111,61 +1506,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   return self;
 }
 
-// Gradient value layout: pure flat stops, or - for a composite type/angle lane
-// - [type, angleDegrees, <flat stops>]. These split/join the parts.
-- (NSArray<KKGradientStop *> *)_currentGradientStops {
-  NSArray<NSNumber *> *flat = _values;
-  if (_gradientWithTypeAngle)
-    flat = _values.count > 2
-               ? [_values subarrayWithRange:NSMakeRange(2, _values.count - 2)]
-               : @[];
-  return KKGradientStopsFromFlat(flat);
-}
-
-- (NSArray<NSNumber *> *)_composeGradientWithStops:
-    (NSArray<KKGradientStop *> *)stops {
-  NSArray<NSNumber *> *flat = KKGradientFlatFromStops(stops);
-  if (!_gradientWithTypeAngle)
-    return flat;
-  double type = _values.count >= 1 ? _values[0].doubleValue : 0.0;
-  double angle = _values.count >= 2 ? _values[1].doubleValue : 0.0;
-  NSMutableArray<NSNumber *> *out = [@[ @(type), @(angle) ] mutableCopy];
-  [out addObjectsFromArray:flat];
-  return out;
-}
-
-- (void)_updateGradientAngleVisibility {
-  NSInteger type = _values.count >= 1 ? llround(_values[0].doubleValue) : 0;
-  _gradientAngleContainer.hidden = (type != 1); // angle only for Linear
-}
-
-- (void)_gradientAngleKnobMoved:(NSSlider *)sender {
-  if (!_gradientAngleKnobDragging) {
-    [sender.window makeFirstResponder:nil];
-    _gradientAngleKnobDragging = YES;
-    if (self.onDragBegin)
-      self.onDragBegin();
-  }
-  NSMutableArray<NSNumber *> *v = [_values mutableCopy];
-  if (v.count >= 2)
-    v[1] = @(sender.doubleValue);
-  [self _setValues:v emit:YES];
-  if (NSApp.currentEvent.type == NSEventTypeLeftMouseUp) {
-    _gradientAngleKnobDragging = NO;
-    if (self.onDragEnd)
-      self.onDragEnd();
-  }
-}
-
-- (void)_gradientAngleFieldCommitted:(NSTextField *)sender {
-  NSMutableArray<NSNumber *> *v = [_values mutableCopy];
-  if (v.count >= 2)
-    v[1] = @(sender.doubleValue);
-  [self _setValues:v emit:YES];
-}
-
 // Per-component clamp; for Crop additionally keep the box inside the image
-// (|x| ≤ (1-w)/2, |y| ≤ (1-h)/2) so typed values match the OSC, which
+// (|x| <= (1-w)/2, |y| <= (1-h)/2) so typed values match the OSC, which
 // never lets the crop rect exceed the image.
 - (void)_constrain:(NSMutableArray<NSNumber *> *)v {
   for (NSInteger i = 0; i < (NSInteger)v.count; i++)
@@ -1183,29 +1525,46 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 // field the user is editing (or mid end-editing) so typing isn't clobbered and
 // a stringValue write can't re-grab focus on the field that's resigning.
 - (void)refreshDisplay {
+  double dispMax =
+      (_clampsDisplayToMax && _cmax.count) ? _cmax[0].doubleValue : INFINITY;
   for (NSInteger i = 0;
        i < (NSInteger)_fields.count && i < (NSInteger)_values.count; i++) {
     if ([self _fieldEditing:_fields[i]])
       continue;
-    _fields[i].stringValue = [self _displayForNorm:_values[i].doubleValue
-                                             index:i];
+    double v = _values[i].doubleValue;
+    if (v > dispMax)
+      v = dispMax;
+    _fields[i].stringValue = [self _displayForNorm:v index:i];
   }
-  if (_slider && _values.count && ![self _fieldEditing:_fields[0]])
-    _slider.doubleValue = _values[0].doubleValue;
+  if (_slider && _values.count && ![self _fieldEditing:_fields[0]]) {
+    double v = _values[0].doubleValue;
+    _slider.doubleValue = v > dispMax ? dispMax : v;
+  }
   if (_seedView && _values.count)
     _seedView.seed = (uint32_t)llround(_values[0].doubleValue);
   if (_choicePill && _values.count) {
-    NSInteger sel = (NSInteger)llround(_values[0].doubleValue);
+    NSInteger sel = [self _selectedChoiceIndex];
     for (NSInteger i = 0; i < (NSInteger)_choiceLabels.count; i++)
       [_choicePill setState:(i == sel) atIndex:i];
   }
+  if (_choiceField && _values.count) {
+    [self _syncChoiceFieldTitle];
+    // An outside change (undo, a keypose swap) has to move the mark in an open
+    // list too, or it keeps showing the pick the user just undid.
+    if (_choiceAllowsMultiple)
+      [_choiceList setSelectedIndexes:[self _selectedChoiceIndexes]];
+    else
+      [_choiceList setSelectedIndex:[self _selectedChoiceIndex]];
+  }
   if (_toggleCheckbox && _values.count)
     _toggleCheckbox.isChecked = llround(_values[0].doubleValue) != 0;
-  if (_colorWell && _values.count >= 3) {
-    CGFloat a = _values.count >= 4 ? _values[3].doubleValue : 1.0;
-    _colorWell.color = [NSColor colorWithSRGBRed:_values[0].doubleValue
-                                           green:_values[1].doubleValue
-                                            blue:_values[2].doubleValue
+  if (_colorWell && (NSInteger)_values.count >= _swatchOffset + 3) {
+    NSInteger o = _swatchOffset;
+    CGFloat a =
+        (NSInteger)_values.count >= o + 4 ? _values[o + 3].doubleValue : 1.0;
+    _colorWell.color = [NSColor colorWithSRGBRed:_values[o].doubleValue
+                                           green:_values[o + 1].doubleValue
+                                            blue:_values[o + 2].doubleValue
                                            alpha:a];
   }
   if (_gradientControl) {
@@ -1361,12 +1720,80 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 }
 
 - (void)applyLane:(KKLane *)lane {
+  // Re-capture the link expression + position-path flag so a reused row
+  // reflects the current model (the accent tint + right-click menu flip to
+  // match).
+  _linkExpression = [lane.linkExpression copy];
+  _positionPathDriven = lane.positionPathDriven;
+  [self _applyExpressionState];
+  // Code lane: no fields/slider - re-sync the editor's text from the lane (an
+  // undo/redo of a committed code edit, or a preset/AI swap, reverts the
+  // codeString here), plus the shared name + lock. The editor guards against
+  // clobbering an in-progress typing burst.
+  if (_valueType == KKLaneValueTypeCode) {
+    if (_codeEditor) {
+      if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
+        NSMutableArray<NSDictionary<NSString *, NSString *> *> *sections =
+            [NSMutableArray array];
+        [sections
+            addObject:@{@"name" : @"Image", @"code" : lane.codeString ?: @""}];
+        [sections addObjectsFromArray:lane.codeTabs ?: @[]];
+        [_codeEditor applyExternalSections:sections];
+      } else {
+        [_codeEditor applyExternalText:lane.codeString ?: @""];
+      }
+      // The save-bar name too. Loading a template rewrites BOTH the code and
+      // the name it is saved under, and without this the field kept whatever
+      // name the row was built with - so switching templates left the previous
+      // one's name sitting over the new one's code.
+      _codeEditor.saveName = lane.codeSaveName ?: @"";
+    }
+    _locked = lane.locked;
+    self.alphaValue = _locked ? 0.5 : 1.0;
+    NSString *codeShown = KKLocalizedParamName(lane.displayName);
+    _titleField.stringValue = _codeTitleHidden ? @"" : (codeShown ?: @"");
+    _titleField.toolTip = _codeTitleHidden ? nil : codeShown;
+    return;
+  }
+  // Re-bound the field + slider to the lane's CURRENT range before applying the
+  // value, so a row reused across an updateUnoptedLanes rebuild picks up a
+  // source-derived range change (e.g. a shader `// #color max=` edit) instead
+  // of keeping its build-time bounds. The field clamp tracks componentMax; the
+  // slider cap tracks sliderMax (decoupled - the field may exceed the slider).
+  if (lane.componentMin.count)
+    _cmin = lane.componentMin;
+  if (lane.componentMax.count)
+    _cmax = lane.componentMax;
+  if (_slider) {
+    _slider.minValue = lane.sliderMin
+                           ? lane.sliderMin.doubleValue
+                           : (_cmin.count ? _cmin[0].doubleValue : 0.0);
+    _slider.maxValue = lane.sliderMax
+                           ? lane.sliderMax.doubleValue
+                           : (_cmax.count ? _cmax[0].doubleValue : 1.0);
+  }
   [self applyValues:lane.keyposes.firstObject.values];
+  [self refreshDisplay];
+  // Refresh the shown name so a display-label edit (identity unchanged, so the
+  // row is reused not remade) updates live instead of going stale.
+  NSString *shown = KKLocalizedParamName(lane.displayName);
+  _titleField.stringValue = shown ?: @"";
+  _titleField.toolTip = shown;
   // Locked lane = read-only: dim + swallow input (handled in hitTest:). Set
   // here (not just init) so a row reused across an updateUnoptedLanes / rebuild
   // also reflects the current lock state.
   _locked = lane.locked;
   self.alphaValue = _locked ? 0.5 : 1.0;
+}
+
+- (void)applySliderMax:(double)maxValue {
+  if (!_slider || (_cmax.count && _cmax[0].doubleValue == maxValue))
+    return;
+  _cmax = @[ @(maxValue) ];
+  _slider.maxValue = maxValue;
+  // Re-clamp the field + thumb to the new range (stored _values is preserved,
+  // so a wider Type later restores the original count).
+  [self refreshDisplay];
 }
 
 - (NSView *)guideSliderView {
@@ -1393,7 +1820,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   NSWindow *w = _addBtn.window;
   if (!_addBtn || !w)
     return NSZeroRect;
-  return [w convertRectToScreen:[_addBtn convertRect:_addBtn.bounds toView:nil]];
+  return [w convertRectToScreen:[_addBtn convertRect:_addBtn.bounds
+                                              toView:nil]];
 }
 
 // Return commits and fully defocuses. Returning YES suppresses AppKit's

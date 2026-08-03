@@ -15,17 +15,51 @@
 
 static const CGFloat kChecklistPillH = 24.0;
 
+// lane key -> layerKey, the row-level lookup the filter uses (rows are matched
+// by `rowLabel`, which is the lane key).
+static NSDictionary<NSString *, NSString *> *
+_kkChecklistLayerByLabel(NSArray<KKLane *> *lanes) {
+  NSMutableDictionary<NSString *, NSString *> *byLabel =
+      [NSMutableDictionary dictionary];
+  for (KKLane *l in lanes)
+    if (l.key.length && l.layerKey.length)
+      byLabel[l.key] = l.layerKey;
+  return byLabel;
+}
+
 @implementation _KKLaneChecklistView
 
 + (CGFloat)preferredWidth {
   return kPopoverW;
 }
 
-+ (CGFloat)heightForRowCount:(NSInteger)count hasPill:(BOOL)hasPill {
++ (CGFloat)heightForRowCount:(NSInteger)count pillRows:(NSInteger)pillRows {
   CGFloat h = KKPaddingMD + kSearchH + KKPaddingMD;
-  if (hasPill)
-    h += kChecklistPillH + KKSpacingSM;
+  h += pillRows * (kChecklistPillH + KKSpacingSM);
   return h + count * kRowHeight + KKPaddingMD;
+}
+
+- (NSInteger)_pillRows {
+  return (_hasPill ? 1 : 0) + (_hasLayerPill ? 1 : 0);
+}
+
+// The lanes the category nav + rows are scoped to: the selected layer's when
+// there is a layer nav, every lane for a plugin that carries no layer info.
+- (NSArray<KKLane *> *)_scopedLanes {
+  if (!_hasLayerPill)
+    return _lanes; // single-owner (or no layer info): nothing to scope by
+  return [[self class] _lanesIn:_lanes scopedToLayer:_selectedLayer];
+}
+
++ (NSArray<KKLane *> *)_lanesIn:(NSArray<KKLane *> *)lanes
+                  scopedToLayer:(NSString *)layerKey {
+  if (layerKey.length == 0)
+    return lanes;
+  NSMutableArray<KKLane *> *out = [NSMutableArray array];
+  for (KKLane *l in lanes)
+    if ([l.layerKey isEqualToString:layerKey])
+      [out addObject:l];
+  return out;
 }
 
 - (BOOL)isFlipped {
@@ -53,21 +87,33 @@ static const CGFloat kChecklistPillH = 24.0;
                 minimumHeight:(CGFloat)minimumHeight
                         width:(CGFloat)width
                 maxBodyHeight:(CGFloat)maxBodyHeight {
+  // A multi-owner lane set always opens on ONE owner (the first, until a host
+  // calls -selectLayerKey:), never on an "all owners" page: a rack's parameter
+  // list only means anything per entry. Everything below - the category nav,
+  // the row count, the height - is therefore computed on the SCOPED lanes.
+  NSArray<NSString *> *layerKeys = KKLaneLayerKeys(lanes);
+  BOOL hasLayerPill = layerKeys.count > 1;
+  NSString *selectedLayer = hasLayerPill ? layerKeys.firstObject : nil;
+  NSArray<KKLane *> *scoped =
+      hasLayerPill ? [[self class] _lanesIn:lanes scopedToLayer:selectedLayer]
+                   : lanes;
+
   NSDictionary<NSString *, NSString *> *catByLabel =
       KKLaneCategoryByLabel(lanes);
-  NSArray<NSString *> *keys = KKLaneCategoryKeys(lanes);
+  NSArray<NSString *> *keys = KKLaneCategoryKeys(scoped);
   BOOL hasPill = keys.count > 0;
   NSString *selected = hasPill ? keys.firstObject : nil;
 
   // Open hugging the first category's page (or all rows when there's no pill);
   // it resizes as the pill/search narrows the list.
   NSInteger initialVisible = 0;
-  for (KKLane *lane in lanes)
-    if (!hasPill || catByLabel[lane.label] == nil ||
-        [catByLabel[lane.label] isEqualToString:selected])
+  for (KKLane *lane in scoped)
+    if (!hasPill || catByLabel[lane.key] == nil ||
+        [catByLabel[lane.key] isEqualToString:selected])
       initialVisible++;
   CGFloat h = MAX([[self class] heightForRowCount:initialVisible
-                                          hasPill:hasPill],
+                                         pillRows:(hasPill ? 1 : 0) +
+                                                  (hasLayerPill ? 1 : 0)],
                   minimumHeight);
   self = [super initWithFrame:NSMakeRect(0, 0, width, h)];
   if (!self)
@@ -80,11 +126,15 @@ static const CGFloat kChecklistPillH = 24.0;
   // built off this flag; setting it after leaves the rows un-scrolled (they
   // overflow the host with no clip / fade / hit-testing past the edge).
   _embedded = maxBodyHeight > 0.0;
+  _allowsMultipleSelection = YES; // every lane list here is a checklist
   _lanes = [lanes copy];
   _allRows = [NSMutableArray array];
   _rowCategoryByLabel = catByLabel;
   _hasPill = hasPill;
   _selectedCategory = selected;
+  _rowLayerByLabel = _kkChecklistLayerByLabel(lanes);
+  _hasLayerPill = hasLayerPill;
+  _selectedLayer = [selectedLayer copy];
   [self _buildChromeForLanes:lanes];
   return self;
 }
@@ -107,12 +157,12 @@ static const CGFloat kChecklistPillH = 24.0;
 // exactly so the scroll body is never clipped by the host popover edge.
 - (CGFloat)_embeddedHeightForRows:(NSInteger)rows {
   CGFloat h = KKPaddingMD + kSearchH + KKSpacingSM + rows * kRowHeight;
-  if (_hasPill)
-    h += kChecklistPillH + KKSpacingSM;
+  h += [self _pillRows] * (kChecklistPillH + KKSpacingSM);
   return h;
 }
 
-// Search field, the optional category pill nav, and the (empty) row stack.
+// Search field, the optional layer + category pill navs, and the (empty) row
+// stack.
 - (void)_buildChromeForLanes:(NSArray<KKLane *> *)lanes {
   _searchField = [[_KKSearchField alloc] init];
   _searchField.translatesAutoresizingMaskIntoConstraints = NO;
@@ -125,8 +175,17 @@ static const CGFloat kChecklistPillH = 24.0;
 
   NSLayoutYAxisAnchor *searchTop = self.topAnchor;
   CGFloat searchTopInset = KKPaddingMD;
+  // Layer nav on top (which shader), category nav under it (which group within
+  // that shader), search under both.
+  if (_hasLayerPill) {
+    searchTop = [self _buildLayerPill].bottomAnchor;
+    searchTopInset = KKSpacingSM;
+  }
   if (_hasPill) {
-    searchTop = [self _buildCategoryPillForLanes:lanes].bottomAnchor;
+    searchTop = [self _buildCategoryPillForLanes:[self _scopedLanes]
+                                       belowEdge:searchTop
+                                           inset:searchTopInset]
+                    .bottomAnchor;
     searchTopInset = KKSpacingSM;
   }
 
@@ -179,20 +238,13 @@ static const CGFloat kChecklistPillH = 24.0;
   ]];
 }
 
-// The category pill wrapped in a horizontal edge-faded scroll so a long
-// category run stays on one row and scrolls instead of forcing the popover
-// wide. Returns the wrapper for anchoring the search field below it.
-- (KKPillBar *)_buildCategoryPillForLanes:(NSArray<KKLane *> *)lanes {
-  __weak typeof(self) weak = self;
-  _categoryPill = KKMakeLaneCategoryPill(lanes, _selectedCategory,
-                                         ^(NSString *categoryKey) {
-                                           __strong typeof(weak) ss = weak;
-                                           if (!ss)
-                                             return;
-                                           ss->_selectedCategory = categoryKey;
-                                           [ss _applyFilterAndResize];
-                                         });
-  KKPillBar *pillBar = [[KKPillBar alloc] initWithPillRow:_categoryPill];
+// A pill row wrapped in a horizontal edge-faded scroll so a long run stays on
+// one line and scrolls instead of forcing the popover wide. Returns the wrapper
+// for anchoring whatever sits below it.
+- (KKPillBar *)_installPillRow:(KKPillToggleRowView *)pillRow
+                     belowEdge:(NSLayoutYAxisAnchor *)topEdge
+                         inset:(CGFloat)inset {
+  KKPillBar *pillBar = [[KKPillBar alloc] initWithPillRow:pillRow];
   pillBar.translatesAutoresizingMaskIntoConstraints = NO;
   // Hug content when it fits, but a near-zero compression resistance lets it
   // shrink so the inner scroll takes over on overflow (vs clipping full-width).
@@ -211,11 +263,137 @@ static const CGFloat kChecklistPillH = 24.0;
     [pillBar.trailingAnchor
         constraintLessThanOrEqualToAnchor:self.trailingAnchor
                                  constant:-KKPaddingMD],
-    [pillBar.topAnchor constraintEqualToAnchor:self.topAnchor
-                                      constant:KKPaddingMD],
+    [pillBar.topAnchor constraintEqualToAnchor:topEdge constant:inset],
     [pillBar.heightAnchor constraintEqualToConstant:kChecklistPillH],
   ]];
   return pillBar;
+}
+
+- (KKPillBar *)_buildCategoryPillForLanes:(NSArray<KKLane *> *)lanes
+                                belowEdge:(NSLayoutYAxisAnchor *)topEdge
+                                    inset:(CGFloat)inset {
+  __weak typeof(self) weak = self;
+  _categoryPill = KKMakeLaneCategoryPill(lanes, _selectedCategory,
+                                         ^(NSString *categoryKey) {
+                                           __strong typeof(weak) ss = weak;
+                                           if (!ss)
+                                             return;
+                                           ss->_selectedCategory = categoryKey;
+                                           [ss _applyFilterAndResize];
+                                         });
+  _categoryPillBar = [self _installPillRow:_categoryPill
+                                 belowEdge:topEdge
+                                     inset:inset];
+  return _categoryPillBar;
+}
+
+// One pill per owner, no "all owners" segment. Picking one re-scopes the
+// category nav (each shader in a rack declares its own groups), so this
+// rebuilds the chrome rather than only refiltering.
+- (KKPillBar *)_buildLayerPill {
+  __weak typeof(self) weak = self;
+  _layerPill =
+      KKMakeLaneLayerPill(_lanes, _selectedLayer, ^(NSString *layerKey) {
+        [weak selectLayerKey:layerKey];
+      });
+  _layerPillBar = [self _installPillRow:_layerPill
+                              belowEdge:self.topAnchor
+                                  inset:KKPaddingMD];
+  return _layerPillBar;
+}
+
+- (NSArray<NSString *> *)layerKeys {
+  return KKLaneLayerKeys(_lanes);
+}
+
+- (void)selectLayerKey:(NSString *)layerKey {
+  if (!_hasLayerPill)
+    return;
+  NSArray<NSString *> *keys = KKLaneLayerKeys(_lanes);
+  // Never "no owner": an unresolvable key (a host whose selection isn't in this
+  // lane set) lands on the first layer rather than on an all-owners page.
+  NSString *resolved = (layerKey.length && [keys containsObject:layerKey])
+                           ? layerKey
+                           : keys.firstObject;
+  if ([resolved isEqualToString:_selectedLayer])
+    return;
+  _selectedLayer = [resolved copy];
+  [self _rebuildChromePreservingSearch];
+  [self rebuildRows];
+  [self _applyFilterAndResize];
+  // Before the host hands us a popover (a presenter scoping the list on the way
+  // up) nothing else owns the height, and the presenter sizes the popover from
+  // our bounds - so adopt the scoped fitting height here.
+  if (!_embedded && !self.popover)
+    [self setFrameSize:NSMakeSize(NSWidth(self.frame), [self fittingHeight])];
+}
+
+// Tear the chrome down and rebuild it for the current lanes + layer selection,
+// carrying the typed query AND both pill runs' scroll offsets across. A rebuild
+// mints fresh KKPillBars parked at offset 0, so without this a click on a pill
+// far along an overflowing run snapped the run back to its first pill - taking
+// the pill the user just clicked off-screen with it.
+- (void)_rebuildChromePreservingSearch {
+  NSString *query = _searchField.stringValue ?: @"";
+  CGFloat layerOffset = _layerPillBar.scrollOffsetX;
+  CGFloat categoryOffset = _categoryPillBar.scrollOffsetX;
+  NSArray<NSString *> *catKeys = KKLaneCategoryKeys([self _scopedLanes]);
+  _hasPill = catKeys.count > 0;
+  _selectedCategory = !_hasPill ? nil
+                      : [catKeys containsObject:_selectedCategory]
+                          ? _selectedCategory
+                          : catKeys.firstObject;
+  _heightConstraint.active = NO;
+  _bodyHeightConstraint.active = NO;
+  _heightConstraint = nil;
+  _bodyHeightConstraint = nil;
+  for (NSView *sub in [self.subviews copy])
+    [sub removeFromSuperview];
+  _categoryPill = nil;
+  _categoryPillBar = nil;
+  _layerPill = nil;
+  _layerPillBar = nil;
+  _searchField = nil;
+  _rowStack = nil;
+  _bodyScroll = nil;
+  [self _buildChromeForLanes:_lanes];
+  _searchField.stringValue = query;
+  // Restoring has to wait for a layout pass: the fresh bars have no frame yet,
+  // so their clip width is 0 and every offset would clamp to 0 - the very
+  // reset this is here to undo. The rows + height land in the same turn, so one
+  // hop to the next runloop is enough.
+  __weak typeof(self) weak = self;
+  KKPillBar *layerBar = _layerPillBar;
+  KKPillBar *categoryBar = _categoryPillBar;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weak) ss = weak;
+    if (!ss || ss->_layerPillBar != layerBar ||
+        ss->_categoryPillBar != categoryBar)
+      return; // another rebuild already replaced these bars
+    [ss layoutSubtreeIfNeeded];
+    [ss _restoreLayerOffset:layerOffset categoryOffset:categoryOffset];
+  });
+}
+
+// Put both pill runs back where the user left them, then guarantee the SELECTED
+// pill is on screen - the category run's segments change wholesale on a
+// re-scope, so a restored offset alone can't promise it.
+- (void)_restoreLayerOffset:(CGFloat)layerOffset
+             categoryOffset:(CGFloat)categoryOffset {
+  _layerPillBar.scrollOffsetX = layerOffset;
+  _categoryPillBar.scrollOffsetX = categoryOffset;
+  NSArray<NSString *> *layerKeys = KKLaneLayerKeys(_lanes);
+  NSUInteger layerIdx = _selectedLayer.length
+                            ? [layerKeys indexOfObject:_selectedLayer]
+                            : NSNotFound;
+  if (layerIdx != NSNotFound)
+    [_layerPillBar revealPillAtIndex:(NSInteger)layerIdx];
+  NSArray<NSString *> *catKeys = KKLaneCategoryKeys([self _scopedLanes]);
+  NSUInteger catIdx = _selectedCategory.length
+                          ? [catKeys indexOfObject:_selectedCategory]
+                          : NSNotFound;
+  if (catIdx != NSNotFound)
+    [_categoryPillBar revealPillAtIndex:(NSInteger)catIdx];
 }
 
 #pragma mark - Rows
@@ -232,6 +410,7 @@ static const CGFloat kChecklistPillH = 24.0;
   row.rowLabel = label;
   row.categoryKey = categoryKey;
   row.indentLevel = indentLevel;
+  row.radio = !_allowsMultipleSelection;
   [_rowStack addArrangedSubview:row];
   [row.widthAnchor constraintEqualToAnchor:_rowStack.widthAnchor].active = YES;
   [_allRows addObject:row];
@@ -252,34 +431,30 @@ static const CGFloat kChecklistPillH = 24.0;
 }
 
 - (void)setLanes:(NSArray<KKLane *> *)lanes {
-  NSArray<NSString *> *oldKeys = KKLaneCategoryKeys(_lanes);
-  NSArray<NSString *> *newKeys = KKLaneCategoryKeys(lanes);
+  NSArray<NSString *> *oldCats = KKLaneCategoryKeys([self _scopedLanes]);
+  NSArray<NSString *> *oldLayers = KKLaneLayerKeys(_lanes);
+  NSArray<NSString *> *newLayers = KKLaneLayerKeys(lanes);
   _lanes = [lanes copy];
-  // Common case (filter refresh, same owner): the category nav is unchanged, so
-  // just refresh the rows - cheap, keeps the pill/search/scroll intact.
-  if ([oldKeys isEqualToArray:newKeys]) {
+  _rowLayerByLabel = _kkChecklistLayerByLabel(lanes);
+  _hasLayerPill = newLayers.count > 1;
+  // A layer that went away can't stay selected - fall back to the first one
+  // (there is no all-owners page to fall back to).
+  if (_hasLayerPill &&
+      (!_selectedLayer.length || ![newLayers containsObject:_selectedLayer]))
+    _selectedLayer = [newLayers.firstObject copy];
+  NSArray<NSString *> *newCats = KKLaneCategoryKeys([self _scopedLanes]);
+  // Common case (filter refresh, same owner): neither nav changed, so just
+  // refresh the rows - cheap, keeps the pills/search/scroll intact.
+  if ([oldCats isEqualToArray:newCats] &&
+      [oldLayers isEqualToArray:newLayers]) {
     [self rebuildRows];
     return;
   }
   // A multi-owner re-scope changed the category set (e.g. an image's
-  // Transform-only list -> a path's Core/Stroke/Transform): _hasPill + the pill
-  // segments must change, so tear down and rebuild the chrome, then the rows.
-  _hasPill = newKeys.count > 0;
-  _selectedCategory = !_hasPill ? nil
-                      : [newKeys containsObject:_selectedCategory]
-                          ? _selectedCategory
-                          : newKeys.firstObject;
-  _heightConstraint.active = NO;
-  _bodyHeightConstraint.active = NO;
-  _heightConstraint = nil;
-  _bodyHeightConstraint = nil;
-  for (NSView *sub in [self.subviews copy])
-    [sub removeFromSuperview];
-  _categoryPill = nil;
-  _searchField = nil;
-  _rowStack = nil;
-  _bodyScroll = nil;
-  [self _buildChromeForLanes:lanes];
+  // Transform-only list -> a path's Core/Stroke/Transform) or the layer set (a
+  // rack entry added/removed): the pill segments must change, so tear down and
+  // rebuild the chrome, then the rows.
+  [self _rebuildChromePreservingSearch];
   [self rebuildRows];
 }
 
@@ -287,19 +462,40 @@ static const CGFloat kChecklistPillH = 24.0;
   NSMutableArray<NSString *> *out =
       [NSMutableArray arrayWithCapacity:_lanes.count];
   for (KKLane *l in _lanes)
-    if (l.label)
-      [out addObject:l.label];
+    if (l.key)
+      [out addObject:l.key];
   return out;
 }
 
+- (void)setAllowsMultipleSelection:(BOOL)allowsMultipleSelection {
+  if (_allowsMultipleSelection == allowsMultipleSelection)
+    return;
+  _allowsMultipleSelection = allowsMultipleSelection;
+  // Rows already on screen keep their glyph otherwise: the flag is normally set
+  // before the first rebuild, but a host that flips it later shouldn't have to
+  // know that.
+  for (_KKManageRow *row in _allRows)
+    row.radio = !allowsMultipleSelection;
+}
+
+- (void)checkOnlyRow:(_KKManageRow *)row {
+  for (_KKManageRow *other in _allRows)
+    other.checked = (other == row);
+}
+
 - (void)rebuildRows {
-  // Labels can be layer-tagged (multi-owner re-scope), so refresh the map.
+  // Labels can be layer-tagged (multi-owner re-scope), so refresh the maps.
   _rowCategoryByLabel = KKLaneCategoryByLabel(_lanes);
+  _rowLayerByLabel = _kkChecklistLayerByLabel(_lanes);
   [self removeAllRows];
   for (KKLane *lane in _lanes) {
-    _KKManageRow *row = [self appendRowWithLabel:lane.label
-                                     categoryKey:_rowCategoryByLabel[lane.label]
+    _KKManageRow *row = [self appendRowWithLabel:lane.key
+                                     categoryKey:_rowCategoryByLabel[lane.key]
                                      indentLevel:0];
+    row.layerKey = lane.layerKey;
+    // rowLabel stays the identity (used for checked-state / search); show the
+    // lane's displayName so a dynamic plugin's stable key isn't user-facing.
+    row.displayOverride = KKLocalizedParamName(lane.displayName);
     [self configureRow:row forLane:lane];
   }
   [self refilterAndResize];
@@ -313,13 +509,22 @@ static const CGFloat kChecklistPillH = 24.0;
 }
 
 - (void)selectCategoryForLabel:(NSString *)label {
-  if (!_hasPill || label.length == 0)
+  if (label.length == 0)
+    return;
+  // The label's layer page has to come first: its category nav is the one the
+  // category below is resolved against. A label with no layer (a subclass's
+  // synthetic row) shows on every page, so leave the nav where it is rather
+  // than letting the nil fall through to the first layer.
+  NSString *labelLayer = _rowLayerByLabel[label];
+  if (labelLayer.length)
+    [self selectLayerKey:labelLayer];
+  if (!_hasPill)
     return;
   NSString *cat = _rowCategoryByLabel[label];
   if (cat.length == 0 || [cat isEqualToString:_selectedCategory])
     return;
   _selectedCategory = cat;
-  NSArray<NSString *> *keys = KKLaneCategoryKeys(_lanes);
+  NSArray<NSString *> *keys = KKLaneCategoryKeys([self _scopedLanes]);
   NSInteger idx = [keys indexOfObject:cat];
   if (idx != NSNotFound) {
     NSMutableArray<NSNumber *> *states =
@@ -348,7 +553,16 @@ static const CGFloat kChecklistPillH = 24.0;
     NSString *cat = row.categoryKey;
     BOOL matchCategory =
         !_hasPill || cat.length == 0 || [cat isEqualToString:_selectedCategory];
-    BOOL show = matchSearch && matchCategory;
+    // A row that names its own owner wins over the key-indexed map: a
+    // subclass's master / component rows carry display labels, which the map
+    // can't resolve. Rows with neither (genuinely owner-less) show on every
+    // layer page, exactly as an uncategorised row does for categories.
+    NSString *layer =
+        row.layerKey.length ? row.layerKey : _rowLayerByLabel[row.rowLabel];
+    BOOL matchLayer = !_hasLayerPill || _selectedLayer.length == 0 ||
+                      layer.length == 0 ||
+                      [layer isEqualToString:_selectedLayer];
+    BOOL show = matchSearch && matchCategory && matchLayer;
     row.hidden = !show;
     if (show)
       visible++;
@@ -356,11 +570,23 @@ static const CGFloat kChecklistPillH = 24.0;
   return visible;
 }
 
+// An embedded list is normally a SECTION of a bigger popover, so
+// `-_embeddedHeightForRows:` leaves the bottom pad to that host. When the list
+// IS the popover's whole content (`popover` set), nothing else supplies it - so
+// add it here. `_bodyScroll` is pinned at the top with an explicit height and
+// never to the bottom, so the extra simply becomes the gap below the fade,
+// matching the trailing pad the non-embedded path bakes into
+// `+heightForRowCount:`.
+- (CGFloat)_embeddedHeightForRows:(NSInteger)rows hostedInPopover:(BOOL)hosted {
+  return [self _embeddedHeightForRows:rows] + (hosted ? KKPaddingMD : 0.0);
+}
+
 - (CGFloat)fittingHeight {
   NSInteger visible = MAX([self _applyFilter], 1);
   if (_embedded)
-    return [self _embeddedHeightForRows:[self _cappedRowCount:visible]];
-  return MAX([[self class] heightForRowCount:visible hasPill:_hasPill],
+    return [self _embeddedHeightForRows:[self _cappedRowCount:visible]
+                        hostedInPopover:self.popover != nil];
+  return MAX([[self class] heightForRowCount:visible pillRows:[self _pillRows]],
              _minimumHeight);
 }
 
@@ -369,18 +595,32 @@ static const CGFloat kChecklistPillH = 24.0;
   if (_embedded) {
     NSInteger capped = [self _cappedRowCount:visible];
     _bodyHeightConstraint.constant = capped * kRowHeight;
-    _heightConstraint.constant = [self _embeddedHeightForRows:capped];
+    CGFloat h = [self _embeddedHeightForRows:capped
+                             hostedInPopover:self.popover != nil];
+    _heightConstraint.constant = h;
+    // Hosted directly in a popover: keep it hugging the capped height as a
+    // search narrows the list, exactly as the non-embedded path does below.
+    if (self.popover)
+      self.popover.contentSize = NSMakeSize(_width, h);
     return;
   }
   if (self.popover)
-    self.popover.contentSize =
-        NSMakeSize(kPopoverW, MAX([[self class] heightForRowCount:visible
-                                                          hasPill:_hasPill],
-                                  _minimumHeight));
+    self.popover.contentSize = NSMakeSize(
+        kPopoverW, MAX([[self class] heightForRowCount:visible
+                                              pillRows:[self _pillRows]],
+                       _minimumHeight));
 }
 
 - (void)controlTextDidChange:(NSNotification *)note {
   [self _applyFilterAndResize];
+}
+
+// Enter / Esc drop focus (blur) so spacebar (playback) and Esc (close popover)
+// reach the popover again, matching every other field in a ViewBridge popover.
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)selector {
+  return KKSearchFieldBlurOnCommit(control, selector);
 }
 
 @end

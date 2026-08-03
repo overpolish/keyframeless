@@ -42,34 +42,130 @@ actor AudioExtractionLimiter {
 actor ProcessedAudioRenderer {
 	static let shared = ProcessedAudioRenderer()
 
-	private var cache: [String: URL] = [:]
+	/// One cached render. Kept together rather than spread across dictionaries
+	/// keyed by the same string, so a file's size and its lease can't drift out
+	/// of step with the file itself.
+	private struct Entry {
+		let url: URL
+		let size: UInt64
+		var leases: Int
+		/// A monotonic tick, not a timestamp: this only has to order uses
+		/// against each other, and a wall clock can jump backwards.
+		var lastUsed: UInt64
+	}
+
+	private var entries: [String: Entry] = [:]
 	private var inflight: [String: Task<URL, Error>] = [:]
+	private var tick: UInt64 = 0
+
+	/// Summed on demand rather than tracked: a running total is one more thing
+	/// to keep in step with `entries`, and there are only ever a handful.
+	private var totalBytes: UInt64 { entries.values.reduce(0) { $0 + $1.size } }
 
 	private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf", "mts", "avi"]
 
-	func renderedURL(for clip: FCPXMLParser.AudioClip) async throws -> URL {
+	/// A rendered clip is uncompressed Float32 at the source rate, so 48kHz
+	/// stereo costs ~1.4GB per hour, and every edit to a clip mints a fresh
+	/// fingerprint and a fresh file. Each consumer caches its own derived result
+	/// (waveform buckets, STFT frames) under that same fingerprint, so a kept
+	/// WAV only ever saves a repeat decode - worth some disk, not unbounded
+	/// disk. The cap is in bytes because one long clip outweighs dozens of
+	/// short ones.
+	private static let budgetBytes: UInt64 = 3 << 30
+
+	/// Renders get their own directory so `TempJanitor` can clear a dead run's
+	/// leftovers wholesale, rather than pattern-matching them out of the tmp
+	/// root alongside everything else that lands there.
+	static let directory = FileManager.default.temporaryDirectory
+		.appendingPathComponent("KKProcessedAudio", isDirectory: true)
+
+	/// Runs `body` with a rendered copy of `clip`'s processed audio.
+	///
+	/// The file is guaranteed to outlive the call and may be evicted any time
+	/// after it, so read what you need inside and don't hold the URL.
+	func withRenderedAudio<T: Sendable>(
+		for clip: FCPXMLParser.AudioClip,
+		_ body: @Sendable (URL) async throws -> T
+	) async throws -> T {
 		let key = Self.cacheKey(for: clip)
-		if let url = cache[key], FileManager.default.fileExists(atPath: url.path) {
-			return url
+		let url = try await acquire(key: key, clip: clip)
+		defer { release(key) }
+		return try await body(url)
+	}
+
+	/// Returns a cached or freshly rendered file with its lease already held, so
+	/// eviction can't pull it out from under the caller in the window between
+	/// the lookup and the read.
+	private func acquire(key: String, clip: FCPXMLParser.AudioClip) async throws -> URL {
+		if let entry = entries[key], FileManager.default.fileExists(atPath: entry.url.path) {
+			lease(key)
+			return entry.url
 		}
-		if let task = inflight[key] {
-			return try await task.value
+		// The file vanished under us (a manual tmp purge, say). Drop the entry
+		// rather than let a dead path wedge the key for the rest of the session.
+		entries[key] = nil
+
+		let task: Task<URL, Error>
+		if let existing = inflight[key] {
+			task = existing
+		} else {
+			task = Task<URL, Error> {
+				await AudioExtractionLimiter.shared.acquire()
+				defer { Task { await AudioExtractionLimiter.shared.release() } }
+				return try await Self.render(clip: clip)
+			}
+			inflight[key] = task
 		}
-		let task = Task<URL, Error> {
-			await AudioExtractionLimiter.shared.acquire()
-			defer { Task { await AudioExtractionLimiter.shared.release() } }
-			return try await Self.render(clip: clip)
-		}
-		inflight[key] = task
+
+		let url: URL
 		do {
-			let url = try await task.value
-			cache[key] = url
-			inflight[key] = nil
-			return url
+			url = try await task.value
 		} catch {
-			inflight[key] = nil
+			if inflight[key] == task { inflight[key] = nil }
 			throw error
 		}
+		if inflight[key] == task { inflight[key] = nil }
+		// Every waiter on a shared task resumes here, so only the first one to
+		// arrive records the file - the rest would double-count it.
+		if entries[key] == nil {
+			entries[key] = Entry(url: url, size: Self.fileSize(url), leases: 0, lastUsed: 0)
+		}
+		lease(key)
+		evictIfOverBudget()
+		return url
+	}
+
+	/// Takes a lease and marks the entry most-recently-used.
+	private func lease(_ key: String) {
+		tick += 1
+		entries[key]?.leases += 1
+		entries[key]?.lastUsed = tick
+	}
+
+	private func release(_ key: String) {
+		guard let leases = entries[key]?.leases, leases > 0 else { return }
+		entries[key]?.leases = leases - 1
+	}
+
+	/// Oldest first, skipping anything a caller is currently reading.
+	private func evictIfOverBudget() {
+		var total = totalBytes
+		guard total > Self.budgetBytes else { return }
+		let candidates =
+			entries
+			.filter { $0.value.leases == 0 }
+			.sorted { $0.value.lastUsed < $1.value.lastUsed }
+		for (key, entry) in candidates {
+			guard total > Self.budgetBytes else { break }
+			try? FileManager.default.removeItem(at: entry.url)
+			entries[key] = nil
+			total -= entry.size
+		}
+	}
+
+	private static func fileSize(_ url: URL) -> UInt64 {
+		let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+		return UInt64(values?.fileSize ?? 0)
 	}
 
 	private static func cacheKey(for clip: FCPXMLParser.AudioClip) -> String {
@@ -153,8 +249,10 @@ actor ProcessedAudioRenderer {
 				buffer: buffer, filters: filters, baseSourceTime: clip.sourceStart)
 		}
 
-		let outURL = FileManager.default.temporaryDirectory
-			.appendingPathComponent("kk_processed_\(UUID().uuidString).wav")
+		try FileManager.default.createDirectory(
+			at: Self.directory, withIntermediateDirectories: true)
+		let outURL = Self.directory.appendingPathComponent(
+			"kk_processed_\(UUID().uuidString).wav")
 		let outFile = try AVAudioFile(forWriting: outURL, settings: processed.format.settings)
 		try outFile.write(from: processed)
 		return outURL

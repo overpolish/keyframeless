@@ -5,6 +5,7 @@
 
 #import "KKDataBlob.h"
 #import "KKMiniViewerRenderer.h"
+#import "KKOSCVisibilityDefaults.h"
 #import "KKPlugin+OSCVisibility.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -29,10 +30,20 @@
                              renderer:(KKMiniViewerRenderer *)renderer {
   NSDictionary *els = uiState[@"oscElements"];
   NSMutableSet<NSString *> *hidden = [NSMutableSet set];
-  if ([els isKindOfClass:[NSDictionary class]])
+  if ([els isKindOfClass:[NSDictionary class]]) {
     for (NSString *key in keys)
       if (els[key] && ![els[key] boolValue])
         [hidden addObject:key];
+  } else {
+    // No stored map at all - a clip that has never had its OSC set touched.
+    // Seed the user's saved default (nil when they never saved one, which
+    // leaves everything visible as before). Intersected with `keys` so a
+    // default carried over from another shader can't hide an element this one
+    // doesn't have.
+    for (NSString *key in KKOSCVisibilityDefaultsRead(nil))
+      if ([keys containsObject:key])
+        [hidden addObject:key];
+  }
   KKInstanceStateForAPI(self.apiManager).hiddenOSCElements = hidden;
   renderer.hiddenHandleLabels = hidden;
 }
@@ -118,9 +129,15 @@
   };
   view.oscVisibilityElementToggled = ^(NSInteger ci, NSInteger seg, BOOL isOn) {
     __strong typeof(weak) strong = weak;
-    if (!strong || ci < 0 || ci >= (NSInteger)compounds.count)
+    // Resolve against the LIVE set, which is what the checklist rows were built
+    // from. Indexing the wire-time set instead sends the wrong key whenever a
+    // plugin has narrowed the list (Canvas drops the path-only compounds for an
+    // image layer, shifting every row by two).
+    NSArray<NSArray<NSString *> *> *live =
+        weakView.oscVisibilityCompounds ?: compounds;
+    if (!strong || ci < 0 || ci >= (NSInteger)live.count)
       return;
-    NSArray<NSString *> *compound = compounds[ci];
+    NSArray<NSString *> *compound = live[ci];
     if (seg < 0 || seg >= (NSInteger)compound.count)
       return;
     [strong kkSetOSCElement:compound[seg]
@@ -260,15 +277,12 @@
 // triggers none. This nonce write is the same mechanism the boundary-preview
 // path uses; it doesn't touch any persisted UI state.
 - (void)kkNudgeRenderWithParamID:(UInt32)nudgeParamID {
-  id<FxCustomParameterActionAPI_v4> act =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!act)
-    return;
-  [act startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString], nudgeParamID);
-  [act endAction:self];
+  KKPerformUndoable(self.apiManager, self, nil,
+                    ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                      id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+                      KKWriteCustomParamString(
+                          setAPI, [[NSUUID UUID] UUIDString], nudgeParamID);
+                    });
 }
 
 @end

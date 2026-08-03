@@ -6,6 +6,7 @@
 #import "KKTimelineBasicView_Private.h"
 
 #import "KKKeyposeSymbol.h"
+#import "KKLaneCategoryNav.h" // KKLaneLayerKeysWithKeyposeNearFraction
 #import "KKMiniViewerView.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineScale.h"
@@ -13,6 +14,7 @@
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLocalized.h>
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 @implementation KKTimelineBasicView (BoundaryPopover)
@@ -52,25 +54,40 @@
         resolved = l.layerKey;
         break;
       }
-  if (resolved && ![resolved isEqualToString:_activeLayerKey]) {
+  if (resolved) {
     _activeLayerKey = [resolved copy];
-    // Only fire on a USER-driven open (graph click / nav). A selection-driven
-    // re-drive (retarget / timeline re-feed) passes NO, else activation drives
-    // the host selection back to the popover's old owner - the ping-pong.
-    if (fireActivation && self.onKeyposeLayerActivated)
+    // Fire on EVERY user-driven open (graph click / nav), not only when the
+    // resolved layer changed: the host selection can have drifted off this
+    // layer while _activeLayerKey still equals it (an external re-select, a
+    // re-feed), and a change-gated fire would never correct it - the popover
+    // would open on a layer the host isn't showing. The host handler is
+    // idempotent for the layer it's already on. A selection-driven re-drive
+    // (retarget / timeline re-feed) passes NO, else activation drives the host
+    // selection back to the popover's old owner - the ping-pong.
+    if (fireActivation && self.onKeyposeLayerActivated) {
+      KKLogDebug(@"[Keypose] activate layer %@ from basic-boundary-popover",
+                 resolved);
       self.onKeyposeLayerActivated(resolved);
+    }
   }
   return resolved;
 }
 
 - (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
-  BOOL eligible = NO;
-  for (KKLane *l in _timeline.lanes)
-    if (l.enabled && [l.layerKey isEqualToString:layerKey]) {
-      eligible = YES;
-      break;
-    }
-  if (!eligible || [layerKey isEqualToString:_activeLayerKey])
+  // An enabled lane isn't enough: an owner whose lanes carry no keypose at this
+  // boundary has nothing for the popover to edit, and re-scoping to it would
+  // leave an empty editor open. Same rule the host's owner switcher grays with
+  // (KKLaneLayerKeysWithKeyposeNearFraction).
+  NSSet<NSString *> *owners = KKLaneLayerKeysWithKeyposeNearFraction(
+      _timeline.lanes, _lastBoundaryFraction);
+  // An empty set means no lane declares an owner at all (single-owner plugin):
+  // nothing to gate, so the retarget goes through as it always did.
+  if (owners.count && ![owners containsObject:layerKey]) {
+    KKLogDebug(@"[Keypose] retarget to %@ refused: no keypose at %.4f",
+               layerKey, _lastBoundaryFraction);
+    return;
+  }
+  if ([layerKey isEqualToString:_activeLayerKey])
     return;
   _activeLayerKey = [layerKey copy];
   // Selection already moved here; re-scope the popover without firing
@@ -112,6 +129,7 @@
     frac = p.outStartFrac;
   else
     frac = p.inEnabled ? p.inEndFrac : (p.outEnabled ? p.outStartFrac : 0.0);
+  _lastBoundaryFraction = frac;
 
   // Build synthetic single-keypose lanes carrying the value at this boundary
   // - with valueType / component bounds taken from the plugin template
@@ -122,18 +140,34 @@
   // layer's values. nil for single-owner plugins (shows all, as before).
   NSString *activeLayer =
       [self _resolveBasicActiveLayerKeyFiringActivation:fireActivation];
+  // A host that opts into the strict co-timed rule (Mirage's rack, where an
+  // entry's keyposes are one co-timed set) tightens multi-owner popovers to
+  // match Advanced: only a lane that actually participates in THIS boundary, in
+  // the active owner, is editable. A non-participating lane of the same owner
+  // is dimmed + inert instead of carrying an "Animate" affordance (that
+  // affordance goes dormant - the closure stays wired, no row asks for it),
+  // because arming a property that has no keypose at this boundary is exactly
+  // the edit the rule forbids. Canvas (the default) keeps its Animate rows on
+  // multi-layer timelines, as do single-owner timelines everywhere.
+  BOOL strictCoTimed =
+      self.keyposeStrictCoTimed && KKLanesSpanMultipleLayers(_timeline.lanes);
 
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
   NSMutableArray<NSString *> *excludedLabels = [NSMutableArray array];
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled)
       continue;
+    // Another owner's lane is not in this popover at all - it belongs to a
+    // different effect's parameter list, and showing it (even read-only) put
+    // two owners' groups in one editor. Matches Advanced and Canvas's
+    // multi-layer scoping.
     if (activeLayer && ![lane.layerKey isEqualToString:activeLayer])
-      continue; // another layer's lane - not in this popover
+      continue;
     // A property "doesn't apply to" this boundary's phase when it has no
     // keypose there OR its phase interval is flat (holdsFlat) - either way it
     // sits at Hold through the phase. Flag it excluded (row becomes a message +
     // Animate, in place, preserving property order). Hold always participates.
+    BOOL inertHere = NO;
     if (lane.keyposes.count >= 2) {
       KKHoldShape sh = KKShapeOfLane(lane);
       BOOL participates;
@@ -145,23 +179,27 @@
             sh.outEnabled && !lane.keyposes[sh.holdEnd].outgoing.holdsFlat;
       else
         participates = YES;
-      if (!participates)
-        [excludedLabels addObject:lane.label];
+      if (!participates) {
+        if (strictCoTimed)
+          inertHere = YES;
+        else
+          [excludedLabels addObject:lane.key];
+      }
     }
     NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(lane, frac)
                                     ?: lane.keyposes.firstObject.values;
-    // Multi-owner lanes are layer-tagged ("Stroke Width\x1f<id>"); match the
-    // template on the PLAIN label or it's nil for every tagged lane, losing its
-    // metadata (integerValued / autoSizesComponentLabels / scaleWithMedia) so
-    // the Basic keypose popover diverged from Constants.
-    NSString *plain = KKPlainLaneLabel(lane.label);
+    // Multi-owner lanes carry layer-scoped KEYS ("Stroke Width\x1f<id>");
+    // match the template on the PLAIN key or it's nil for every merged lane,
+    // losing its metadata (integerValued / autoSizesComponentLabels /
+    // scaleWithMedia) so the Basic keypose popover diverged from Constants.
+    NSString *plain = KKPlainLaneLabel(lane.key);
     KKLane *tmpl = nil;
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:plain]) {
+      if ([t.key isEqualToString:plain]) {
         tmpl = t;
         break;
       }
-    KKLane *dl = [KKLane laneWithLabel:lane.label];
+    KKLane *dl = [KKLane laneWithKey:lane.key label:lane.label];
     dl.valueType = tmpl ? tmpl.valueType : lane.valueType;
     dl.componentMin = tmpl ? tmpl.componentMin : lane.componentMin;
     dl.componentMax = tmpl ? tmpl.componentMax : lane.componentMax;
@@ -183,10 +221,23 @@
     // the source lane (it's serialized too) so the Basic boundary popover
     // matches the constants row and Advanced.
     dl.oscEditedOnly = tmpl ? tmpl.oscEditedOnly : lane.oscEditedOnly;
-    // Basic intentionally ignores lock: its keypose timings are shared/linked
-    // across all layers, so freezing one layer here has no meaning. Lock is an
-    // Advanced-only (per-lane) concept - so don't mark the Basic row read-only.
+    // Basic intentionally ignores lane LOCK: its keypose timings are
+    // shared/linked across all layers, so freezing one layer here has no
+    // meaning (lock is an Advanced-only, per-lane concept). `locked` is still
+    // the mechanism that dims + inerts a lane of this owner that doesn't
+    // participate in this boundary.
+    dl.locked = inertHere;
     [dl kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
+    // The display name is template-canonical: a persisted lane may carry a
+    // stale label (saved before a rename), so the template's current label
+    // wins when one resolved (matches Advanced).
+    if (tmpl.label.length)
+      dl.label = tmpl.label;
+    // Parameter-link expression is a lane-level property (from the serialized
+    // timeline lane, not the template), so carry it onto the display lane -
+    // else the keypose popover shows neither the accent label nor the inline
+    // editor.
+    dl.linkExpression = lane.linkExpression;
     KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
     // Carry the curve state from the keypose nearest this boundary (matches the
     // nearest-match write) so the row's toggle reflects it.
@@ -245,6 +296,9 @@
   _curAnimateSec = (boundary == KKBasicBoundaryInStart) ? KKBasicSectionIn
                                                         : KKBasicSectionOut;
   _curDiamond = d;
+  // Highlight this pill as the active keypose while its popover is open.
+  _boundaryPopoverShowing = YES;
+  [self setNeedsDisplay:YES];
   __weak typeof(self) weak = self;
   // Remove only applies to In/Out boundaries (their "applies to" set). Hold
   // always participates, so the Hold popover has no − gutter (onRemove nil).
@@ -374,10 +428,10 @@
     // Single-owner timelines have no tag / active key, so only the exact branch
     // fires (this is a no-op for them). layerKey==_activeLayerKey keeps it
     // scoped to one owner, so no cross-layer double-write.
-    BOOL match = [lanes[i].label isEqualToString:label];
+    BOOL match = [lanes[i].key isEqualToString:label];
     if (!match && _activeLayerKey.length && lanes[i].layerKey.length &&
         [lanes[i].layerKey isEqualToString:_activeLayerKey] &&
-        [KKPlainLaneLabel(lanes[i].label)
+        [KKPlainLaneLabel(lanes[i].key)
             isEqualToString:KKPlainLaneLabel(label)])
       match = YES;
     if (!match)

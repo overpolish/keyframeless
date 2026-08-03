@@ -8,7 +8,7 @@ In the Edit tab's export sidebar, the user picks one of three caption types:
 **Title** (default).
 
 - Exports as FCP Title clips - fully animatable.
-- **Supports caption templates** from the Keyframeless plugin family (Rounded, Canvas, MagicMove, Glow, Template, plus any community templates). See `caption-templates`.
+- **Supports caption templates** from the Keyframeless plugin family (Canvas, Mirage, Template, plus any community templates). See `caption-templates`.
 - Supports per-word animation on templates that opt into it.
 - Style options apply: text font/size/color/Y-position, max words per line, one or two lines, ALL CAPS, no gaps, censor profanity, strip punctuation (with optional "Keep ? and !" override).
 

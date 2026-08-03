@@ -16,7 +16,7 @@ Two library products, so the MLX inference engine never links into a plugin - it
 
 On-device inference runs in a single out-of-process helper (`kk-ai-helper`), shared by every plugin and extension. It is installed **once** by the "Keyframeless AI" package to `/Library/Application Support/Keyframeless/kk-ai-helper` and launched **on demand by launchd**. Plugins never embed it.
 
-A sandboxed FCP plugin can't exec an out-of-bundle binary, but it can look up an app-group Mach service. The installer registers an on-demand LaunchAgent vending `group.co.overpolish.keyframeless.aihelper`; `SharedHelperRunner` opens an `NSXPCConnection` to it, launchd starts the helper, and the helper binds its unix socket in the app-group container. From there the data path is the proven one: length-prefixed JSON over the socket, with streaming, status, and cancel. The same control channel carries model **download** (the helper runs the HuggingFace fetch and streams progress), **cancel-download** (cancels the fetch and drops the partial to free disk), and a **status** reply that reports any in-flight download's model + fraction so a plugin that didn't start it mirrors the progress live.
+A sandboxed FCP plugin can't exec an out-of-bundle binary, but it can look up an app-group Mach service. The installer registers an on-demand LaunchAgent vending `group.com.keyframeless.aihelper`; `SharedHelperRunner` opens an `NSXPCConnection` to it, launchd starts the helper, and the helper binds its unix socket in the app-group container. From there the data path is the proven one: length-prefixed JSON over the socket, with streaming, status, and cancel. The same control channel carries model **download** (the helper runs the HuggingFace fetch and streams progress), **cancel-download** (cancels the fetch and drops the partial to free disk), and a **status** reply that reports any in-flight download's model + fraction so a plugin that didn't start it mirrors the progress live.
 
 ```mermaid
 flowchart TB
@@ -31,7 +31,7 @@ flowchart TB
     LA["launchd LaunchAgent<br/>on-demand, MachService<br/>(installed to /Library/LaunchAgents)"]
     HELPER["kk-ai-helper (MLX)<br/>/Library/Application Support/Keyframeless<br/>installed once by Keyframeless AI.pkg"]
 
-    subgraph group ["App Group: group.co.overpolish.keyframeless"]
+    subgraph group ["App Group: group.com.keyframeless"]
         SOCK(["kkai.sock"])
         CACHE[("HF model cache")]
     end
@@ -56,7 +56,7 @@ The open socket connection is the ref-count: when the last client disconnects th
 
 ## Adding a new plugin
 
-From the repo root, run `scripts/convert-plugin-to-thin.py <Plugin>`. It removes any embedded `kk-ai-helper` target + Copy Files phase and adds the app group `group.co.overpolish.keyframeless` to the plugin's **XPC Service** target. Then:
+From the repo root, run `scripts/convert-plugin-to-thin.py <Plugin>`. It removes any embedded `kk-ai-helper` target + Copy Files phase and adds the app group `group.com.keyframeless` to the plugin's **XPC Service** target. Then:
 
 1. The XPC Service already links the `KeyframelessAI` (thin) product by name, so nothing else to wire for the client.
 2. Local AI needs the shared engine installed. Build it with `scripts/build-and-sign.sh keyframelessai <apple-id> <team-id>` and ship `Keyframeless AI.pkg` (it is a package in the combined `Distribution/Keyframeless.pkgproj`; `split-pkgproj.py` extracts the standalone). Users install it once.
@@ -75,16 +75,16 @@ Because `SharedHelperRunner` connects to the socket before trying to wake the he
 
 ## Models
 
-Drive `LocalModelStore.shared` (`download`, `cancelDownload`, `select`, `uninstall`, `selectedModelID`, `hasReadyModel`) or present `LocalModelsView`; the catalog is `LocalModelCatalog.models`. The **helper** runs the actual swift-huggingface fetch into the shared app-group cache (`…/group.co.overpolish.keyframeless/huggingface/hub/`); the store just drives it over the socket and forwards progress. "Downloaded" means the helper wrote a `.kkcomplete` marker in the repo dir on full success (`isDownloaded` checks for it - a partial or cancelled fetch leaves blobs but no marker, so it correctly reads as not-downloaded). While `LocalModelsView` is on screen, `startHelperSync`/`stopHelperSync` poll the helper so a download started in another plugin shows live progress here too.
+Drive `LocalModelStore.shared` (`download`, `cancelDownload`, `select`, `uninstall`, `selectedModelID`, `hasReadyModel`) or present `LocalModelsView`; the catalog is `LocalModelCatalog.models`. The **helper** runs the actual swift-huggingface fetch into the shared app-group cache (`…/group.com.keyframeless/huggingface/hub/`); the store just drives it over the socket and forwards progress. "Downloaded" means the helper wrote a `.kkcomplete` marker in the repo dir on full success (`isDownloaded` checks for it - a partial or cancelled fetch leaves blobs but no marker, so it correctly reads as not-downloaded). While `LocalModelsView` is on screen, `startHelperSync`/`stopHelperSync` poll the helper so a download started in another plugin shows live progress here too.
 
 Local is gated to Apple Silicon with 24 GB+ RAM (`AIPlatform.supportsLocal`); below that, `.local` is hidden and clients use the cloud providers. Note the helper is arm64-only (MLX is Apple-Silicon).
 
 ## Logs
 
-Subsystem `co.overpolish.keyframeless`, categories `ai.helper` (routing, wake, socket) and `ai.local` (load and generation timings):
+Subsystem `com.keyframeless`, categories `ai.helper` (routing, wake, socket) and `ai.local` (load and generation timings):
 
 ```sh
-log show --last 5m --predicate 'subsystem == "co.overpolish.keyframeless"' --info
+log show --last 5m --predicate 'subsystem == "com.keyframeless"' --info
 ```
 
 "did not come up" / connect failures usually mean the **Keyframeless AI engine isn't installed** (no `/Library/Application Support/Keyframeless/kk-ai-helper`, so the LaunchAgent Mach service isn't registered) or the plugin is missing the app-group entitlement. `no app-group socket; local disabled` means the app group isn't on this target.

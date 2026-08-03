@@ -21,7 +21,20 @@ typedef struct {
   simd_float3 col2;
 } KKRotMatrix3;
 
-/// World matrix R = Ry * Rx * Rz (matches MagicMove.metal's order).
+/// Which Euler axes a rotation control drives. The bound lane carries one
+/// component per enabled axis, in X, Y, Z order (Z-only = a 1-component lane
+/// holding the Z angle; the default X|Y|Z = the classic 3-component lane). A
+/// disabled axis is never drawn, hit-tested, or written - so a 2D plugin can
+/// reuse the gizmo (viewer `KKRotationOSC` + mini-viewer renderer) with a
+/// single Z rotation. Shared here so both the viewer + mini sides agree.
+typedef enum {
+  KKRotationAxisX = 1 << 0,
+  KKRotationAxisY = 1 << 1,
+  KKRotationAxisZ = 1 << 2,
+  KKRotationAxesAll = KKRotationAxisX | KKRotationAxisY | KKRotationAxisZ,
+} KKRotationAxes;
+
+/// World matrix R = Ry * Rx * Rz.
 static inline KKRotMatrix3 KKBuildRotationMatrix(float rx, float ry, float rz) {
   float cx = cosf(rx), sx = sinf(rx);
   float cy = cosf(ry), sy = sinf(ry);
@@ -34,6 +47,38 @@ static inline KKRotMatrix3 KKBuildRotationMatrix(float rx, float ry, float rz) {
   m.col2 = simd_make_float3(sy * cx, -sx, cy * cx);
   return m;
 }
+
+/// The display matrix for ring `k` (0=X, 1=Y, 2=Z). A FULL 3-axis gizmo draws
+/// every ring under the whole pose (its trackball drag spins about the
+/// visible axis, so pose and motion agree). A PARTIAL axis set drags as a
+/// plain Euler increment (the trackball compose needs the disabled axes to
+/// store its result), so each ring draws in the NESTED frame where its Euler
+/// rotation actually applies - order R = Ry * Rx * Rz, so the Y ring sits
+/// under Ry, the X ring under Ry * Rx, the Z ring under the full pose. A
+/// ring's circle is invariant to its own rotation, so including it is safe.
+static inline KKRotMatrix3 KKRingDisplayMatrix(float rx, float ry, float rz,
+                                               int axesMask, int k) {
+  if ((axesMask & KKRotationAxesAll) == KKRotationAxesAll || k == 2)
+    return KKBuildRotationMatrix(rx, ry, rz);
+  if (k == 1)
+    return KKBuildRotationMatrix(0.0f, ry, 0.0f);
+  return KKBuildRotationMatrix(rx, ry, 0.0f); // X ring: Ry * Rx
+}
+
+/// Fill a KKRotationOSCParams' per-ring U/V bases from three per-ring display
+/// matrices (X ring spans col1/col2, Y spans col0/col2, Z spans col0/col1 -
+/// the ring's own axis column is its normal and is dropped). Declared here
+/// (not the shared shader-types header) so Metal never sees KKRotMatrix3; the
+/// params struct type is opaque via the macro-free field writes below.
+#define KKRotationOSCParamsSetRingBases(p, mx, my, mz)                         \
+  do {                                                                         \
+    (p)->ringUX = (mx).col1;                                                   \
+    (p)->ringVX = (mx).col2;                                                   \
+    (p)->ringUY = (my).col0;                                                   \
+    (p)->ringVY = (my).col2;                                                   \
+    (p)->ringUZ = (mz).col0;                                                   \
+    (p)->ringVZ = (mz).col1;                                                   \
+  } while (0)
 
 /// Identity rotation.
 static inline KKRotMatrix3 KKRotMatrixIdentity(void) {
@@ -283,6 +328,72 @@ KKRotationComposeAxisDelta(int axis, double dAngle, double pressRx,
   *outRx = rx;
   *outRy = ry;
   *outRz = rz;
+}
+
+/// Cmd-snap step for ring drags, shared by the viewer + mini surfaces.
+static const double KKRingDragSnapRad = 15.0 * M_PI / 180.0;
+
+/// Unit Y-DOWN screen tangent of ring `k` at t-angle `t` in display frame `m`
+/// (ring point = r(cos t·U + sin t·V) => tangent = -sin t·U + cos t·V).
+/// Captured at press so the drag stays consistent even if the pose is nudged
+/// mid-drag.
+static inline void KKRingScreenTangentAtT(KKRotMatrix3 m, int k, double t,
+                                          double *outTx, double *outTy) {
+  simd_float3 U, V;
+  KKRingBasis(m, k, &U, &V);
+  double tx = -sin(t) * U.x + cos(t) * V.x;
+  double ty = -sin(t) * U.y + cos(t) * V.y;
+  double len = sqrt(tx * tx + ty * ty);
+  if (len > 1e-6) {
+    tx /= len;
+    ty /= len;
+  }
+  *outTx = tx;
+  *outTy = ty;
+}
+
+/// Tangent-projected ring-drag delta in radians: the screen displacement
+/// (dx, dyYDown - callers flip their Y-up mouse dy) projected on the press
+/// tangent, per-axis user-natural sign {+1,-1,+1}, scaled by the ring radius.
+/// `snap` quantizes the OBJECT-axis delta to KKRingDragSnapRad BEFORE
+/// composing - snapping decomposed Euler values instead jiggles the other two
+/// axes (their decomposition shifts tick-to-tick as the object rotates).
+static inline double KKRingDragAngleDelta(int axis, double dx, double dyYDown,
+                                          double tanX, double tanY,
+                                          double radius, BOOL snap) {
+  double projected = dx * tanX + dyYDown * tanY;
+  double sign = (axis == 1) ? -1.0 : 1.0;
+  double dAngle = sign * projected / radius;
+  if (snap)
+    dAngle = round(dAngle / KKRingDragSnapRad) * KKRingDragSnapRad;
+  return dAngle;
+}
+
+/// Apply a ring drag delta to the press-time Euler pose. A FULL 3-axis set
+/// composes around the object's current ring axis (trackball feel, decomposed
+/// nearest lastWritten for continuity past ±90°). A PARTIAL set uses a plain
+/// Euler increment on the grabbed axis - the composed pose generally needs
+/// the disabled axes to represent it (dropping them corrupts the pose into a
+/// global-axis-like drift), so the slider semantic is exact and stable inside
+/// the storable subspace.
+static inline void KKRingApplyDragDelta(int axis, BOOL fullAxes, double dAngle,
+                                        double pressRx, double pressRy,
+                                        double pressRz, double *inOutLastRx,
+                                        double *inOutLastRy,
+                                        double *inOutLastRz, double *outRx,
+                                        double *outRy, double *outRz) {
+  if (fullAxes) {
+    KKRotationComposeAxisDelta(axis, dAngle, pressRx, pressRy, pressRz,
+                               inOutLastRx, inOutLastRy, inOutLastRz, outRx,
+                               outRy, outRz);
+    return;
+  }
+  *outRx = pressRx + (axis == 0 ? dAngle : 0.0);
+  *outRy = pressRy + (axis == 1 ? dAngle : 0.0);
+  *outRz = pressRz + (axis == 2 ? dAngle : 0.0);
+  *inOutLastRx = *outRx;
+  *inOutLastRy = *outRy;
+  *inOutLastRz = *outRz;
 }
 
 #ifdef __cplusplus

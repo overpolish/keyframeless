@@ -22,6 +22,8 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 @property(nonatomic, strong)
     NSMutableDictionary<NSString *, id<MTLRenderPipelineState>> *pipelineStates;
 @property(nonatomic, strong) NSLock *pipelineStatesLock;
+/// Throttle for the exhaustion warning, guarded by commandQueueCacheLock.
+@property(nonatomic) NSTimeInterval lastExhaustionLog;
 
 - (instancetype)initWithDevice:(id<MTLDevice>)device;
 - (nullable id<MTLCommandQueue>)getNextFreeCommandQueue;
@@ -75,15 +77,36 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 
 - (id<MTLCommandQueue>)getNextFreeCommandQueue {
   id<MTLCommandQueue> result = nil;
+  NSUInteger inUse = 0;
   [_commandQueueCacheLock lock];
-  for (NSUInteger i = 0; result == nil && i < kMaxCommandQueues; i++) {
+  for (NSUInteger i = 0; i < kMaxCommandQueues; i++) {
     NSMutableDictionary *dict = [_commandQueueCache objectAtIndex:i];
-    if (![[dict objectForKey:kKey_InUse] boolValue]) {
+    if ([[dict objectForKey:kKey_InUse] boolValue]) {
+      inUse++;
+      continue;
+    }
+    if (result == nil) {
       [dict setObject:@YES forKey:kKey_InUse];
       result = [dict objectForKey:kKey_CommandQueue];
+      inUse++;
     }
   }
+  BOOL exhausted = (result == nil);
+  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+  BOOL shouldLog = exhausted && (now - _lastExhaustionLog) > 3.0;
+  if (shouldLog)
+    _lastExhaustionLog = now;
   [_commandQueueCacheLock unlock];
+  // Exhaustion used to be silent, and a caller that gets nil here quietly
+  // degrades - a skipped buffer pass, a dropped mini publish, motion blur
+  // falling back. The pool is fixed size and process-wide, so a single caller
+  // that leaks a checkout shrinks it permanently for every instance sharing
+  // this process. Throttled so a sustained shortage cannot flood the log.
+  if (shouldLog)
+    KKLogWarn(@"KKMetalDeviceCache: command queue pool EXHAUSTED (%lu/%lu in "
+              @"use) - a caller is not returning its checkout, or too many are "
+              @"live at once",
+              (unsigned long)inUse, (unsigned long)kMaxCommandQueues);
   return result;
 }
 

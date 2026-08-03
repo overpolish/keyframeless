@@ -91,7 +91,20 @@ static const CGFloat kEdgeW = 16.0; // overflow-shadow gradient width
   // Hug the pill content so the bar can be right-aligned by Auto Layout
   // (label-left / control-right, matching the rest of the popover). When
   // the host pins it narrower than this, `layout` falls back to scrolling.
-  return _row.intrinsicContentSize;
+  NSSize s = _row.intrinsicContentSize;
+  // Never advertise more than the host can give: an over-wide intrinsic
+  // inflates the host's fitting width (see maxIntrinsicWidth).
+  if (_maxIntrinsicWidth > 0)
+    s.width = MIN(s.width, _maxIntrinsicWidth);
+  return s;
+}
+
+- (void)setMaxIntrinsicWidth:(CGFloat)maxIntrinsicWidth {
+  if (fabs(_maxIntrinsicWidth - maxIntrinsicWidth) < 0.5)
+    return;
+  _maxIntrinsicWidth = maxIntrinsicWidth;
+  [self invalidateIntrinsicContentSize];
+  self.needsLayout = YES;
 }
 
 - (BOOL)isFlipped {
@@ -130,6 +143,39 @@ static const CGFloat kEdgeW = 16.0; // overflow-shadow gradient width
         (float)MAX(0.0, MIN(1.0, (scrollable - offX) / kEdgeW));
   }
   [CATransaction commit];
+}
+
+- (CGFloat)scrollOffsetX {
+  return _scroll.contentView.bounds.origin.x;
+}
+
+- (void)setScrollOffsetX:(CGFloat)scrollOffsetX {
+  // Lay out first: right after a rebuild the row still has a zero frame, so the
+  // scrollable range would clamp every offset to 0.
+  [self layoutSubtreeIfNeeded];
+  CGFloat scrollable =
+      MAX(0.0, NSWidth(_row.frame) - _scroll.contentView.bounds.size.width);
+  CGFloat x = MAX(0.0, MIN(scrollable, scrollOffsetX));
+  [_scroll.contentView scrollToPoint:NSMakePoint(x, 0)];
+  [_scroll reflectScrolledClipView:_scroll.contentView];
+}
+
+- (void)revealPillAtIndex:(NSInteger)index {
+  [self layoutSubtreeIfNeeded];
+  NSRect pill = [_row pillRectAtIndex:index];
+  if (NSIsEmptyRect(pill))
+    return;
+  CGFloat visW = _scroll.contentView.bounds.size.width;
+  if (NSWidth(_row.frame) - visW <= 0.5)
+    return; // nothing scrolls, so nothing can be hidden
+  CGFloat off = _scroll.contentView.bounds.origin.x;
+  if (NSMinX(pill) < off)
+    off = NSMinX(pill);
+  else if (NSMaxX(pill) > off + visW)
+    off = NSMaxX(pill) - visW;
+  else
+    return;
+  self.scrollOffsetX = off;
 }
 
 - (void)setStates:(NSArray<NSNumber *> *)states {

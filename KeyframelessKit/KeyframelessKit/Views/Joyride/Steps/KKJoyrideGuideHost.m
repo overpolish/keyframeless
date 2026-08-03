@@ -8,7 +8,7 @@
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 // OSC warm-up timing: after the zoom-to-fit AppleScript, the host needs time
 // to actually resize the viewer before the guide reads spotlight positions.

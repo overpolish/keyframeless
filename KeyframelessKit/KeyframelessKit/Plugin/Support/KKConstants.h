@@ -21,10 +21,8 @@ static const UInt32 kKKParamTimingExpanded __attribute__((unused)) = 9908;
 /// these but no current code reads or registers them. Do not reuse:
 ///   9901–9904, 9906, 9907, 9909–9917 (legacy 3-phase factor engine)
 ///   9918 (legacy always-on multi-stage gate)
-///   9920, 9921 (legacy MultiStage Selected* int sliders - selection is
-///               carried in the lanes JSON's `sel` field instead)
-/// Multi-stage timing parameters:
-static const UInt32 kKKParamMultiStageData __attribute__((unused)) = 9919;
+///   9919 (legacy multi-stage lanes blob), 9930 (its native-string mirror)
+///   9920, 9921 (legacy MultiStage Selected* int sliders)
 
 /// Hidden per-instance UUID - keys the static per-instance state map so
 /// multiple copies of a plugin on the same timeline don't share state.
@@ -40,16 +38,6 @@ static const UInt32 kKKParamTimingLoopEnabled __attribute__((unused)) = 9923;
 /// read by the render path via `KKTimelineLaneValueAtFraction`.
 static const UInt32 kKKParamTimelineData __attribute__((unused)) = 9931;
 
-/// Native-string mirror of `kKKParamMultiStageData`. The blob is
-/// unreadable from the OSC's apiManager (FxPlug XPC scope rule); native
-/// strings DO read cold, so we mirror the same JSON here. Canonical
-/// store stays the blob (preserves undo); the mirror is a write-through
-/// cache kept in sync at every `KKWriteMultiStageJSONDeduped` tick and
-/// refreshed on cmd-Z echo. Cold-boot OSC ticks seed `lanesSnapshot`
-/// from this mirror so all existing snapshot consumers (oscVisible,
-/// bezier path, etc.) just work without per-consumer plumbing.
-static const UInt32 kKKParamMultiStageDataMirror __attribute__((unused)) = 9930;
-
 /// Motion blur parameters (9924–9929). Registered by
 /// `addMotionBlurParametersWithAPI:` as a custom group with an Enabled
 /// checkbox; shutter/quality reveal when enabled.
@@ -60,6 +48,13 @@ static const UInt32 kKKParamMotionBlurQuality __attribute__((unused)) = 9927;
 static const UInt32 kKKParamMotionBlurExpanded __attribute__((unused)) = 9928;
 static const UInt32 kKKParamMotionBlurTransitionsOnly __attribute__((unused)) =
     9929;
+
+/// Hidden STRING nonce the KKLinkWatcher rewrites (inside an action scope -
+/// unscoped writes are silently ignored) to force a re-render when a watched
+/// link-bus source changes. Every honored write charges one undo entry, so
+/// the watcher wraps each nudge burst in an FxUndoAPI undo group; one source
+/// edit costs one stray "Update Link" entry.
+static const UInt32 kKKParamRenderNudgeString __attribute__((unused)) = 9933;
 
 /// Custom-UI motion blur state (KKDataBlob, JSON
 /// `{enabled,shutterAngle,samples}`). Replaces the native 9924–9929 group when

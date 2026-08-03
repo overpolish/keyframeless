@@ -4,9 +4,22 @@
  */
 
 #import "KKConstants.h"
+#import "KKCurveDefaults.h"
 #import "KKDataBlob.h"
 #import "KKHostInfo.h"
+#import "KKLinkBus.h"
+#import "KKLog.h"
 #import "KKPluginInstanceState.h"
+#import <os/lock.h>
+
+// Process-wide (all this plugin's instances share ONE XPC service process) live
+// set + reconcile debounce. -pluginInstanceAddedToDocument adds each existing
+// instance's uuid on document load; ~5s after the load burst settles we remove
+// any manifest whose uuid never showed up (an effect deleted before this load).
+static NSMutableSet<NSString *> *gKKLiveUUIDs;
+static os_unfair_lock gKKLiveLock = OS_UNFAIR_LOCK_INIT;
+static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
+
 #import "KKPlugin_Private.h"
 #import "KKUpdateChecker.h"
 #import <AppKit/AppKit.h>
@@ -14,6 +27,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
+#import <QuartzCore/QuartzCore.h>
 
 @interface KKPrincipalDelegate : NSObject <FxPrincipalDelegate>
 + (instancetype)shared;
@@ -45,7 +59,38 @@
 @implementation KKPlugin
 #pragma clang diagnostic pop
 
-@synthesize timingHeader = _timingHeader;
+- (void)kkInActionScope:(void (^)(void))block {
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act)
+    return;
+  [act startAction:self];
+  @try {
+    if (block)
+      block();
+  } @finally {
+    // An exception escaping an open scope wedges FCP's undo machinery (its
+    // next beginWithUndoState aborts) - always close.
+    [act endAction:self];
+  }
+}
+
+- (void)kkInParamAction:(void (^)(id<FxParameterRetrievalAPI_v6> getAPI,
+                                  id<FxParameterSettingAPI_v5> setAPI,
+                                  CMTime actionTime))block {
+  id<PROAPIAccessing> api = self.apiManager;
+  [self kkInActionScope:^{
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    id<FxCustomParameterActionAPI_v4> act =
+        [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (block)
+      block(getAPI, setAPI, act ? [act currentTime] : kCMTimeInvalid);
+  }];
+}
+
 @synthesize motionBlurHeader = _motionBlurHeader;
 
 + (id)servicePrincipalDelegate {
@@ -56,6 +101,18 @@
   self = [super init];
   if (self) {
     _apiManager = apiManager;
+    // Sentinel for "never measured", so the first usable sample seeds the lead
+    // outright instead of the smoothing crawling up from a bogus zero.
+    _miniViewerPlayheadLead = -1.0;
+    // Warm the parameter-link app-group container off-thread at process start,
+    // so the first link resolve on the render thread doesn't stall on the ~1-2s
+    // cold container lookup mid-frame. One call covers every plugin (each
+    // FxPlug instance is its own XPC process); a no-op when nothing links.
+    [KKLinkBus warmUp];
+    // Scope the saved curve default to this plugin (Canvas and Mirage keep
+    // their own), so intervals created in this process start at the user's
+    // shape rather than the built-in EaseInOut.
+    KKDefaultsSetActiveScope([self presetPluginKey]);
   }
   return self;
 }
@@ -65,130 +122,210 @@
              ?: NSStringFromClass([self class]);
 }
 
-- (void)setTimingGroupExtraParamIDs:(NSArray<NSNumber *> *)ids {
-  objc_setAssociatedObject([self class], kKKTimingExtraIDs, [ids copy],
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+- (NSArray<KKLane *> *)linkableLanesForManifest {
+  return nil; // opt-out by default; a plugin opts in by overriding
 }
 
-- (NSArray<NSNumber *> *)timingGroupExtraParamIDs {
-  return objc_getAssociatedObject([self class], kKKTimingExtraIDs);
+- (NSArray<KKLinkLayerSource *> *)linkableLayersForManifest {
+  return nil; // flat source by default; layered plugins (Canvas) override
 }
 
-- (void)setLinkedParameterPairs:(NSArray<NSArray<NSNumber *> *> *)pairs {
-  objc_setAssociatedObject([self class], kKKLinkedPairs, [pairs copy],
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+- (NSString *)linkManifestEffectName {
+  NSString *n =
+      [NSBundle bundleForClass:[self class]].infoDictionary[@"CFBundleName"];
+  return n.length ? n : NSStringFromClass([self class]);
 }
 
-- (NSArray<NSArray<NSNumber *> *> *)linkedParameterPairs {
-  return objc_getAssociatedObject([self class], kKKLinkedPairs);
+- (NSString *)linkManifestDisplayName {
+  return [self linkManifestEffectName]; // no per-instance name by default
 }
 
-- (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time {
-  NSNumber *locking = objc_getAssociatedObject(self, kKKLinkedLocking);
-  if (locking.boolValue)
-    return YES;
+// One serial queue per process for every publish this plugin makes. Serial so
+// two ticks can never interleave their writes to the same manifest file (and so
+// the "last signature wins" order the gate establishes on the render thread is
+// the order the bus sees); background because nothing here needs the render
+// thread - the bus is file-based pub/sub that other clips poll, so a few
+// milliseconds of publish latency is invisible.
+static dispatch_queue_t KKLinkPublishQueue(void) {
+  static dispatch_queue_t q;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    q = dispatch_queue_create("co.overpolish.keyframeless.link-publish",
+                              dispatch_queue_attr_make_with_qos_class(
+                                  DISPATCH_QUEUE_SERIAL, QOS_CLASS_UTILITY, 0));
+  });
+  return q;
+}
 
-  CGEventFlags flags =
-      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-  BOOL cmdHeld = (flags & kCGEventFlagMaskCommand) != 0;
-  BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
+static const double kKKLinkRepublishSeconds = 10.0;
 
-  if (!cmdHeld && !optHeld) {
-    objc_setAssociatedObject(self, kKKLinkedSource, nil,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+- (BOOL)shouldPublishLinkManifestForSignature:(NSString *)signature {
+  double now = CACurrentMediaTime();
+  BOOL changed = ![signature isEqualToString:self.linkPublishSignature];
+  BOOL stale = self.linkPublishTimeMono <= 0.0 ||
+               (now - self.linkPublishTimeMono) > kKKLinkRepublishSeconds;
+  if (!changed && !stale)
     return NO;
-  }
-
-  NSArray<NSArray<NSNumber *> *> *pairs = self.linkedParameterPairs;
-  UInt32 otherID = 0;
-  BOOL found = NO;
-  for (NSArray<NSNumber *> *pair in pairs) {
-    if (pair.count < 2)
-      continue;
-    if (pair[0].unsignedIntValue == parameterID) {
-      otherID = pair[1].unsignedIntValue;
-      found = YES;
-      break;
-    }
-    if (pair[1].unsignedIntValue == parameterID) {
-      otherID = pair[0].unsignedIntValue;
-      found = YES;
-      break;
-    }
-  }
-  if (!found)
-    return NO;
-
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!getAPI || !setAPI)
-    return NO;
-
-  double valA = 0;
-  [getAPI getFloatValue:&valA fromParameter:parameterID atTime:time];
-
-  if (optHeld) {
-    objc_setAssociatedObject(self, kKKLinkedLocking, @YES,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [setAPI setFloatValue:valA toParameter:otherID atTime:time];
-    objc_setAssociatedObject(self, kKKLinkedLocking, @NO,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return YES;
-  }
-
-  double valB = 0;
-  [getAPI getFloatValue:&valB fromParameter:otherID atTime:time];
-
-  // First-tick guard: when prevSource is nil or different (i.e. this is
-  // the first parameterChanged for `parameterID` in this gesture), only
-  // record the ratio baseline - don't write the linked partner yet.
-  // A cmd-Z / cmd-Shift-Z echo for a linked param is a single one-shot
-  // event so it never reaches a "second tick", meaning the linked write
-  // never fires from a host-revert echo and the redo stack is preserved.
-  // A real cmd-drag emits parameterChanged at ~60 Hz so the second tick
-  // arrives within ~16 ms and the partner catches up imperceptibly.
-  NSNumber *prevSource = objc_getAssociatedObject(self, kKKLinkedSource);
-  BOOL firstTickForSource =
-      (prevSource == nil || prevSource.unsignedIntValue != parameterID);
-  // Default: clear the "last partner written" marker so plugins polling
-  // it via `linkedPartnerWrittenForLastChange` don't see a stale value
-  // from a previous call.
-  objc_setAssociatedObject(self, kKKLinkedLastPartner, nil,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  if (firstTickForSource) {
-    objc_setAssociatedObject(self, kKKLinkedSource, @(parameterID),
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    double ratio = (valA > 0) ? valB / valA : 1.0;
-    objc_setAssociatedObject(self, kKKLinkedRatio, @(ratio),
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return YES;
-  }
-
-  NSNumber *ratioNum = objc_getAssociatedObject(self, kKKLinkedRatio);
-  double ratio = ratioNum != nil ? ratioNum.doubleValue : 1.0;
-
-  objc_setAssociatedObject(self, kKKLinkedLocking, @YES,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  [setAPI setFloatValue:valA * ratio toParameter:otherID atTime:time];
-  objc_setAssociatedObject(self, kKKLinkedLocking, @NO,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  // Record the partner so the plugin can run any per-edit side effects
-  // (e.g. mirroring the value into a backing path blob) on the partner
-  // too. FCP does NOT echo `parameterChanged` for `setFloatValue:` calls
-  // made from inside another `parameterChanged`, so without this the
-  // partner write reaches the inspector but never triggers the plugin's
-  // normal parameterChanged-driven persistence path.
-  objc_setAssociatedObject(self, kKKLinkedLastPartner, @(otherID),
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
+  self.linkPublishSignature = signature;
+  self.linkPublishTimeMono = now;
   return YES;
 }
 
-- (UInt32)linkedPartnerWrittenForLastChange {
-  NSNumber *partner = objc_getAssociatedObject(self, kKKLinkedLastPartner);
-  return partner != nil ? partner.unsignedIntValue : 0;
+- (void)writeLinkManifest {
+  if ([self linkableLanesForManifest] == nil &&
+      [self linkableLayersForManifest] == nil)
+    return; // not a link source - don't re-enter the host to find that out
+  id<FxTimingAPI_v4> t =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!t)
+    return;
+  CMTime effStart = kCMTimeZero, dur = kCMTimeZero, effStartTL = kCMTimeZero;
+  [t startTimeForEffect:&effStart];
+  [t durationTimeForEffect:&dur];
+  [t timelineTime:&effStartTL fromInputTime:effStart];
+  [self writeLinkManifestWithClipStartSec:CMTimeGetSeconds(effStartTL)
+                              durationSec:CMTimeGetSeconds(dur)];
+}
+
+- (void)writeLinkManifestWithClipStartSec:(double)tlStart
+                              durationSec:(double)durSec {
+  NSArray<KKLane *> *lanes = [self linkableLanesForManifest];
+  NSArray<KKLinkLayerSource *> *layers = [self linkableLayersForManifest];
+  if (lanes == nil && layers == nil)
+    return; // not a link source
+  // CMTimeGetSeconds returns NaN for an INVALID CMTime, and the timing API
+  // hands one back when this fires before the clip is fully placed (applying
+  // by DOUBLE-CLICK in the effects browser hits this; a drag-apply does not).
+  // NaN fails every comparison, so `durSec <= 0.0` waves it through, and the
+  // NaN reaches NSJSONSerialization in the manifest writer, which RAISES on a
+  // non-finite number. Uncaught, that kills the XPC process, and FCP then
+  // aborts in POOnScreenControl hitCheckWithViewCoords: against the dead
+  // connection on the next mouse move. Test finiteness explicitly.
+  if (!isfinite(durSec) || !isfinite(tlStart)) {
+    KKLogWarn(@"KKPlugin: link manifest skipped, timing not ready "
+              @"(dur %f, tlStart %f)",
+              durSec, tlStart);
+    return;
+  }
+  if (durSec <= 0.0)
+    return;
+  // Everything the host has to answer is resolved HERE, inside the callback:
+  // the instance uuid (a parameter read, memoized per api object) and the
+  // document id (an FxProjectAPI call, memoized per uuid). Both are near-free
+  // after the first tick, and neither is legal off this thread. What follows
+  // them - assembling the manifest, serializing every referenceable lane into
+  // its own curve file, and the writes - touches no FxPlug API at all, so it
+  // goes to the publish queue.
+  NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
+  if (uuid.length == 0)
+    return; // no identity yet (fresh instance before any UI) - skip
+  NSString *documentID = KKLinkDocumentIDForAPI(self.apiManager);
+  NSString *effectName = [self linkManifestEffectName];
+  NSString *displayName = [self linkManifestDisplayName];
+  dispatch_async(KKLinkPublishQueue(), ^{
+    if (layers != nil) {
+      KKLinkWriteManifestWithLayersForUUID(uuid, documentID, lanes ?: @[],
+                                           layers, tlStart, durSec, effectName,
+                                           displayName);
+      // Publish each layer's actual curves so a `${uuid.layerID.label}`
+      // reference on another clip resolves.
+      for (KKLinkLayerSource *layer in layers)
+        KKLinkPublishReferenceableLayerForUUID(uuid, layer, tlStart,
+                                               tlStart + durSec);
+      if (lanes.count)
+        KKLinkPublishReferenceableLanesForUUID(uuid, lanes, tlStart,
+                                               tlStart + durSec);
+      return;
+    }
+    KKLinkWriteManifestForUUID(uuid, documentID, lanes, tlStart, durSec,
+                               effectName, displayName);
+    // Publish the same lanes' actual curves so a `${uuid.label}` reference on
+    // another clip resolves (the manifest only advertises the label set).
+    KKLinkPublishReferenceableLanesForUUID(uuid, lanes, tlStart,
+                                           tlStart + durSec);
+  });
+}
+
+// FxPlug's ADD signal (FxTileableEffect, @optional): fires when this instance
+// becomes part of the document - on ADD and on every document LOAD, once per
+// existing instance as it deserializes. There is NO removal counterpart in the
+// SDK (verified: FCP never tells a plugin an effect was deleted, and pins the
+// instance for undo so no teardown fires either). We lean on the ADD signal two
+// ways: register the manifest here (not only on render) so idle effects still
+// advertise themselves, and treat the load-time burst of uuids as the set of
+// LIVE effects - anything on the bus that isn't in it was deleted before this
+// load, so reconcile drops it. In-session deletes can't be caught (no signal);
+// they clear on the next reopen, or via the manual "Remove from list".
+- (void)pluginInstanceAddedToDocument {
+  NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
+  // Deferred, NEVER inline: -writeLinkManifest re-enters the host synchronously
+  // (KKLinkDocumentIDForAPI -> FxProjectAPI documentID:), and this callback
+  // fires DURING a document load, while FCP holds its own locks. Called inline
+  // that deadlocks outright - FCP's main thread sits in FFSharedLock's
+  // _writeLock while this thread waits on the host, and neither ever moves.
+  // What matters is that this callback RETURNS, so the load can finish and the
+  // locks drop; the manifest landing a beat later costs nothing, since its
+  // whole job is to advertise an idle effect that isn't rendering anyway.
+  //
+  // It runs on MAIN inside an ACTION SCOPE, not on a background queue: off the
+  // FxPlug callback the parameter APIs stop resolving, so -writeLinkManifest
+  // read no lanes and silently registered nothing ("link manifest skipped, no
+  // lanes/layers"). FxCustomParameterActionAPI_v4 is the only API that resolves
+  // before -startAction:, and the retrieval API resolves inside the scope. The
+  // scope only READS, so it adds no undo entry.
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    id<FxCustomParameterActionAPI_v4> actionAPI =
+        [s.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!actionAPI) {
+      KKLogWarn(@"KKPlugin: link manifest skipped, no action API");
+      return;
+    }
+    [actionAPI startAction:s];
+    [s writeLinkManifest];
+    [actionAPI endAction:s];
+  });
+  if (uuid.length == 0)
+    return;
+
+  // Debounce a reconcile ~5s after the LAST add of this load burst: any
+  // manifest for THIS effect whose uuid isn't in the live set by then belonged
+  // to a deleted effect (it never deserialized), so drop it. Scoped by effect
+  // name so one plugin never prunes another plugin's manifests. No staleness ->
+  // idle effects, which DO fire this callback on load, are never touched.
+  //
+  // The generation bump takes the live set's lock rather than standing alone:
+  // FxPlug delivers this callback on a CONCURRENT queue (one per instance
+  // during a load burst), so an unsynchronised ++ raced both its peers and the
+  // read below. Bumping it in the same critical section as the insert also
+  // makes "uuid is live" and "generation N" one atomic step, which is the real
+  // invariant - a generation only means anything paired with the set it was
+  // taken against.
+  NSString *effectName = [self linkManifestEffectName];
+  os_unfair_lock_lock(&gKKLiveLock);
+  if (!gKKLiveUUIDs)
+    gKKLiveUUIDs = [NSMutableSet set];
+  [gKKLiveUUIDs addObject:uuid];
+  NSInteger gen = ++gKKReconcileGen;
+  os_unfair_lock_unlock(&gKKLiveLock);
+
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        // Generation check and set snapshot under ONE acquisition: read apart,
+        // a later add landing between them would pass the check and then hand
+        // reconcile a set from a different generation.
+        os_unfair_lock_lock(&gKKLiveLock);
+        BOOL superseded = (gen != gKKReconcileGen);
+        NSSet<NSString *> *live = superseded ? nil : [gKKLiveUUIDs copy];
+        os_unfair_lock_unlock(&gKKLiveLock);
+        if (superseded)
+          return; // a later add is still arriving; its timer does the work
+        [KKLinkBus reconcileEffectName:effectName keepingUUIDs:live];
+      });
 }
 
 - (nullable id<MTLRenderPipelineState>)
@@ -220,13 +357,51 @@
                                            id<MTLRenderCommandEncoder> encoder,
                                            NSArray<id<MTLTexture>>
                                                *inputTextures))commands {
+  return [self encodeRenderCommandsForDestinationImage:destinationImage
+                                          sourceImages:sourceImages
+                                                 setup:nil
+                                              commands:commands];
+}
+
+- (BOOL)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                               sourceImages:
+                                   (NSArray<FxImageTile *> *)sourceImages
+                                      setup:(void (^)(id<MTLCommandBuffer>
+                                                          commandBuffer))setup
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures))commands {
+  return [self encodeRenderCommandsForDestinationImage:destinationImage
+                                          sourceImages:sourceImages
+                                          commandQueue:nil
+                                                 setup:setup
+                                              commands:commands];
+}
+
+- (BOOL)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                               sourceImages:
+                                   (NSArray<FxImageTile *> *)sourceImages
+                               commandQueue:(id<MTLCommandQueue>)suppliedQueue
+                                      setup:(void (^)(id<MTLCommandBuffer>
+                                                          commandBuffer))setup
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures))commands {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   MTLPixelFormat pixelFormat =
       [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
   uint64_t registryID = destinationImage.deviceRegistryID;
 
   id<MTLCommandQueue> commandQueue =
-      [cache commandQueueWithRegistryID:registryID pixelFormat:pixelFormat];
+      suppliedQueue
+          ?: [cache commandQueueWithRegistryID:registryID
+                                   pixelFormat:pixelFormat];
   if (!commandQueue)
     return NO;
 
@@ -245,6 +420,10 @@
   id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
   commandBuffer.label = @"KKPlugin Command Buffer";
   [commandBuffer enqueue];
+
+  // Input preparation rides this buffer, ahead of the render encoder below.
+  if (setup)
+    setup(commandBuffer);
 
   MTLRenderPassColorAttachmentDescriptor *colorAttachment =
       [[MTLRenderPassColorAttachmentDescriptor alloc] init];
@@ -305,9 +484,13 @@
 
   [encoder endEncoding];
   [commandBuffer commit];
+  // The one mandatory round trip: FxPlug requires the destination filled before
+  // the render callback returns. On a supplied queue this also drains whatever
+  // the caller committed ahead of it.
   [commandBuffer waitUntilCompleted];
 
-  [cache returnCommandQueueToCache:commandQueue];
+  if (!suppliedQueue)
+    [cache returnCommandQueueToCache:commandQueue];
 
   return YES;
 }
@@ -411,7 +594,7 @@
   if (!sourceImages[0].ioSurface || !destinationImage.ioSurface) {
     if (outError) {
       *outError =
-          [NSError errorWithDomain:@"co.overpolish.keyframeless"
+          [NSError errorWithDomain:@"com.keyframeless"
                               code:-1
                           userInfo:@{
                             NSLocalizedDescriptionKey :
@@ -456,140 +639,40 @@
                                      }];
 }
 
-- (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
-                               paramIDs:(NSArray<NSNumber *> *)paramIDs
-                                 atTime:(CMTime)time {
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  BOOL forceShow = NO;
-  [paramGetAPI getBoolValue:&forceShow
-              fromParameter:forceShowParamID
-                     atTime:time];
-  if (!forceShow)
-    return NO;
-
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  for (NSNumber *paramID in paramIDs) {
-    UInt32 pid = paramID.unsignedIntValue;
-    FxParameterFlags cur = 0;
-    [paramGetAPI getParameterFlags:&cur fromParameter:pid];
-    FxParameterFlags want = cur & ~kFxParameterFlag_HIDDEN;
-    if (want != cur)
-      [paramSetAPI setParameterFlags:want toParameter:pid];
+- (nullable KKTimeline *)timelineStampedWithClipDuration:
+    (nullable KKTimeline *)timeline {
+  if (!timeline)
+    return timeline;
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime dur = kCMTimeZero;
+  [timingAPI durationTimeForEffect:&dur];
+  double durSec = CMTimeGetSeconds(dur);
+  if (durSec <= 0)
+    return timeline;
+  KKTimeline *out = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [out.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    KKLane *l = [lanes[i] copy];
+    l.lastKnownClipDuration = durSec;
+    lanes[i] = l;
   }
-  return YES;
+  out.lanes = lanes;
+  return out;
 }
 
 - (BOOL)forceShowAllParameters {
   return NO;
 }
 
-- (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
-                                          groupKey:(NSString *)groupKey
-                                            atTime:(CMTime)time {
-  return nil;
-}
-
-- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
-               forLabel:(NSString *)label
-               groupKey:(NSString *)groupKey
-                 atTime:(CMTime)time {
-  return NO;
-}
-
-- (void)setEditingDisabled:(BOOL)disabled
-              forLaneLabel:(NSString *)label
-                  groupKey:(NSString *)groupKey {
-}
-
-- (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
-                                    paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
-                                                    paramGetAPI {
-  return nil;
-}
-
-- (NSArray<KKTimingLane *> *)reconcileLanes:(NSArray<KKTimingLane *> *)existing
-                                     atTime:(CMTime)time
-                                paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
-                                                paramGetAPI {
-  return existing;
-}
-
-- (NSString *)kkReconcileFingerprintForAPI:(id<PROAPIAccessing>)apiManager {
-  return nil;
-}
-
-- (BOOL)usesMotionBlur {
-  return NO;
-}
-
-- (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
-  return [NSSet set];
-}
-
-- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
-  return [NSSet set];
-}
-
-- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
-  return [NSSet set];
-}
-
-- (NSString *)kkSelectedGroupKey {
-  return nil;
-}
-
-- (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey {
-}
-
-- (void)kkRefreshSequencerSelectedGroup {
-}
-
-- (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
-                               lane:(KKTimingLane *)lane
-                            atIndex:(NSInteger)index
-                             getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                             setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
-  // Default: no-op. Plugins override to keep out-of-band per-segment data
-  // in sync with the sequencer's segment count.
-}
-
-- (void)kkLoadLaneSegmentForLabel:(NSString *)label
-                         groupKey:(NSString *)groupKey
-                          segment:(NSInteger)segmentIndex
-                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
-  // Default: no-op. Scalar lanes use the values-based applyLaneValues:
-  // path; this hook is for plugins with out-of-band per-segment payloads.
-}
-
-- (void)kkCopyLaneSegmentForLabel:(NSString *)label
-                         groupKey:(NSString *)groupKey
-                      fromSegment:(NSInteger)srcSegmentIndex
-                        toSegment:(NSInteger)dstSegmentIndex
-                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
-  // Default: no-op. The scalar values copy handled by
-  // _handleSegmentValuesCopiedAtLane: covers value-based lanes.
-}
-
-- (NSString *)emptyLanesMessageWhenNoLanes {
-  return nil;
-}
-
-- (NSString *)emptyLanesIconNameWhenNoLanes {
-  return @"rectangle.on.rectangle.slash";
-}
-
 // FxPlug requires this when the plugin uses custom parameters - FCP needs
 // the value classes ahead of unarchiving project files. Subclasses can
 // override and call super to add their own custom-param IDs.
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
-  if (parameterID == kKKParamMultiStageData ||
+  if (parameterID == kKKParamTimelineData ||
+      parameterID == kKKParamMotionBlurData ||
       parameterID == kKKParamGradientData ||
       parameterID == kKKParamColorExpanded ||
-      parameterID == kKKParamTimingExpanded ||
       parameterID == kKKParamMotionBlurExpanded ||
       parameterID == kKKParamMotionBlurEnabled)
     return [NSSet setWithObject:[KKDataBlob class]];
@@ -597,3 +680,13 @@
 }
 
 @end
+
+FxImageTile *KKImageTileForParameterID(NSArray<FxImageTile *> *sourceImages,
+                                       UInt32 parameterID) {
+  for (FxImageTile *tile in sourceImages) {
+    if (tile.imageSource == kFxImageTileRequestSourceParameter &&
+        tile.parameterID == parameterID)
+      return tile;
+  }
+  return nil;
+}

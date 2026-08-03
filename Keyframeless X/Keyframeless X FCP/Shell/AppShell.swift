@@ -12,7 +12,6 @@ struct AppShell: View {
 	@ObservedObject var audioModel: AudioModel
 	@StateObject private var audioModelManager = AudioModelManager()
 	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
-	@State private var selectedTab: AppTab = .audio
 	@State private var availableVersion: String?
 	@State private var currentVersion: String = ""
 	@State private var updateDismissed = Self.dismissed
@@ -38,6 +37,17 @@ struct AppShell: View {
 				subdirectory: "AIKnowledge"
 			)
 		)
+		// Sonar's doc lives in KeyframelessKit, not here: Sonar publishes the data
+		// and Mirage consumes it, so neither owns the explanation. Registering the
+		// shared copy keeps one source rather than a duplicate that drifts.
+		AIKnowledgeRegistry.shared.register(
+			BundleMarkdownKnowledgeProvider(
+				name: "Sonar",
+				bundle: Bundle(for: KKUpdateChecker.self),
+				subdirectory: nil,
+				onlyTopicIDs: ["audio-sonar", "audio-shader-directive"]
+			)
+		)
 	}
 
 	static let aiProductContext =
@@ -59,7 +69,7 @@ struct AppShell: View {
 			}
 			topBar
 			Group {
-				switch selectedTab {
+				switch audioModel.selectedTab {
 				case .audio:
 					switch audioModel.stage {
 					case .setup:
@@ -83,6 +93,8 @@ struct AppShell: View {
 					case .edit:
 						AudioEditView(model: audioModel)
 					}
+				case .sonar:
+					SonarView(model: audioModel)
 				}
 			}
 		}
@@ -117,6 +129,15 @@ struct AppShell: View {
 					return
 				}
 			#endif
+			// Keyframeless AI (its own installer) update check: the AI popover
+			// fires this on open; run the helper's check + push into that banner.
+			AIUpdateBridge.setCheckHandler {
+				KKUpdateChecker.shared().checkAIUpdate { _ in
+					let c = KKUpdateChecker.shared()
+					AIUpdateBridge.setAvailableVersion(
+						c.aiAvailableVersion, notesURL: c.aiNotesURL?.absoluteString)
+				}
+			}
 			KKUpdateChecker.shared().check { available in
 				let checker = KKUpdateChecker.shared()
 				guard available, let version = checker.availableVersion else { return }
@@ -214,9 +235,17 @@ struct AppShell: View {
 				productContext: AppShell.aiProductContext,
 				onRun: { instruction in audioModel.runAITransform(instruction: instruction) }
 			)
-			PillTabBar(selected: $selectedTab)
+			PillTabBar(selected: $audioModel.selectedTab)
 			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
 			FeedbackButton(url: KKUpdateChecker.shared().feedbackURL)
+			// Trial covers Steno only; Sonar is free, so the button hides there.
+			if audioModel.selectedTab == .audio {
+				LicenseButton(
+					productID: LicenseProduct.steno,
+					productName: "Steno",
+					purchaseURL: URL(string: "https://keyframeless.com")
+				)
+			}
 			Spacer()
 			toolNav
 		}
@@ -231,23 +260,32 @@ struct AppShell: View {
 
 	@ViewBuilder
 	private var toolNav: some View {
-		switch selectedTab {
+		switch audioModel.selectedTab {
 		case .audio:
-			PillIconToggle<AudioModel.Stage>(
-				selection: $audioModel.stage,
-				options: [
-					(
-						label: String(localized: "Setup"),
-						systemImage: "sparkles.rectangle.stack.fill",
-						value: .setup
-					),
-					(
-						label: String(localized: "Edit"), systemImage: "bubble.and.pencil",
-						value: .edit
-					),
-				],
-				disabledValues: audioModel.audioClips.isEmpty ? [.edit] : []
-			)
+			stageToggle
+		case .sonar:
+			// Hidden (not EmptyView) so the top bar reserves the toggle's height
+			// and doesn't shift a pixel when switching tabs.
+			stageToggle.hidden()
 		}
 	}
+
+	private var stageToggle: some View {
+		PillIconToggle<AudioModel.Stage>(
+			selection: $audioModel.stage,
+			options: [
+				(
+					label: String(localized: "Setup"),
+					systemImage: "sparkles.rectangle.stack.fill",
+					value: .setup
+				),
+				(
+					label: String(localized: "Edit"), systemImage: "bubble.and.pencil",
+					value: .edit
+				),
+			],
+			disabledValues: audioModel.audioClips.isEmpty ? [.edit] : []
+		)
+	}
+
 }

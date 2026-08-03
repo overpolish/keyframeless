@@ -10,6 +10,8 @@
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasPathOps.h" // shared boolean / outline op cores
 #import "CanvasToolbar.h"
+#import <KeyframelessKit/KKLicense.h>
+#import <KeyframelessKit/KKLinkBus.h> // own-manifest link timing
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -22,19 +24,39 @@ NSString *const CanvasMiniViewerRequestPath =
     @"/tmp/canvas-miniviewer-request.json";
 
 NSString *CanvasMiniViewerDescriptorPathForUUID(NSString *uuid) {
-  if (!uuid.length)
-    return CanvasMiniViewerDescriptorPath;
-  return [NSString stringWithFormat:@"/tmp/canvas-miniviewer-%@.json", uuid];
+  return KKMiniViewerFeedDescriptorPath(@"canvas", uuid);
 }
 
 NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
-  if (!uuid.length)
-    return CanvasMiniViewerRequestPath;
-  return
-      [NSString stringWithFormat:@"/tmp/canvas-miniviewer-request-%@.json", uuid];
+  return KKMiniViewerFeedRequestPath(@"canvas", uuid);
 }
 
-@implementation CanvasMiniViewerRenderer
+@implementation CanvasMiniViewerRenderer {
+  double _linkTimingStart;
+  double _linkTimingDur;
+  CFAbsoluteTime _linkTimingFetchedAt;
+}
+
+- (BOOL)linkTimingStart:(double *)outStart duration:(double *)outDur {
+  CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+  if (_linkTimingFetchedAt == 0.0 || now - _linkTimingFetchedAt > 2.0) {
+    _linkTimingFetchedAt = now;
+    NSString *uuid = self.instanceUUID;
+    if (uuid.length) {
+      for (KKLinkManifest *m in [KKLinkBus allManifests])
+        if ([m.uuid isEqualToString:uuid]) {
+          _linkTimingStart = m.clipStartSec;
+          _linkTimingDur = m.clipDurSec;
+          break;
+        }
+    }
+  }
+  if (_linkTimingDur <= 0.0)
+    return NO;
+  *outStart = _linkTimingStart;
+  *outDur = _linkTimingDur;
+  return YES;
+}
 
 // The kit boundary popover owns suppressedHandleLabels (per-phase: lanes with
 // no keypose at this fraction). Canvas ALSO suppresses Rotation under a drawing
@@ -77,6 +99,7 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
 
 - (instancetype)init {
   if ((self = [super init])) {
+    self.watermarkProductID = KKLicenseProductCanvas;
     _positionMini =
         [[KKPositionMiniController alloc] initWithRenderer:self
                                                  laneLabel:@"Position"
@@ -338,13 +361,13 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
 
 - (KKLane *)templateLaneForLabel:(NSString *)label {
   for (KKLane *l in self.laneTemplates)
-    if ([l.label isEqualToString:label])
+    if ([l.key isEqualToString:label])
       return l;
   return [super templateLaneForLabel:label];
 }
 
 // Position is the only point handle; draw it as a ring (matches the viewer's
-// KKArcOSC + MagicMove's mini), with the motion-path arc through its keyposes.
+// KKArcOSC), with the motion-path arc through its keyposes.
 - (NSString *)pointLabel {
   return @"Position";
 }
@@ -354,11 +377,8 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 
 // The Position handle is an arc (drawn on its own path), so this only sizes the
-// scale-box corner/edge point handles - shrink them so they aren't oversized
-// (matches MagicMove / Rounded).
-- (CGFloat)pointHandleSizeScale {
-  return 0.6;
-}
+// (pointHandleSizeScale: the base's KKOSCAnchorDotScale default already
+// matches the path-anchor dots - no override needed.)
 
 // Canvas has no Crop lane, so suppress the base's default crop handles.
 - (NSString *)cropLabel {

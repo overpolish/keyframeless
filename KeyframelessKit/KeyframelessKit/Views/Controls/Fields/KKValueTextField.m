@@ -5,6 +5,7 @@
 
 #import "KKValueTextField.h"
 
+#import "KKFieldEditorSupport.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 
@@ -42,6 +43,7 @@ static NSCursor *KKBlankCursor(void) {
   BOOL _userClickPending;
   BOOL _kkEditing;
   BOOL _inMouseDown;
+  id _outsideClickMon;
 }
 
 + (instancetype)valueField {
@@ -180,30 +182,16 @@ static NSCursor *KKBlankCursor(void) {
 }
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
   NSText *editor = self.currentEditor;
-  // In an FxPlug ViewBridge popover there's no Edit menu, so the standard
-  // Cmd-A / C / V / X key equivalents never route to the field editor. Dispatch
-  // them to it explicitly while we're being edited.
-  if (editor &&
-      (event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask) ==
-          NSEventModifierFlagCommand) {
-    NSString *key = event.charactersIgnoringModifiers.lowercaseString;
-    if ([key isEqualToString:@"a"]) {
-      [editor selectAll:nil];
-      return YES;
-    }
-    if ([key isEqualToString:@"c"]) {
-      [editor copy:nil];
-      return YES;
-    }
-    if ([key isEqualToString:@"v"]) {
-      [editor paste:nil];
-      return YES;
-    }
-    if ([key isEqualToString:@"x"]) {
-      [editor cut:nil];
-      return YES;
-    }
+  // Escape ends the edit and drops focus (like a native field). In a ViewBridge
+  // popover the host stays key, so Escape arrives here as a key equivalent, not
+  // a cancelOperation: - handle it explicitly.
+  if (editor && event.keyCode == 53) {
+    [self.window makeFirstResponder:nil];
+    return YES;
   }
+  // Cmd-A/C/V/X (no Edit menu in a ViewBridge popover to route them).
+  if (KKHandleEditMenuKeyEquivalent(editor, event))
+    return YES;
   if (editor) {
     [editor keyDown:event];
     return YES;
@@ -214,6 +202,12 @@ static NSCursor *KKBlankCursor(void) {
   BOOL ok = [super becomeFirstResponder];
   if (ok) {
     _kkEditing = YES;
+    // Install the click-away monitor HERE, not in textDidBeginEditing: these
+    // fields scrub, so mouseDown runs its own event loop and consumes the
+    // mouse-up. The field editor then gets installed via makeFirstResponder:
+    // WITHOUT the interactive begin that posts the begin-editing notification,
+    // so textDidBeginEditing: never fires. becomeFirstResponder always does.
+    [self _installOutsideClickMonitor];
     [self _styleFieldEditor];
     // The field editor may not be installed yet on this runloop tick;
     // re-apply next tick so the accent caret/selection actually takes.
@@ -225,29 +219,69 @@ static NSCursor *KKBlankCursor(void) {
   return ok;
 }
 - (void)_styleFieldEditor {
-  NSText *ed = self.currentEditor;
-  if (![ed isKindOfClass:[NSTextView class]])
-    return;
-  NSTextView *editor = (NSTextView *)ed;
-  NSColor *accent = [NSColor accentMatchingHost];
-  editor.insertionPointColor = accent;
-  editor.selectedTextAttributes = @{
-    NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
-    NSForegroundColorAttributeName : [NSColor labelColor],
-  };
+  KKStyleFieldEditorAccent(self.currentEditor);
 }
+
+// While editing, a click outside this field ends the edit (drops focus). The
+// ViewBridge popover doesn't resign fields on a click that lands on a
+// non-responder (another slider, the mini-viewer, empty space), so a monitor
+// bridges that gap. Runs only between textDidBeginEditing/textDidEndEditing.
+- (void)_installOutsideClickMonitor {
+  if (_outsideClickMon)
+    return;
+  __weak typeof(self) weak = self;
+  _outsideClickMon = [NSEvent
+      addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown |
+                                           NSEventMaskRightMouseDown
+                                   handler:^NSEvent *(NSEvent *e) {
+                                     __strong typeof(weak) s = weak;
+                                     if (!s)
+                                       return e;
+                                     // Monitor is alive only while focused, so
+                                     // no currentEditor guard (it can read nil
+                                     // mid-routing and wrongly skip the
+                                     // resign).
+                                     NSRect r = [s convertRect:s.bounds
+                                                        toView:nil];
+                                     BOOL inField =
+                                         e.window == s.window &&
+                                         NSPointInRect(e.locationInWindow, r);
+                                     if (!inField)
+                                       [s.window makeFirstResponder:nil];
+                                     return e;
+                                   }];
+}
+- (void)_removeOutsideClickMonitor {
+  if (_outsideClickMon) {
+    [NSEvent removeMonitor:_outsideClickMon];
+    _outsideClickMon = nil;
+  }
+}
+- (void)dealloc {
+  [self _removeOutsideClickMonitor];
+}
+
 - (void)textDidBeginEditing:(NSNotification *)notification {
   [super textDidBeginEditing:notification];
   // Editing can re-start without a fresh becomeFirstResponder (the field stays
   // first responder and AppKit just re-enters editing). Set the guard here, at
   // the true session boundary, so a redisplay reliably skips us while live.
   _kkEditing = YES;
+  // The click-away monitor is installed in becomeFirstResponder (this
+  // notification doesn't fire for scrub fields). Belt-and-suspenders for a
+  // field editor that begins interactively (first keystroke) without us.
+  [self _installOutsideClickMonitor];
 }
 - (void)textDidEndEditing:(NSNotification *)notification {
   // Keep _kkEditing YES across super: super fires the sendsActionOnEndEditing
   // action, whose redisplay must skip this field (a stringValue write here
   // re-grabs focus + reselects). Only after super do we clear it and resign.
   [super textDidEndEditing:notification];
+  // Only tear the monitor down on a GENUINE end. A spurious end fires inside
+  // our own mouseDown (the instant we become first responder); removing then
+  // would kill the monitor we just installed in becomeFirstResponder.
+  if (!_inMouseDown)
+    [self _removeOutsideClickMonitor];
   _userClickPending = NO;
   _kkEditing = NO;
   // Return focus to the window (so keyboard shortcuts work again) only on a
@@ -269,7 +303,12 @@ static NSCursor *KKBlankCursor(void) {
 @end
 
 BOOL KKValueFieldHandleReturnCommand(NSWindow *window, SEL commandSelector) {
-  if (commandSelector == @selector(insertNewline:)) {
+  // Return commits, Escape cancels - both fully defocus. In this popover keys
+  // reach the field editor as doCommandBySelector (not performKeyEquivalent),
+  // so Escape lands here as cancelOperation: rather than the key-equivalent
+  // path in -performKeyEquivalent:.
+  if (commandSelector == @selector(insertNewline:) ||
+      commandSelector == @selector(cancelOperation:)) {
     [window makeFirstResponder:nil];
     return YES;
   }

@@ -85,7 +85,8 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
 }
 
 - (CGFloat)wrapWidth {
-  return (_wraps && _preferredMaxLayoutWidth > 0) ? _preferredMaxLayoutWidth : 0;
+  return (_wraps && _preferredMaxLayoutWidth > 0) ? _preferredMaxLayoutWidth
+                                                  : 0;
 }
 
 - (void)setPreferredMaxLayoutWidth:(CGFloat)w {
@@ -169,11 +170,10 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
 // fall back to the raw image at its own size.
 - (NSImage *)resolvedIconAtIndex:(NSInteger)i {
   NSImage *raw = _icons[i];
-  NSImage *sym = [raw
-      imageWithSymbolConfiguration:[NSImageSymbolConfiguration
-                                       configurationWithPointSize:kPillIconSize
-                                                           weight:
-                                                               NSFontWeightMedium]];
+  NSImage *sym = [raw imageWithSymbolConfiguration:
+                          [NSImageSymbolConfiguration
+                              configurationWithPointSize:kPillIconSize
+                                                  weight:NSFontWeightMedium]];
   return sym ?: raw;
 }
 
@@ -238,6 +238,35 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
     y += h + kPillLineSpacing;
   }
   return rects;
+}
+
+// A pill's icon in the pill's own ink. Template images would tint themselves,
+// but these arrive as ordinary bitmaps, so the tint is composited on a copy -
+// the original is cached and must not be recoloured in place.
+- (NSImage *)_tintedIconAtIndex:(NSUInteger)index tint:(NSColor *)tint {
+  NSImage *tinted = [[self resolvedIconAtIndex:index] copy];
+  [tinted lockFocus];
+  [tint set];
+  NSRectFillUsingOperation(
+      NSMakeRect(0, 0, tinted.size.width, tinted.size.height),
+      NSCompositingOperationSourceAtop);
+  [tinted unlockFocus];
+  return tinted;
+}
+
+// Vertically centred in the pill, horizontally wherever the caller says - which
+// is the only thing the labelled and icon-only pills disagree about.
+- (void)_drawIcon:(NSImage *)icon atX:(CGFloat)x centeredInRect:(NSRect)r {
+  // respectFlipped: this view IS flipped, and the -drawAtPoint: family ignores
+  // that - it draws an image bottom-up into a top-down context, so any icon
+  // that isn't vertically symmetric comes out upside down.
+  [icon drawInRect:NSMakeRect(x, NSMidY(r) - icon.size.height / 2.0,
+                              icon.size.width, icon.size.height)
+            fromRect:NSZeroRect
+           operation:NSCompositingOperationSourceOver
+            fraction:1.0
+      respectFlipped:YES
+               hints:nil];
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
@@ -310,20 +339,9 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
         on ? onColor : [[NSColor inspectorLabel] colorWithAlphaComponent:0.6];
 
     if (_iconAndLabel) {
-      NSImage *icon = [self resolvedIconAtIndex:i];
-      NSImage *tinted = [icon copy];
-      [tinted lockFocus];
-      [tint set];
-      NSRectFillUsingOperation(
-          NSMakeRect(0, 0, tinted.size.width, tinted.size.height),
-          NSCompositingOperationSourceAtop);
-      [tinted unlockFocus];
+      NSImage *tinted = [self _tintedIconAtIndex:i tint:tint];
       CGFloat contentX = NSMinX(r) + [self currentPillPadX];
-      CGFloat iconY = NSMidY(r) - tinted.size.height / 2.0;
-      [tinted drawAtPoint:NSMakePoint(contentX, iconY)
-                 fromRect:NSZeroRect
-                operation:NSCompositingOperationSourceOver
-                 fraction:1.0];
+      [self _drawIcon:tinted atX:contentX centeredInRect:r];
       NSDictionary *attrs = @{
         NSFontAttributeName : [self pillFont],
         NSForegroundColorAttributeName : tint,
@@ -333,20 +351,9 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
       CGFloat textY = NSMidY(r) - textSize.height / 2.0;
       [_labels[i] drawAtPoint:NSMakePoint(textX, textY) withAttributes:attrs];
     } else if (_icons) {
-      NSImage *icon = [self resolvedIconAtIndex:i];
-      NSImage *tinted = [icon copy];
-      [tinted lockFocus];
-      [tint set];
-      NSRectFillUsingOperation(
-          NSMakeRect(0, 0, tinted.size.width, tinted.size.height),
-          NSCompositingOperationSourceAtop);
-      [tinted unlockFocus];
+      NSImage *tinted = [self _tintedIconAtIndex:i tint:tint];
       CGFloat iconX = NSMidX(r) - tinted.size.width / 2.0;
-      CGFloat iconY = NSMidY(r) - tinted.size.height / 2.0;
-      [tinted drawAtPoint:NSMakePoint(iconX, iconY)
-                 fromRect:NSZeroRect
-                operation:NSCompositingOperationSourceOver
-                 fraction:1.0];
+      [self _drawIcon:tinted atX:iconX centeredInRect:r];
     } else {
       NSDictionary *attrs = @{
         NSFontAttributeName : [self pillFont],
@@ -362,6 +369,15 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
 
 - (BOOL)acceptsFirstMouse:(NSEvent *)event {
   return YES;
+}
+
+- (NSRect)pillRectAtIndex:(NSInteger)index {
+  if (index < 0 || index >= _count)
+    return NSZeroRect;
+  NSArray<NSValue *> *rects = [self pillRects];
+  if (index >= (NSInteger)rects.count)
+    return NSZeroRect;
+  return rects[index].rectValue;
 }
 
 - (NSRect)guidePillScreenRectAtIndex:(NSInteger)index {

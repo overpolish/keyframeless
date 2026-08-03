@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLaneCategoryNav.h" // KKLaneLayerKeysWithKeyposeNearFraction
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
+#import "KKLog.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
@@ -12,6 +14,7 @@
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
+#import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
@@ -113,14 +116,33 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 // cascade over the timeline so each controller resolves to its current value.
 - (NSArray<KKLane *> *)_manageVisibleLanes {
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   NSMutableArray<KKLane *> *visibleLanes = [NSMutableArray array];
   for (KKLane *l in [self _ownerScopedAvailableLanes])
     // Only animatable lanes are offered (a structural toggle / enum can't be
     // animated), matching the manage view's own init filter.
-    if (l.animatable && [condVisible containsObject:l.label])
+    if (l.animatable && [condVisible containsObject:l.key])
       [visibleLanes addObject:l];
   return visibleLanes;
+}
+
+// The owner a dropdown should open on. `constantsLaneFilter` comes FIRST when a
+// host supplies one: it is read live and answers YES for exactly the owner the
+// host has selected right now (Mirage's rack strip), whereas `activeLayerKey`
+// is our own stored copy, which a host that doesn't push its selection back to
+// us can outrun. `activeLayerKey` then covers the hosts with no filter (and the
+// keypose click that stored it).
+- (nullable NSString *)_hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes {
+  BOOL (^filter)(KKLane *) = self.constantsLaneFilter;
+  if (filter)
+    for (KKLane *l in lanes)
+      if (l.layerKey.length && filter(l))
+        return l.layerKey;
+  if (self.activeLayerKey.length)
+    for (KKLane *l in lanes)
+      if ([l.layerKey isEqualToString:self.activeLayerKey])
+        return self.activeLayerKey;
+  return nil;
 }
 
 - (void)_showManagePopoverFromView:(NSView *)anchorView {
@@ -145,8 +167,22 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
              [manageView updateCheckedLabels:[s _optedInLabelsSet]];
            }];
 
+  // Multi-owner lane sets (Mirage's shader rack) get a layer nav above the
+  // category pills, and it opens on the owner the host already has selected -
+  // the user came from that entry's strip, so that is the list they mean.
+  // `constantsLaneFilter` is the only live read of the host's selection the
+  // lanes view has; it answers YES for exactly the selected owner's lanes, so
+  // the first lane it accepts names the layer. There is no "all owners" page
+  // to fall back to: an unresolvable key lands on the FIRST layer, and a
+  // single-owner plugin gets no layer nav at all - today's flat list.
+  [manageView selectLayerKey:[self _hostSelectedLayerKeyIn:visibleLanes]];
+
   _openManageView = manageView;
 
+  // The Animated dropdown is an option picker (pick which lanes animate), so it
+  // dismisses on any outside click - a click elsewhere in the inspector closes
+  // it, unlike the companion editors that stay open to switch content.
+  _nextPopoverIsOptionType = YES;
   NSPopover *pop =
       [self _showPopoverWithContent:manageView
                            fromView:anchorView
@@ -175,7 +211,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   if (self.onManagePopoverWillOpen) {
     NSString *targetLabel =
         self.managePopoverSpotlightLabel
-            ?: [self _ownerScopedAvailableLanes].firstObject.label;
+            ?: [self _ownerScopedAvailableLanes].firstObject.key;
     __weak _KKManagePopoverView *weakManage = _openManageView;
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
@@ -229,15 +265,139 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   return owner;
 }
 
+// Opaque cover + centred spinner, parked over a popover's content area while
+// its controller is swapped. AppKit implements a controller change on a SHOWN
+// popover as a cross-fade from a SNAPSHOT of the outgoing content scaled into
+// the incoming frame, so a curve editor visibly stretched into the keypose
+// editor's shape before the real rows appeared. Covering BOTH sides means the
+// snapshot is of the loader and the cross-fade tweens loader->loader: the user
+// sees one steady panel resizing, never the stretch.
+static NSView *KKMakePopoverSwapCover(NSRect frame) {
+  NSView *cover = [[NSView alloc] initWithFrame:frame];
+  cover.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  cover.wantsLayer = YES;
+  // Fully opaque (the popover's own fill is half-alpha over the glass chrome) -
+  // anything less lets the outgoing rows read through the loader.
+  cover.layer.backgroundColor = [NSColor inspectorBackground].CGColor;
+  NSProgressIndicator *spinner = [[NSProgressIndicator alloc] init];
+  spinner.style = NSProgressIndicatorStyleSpinning;
+  spinner.controlSize = NSControlSizeSmall;
+  spinner.indeterminate = YES;
+  spinner.displayedWhenStopped = NO;
+  spinner.translatesAutoresizingMaskIntoConstraints = NO;
+  [cover addSubview:spinner];
+  [NSLayoutConstraint activateConstraints:@[
+    [spinner.centerXAnchor constraintEqualToAnchor:cover.centerXAnchor],
+    [spinner.centerYAnchor constraintEqualToAnchor:cover.centerYAnchor],
+  ]];
+  [spinner startAnimation:nil];
+  return cover;
+}
+
+// One display tick: the shortest the cover can possibly be up for and still
+// have hidden the frame the controller change is committed on. There is no
+// longer a fixed floor beyond it - the reveal is driven by the incoming
+// content's own layout settling (below), so a swap that resizes by a little
+// costs a little and one that doesn't resize at all costs nothing.
+static const CFTimeInterval kPopoverSwapMinCoverTime = 1.0 / 60.0;
+
+// How long the reveal will wait for the wrapper to stop moving before giving
+// up and showing whatever is there. Only reached if the popover is animating
+// unusually slowly - the stall detector below normally settles first.
+static const CFTimeInterval kPopoverSwapDeadline = 0.35;
+
+// Consecutive identical bounds samples that count as "the resize is over" for a
+// popover that never reaches the size we asked for (clamped to the screen edge,
+// or born at the target and never animated at all). Three ticks ~ 50ms, short
+// enough not to be felt and long enough not to fire on the frame before the
+// window animation starts.
+static const NSInteger kPopoverSwapStableTicks = 3;
+
+// Drop `cover` once the popover has finished resizing to `target`. The size
+// signal is the WRAPPER's own bounds: AppKit drives the content view's frame as
+// the popover window animates, so when it reaches the size we asked for, the
+// incoming content is laid out at its final width and safe to reveal.
+//
+// The wrapper does NOT always get there: a popover clamped to the screen edge
+// settles short of the requested size, and one whose incoming content is the
+// same size as the outgoing never moves at all. Waiting out a fixed deadline in
+// those cases was the whole of the swap's felt latency (0.6s + a 0.12s fade
+// against a fresh open's zero), so a stalled wrapper reveals as soon as its
+// bounds stop changing.
+static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
+                                       NSSize target) {
+  __weak NSView *weakCover = cover;
+  __weak NSView *weakWrapper = wrapper;
+  CFTimeInterval start = CACurrentMediaTime();
+  CFTimeInterval deadline = start + kPopoverSwapDeadline;
+  __block NSSize lastSize = NSMakeSize(-1.0, -1.0);
+  __block NSInteger stableTicks = 0;
+  __block void (^tick)(void) = nil;
+  tick = ^{
+    NSView *cv = weakCover;
+    NSView *wr = weakWrapper;
+    if (!cv || !wr) {
+      tick = nil;
+      return;
+    }
+    CFTimeInterval now = CACurrentMediaTime();
+    NSSize size = wr.bounds.size;
+    BOOL atTarget = fabs(size.width - target.width) < 0.5 &&
+                    fabs(size.height - target.height) < 0.5;
+    BOOL unchanged = fabs(size.width - lastSize.width) < 0.5 &&
+                     fabs(size.height - lastSize.height) < 0.5;
+    stableTicks = unchanged ? stableTicks + 1 : 0;
+    lastSize = size;
+    CFTimeInterval elapsed = now - start;
+    BOOL settled = elapsed >= kPopoverSwapMinCoverTime &&
+                   (atTarget || stableTicks >= kPopoverSwapStableTicks);
+    if (!settled && now < deadline) {
+      dispatch_after(
+          dispatch_time(DISPATCH_TIME_NOW, (int64_t)(NSEC_PER_SEC / 60)),
+          dispatch_get_main_queue(), ^{
+            if (tick)
+              tick();
+          });
+      return;
+    }
+    KKLogDebug(@"[Keypose] popover swap revealed after %.0fms (atTarget=%d "
+               @"stable=%ld deadline=%d)",
+               elapsed * 1000.0, (int)atTarget, (long)stableTicks,
+               (int)(now >= deadline));
+    [NSAnimationContext
+        runAnimationGroup:^(NSAnimationContext *ctx) {
+          ctx.duration = 0.08;
+          cv.animator.alphaValue = 0.0;
+        }
+        completionHandler:^{
+          [cv removeFromSuperview];
+        }];
+    tick = nil;
+  };
+  tick();
+}
+
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                          preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose {
-  // Dismiss any popover from a previous call first - the ApplicationDefined
-  // outside-click monitors don't fire click-to-click between two gaps in the
-  // same custom view, so a second gap would otherwise stack on the first.
-  // (Not reentrant: we're in a fresh mouseUp, not the old popover's callback.)
-  [_openContentPopover close];
+  // Consume the one-shot option-type marker: an option picker (OSC / filter /
+  // param-order / motion blur) dismisses on any outside click; a companion
+  // editor keeps open on in-inspector clicks (mode switches). Captured locally
+  // so the dismiss monitor below reads THIS popover's kind, not a later one's.
+  BOOL optionType = _nextPopoverIsOptionType;
+  _nextPopoverIsOptionType = NO;
+
+  // Capture the size the content WANTS before it is pinned into the wrapper.
+  // Once pinned, `content.bounds` tracks the wrapper - which AppKit lays out to
+  // the popover's CURRENT (outgoing) content size the moment the new controller
+  // is installed. Reading bounds after that point fed the OLD width straight
+  // back into -setContentSize:, so a swap between two differently-sized editors
+  // settled at the wrong width. `fittingSize` covers a content view that was
+  // handed to us with no frame at all.
+  NSSize desiredContentSize = content.bounds.size;
+  if (NSIsEmptyRect(content.bounds))
+    desiredContentSize = content.fittingSize;
 
   _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
   wrapper.frame = content.bounds;
@@ -253,28 +413,116 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   NSViewController *vc = [[NSViewController alloc] init];
   vc.view = wrapper;
 
-  // Reuse one popover instance (and its remote-hosted backing window) across
-  // opens - see _openContentPopover's declaration. Just swap its content; only
-  // alloc the first time.
+  // Swap content on the LIVE window ONLY when the new popover targets the SAME
+  // anchor+edge (same family / on-screen position, e.g.
+  // keypose<->gap<->constants beside the inspector). A DIFFERENT anchor (a cog
+  // popover at its button, or the reverse) needs a real close+reopen to
+  // re-position - the buttons inside fire on mouseDown so they survive that
+  // reopen.
+  BOOL isShown = _openContentPopover.isShown;
+  BOOL swapInPlace = isShown && anchor == _openPopoverAnchorView &&
+                     preferredEdge == _openPopoverPreferredEdge;
+  NSView *outgoingContent = _openContentView;
+  void (^outgoingOnClose)(void) = _openContentOnClose;
+
+  if (isShown && !swapInPlace) {
+    // Cross-anchor reopen: close the old popover first so its WillClose runs
+    // the OUTGOING cleanup (the closeObs reads the still-current
+    // _openContentOnClose / _openContentView) and tears down the old monitors,
+    // BEFORE we overwrite the live state and re-show at the new anchor.
+    [_openContentPopover close];
+  }
+
+  // New live state the ONE persistent monitor set reads.
+  _openContentView = content;
+  _openContentMiniViewer = KKFindMiniViewer(content);
+  _openPopoverIsOptionType = optionType;
+  _openPopoverShownAt = CACurrentMediaTime();
+  _openContentOnClose = [onClose copy];
+  _openPopoverPreferredEdge = preferredEdge;
+  _openPopoverAnchorView = anchor;
+  KKFindMiniViewer(content).grabsKeyFocusOnClick =
+      self.miniGrabsKeyFocusOnClick;
+  // Seed the play state. -setOpenPopoverLivePlaying: only fires on a FLIP, so a
+  // popover opened (or re-anchored, which rebuilds its content) mid-playback
+  // would otherwise sit at NO for the whole run and paint every handle over the
+  // moving preview.
+  _openContentMiniViewer.livePlaybackActive = _openPopoverLivePlaying;
+
+  if (swapInPlace) {
+    // Never close+reopen for a same-anchor switch - the swap keeps the window
+    // (and its event forwarding) alive. Run the OUTGOING content's cleanup
+    // (onClose + mini-viewer release) here since its WillClose won't fire.
+    if (outgoingOnClose)
+      outgoingOnClose();
+    // The loader exists ONLY to hide the stretch: AppKit implements a
+    // controller change on a shown popover as a cross-fade from a snapshot of
+    // the outgoing content scaled into the incoming frame, and the scaling is
+    // what reads as a smear. Same size in and out = no scaling = nothing to
+    // hide, so the swap runs bare and costs a plain cross-fade - which is what
+    // a fresh open looks like anyway. This is the common case for keypose <->
+    // constants and for curve <-> keypose at equal row counts, and covering it
+    // was pure latency.
+    NSSize outgoing = _openContentPopover.contentSize;
+    BOOL resizes = desiredContentSize.width > 0.0 &&
+                   desiredContentSize.height > 0.0 &&
+                   (fabs(outgoing.width - desiredContentSize.width) >= 0.5 ||
+                    fabs(outgoing.height - desiredContentSize.height) >= 0.5);
+    // Hide both sides of the swap behind a loader BEFORE the controller change
+    // so the snapshot AppKit tweens is of the cover, not of the outgoing rows.
+    // The outgoing cover goes away with its view; the incoming one is dropped
+    // once the popover has finished resizing (see KKRevealAfterPopoverResize).
+    NSView *incomingCover = nil;
+    if (resizes) {
+      NSView *outgoingRoot = _openContentPopover.contentViewController.view;
+      if (outgoingRoot) {
+        NSView *outgoingCover = KKMakePopoverSwapCover(outgoingRoot.bounds);
+        [outgoingRoot addSubview:outgoingCover
+                      positioned:NSWindowAbove
+                      relativeTo:nil];
+        [outgoingRoot displayIfNeeded];
+      }
+      incomingCover = KKMakePopoverSwapCover(wrapper.bounds);
+      [wrapper addSubview:incomingCover
+               positioned:NSWindowAbove
+               relativeTo:nil];
+    }
+    KKLogDebug(@"[Keypose] popover swap %.0fx%.0f -> %.0fx%.0f (%@)",
+               outgoing.width, outgoing.height, desiredContentSize.width,
+               desiredContentSize.height, resizes ? @"covered" : @"bare");
+    // Controller FIRST, then contentSize, then force layout - setting size
+    // first leaves the popover grown to the new size while the OLD content is
+    // still installed, so a taller editor (curve -> modulation, gap -> keypose)
+    // never repaints the exposed area.
+    _openContentPopover.contentViewController = vc;
+    if (desiredContentSize.width > 0.0 && desiredContentSize.height > 0.0)
+      _openContentPopover.contentSize = desiredContentSize;
+    [wrapper layoutSubtreeIfNeeded];
+    if (incomingCover)
+      KKRevealAfterPopoverResize(incomingCover, wrapper, desiredContentSize);
+    __weak NSView *weakOutgoing = outgoingContent;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      __strong NSView *oc = weakOutgoing;
+      if ([oc respondsToSelector:@selector(releaseMiniViewer)])
+        [(id)oc releaseMiniViewer];
+    });
+    return _openContentPopover;
+  }
+
+  // First open (or after a real dismiss): create/show + install the persistent
+  // monitors. Reuse one popover instance (and its remote-hosted backing window)
+  // across opens - see _openContentPopover's declaration. ApplicationDefined,
+  // not Transient: Transient closes on ANY event to a different window, but
+  // ViewBridge-routed FCP clicks target the inspector window - we replicate
+  // outside-click close with the local + global mouseDown monitors below.
   NSPopover *popover = _openContentPopover;
   if (!popover) {
     popover = [[NSPopover alloc] init];
-    // ApplicationDefined instead of Transient: Transient closes the popover if
-    // ANY event targets a different window - ViewBridge-routed clicks from FCP
-    // target the inspector window, not the popover, triggering that
-    // immediately. We replicate outside-click close with local + global
-    // mouseDown monitors.
     popover.behavior = NSPopoverBehaviorApplicationDefined;
   }
   popover.contentViewController = vc;
-  // Size the popover to THIS content before it shows. A reused instance keeps
-  // the previous open's contentSize, so without this the new content (e.g. a
-  // keypose mini-viewer) draws at the stale/small size and then pops to the
-  // right size on first layout. content.bounds is the caller-sized content
-  // (same value used for wrapper.frame above).
-  if (!NSIsEmptyRect(content.bounds))
-    popover.contentSize = content.bounds.size;
-
+  if (desiredContentSize.width > 0.0 && desiredContentSize.height > 0.0)
+    popover.contentSize = desiredContentSize;
   [popover showRelativeToRect:anchor.bounds
                        ofView:anchor
                 preferredEdge:preferredEdge];
@@ -300,17 +548,11 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   // view's multi-MB CAMetalLayer drawables every guide run. Weak so a stranded
   // monitor can't keep the window (and the whole mini-viewer) alive.
   __weak NSWindow *weakPopoverWindow = popoverWindow;
-  CFTimeInterval shownAt = CACurrentMediaTime();
   // Host app (FCP) is frontmost when the popover opens. Captured so an
   // outside-click in another app doesn't dismiss it.
   pid_t hostPID =
       NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
   __weak NSPopover *weakPopover = popover;
-  KKMiniViewerView *canvas = KKFindMiniViewer(content);
-  __weak NSView *weakContent = content;
-  // Let the mini grab key focus on click (so bare keys are handled in the
-  // popover) when the plugin opted in.
-  canvas.grabsKeyFocusOnClick = self.miniGrabsKeyFocusOnClick;
   __block id localMon = nil;
   __block id globalMon = nil;
   __block id magnifyLocalMon = nil;
@@ -357,21 +599,29 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                    queue:NSOperationQueue.mainQueue
               usingBlock:^(NSNotification *n) {
                 removeMonitors();
-                if (onClose)
-                  onClose();
+                // Fire the CURRENT content's onClose (a swap already fired the
+                // outgoing one), then clear the live state - a real close ends
+                // the session; the next show re-installs monitors.
+                __strong typeof(navWeakSelf) s = navWeakSelf;
+                void (^oc)(void) = s ? s->_openContentOnClose : nil;
+                NSView *closing = s ? s->_openContentView : nil;
+                if (s) {
+                  s->_openContentOnClose = nil;
+                  s->_openContentView = nil;
+                  s->_openContentMiniViewer = nil;
+                }
+                if (oc)
+                  oc();
                 // Free the closing content's mini-viewer GPU memory promptly.
                 // The backing window is NOT destroyed: _openContentPopover is
                 // reused across opens (its remote-hosted window can't be freed
                 // until inspector teardown anyway - see its declaration), so
                 // reusing one window bounds the CA layer-hosting IOSurface leak
                 // instead of creating a fresh stranded window per open. Defer
-                // one runloop so the popover's own close settles first. Target
-                // weakContent (the CLOSING content), never the reused popover's
-                // current content.
+                // one runloop so the popover's own close settles first.
                 dispatch_async(dispatch_get_main_queue(), ^{
-                  __strong NSView *c = weakContent;
-                  if ([c respondsToSelector:@selector(releaseMiniViewer)])
-                    [(id)c releaseMiniViewer];
+                  if ([closing respondsToSelector:@selector(releaseMiniViewer)])
+                    [(id)closing releaseMiniViewer];
                 });
                 [NSNotificationCenter.defaultCenter removeObserver:closeObs];
               }];
@@ -380,8 +630,10 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   // swatch's shared NSColorPanel is open - a separate window whose clicks would
   // otherwise count as "outside" and close the popover mid-edit).
   BOOL (^contentSuppressesDismiss)(void) = ^BOOL {
-    return [content respondsToSelector:@selector(suppressesPopoverDismiss)] &&
-           [(id)content suppressesPopoverDismiss];
+    __strong typeof(navWeakSelf) s = navWeakSelf;
+    NSView *c = s ? s->_openContentView : nil;
+    return [c respondsToSelector:@selector(suppressesPopoverDismiss)] &&
+           [(id)c suppressesPopoverDismiss];
   };
 
   // Scroll over the mini viewer = zoom/pan (events arrive global in
@@ -399,9 +651,30 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
       return YES; // couldn't resolve host - keep the old close-on-scroll
     return KKWindowOwnerPIDAtScreenPoint(NSEvent.mouseLocation) == hostPID;
   };
+  // A scroll only dismisses when it is a FRESH gesture the user made with the
+  // popover already up. Two cases are not:
+  //  - momentum (inertia) events, which keep arriving up to ~1.5s after the
+  //    fingers lift: scrolling the inspector to reach a row and clicking it
+  //    immediately meant the tail of that scroll dismissed the popover on its
+  //    first open.
+  //  - anything inside the same warm-up window the mouseDown monitor uses, for
+  //    the pre-momentum tail of the same gesture.
+  // Both read as "intermittent dismiss right after opening".
+  BOOL (^scrollIsFreshGesture)(NSEvent *) = ^BOOL(NSEvent *e) {
+    if (e.momentumPhase != NSEventPhaseNone)
+      return NO;
+    __strong typeof(navWeakSelf) s = navWeakSelf;
+    if (s && CACurrentMediaTime() - s->_openPopoverShownAt < 0.2)
+      return NO;
+    return YES;
+  };
   localMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                    handler:^NSEvent *(NSEvent *e) {
+                                     __strong typeof(navWeakSelf) s =
+                                         navWeakSelf;
+                                     KKMiniViewerView *canvas =
+                                         s ? s->_openContentMiniViewer : nil;
                                      if (canvas && [canvas pointerOverCanvas])
                                        return e; // let the responder handle it
                                      // Scroll inside a companion side panel
@@ -410,6 +683,8 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                              NSEvent.mouseLocation))
                                        return e;
                                      if (contentSuppressesDismiss())
+                                       return e;
+                                     if (!scrollIsFreshGesture(e))
                                        return e;
                                      if (!scrollInHostApp())
                                        return e;
@@ -421,12 +696,18 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   globalMon = [NSEvent
       addGlobalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                     handler:^(NSEvent *e) {
+                                      __strong typeof(navWeakSelf) s =
+                                          navWeakSelf;
+                                      KKMiniViewerView *canvas =
+                                          s ? s->_openContentMiniViewer : nil;
                                       if (canvas && [canvas pointerOverCanvas])
                                         return;
                                       if (KKPopoverPointInKeepAliveWindow(
                                               NSEvent.mouseLocation))
                                         return;
                                       if (contentSuppressesDismiss())
+                                        return;
+                                      if (!scrollIsFreshGesture(e))
                                         return;
                                       if (!scrollInHostApp())
                                         return;
@@ -474,19 +755,40 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
       if (owner != hostPID)
         return;
     }
-    // A click inside our own timeline (the graph that owns this popover) is a
-    // keypose re-target or timeline interaction, NOT a dismiss. Don't close:
-    // the graph re-presents IN PLACE on mouseUp, keeping the mini viewer + its
-    // overlay alive. Closing here tears the mini viewer down and rebuilds it
-    // into the reused ViewBridge window, where the fresh overlay loses drag
-    // tracking (OSC freezes after a keypose switch). This monitor fires on
-    // mousedown - before the graph's mouseUp re-present - so a flag set during
-    // the re-present loses the race; gate on the click LOCATION instead.
     __strong typeof(self) s = navWeakSelf;
-    if (s && s->_openStaticIsBoundary && s.window) {
-      NSRect lanesScreen = [s.window convertRectToScreen:[s convertRect:s.bounds
-                                                                 toView:nil]];
-      if (NSPointInRect(p, lanesScreen))
+    if (!s)
+      return;
+    // A click on the popover's OWN anchor (e.g. the cog toggle button) is that
+    // button's job to handle - it toggles the popover shut on mouseUp. Don't
+    // also close here on mouseDown, or the button's action re-opens it right
+    // after (the popover never closes from its own button). Applies to every
+    // popover; option pickers just have no other in-inspector keep-open case.
+    NSView *anchorV = s->_openPopoverAnchorView;
+    if (anchorV && anchorV.window) {
+      NSRect aScreen = [anchorV.window
+          convertRectToScreen:[anchorV convertRect:anchorV.bounds toView:nil]];
+      if (NSPointInRect(p, aScreen))
+        return;
+    }
+    // COMPANION editors (keypose / constants / curve / modulation) treat a
+    // click anywhere in the inspector's OWN UI as a mode switch, not a dismiss:
+    // clicking another keypose/gap/the constants button switches them IN PLACE
+    // (reconfigure / same-anchor swap), so closing here would fight that.
+    // OPTION pickers (OSC / filter / param-order / motion blur / presets /
+    // animated) instead dismiss on ANY click off them - including elsewhere in
+    // the inspector - because they are separate; opening a companion from that
+    // click re-shows at the correct anchor and its buttons fire on mouseDown so
+    // they survive the reopen. Read the kind live (the popover swaps content in
+    // place, so its current kind is on the ivar).
+    if (!s->_openPopoverIsOptionType) {
+      BOOL clickInInspector = NO;
+      NSView *cv = s.window.contentView;
+      if (s.window && cv) {
+        NSRect inspScreen = [s.window
+            convertRectToScreen:[cv convertRect:cv.bounds toView:nil]];
+        clickInInspector = NSPointInRect(p, inspScreen);
+      }
+      if (clickInInspector)
         return;
     }
     [weakPopover close];
@@ -498,8 +800,14 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                      // local event ~50-100ms after the joyride
                                      // global monitor fires; ignore events in
                                      // that window to avoid false-closing the
-                                     // popover.
-                                     if (CACurrentMediaTime() - shownAt < 0.2)
+                                     // popover. Read the live show-time
+                                     // (updated on every swap) so a swap gets
+                                     // its own warm-up window.
+                                     __strong typeof(navWeakSelf) sw =
+                                         navWeakSelf;
+                                     if (sw && CACurrentMediaTime() -
+                                                       sw->_openPopoverShownAt <
+                                                   0.2)
                                        return e;
                                      if (e.window != weakPopoverWindow)
                                        closeIfOutsidePopover();
@@ -511,9 +819,10 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                                closeIfOutsidePopover();
                                              }];
 
-  // Left/right arrows step to the prev/next keypose while the boundary popover
-  // is focused - but only when no value field is being edited (the field editor
-  // is first responder), so arrows still move the text cursor inside a field.
+  // Key handling while a content popover is open: Esc closes it, and (boundary
+  // popover only) left/right arrows step to the prev/next keypose. Both are
+  // suppressed while a value field or the code editor is being edited (its
+  // field editor is first responder), so those keys reach the text instead.
   keyMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                    handler:^NSEvent *(NSEvent *e) {
@@ -521,28 +830,42 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                          navWeakSelf;
                                      if (!s)
                                        return e;
-                                     if (!(s->_openContentPopover.isShown &&
-                                           s->_openStaticIsBoundary))
+                                     if (!s->_openContentPopover.isShown)
                                        return e;
                                      unsigned short kc = e.keyCode;
-                                     if (kc != 123 && kc != 124)
-                                       return e; // 123 = left, 124 = right
                                      // ViewBridge routes the popover's key
                                      // events through the host window, so
                                      // e.window never equals the popover window
                                      // - gate on the popover window's first
                                      // responder instead. An NSText (the field
-                                     // editor) means a value field is being
-                                     // edited: let the arrows move the text
-                                     // cursor rather than navigating. Also let
-                                     // them through when a field editor is
-                                     // active in the key window (e.g. renaming
-                                     // a layer in the companion panel, a
-                                     // separate window from the popover).
-                                     if ([weakPopoverWindow.firstResponder
+                                     // editor, incl. the code editor's text
+                                     // view) means a value field is being
+                                     // edited. Also check the key window for a
+                                     // field editor (e.g. renaming a layer in
+                                     // the companion panel, a separate window).
+                                     BOOL fieldEditing =
+                                         [weakPopoverWindow.firstResponder
                                              isKindOfClass:[NSText class]] ||
                                          [NSApp.keyWindow.firstResponder
-                                             isKindOfClass:[NSText class]])
+                                             isKindOfClass:[NSText class]];
+                                     // Esc closes the popover - unless a value
+                                     // field / code editor is focused, where it
+                                     // should cancel that edit instead.
+                                     if (kc == 53) { // Escape
+                                       if (fieldEditing)
+                                         return e;
+                                       [s->_openContentPopover close];
+                                       return nil; // consume
+                                     }
+                                     // Left/right step to the prev/next keypose
+                                     // (boundary popover only), when not
+                                     // editing a field, so arrows still move
+                                     // the text cursor inside a value field.
+                                     if (!s->_openStaticIsBoundary)
+                                       return e;
+                                     if (kc != 123 && kc != 124)
+                                       return e; // 123 = left, 124 = right
+                                     if (fieldEditing)
                                        return e;
                                      [s _navigateBoundaryPopoverDirection:
                                              (kc == 123 ? -1 : 1)];
@@ -551,6 +874,19 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
 
   _openContentPopover = popover;
   return popover;
+}
+
+- (NSRectEdge)_inspectorSidePreferredEdge {
+  NSRectEdge sideEdge = NSRectEdgeMinX;
+  if (self.window && self.window.screen) {
+    NSRect selfScreen = [self.window
+        convertRectToScreen:[self convertRect:self.bounds toView:nil]];
+    NSRect vis = self.window.screen.visibleFrame;
+    CGFloat spaceLeft = NSMinX(selfScreen) - NSMinX(vis);
+    CGFloat spaceRight = NSMaxX(vis) - NSMaxX(selfScreen);
+    sideEdge = (spaceLeft >= spaceRight) ? NSRectEdgeMinX : NSRectEdgeMaxX;
+  }
+  return sideEdge;
 }
 
 // Dedup tolerance for "same keypose, different lane" filmstrip cells. Two
@@ -706,6 +1042,17 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 
 @implementation KKTimelineLanesView (Popovers)
 
+- (NSString *)hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes {
+  return [self _hostSelectedLayerKeyIn:lanes];
+}
+
+- (NSSet<NSString *> *)openKeyposePopoverLayerKeys {
+  if (!_openStaticView || !_openStaticIsBoundary)
+    return [NSSet set];
+  return KKLaneLayerKeysWithKeyposeNearFraction([self _graphTimeline].lanes,
+                                                _openStaticBoundaryFraction);
+}
+
 - (void)closeManagePopover {
   [_openManagePopover close];
 }
@@ -742,6 +1089,11 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   // registered companion windows), then post the open/close signals a companion
   // panel (Canvas's layer list) observes - scoped to this lanes view via
   // `object`. Lets the OSC settings popover host the layer-list panel too.
+  // These are option pickers (OSC / filter / param-order / motion blur), so
+  // they dismiss on any outside click - a click elsewhere in the inspector
+  // closes them (unlike the companion editors that stay open to switch
+  // content).
+  _nextPopoverIsOptionType = YES;
   __weak typeof(self) weak = self;
   NSPopover *popover =
       [self _showPopoverWithContent:content
@@ -759,6 +1111,20 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   // isBoundary NO => every layer selectable (like the constants kind).
   KKPostStaticValuesPopoverDidOpen(popover, self, kind ?: @"osc", NO, 0.0);
   return popover;
+}
+
+- (NSPopover *)showOptionPopover:(NSView *)content
+                        fromView:(NSView *)anchor
+                   preferredEdge:(NSRectEdge)preferredEdge
+                         onClose:(void (^)(void))onClose {
+  // Option picker: dismiss on any outside click. No companion-panel DidOpen
+  // signal (unlike -showCompanionPopover:) - these have no layer list beside
+  // them.
+  _nextPopoverIsOptionType = YES;
+  return [self _showPopoverWithContent:content
+                              fromView:anchor
+                         preferredEdge:preferredEdge
+                               onClose:onClose];
 }
 
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor {
@@ -818,24 +1184,9 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     if (s.onLaneOptedIn)
       s.onLaneOptedIn(label);
   };
-  // Preview at the live playhead, not t=0. A property animated to start
-  // off-canvas (e.g. flying in) would otherwise render its first-frame pose,
-  // pushing the object + its handles out of the mini-viewer. Evaluate
-  // animatable lanes at the current playhead fraction so the preview matches
-  // the viewer. Constant lanes are single-keypose so editFraction doesn't move
-  // them, and the constants WRITE path ignores editFraction too (it always
-  // replaces the t=0 keypose - see -_timelineBySettingValues:forLabel:).
-  // boundaryEditing stays NO, so handle gating / writes are unchanged. Reset
-  // to 0 on close (see -_presentStaticValuesPopoverFromAnchor: onClose).
-  id constantsDel = self.miniViewerDelegate;
-  if ([constantsDel
-          respondsToSelector:NSSelectorFromString(@"setEditFraction:")]) {
-    double playFrac = [[(_activeTab == 1 ? (id)_advancedGraph : (id)_basicGraph)
-        valueForKey:@"playheadFraction"] doubleValue];
-    if (playFrac < 0.0)
-      playFrac = 0.0; // render tick hasn't pushed a playhead yet
-    [constantsDel setValue:@(playFrac) forKey:@"editFraction"];
-  }
+  // Playhead-fraction preview seeding (editFraction) happens in the presenter
+  // itself so the in-place keypose->constants switch gets it too - see the
+  // constants branch of -_presentStaticValuesPopoverFromAnchor:config:.
   [self _presentStaticValuesPopoverFromAnchor:anchor config:cfg];
 }
 
@@ -914,6 +1265,58 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 - (void)commitGuideConstantFieldForLabel:(NSString *)label
                                component:(NSInteger)component {
   [_openStaticView guideCommitFieldForLabel:label component:component];
+}
+
+- (void)setOpenPopoverLivePlaying:(BOOL)playing {
+  // Remembered even with no popover open: this is the only place the inspector
+  // tells us, and it tells us once per flip, so a popover presented later reads
+  // it from here (see the seed in -_showPopoverWithContent:).
+  _openPopoverLivePlaying = playing;
+  KKMiniViewerView *mini = _openContentMiniViewer;
+  if (!mini)
+    return;
+  // Only react to the play state flipping; per-frame redraws come from the feed
+  // poll picking up new source frames (each carries its own fraction tag), not
+  // from the playhead poller.
+  if (mini.livePlaybackActive == playing)
+    return;
+  mini.livePlaybackActive = playing;
+  // The feed's source is pinned to the editor's frame - a keypose boundary, or
+  // a stale request a prior keypose left behind (the constants editor writes
+  // none of its own). Without releasing it, only the transform would animate
+  // while the footage stayed frozen. Release the pin while playing so the feed
+  // serves the live playhead frame for BOTH keypose and constants; on stop,
+  // re-pin only a keypose so it snaps back to its frame (constants has nothing
+  // to pin - single-slot live just shows the current playhead, which it
+  // previews anyway).
+  if (playing)
+    [self _setOpenBoundaryRequestActive:NO];
+  else if (_openStaticIsBoundary)
+    [self _setOpenBoundaryRequestActive:YES];
+  else
+    [self _previewOpenConstantsAtFraction:[self _activeGraph].playheadFraction];
+  [mini setNeedsDisplay:YES];
+}
+
+- (void)_setOpenBoundaryRequestActive:(BOOL)active {
+  NSString *path = self.miniViewerRequestPath;
+  if (!path)
+    return;
+  NSData *d = [NSData dataWithContentsOfFile:path];
+  NSDictionary *j =
+      d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+  if (![j isKindOfClass:[NSDictionary class]])
+    return;
+  NSArray<NSNumber *> *fracs =
+      [j[@"fracs"] isKindOfClass:[NSArray class]] ? j[@"fracs"] : nil;
+  if (fracs.count == 0) {
+    NSNumber *f = j[@"frac"];
+    fracs = f ? @[ f ] : @[ @0 ];
+  }
+  // Preserve the keypose fracs, flip only the active flag: NO releases the pin
+  // (render side serves the live playhead frame), YES re-requests the keypose
+  // boundary frame.
+  KKWriteBoundaryRequestMulti(path, fracs, active);
 }
 
 @end

@@ -185,11 +185,21 @@ private struct DownloadProgress: View {
 
 	var body: some View {
 		HStack(spacing: 5) {
-			ProgressView(value: progress)
-				.progressViewStyle(.linear)
-				.tint(accent)
-				.frame(width: 56)
-			Text("\(Int(progress * 100))%")
+			// The poll caps at 0.99 while HuggingFace verifies + commits the
+			// downloaded blobs (a slow tail on a multi-GB model). During that,
+			// swap to an INDETERMINATE bar + "Finalizing" so it animates instead
+			// of a determinate bar sitting frozen at 99%.
+			Group {
+				if progress >= 0.99 {
+					ProgressView()
+				} else {
+					ProgressView(value: progress)
+				}
+			}
+			.progressViewStyle(.linear)
+			.tint(accent)
+			.frame(width: 56)
+			Text(progress >= 0.99 ? AILoc("Finalizing") : "\(Int(progress * 100))%")
 				.font(.system(size: 9))
 				.foregroundStyle(Color.aiSecondaryText)
 				.monospacedDigit()

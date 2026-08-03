@@ -35,23 +35,29 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 @interface CanvasMiniViewerRenderer : KKMiniViewerRenderer
 /// The layer stack to composite, kept in sync by the host. Index 0 is topmost.
 @property(nonatomic, copy, nullable) NSArray<KKBezierPath *> *layers;
-/// The effect's clip duration in seconds, set by the inspector. Used to map the
-/// preview's `editFraction` to clip-local seconds for the marching-ants dash
-/// phase (editFraction x clipDurationSeconds), matching the main render's
-/// media-time phase. Retained across timeline rebuilds (a gesture rebuild drops
-/// the lanes' lastKnownClipDuration), so 0 only before the first stamp.
-@property(nonatomic) double clipDurationSeconds;
+// clipDurationSeconds is inherited from KKMiniViewerRenderer (hoisted to the
+// base for link feed-locking) - it drives the marching-ants dash phase here
+// (editFraction x clipDurationSeconds), matching the main render's media time.
 /// Instance UUID, so the cross-process anchor-selection sync rides a
-/// per-instance /tmp file (two stacked / copy-pasted Canvas clips must not share
-/// one). Set by the inspector view (which holds the apiManager) in -init.
+/// per-instance /tmp file (two stacked / copy-pasted Canvas clips must not
+/// share one). Set by the inspector view (which holds the apiManager) in -init.
 @property(nonatomic, copy, nullable) NSString *instanceUUID;
+
+/// Clip-absolute span for the mini's link-expression scope, read from this
+/// clip's OWN manifest on the bus (the render tick stamps it; the ViewBridge
+/// has no timing API). Cached ~2s (the manifest read walks the bus
+/// directory). NO when nothing is published yet - the composite then encodes
+/// without a link scope (expressions read unresolved).
+- (BOOL)linkTimingStart:(double *_Nonnull)outStart
+               duration:(double *_Nonnull)outDur;
 /// The layer the open popover edits. Its transform in the composite comes from
 /// the live `timeline` (the kit's in-memory edited copy) so a Position-handle
 /// drag previews immediately; the Position OSC also reads/writes this layer.
 @property(nonatomic, copy, nullable) NSString *selectedLayerID;
-/// The full multi-selection (every selected layer's id), mirrored from the host.
-/// Drives the mini toolbar's conditional path-operation buttons (which need the
-/// whole selection, not just the primary). Falls back to selectedLayerID.
+/// The full multi-selection (every selected layer's id), mirrored from the
+/// host. Drives the mini toolbar's conditional path-operation buttons (which
+/// need the whole selection, not just the primary). Falls back to
+/// selectedLayerID.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *selectedLayerIDs;
 /// The layer the pointer is over in the Layers panel (or nil). When set, the
 /// mini-viewer draws a translucent amber highlight over that layer (a group
@@ -63,34 +69,45 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// metadata (aspectLinked, units) and the scale-box drag reads the aspect-link
 /// default when the timeline has no Scale lane yet.
 @property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
+
+/// Thumbnail bake only: multiplies stored (canonical-px) stroke widths during
+/// -encodeEffectFromSource so a small offscreen render keeps proportional
+/// stroke thickness - the same correction the main render derives from the
+/// source's inversePixelTransform for downscaled FCP browser thumbnails
+/// (destPx / canonicalPx). 0 (the default) = live mini behaviour (1.0).
+@property(nonatomic) float strokeScaleOverride;
 /// When YES, a click on the preview body (missing every handle) picks the
 /// topmost image layer under the cursor and fires `onSelectLayer` - the
 /// mini-viewer counterpart of the viewer's auto-select toggle. Off by default;
 /// the inspector mirrors the persisted "Auto-select layers" state onto it.
 @property(nonatomic) BOOL autoSelectEnabled;
 /// Layers that can't be auto-selected right now (mirrors the layer list's
-/// non-selectable gating - e.g. a keypose popover only lets you pick layers with
-/// a keypose at that time). A click over one falls through to the layer beneath.
+/// non-selectable gating - e.g. a keypose popover only lets you pick layers
+/// with a keypose at that time). A click over one falls through to the layer
+/// beneath.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *nonSelectableLayerIDs;
 /// Stricter gating for the MARQUEE / body-drag (which select to MOVE): in the
-/// constants popover this excludes move-lane-animated layers (Points / Position),
-/// which a single click can still pick. Falls back to nonSelectableLayerIDs.
+/// constants popover this excludes move-lane-animated layers (Points /
+/// Position), which a single click can still pick. Falls back to
+/// nonSelectableLayerIDs.
 @property(nonatomic, copy, nullable)
     NSSet<NSString *> *marqueeNonSelectableLayerIDs;
-/// Fired with the picked layer's id when a background click auto-selects a layer
-/// (only when `autoSelectEnabled`). The inspector wires this to its layer
+/// Fired with the picked layer's id when a background click auto-selects a
+/// layer (only when `autoSelectEnabled`). The inspector wires this to its layer
 /// selection so the timeline / OSC / Constants follow.
 @property(nonatomic, copy, nullable) void (^onSelectLayer)(NSString *layerID);
 /// Fired for a multi-selection change (Shift / Cmd-click in the mini): the full
-/// set of selected layer ids plus the primary edit target. The inspector mirrors
-/// the set onto the Layers panel + persists it. Falls back to onSelectLayer.
+/// set of selected layer ids plus the primary edit target. The inspector
+/// mirrors the set onto the Layers panel + persists it. Falls back to
+/// onSelectLayer.
 @property(nonatomic, copy, nullable) void (^onSelectLayers)
     (NSArray<NSString *> *layerIDs, NSString *primaryLayerID);
 
 /// Shared alignment-grid state, mirrored from the viewer's kParamUIState by the
-/// inspector so the mini grid matches the viewer's. The mini draws the grid (and
-/// snaps drags to it) when `gridEnabled`; `gridAdaptive` doubles the spacing as
-/// it gets dense; `gridSpacing` is the base cell size in output pixels.
+/// inspector so the mini grid matches the viewer's. The mini draws the grid
+/// (and snaps drags to it) when `gridEnabled`; `gridAdaptive` doubles the
+/// spacing as it gets dense; `gridSpacing` is the base cell size in output
+/// pixels.
 @property(nonatomic) BOOL gridEnabled;
 @property(nonatomic) BOOL gridAdaptive;
 @property(nonatomic) NSInteger gridSpacing;
@@ -104,11 +121,11 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// default bottom-centre anchor (until the user drags it in either surface).
 @property(nonatomic) CGPoint toolbarNormPos;
 /// Fired when a mini-toolbar interaction changes shared UI state, so the host
-/// persists it to kParamUIState (which round-trips to the viewer too). Keys match
-/// the OSC's: gridEnabled / gridAdaptive / gridSpacing / gridSnap / tool, and the
-/// mini's own miniToolbarPos (@[nx, ny]).
-@property(nonatomic, copy, nullable) void (^onPatchUIState)(NSString *key,
-                                                            id value);
+/// persists it to kParamUIState (which round-trips to the viewer too). Keys
+/// match the OSC's: gridEnabled / gridAdaptive / gridSpacing / gridSnap / tool,
+/// and the mini's own miniToolbarPos (@[nx, ny]).
+@property(nonatomic, copy, nullable) void (^onPatchUIState)
+    (NSString *key, id value);
 
 /// Fired when the pen tool mutates the layer stack (a new / extended vector
 /// layer). The host writes `paths` to kParamLayerData (one undo action) and, if

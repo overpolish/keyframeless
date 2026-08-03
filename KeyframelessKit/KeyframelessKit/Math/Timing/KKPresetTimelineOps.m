@@ -5,7 +5,7 @@
 
 #import "KKPresetTimelineOps.h"
 
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 
 static BOOL _kkAnyLockedSeconds(KKTimeline *t) {
   for (KKLane *l in t.lanes)
@@ -119,25 +119,25 @@ KKTimeline *KKPresetTimelineMergedAtFraction(KKTimeline *preset,
   NSMutableDictionary<NSString *, KKLane *> *presetByLabel =
       [NSMutableDictionary dictionary];
   for (KKLane *l in remapped.lanes)
-    if (l.label)
-      presetByLabel[l.label] = l;
+    if (l.key)
+      presetByLabel[l.key] = l;
 
   KKTimeline *out = [current copy];
   NSMutableArray<KKLane *> *merged =
       [NSMutableArray arrayWithCapacity:current.lanes.count];
   NSMutableSet<NSString *> *consumed = [NSMutableSet set];
   for (KKLane *cur in current.lanes) {
-    KKLane *pl = cur.label ? presetByLabel[cur.label] : nil;
+    KKLane *pl = cur.key ? presetByLabel[cur.key] : nil;
     // Only the preset's ANIMATED lanes merge in; its disabled (unused) lanes
     // leave the current lane untouched - otherwise an insert turns every param
     // animatable.
     if (!pl || !pl.enabled) {
       [merged addObject:cur];
       if (pl)
-        [consumed addObject:cur.label];
+        [consumed addObject:cur.key];
       continue;
     }
-    [consumed addObject:cur.label];
+    [consumed addObject:cur.key];
     NSMutableArray<KKKeyPose *> *kps = [NSMutableArray array];
     for (KKKeyPose *kp in cur.keyposes)
       if (kp.time < p - 1e-6)
@@ -157,7 +157,7 @@ KKTimeline *KKPresetTimelineMergedAtFraction(KKTimeline *preset,
     [merged addObject:_kkLaneCollapsingFlatHolds(nl)];
   }
   for (KKLane *pl in remapped.lanes)
-    if (pl.enabled && (!pl.label || ![consumed containsObject:pl.label])) {
+    if (pl.enabled && (!pl.key || ![consumed containsObject:pl.key])) {
       KKLane *nl = [pl copy];
       nl.enabled = YES;
       [merged addObject:nl];

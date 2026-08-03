@@ -9,8 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
-#import <KeyframelessKit/KKTimingLane.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @class KKTimelineInspectorView;
 @class KKMiniViewerRenderer;
@@ -43,12 +42,31 @@ double KKProcessFrameDurationSeconds(void);
 @property(nonatomic) double effectStartSec;
 @property(nonatomic) double effectDurSec;
 @property(nonatomic) double timelineStartSec; // FCP movePlayhead base
+/// The effect's OWN start mapped into project seconds
+/// (`timelineTime:fromInputTime:(effectStart)`) - clip fraction 0 in absolute
+/// timeline time, which is the span every link-bus publish is tagged with.
+/// Distinct from `timelineStartSec`, which maps the SOURCE in-point.
+/// Refreshed every tick by KKRefreshRenderCache, so anything on the render
+/// path that needs it reads it here instead of re-entering the host for an
+/// answer this tick already has.
+@property(nonatomic) double clipProjectStartSec;
 /// Raw source-media in-point (startTimeOfInputToFilter), in source seconds.
 /// Head-trimming a clip advances this; tail-trimming leaves it. Used by the
 /// "Maintain Timing" remap to anchor keyposes to absolute media time.
 @property(nonatomic) double sourceInSec;
 @property(nonatomic) double frameDurSec;
+/// Latest playhead sample, written by KKPlayheadPoller on MAIN and read from
+/// the RENDER threads by the mini-viewer feed gate. One writer, one reader,
+/// no set-then-read protocol between them - the reader only ever takes the
+/// most recent sample - so this is the "store the cached value" shape, not a
+/// shared transient flag. `atomic` (no `nonatomic`) so the accessors are safe
+/// to cross that boundary. `playheadSampleWall` is CACurrentMediaTime at the
+/// sample; <= 0 means never sampled, and a stale value disables the gate.
+@property(atomic) double playheadFrac;
+@property(atomic) double playheadSampleWall;
+@property(atomic) BOOL playheadPlaying;
 @property(nonatomic) double lastPushedClipDuration;
+@property(nonatomic) double lastPushedClipProjectStart;
 @property(nonatomic) BOOL loopEnabled;
 /// "Maintain Timing" (timelock): when YES and `anchorDurSec` > 0, the render
 /// remaps the clip fraction so keyposes hold their absolute media position
@@ -72,6 +90,13 @@ double KKProcessFrameDurationSeconds(void);
 @property(nonatomic) double lastBoundaryReqSec;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *boundaryReqSecs;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *boundaryReqFracs;
+/// Clip fraction (0..1) for an absolute render-time in seconds, from the cached
+/// effect start/duration. The mini-viewer feed tags each published source frame
+/// with this so a live-playback consumer evaluates the effect at exactly that
+/// frame's own playhead time - the transform stays locked to the footage the
+/// feed delivered, instead of a separately-polled playhead that drifts behind
+/// it. 0 when the duration is unset.
+- (double)clipFractionAtSeconds:(double)sec;
 @end
 
 /// Handles a kKKParamTimelineData parameterChanged: reads the blob inside
@@ -91,10 +116,10 @@ void KKHandleTimelineParamChanged(
 ///
 /// Motion blur does NOT request sub-frame source frames here: every built-in
 /// plugin blurs its OWN animation (per-sample params / transforms, or velocity
-/// reconstruction) over a single source frame, so requesting N sub-frame sources
-/// would only re-render the upstream effect N times for no benefit (footage
-/// smear needs Frame Blending / Optical Flow to differ at all). An effect that
-/// genuinely wants footage content-smear calls `+[KKMotionBlur
+/// reconstruction) over a single source frame, so requesting N sub-frame
+/// sources would only re-render the upstream effect N times for no benefit
+/// (footage smear needs Frame Blending / Optical Flow to differ at all). An
+/// effect that genuinely wants footage content-smear calls `+[KKMotionBlur
 /// appendSourceRequestsForState:...]` explicitly.
 ///
 /// `requestBuilder` returns an FxImageTileRequest for the given CMTime.

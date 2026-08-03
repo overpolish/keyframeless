@@ -3,16 +3,29 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLog.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView_Private.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
 #import "NSColor+KKColors.h"
 
 @implementation _KKMiniViewerOverlay {
   BOOL _dragging;
   BOOL _toolbarDragging;
   BOOL _toolDrawing;
+  // The compare divider drag. Deliberately NOT routed through `_dragging`: that
+  // path opens the host's undo group around the delegate's value writes, and
+  // the divider writes no value at all - it is view state.
+  BOOL _compareDragging;
   NSTrackingArea *_optTrackingArea;
   BOOL _optReveal;
+  // Live only while _dragging: catch the drag ticks and the mouseUp when they
+  // land in a DIFFERENT window from the press (a keypose popover opened over
+  // the constants popover - both nonactivating). Without this the drag latches
+  // with no further ticks and no end, which also leaves the plugin's undo group
+  // open and aborts FCP's next undo.
+  id _dragGlobalMonitor;
+  id _dragLocalMonitor;
 }
 
 - (BOOL)isFlipped {
@@ -64,6 +77,16 @@
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   NSPoint p = [self convertPoint:pt fromView:self.superview];
+  // Live playback draws NO on-screen controls (-drawRect: here and the whole
+  // overlay span in -drawInMTKView:), so nothing this overlay owns may be
+  // grabbed either - otherwise the pointer catches handles, the toolbar and the
+  // compare divider that are not on screen. This is the ONE place a pointer
+  // resolves to a mini control, so declining the point here disables every
+  // set's hit-test at once. Falling through to the canvas keeps the surface
+  // behaving like empty preview: click-drag pan, scroll/pinch zoom,
+  // double-click reset and the background pick all live on KKMiniViewerView.
+  if (c.livePlaybackActive)
+    return nil;
   // The toolbar (chrome) sits on top: claim its hits before the handles so the
   // click doesn't fall through to a layer drag / pan.
   if ([d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
@@ -75,9 +98,12 @@
   if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
       [d miniViewerToolDrawingActive:c])
     return self;
+  // The compare divider is grabbable, but it only ever wins where no parameter
+  // handle wants the point (the tie-break below and in mouseDown).
+  BOOL onDivider = [c _compareDividerGrabbableAtPoint:p];
   if (![d respondsToSelector:@selector(
                                  miniViewer:handleHitAtPoint:contentRect:)])
-    return nil;
+    return onDivider ? self : nil;
   // While a pan/zoom gesture is live, skip the per-anchor handle hit-test - a
   // two-finger scroll / pinch never targets a handle, and on a dense path this
   // call costs ~35ms, which AppKit invokes once per scroll event and was the
@@ -85,11 +111,11 @@
   // the canvas (which drives the pan) for the duration of the gesture.
   if ([c _isPanZoomGestureActive])
     return nil;
-  return [d miniViewer:c
-             handleHitAtPoint:p
-                  contentRect:[c contentRectInViewPoints]]
-             ? self
-             : nil;
+  if ([d miniViewer:c
+          handleHitAtPoint:p
+               contentRect:[c contentRectInViewPoints]])
+    return self;
+  return onDivider ? self : nil;
 }
 
 // Handles are drawn by the canvas's Metal pass (shared KKPointOSC shader).
@@ -97,6 +123,12 @@
 // Core Graphics than via a Metal line pipeline.
 - (void)drawRect:(NSRect)dirtyRect {
   KKMiniViewerView *c = self.canvas;
+  // Live playback suppresses every on-screen control for a clean frame; this
+  // AppKit overlay draws the box size readouts (and drag snap guides) on top of
+  // the Metal pass, so it has to honour the same gate - the Metal overlay is
+  // already skipped in -drawInMTKView:.
+  if (c.livePlaybackActive)
+    return;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   CGRect cr = [c contentRectInViewPoints];
   if (_dragging &&
@@ -165,6 +197,11 @@
 
 - (void)mouseDown:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
+  // A press means any earlier divider drag is over, even if its mouseUp was
+  // lost to another window (the cross-popover case the handle drag installs
+  // monitors for). Nothing is left open by a dropped divider drag, so clearing
+  // the flag is the whole recovery.
+  _compareDragging = NO;
   // Free-drawing tool (pen): route every press here (the delegate's controller
   // does its own double-click detection). The toolbar (chrome) still wins; no
   // handle-drag / auto-select / reset-view path runs.
@@ -241,6 +278,36 @@
       return;
     }
   }
+  // Compare divider. Checked AFTER asking the delegate whether it wants the
+  // same point, so the divider loses every tie: with a narrow grab band and the
+  // delegate given first refusal, a point OSC parked at frame centre stays
+  // grabbable with the split on - the same nearest-within-reach arbitration the
+  // colour pucks use, with the divider's reach deliberately the smaller one.
+  //
+  // Outside the onHandleDragBegin/End pair on purpose: the divider is session
+  // view state, so it must not open an undo group or write a parameter.
+  {
+    NSPoint dp = [self convertPoint:e.locationInWindow fromView:nil];
+    BOOL delegateWants =
+        [d respondsToSelector:@selector(
+                                  miniViewer:handleHitAtPoint:contentRect:)] &&
+        [d miniViewer:c
+            handleHitAtPoint:dp
+                 contentRect:[c contentRectInViewPoints]];
+    if (!delegateWants && [c _compareDividerGrabbableAtPoint:dp]) {
+      [c endFieldEditingGrabbingFocusIfNeeded];
+      [self.window makeKeyWindow];
+      _compareDragging = YES;
+      // The SAME monitors a handle drag installs. Inside a popover this
+      // overlay's -mouseDragged: is not reliably delivered, so without them the
+      // press positioned the divider once and every subsequent movement was
+      // dropped - it looked like the line jumped a pixel and then refused to
+      // move however far you dragged.
+      [self _installDragMonitors];
+      [c _dragCompareDividerToPoint:dp];
+      return;
+    }
+  }
   if (![d respondsToSelector:
               @selector(miniViewer:beginHandleDragAtPoint:contentRect:)])
     return;
@@ -270,7 +337,25 @@
       c.onOptHideHandle(@"");
     return;
   }
+  // A press while a drag is still active means the prior mouseUp was lost - a
+  // keypose popover open over the constants popover splits the down/up between
+  // two nonactivating windows, so this overlay sees repeated mouseDowns and no
+  // mouseUp. End the stale drag first so onHandleDragBegin/End stay balanced;
+  // an unbalanced begin leaks the plugin's drag undo group and aborts FCP.
+  if (_dragging)
+    [self _endActiveHandleDragReason:@"lost mouseUp - new mouseDown"];
+  // A reused popover window can come back NON-KEY after a close+reopen (the
+  // boundary popover reopens into the recycled ViewBridge window). A
+  // synthesized mousedown still lands here, but the natural drag session
+  // (mouseDragged / mouseUp) is only tracked for the key window - so without
+  // this the OSC drag freezes after a keypose switch. It's a nonactivating
+  // panel, so keying it doesn't steal FCP's foreground (same makeKeyWindow the
+  // popovers already use for keyboard).
+  [self.window makeKeyWindow];
   _dragging = YES;
+  [self _installDragMonitors];
+  KKLogInfo(@"[dragundo] mouseDown overlay=%p canvas=%p win=%p key=%d", self,
+            (void *)c, (void *)self.window, self.window.isKeyWindow);
   if (c.onHandleDragBegin)
     c.onHandleDragBegin();
   [d miniViewer:c
@@ -297,6 +382,11 @@
           toolbarDraggedToPoint:[self convertPoint:e.locationInWindow
                                           fromView:nil]];
     [self setNeedsDisplay:YES];
+    return;
+  }
+  if (_compareDragging) {
+    [c _dragCompareDividerToPoint:[self convertPoint:e.locationInWindow
+                                            fromView:nil]];
     return;
   }
   if (!_dragging)
@@ -334,9 +424,26 @@
     [self setNeedsDisplay:YES];
     return;
   }
+  if (_compareDragging) {
+    _compareDragging = NO;
+    [self _removeDragMonitors];
+    return;
+  }
+  [self _endActiveHandleDragReason:@"mouseUp"];
+}
+
+// End an in-progress handle drag exactly once, firing the same end path mouseUp
+// would. Called from mouseUp, from a new mouseDown that arrives while still
+// dragging (lost mouseUp), and from teardown - so onHandleDragBegin always has
+// a matching onHandleDragEnd and the plugin's drag undo group never leaks.
+- (void)_endActiveHandleDragReason:(NSString *)reason {
+  [self _removeDragMonitors];
   if (!_dragging)
     return;
   _dragging = NO;
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  KKLogInfo(@"[dragundo] end overlay=%p reason=%@", self, reason);
   if ([d respondsToSelector:@selector(miniViewerEndHandleDrag:)])
     [d miniViewerEndHandleDrag:c];
   if (c.onHandleDragEnd)
@@ -344,11 +451,155 @@
   [self setNeedsDisplay:YES];
 }
 
+// Space pressed mid-drag. The drag is FINISHED where it stands rather than
+// reverted: the handle has been writing its value live the whole time, so the
+// user has already seen (and heard the render of) the value they are on, and
+// there is no restore-original path in this surface to revert to. Finishing
+// keeps onHandleDragBegin/End balanced - the same reason -mouseDown: ends a
+// stale drag - so the plugin's undo group closes and the move lands as ONE undo
+// entry. The alternative, letting the drag continue against invisible handles,
+// is exactly the bug this gate exists to stop.
+- (void)endInteractionForLivePlayback {
+  if (_compareDragging) {
+    _compareDragging = NO;
+    [self _removeDragMonitors];
+  }
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if (_toolDrawing) {
+    _toolDrawing = NO;
+    if (self.window &&
+        [d respondsToSelector:@selector(miniViewer:toolUpAtPoint:contentRect:)])
+      [d miniViewer:c
+          toolUpAtPoint:[self
+                            convertPoint:[self.window convertPointFromScreen:
+                                                          NSEvent.mouseLocation]
+                                fromView:nil]
+            contentRect:[c contentRectInViewPoints]];
+  }
+  if (_toolbarDragging) {
+    _toolbarDragging = NO;
+    if ([d respondsToSelector:@selector(miniViewerToolbarMouseUp:)])
+      [d miniViewerToolbarMouseUp:c];
+  }
+  [self _setOptReveal:NO];
+  [self _endActiveHandleDragReason:@"live playback started"];
+}
+
+// Feed a drag tick from a SCREEN-space location: a monitored event belongs to
+// another window (or to no window at all), so its locationInWindow can't be
+// converted against this overlay directly.
+- (void)_dragTickAtScreenPoint:(NSPoint)screenPoint
+                     modifiers:(NSEventModifierFlags)mods {
+  if (!self.window)
+    return;
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  CGPoint p =
+      [self convertPoint:[self.window convertPointFromScreen:screenPoint]
+                fromView:nil];
+  // The divider shares the monitors but not the handle-drag path: it talks to
+  // the view directly and opens no undo group, so it is answered here and the
+  // delegate never hears about it.
+  if (_compareDragging) {
+    [c _dragCompareDividerToPoint:p];
+    [self setNeedsDisplay:YES];
+    return;
+  }
+  if (!_dragging)
+    return;
+  CGRect cr = [c contentRectInViewPoints];
+  if ([d respondsToSelector:
+              @selector(miniViewer:dragHandleToPoint:contentRect:modifiers:)])
+    [d miniViewer:c dragHandleToPoint:p contentRect:cr modifiers:mods];
+  else
+    [d miniViewer:c dragHandleToPoint:p contentRect:cr];
+  [self setNeedsDisplay:YES];
+}
+
+// Watch drag/up for the duration of a drag whose events may not come back to
+// this overlay. The local monitor ignores anything in THIS window - natural
+// delivery already handles that and a second tick would double-apply the move.
+- (void)_installDragMonitors {
+  __weak _KKMiniViewerOverlay *weak = self;
+  NSEventMask mask = NSEventMaskLeftMouseUp | NSEventMaskLeftMouseDragged;
+  if (!_dragGlobalMonitor)
+    _dragGlobalMonitor = [NSEvent
+        addGlobalMonitorForEventsMatchingMask:mask
+                                      handler:^(NSEvent *e) {
+                                        // A global event has no window: its
+                                        // location is already screen space.
+                                        if (e.type == NSEventTypeLeftMouseUp)
+                                          [weak _endActiveHandleDragReason:
+                                                    @"mouseUp outside the app"];
+                                        else
+                                          [weak
+                                              _dragTickAtScreenPoint:
+                                                  e.locationInWindow
+                                                           modifiers:
+                                                               e.modifierFlags];
+                                      }];
+  if (!_dragLocalMonitor)
+    _dragLocalMonitor = [NSEvent
+        addLocalMonitorForEventsMatchingMask:mask
+                                     handler:^NSEvent *(NSEvent *e) {
+                                       __strong _KKMiniViewerOverlay *s = weak;
+                                       if (!s || e.window == s.window)
+                                         return e;
+                                       if (e.type == NSEventTypeLeftMouseUp) {
+                                         [s _endActiveHandleDragReason:
+                                                 @"mouseUp in another window"];
+                                         return e;
+                                       }
+                                       NSPoint sp =
+                                           e.window
+                                               ? [e.window
+                                                     convertPointToScreen:
+                                                         e.locationInWindow]
+                                               : e.locationInWindow;
+                                       [s _dragTickAtScreenPoint:sp
+                                                       modifiers:
+                                                           e.modifierFlags];
+                                       return e;
+                                     }];
+}
+
+- (void)_removeDragMonitors {
+  if (_dragGlobalMonitor) {
+    [NSEvent removeMonitor:_dragGlobalMonitor];
+    _dragGlobalMonitor = nil;
+  }
+  if (_dragLocalMonitor) {
+    [NSEvent removeMonitor:_dragLocalMonitor];
+    _dragLocalMonitor = nil;
+  }
+}
+
+// If this overlay is pulled from its window (popover dismissed or mini-viewer
+// rebuilt) while a handle drag is live, its mouseUp never arrives. End the drag
+// here so onHandleDragEnd fires and the plugin's undo group closes - a dropped
+// end leaks the group and aborts FCP's next undo ("Adjust <effect>" crash).
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow {
+  [super viewWillMoveToWindow:newWindow];
+  if (_dragging && !newWindow)
+    [self _endActiveHandleDragReason:@"torn down (window->nil)"];
+}
+
+- (void)dealloc {
+  [self _removeDragMonitors];
+  if (_dragging)
+    KKLogWarn(@"[dragundo] overlay=%p dealloc'd mid-drag - onHandleDragEnd "
+              @"was DROPPED",
+              self);
+}
+
 // Opt-hold over the mini-viewer reveals hidden handles/rings as ghosts. A
 // tracking area feeds us mouseMoved/Exited regardless of which subview the
 // pointer is over; we mirror the Option state onto the renderer.
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  if (KKTrackingAreaMatches(_optTrackingArea, self.bounds))
+    return; // see KKTrackingAreaMatches: rebuilding every cycle never settles
   if (_optTrackingArea)
     [self removeTrackingArea:_optTrackingArea];
   _optTrackingArea = [[NSTrackingArea alloc]
@@ -388,12 +639,26 @@
              cursorAtPoint:p
                contentRect:[c contentRectInViewPoints]];
   }
+  // Only where the delegate wants nothing: the divider loses the cursor for the
+  // same reason it loses the press.
+  if (!cursor &&
+      [c _compareDividerGrabbableAtPoint:[self convertPoint:windowPoint
+                                                   fromView:nil]])
+    cursor = [NSCursor resizeLeftRightCursor];
   [(cursor ?: [NSCursor arrowCursor]) set];
 }
 
 - (void)mouseMoved:(NSEvent *)e {
-  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
   KKMiniViewerView *c = self.canvas;
+  // Tracking-area moves are delivered to the owner whether or not -hitTest:
+  // claimed the point, so the playback gate is repeated here: no resize/move
+  // cursor over an invisible handle, and no Opt-peek reveal of hidden ones.
+  if (c.livePlaybackActive) {
+    [self _setOptReveal:NO];
+    [[NSCursor arrowCursor] set];
+    return;
+  }
+  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   // Drawing tool active: feed the cursor (rubber-band + snap ghost) + redraw,
   // but still let the toolbar own the cursor when hovering it (below).
@@ -439,7 +704,9 @@
 }
 
 - (void)flagsChanged:(NSEvent *)e {
-  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
+  [self _setOptReveal:self.canvas.livePlaybackActive
+                          ? NO
+                          : (e.modifierFlags & NSEventModifierFlagOption) != 0];
 }
 
 - (void)mouseExited:(NSEvent *)e {

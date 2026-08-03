@@ -24,18 +24,19 @@
   _menuGapFrac = 0.0;
   NSInteger laneIdx = -1, kpIdx = -1;
   BOOL hitPill = [self _pillAtPoint:pt lane:&laneIdx kp:&kpIdx];
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   if (hitPill && laneIdx < (NSInteger)anim.count) {
-    _menuPillLabel = [anim[laneIdx].label copy];
+    _menuPillLabel = [anim[laneIdx].lane.key copy];
     _menuPillKPIdx = kpIdx;
   } else {
     NSInteger row = [self _laneRowAtPoint:pt];
     NSRect tracks = [self _tracksRect];
-    if (row >= 0 && row < (NSInteger)anim.count && pt.x >= NSMinX(tracks) &&
-        pt.x <= NSMaxX(tracks)) {
-      double frac = [self _fracForX:pt.x inLane:anim[row] inTracks:tracks];
-      NSInteger aIdx = [self _intervalStartKPIdxInLane:anim[row] atFrac:frac];
-      _menuGapLabel = [anim[row].label copy];
+    if (row >= 0 && row < (NSInteger)anim.count && anim[row].lane &&
+        pt.x >= NSMinX(tracks) && pt.x <= NSMaxX(tracks)) {
+      KKLane *rowLane = anim[row].lane;
+      double frac = [self _fracForX:pt.x inLane:rowLane inTracks:tracks];
+      NSInteger aIdx = [self _intervalStartKPIdxInLane:rowLane atFrac:frac];
+      _menuGapLabel = [rowLane.key copy];
       _menuGapAIdx = aIdx;
       _menuGapLaneRow = row;
       _menuGapFrac = frac;
@@ -81,9 +82,9 @@
         .target = self;
     if (_menuGapAIdx >= 0) {
       KKLane *gapLane = nil;
-      for (KKLane *l in anim)
-        if ([l.label isEqualToString:_menuGapLabel]) {
-          gapLane = l;
+      for (KKAdvancedRow *r in anim)
+        if ([r.lane.key isEqualToString:_menuGapLabel]) {
+          gapLane = r.lane;
           break;
         }
       KKInterval *iv =
@@ -92,6 +93,16 @@
               : nil;
       if (iv) {
         [menu addItem:[NSMenuItem separatorItem]];
+        BOOL durationLocked = [self _menuTargetGapsAreDurationLocked];
+        [menu addItemWithTitle:
+                  (durationLocked
+                       ? KKLoc(@"Unlock Duration",
+                               @"Context menu: unlock gap duration.")
+                       : KKLoc(@"Lock Duration",
+                               @"Context menu: lock gap duration."))
+                        action:@selector(_menuToggleGapDurationLock:)
+                 keyEquivalent:@""]
+            .target = self;
         NSString *title =
             iv.endpointsLinked
                 ? KKLoc(@"Unlink Endpoints", @"Context menu: unlink endpoints.")
@@ -106,6 +117,92 @@
     return nil;
   }
   return menu;
+}
+
+- (NSArray<NSString *> *)_menuTargetGapKeys {
+  if (!_menuGapLabel || _menuGapAIdx < 0)
+    return @[];
+  NSString *clicked =
+      [self _gapKeyForLabel:_menuGapLabel aIdx:_menuGapAIdx];
+  return [_selectedGaps containsObject:clicked] ? _selectedGaps.allObjects
+                                                : @[ clicked ];
+}
+
+- (BOOL)_menuTargetGapsAreDurationLocked {
+  NSArray<NSString *> *keys = [self _menuTargetGapKeys];
+  if (keys.count == 0)
+    return NO;
+  BOOL found = NO;
+  for (NSString *key in keys) {
+    NSString *label;
+    NSInteger idx;
+    if (![self _decodeSelectionKey:key label:&label kpIdx:&idx])
+      continue;
+    KKLane *lane = [self _animatableLaneForLabel:label];
+    if (!lane || idx < 0 || idx + 1 >= (NSInteger)lane.keyposes.count)
+      continue;
+    found = YES;
+    if (lane.keyposes[idx].outgoing.lockedSeconds <= 0.0)
+      return NO;
+  }
+  return found;
+}
+
+- (void)_setMenuTargetGapsDurationLocked:(BOOL)locked {
+  double duration = [self _clipDuration];
+  if (locked && duration <= 0.0)
+    return;
+  NSArray<NSString *> *keys = [self _menuTargetGapKeys];
+  if (keys.count == 0)
+    return;
+
+  KKTimeline *timeline = [_timeline copy];
+  NSMutableArray<KKLane *> *lanes = [timeline.lanes mutableCopy];
+  BOOL changed = NO;
+  for (NSString *key in keys) {
+    NSString *label;
+    NSInteger idx;
+    if (![self _decodeSelectionKey:key label:&label kpIdx:&idx])
+      continue;
+    NSInteger laneIndex = -1;
+    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
+      if ([lanes[i].key isEqualToString:label]) {
+        laneIndex = i;
+        break;
+      }
+    if (laneIndex < 0)
+      continue;
+    KKLane *lane = lanes[laneIndex];
+    if (idx < 0 || idx + 1 >= (NSInteger)lane.keyposes.count)
+      continue;
+    NSMutableArray<KKKeyPose *> *keyposes = [lane.keyposes mutableCopy];
+    KKKeyPose *a = [keyposes[idx] copy];
+    KKInterval *interval = [a.outgoing copy] ?: [[KKInterval alloc] init];
+    double seconds =
+        locked ? MAX(0.0, (keyposes[idx + 1].time - a.time) * duration)
+               : 0.0;
+    if (fabs(interval.lockedSeconds - seconds) <= 1.0e-6)
+      continue;
+    interval.lockedSeconds = seconds;
+    a.outgoing = interval;
+    keyposes[idx] = a;
+    KKLane *newLane = [lane copy];
+    newLane.keyposes = keyposes;
+    lanes[laneIndex] = newLane;
+    changed = YES;
+  }
+  if (!changed)
+    return;
+  timeline.lanes = lanes;
+  _timeline = timeline;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(timeline);
+}
+
+- (void)_menuToggleGapDurationLock:(id)sender {
+  [self _setMenuTargetGapsDurationLocked:
+            ![self _menuTargetGapsAreDurationLocked]];
 }
 
 // Copy is single-keypose only (one value, one lane); with a multi-selection it
@@ -219,7 +316,7 @@
   for (NSString *label in byLane) {
     NSInteger li = -1;
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-      if ([lanes[i].label isEqualToString:label]) {
+      if ([lanes[i].key isEqualToString:label]) {
         li = i;
         break;
       }
@@ -285,10 +382,10 @@
 - (void)_menuRemovePill:(id)sender {
   if (!_menuPillLabel)
     return;
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   NSInteger li = -1;
   for (NSInteger i = 0; i < (NSInteger)anim.count; i++)
-    if ([anim[i].label isEqualToString:_menuPillLabel]) {
+    if ([anim[i].lane.key isEqualToString:_menuPillLabel]) {
       li = i;
       break;
     }
@@ -326,7 +423,7 @@
       NSInteger kIdx;
       if (![self _decodeSelectionKey:key label:&kLabel kpIdx:&kIdx])
         continue;
-      if (![kLabel isEqualToString:src.label])
+      if (![kLabel isEqualToString:src.key])
         continue;
       [selIdx addObject:@(kIdx)];
     }
@@ -351,7 +448,7 @@
     }];
     KKLane *nl = [src copy];
     nl.keyposes = kps;
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     changed = YES;
   }
   if (!changed)
@@ -381,7 +478,7 @@
       NSInteger kIdx;
       if (![self _decodeSelectionKey:key label:&kLabel kpIdx:&kIdx])
         continue;
-      if (![kLabel isEqualToString:src.label])
+      if (![kLabel isEqualToString:src.key])
         continue;
       [selIdx addObject:@(kIdx)];
     }
@@ -408,7 +505,7 @@
     }];
     KKLane *nl = [src copy];
     nl.keyposes = kps;
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     changed = YES;
   }
   if (!changed)

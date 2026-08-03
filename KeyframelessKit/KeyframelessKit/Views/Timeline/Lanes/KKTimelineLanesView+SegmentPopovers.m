@@ -11,10 +11,11 @@
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
+#import <KeyframelessKit/KKCurveDefaults.h>
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
-#import <KeyframelessKit/KKTimingStage.h> // KKLane / KKTimeline
+#import <KeyframelessKit/KKTimeline.h> // KKLane / KKTimeline
 
 @interface KKTimelineLanesView (SegmentPopoversPrivate)
 - (nullable NSArray<KKLane *> *)_partLanesForLabels:
@@ -22,6 +23,7 @@
 - (nullable NSArray<KKLane *> *)_compoundLanesForCompounds:
     (NSArray<NSArray<NSString *> *> *)compounds;
 - (void)_resizeOpenSegmentPopoverToEditor:(KKSegmentEditView *)edit;
+- (NSButton *)_makePopoverCloseButton;
 - (void)_wireSegmentEditor:(KKSegmentEditView *)edit
            onParticipation:(void (^)(NSInteger, BOOL))onParticipation
                onDragBegin:(void (^)(void))onDragBegin
@@ -52,14 +54,23 @@
   NSMutableDictionary<NSString *, KKLane *> *byLabel =
       [NSMutableDictionary dictionaryWithCapacity:all.count];
   for (KKLane *lane in all)
-    byLabel[lane.label] = lane;
+    byLabel[lane.key] = lane;
   NSMutableArray<KKLane *> *out =
       [NSMutableArray arrayWithCapacity:labels.count];
   for (NSString *label in labels) {
     // A label that can't be resolved (shouldn't happen - they come from the
     // same timeline) gets a category-less placeholder so the checklist still
     // renders rather than silently falling back to a pill bar.
-    KKLane *lane = byLabel[label] ?: [KKLane laneWithLabel:label];
+    KKLane *lane = byLabel[label] ?: [KKLane laneWithKey:label label:label];
+    // The display name is template-canonical: re-apply it from the template so
+    // the applies-to checklist shows the user's current label, not a stale
+    // persisted one (or the raw key on the placeholder above).
+    for (KKLane *t in _availableLanes)
+      if ([t.key isEqualToString:lane.key] && t.label.length) {
+        lane = [lane copy];
+        lane.label = t.label;
+        break;
+      }
     [out addObject:lane];
   }
   return out;
@@ -99,12 +110,12 @@
   NSMutableDictionary<NSString *, KKLane *> *byLabel =
       [NSMutableDictionary dictionaryWithCapacity:all.count];
   for (KKLane *lane in all)
-    byLabel[lane.label] = lane;
+    byLabel[lane.key] = lane;
   NSMutableArray<KKLane *> *out =
       [NSMutableArray arrayWithCapacity:compounds.count];
   for (NSArray<NSString *> *compound in compounds) {
     NSString *master = compound.firstObject ?: @"";
-    KKLane *lane = byLabel[master] ?: [KKLane laneWithLabel:master];
+    KKLane *lane = byLabel[master] ?: [KKLane laneWithKey:master label:master];
     [out addObject:lane];
   }
   return out;
@@ -184,15 +195,47 @@
       KKPaddingMD + headerH + KKSpacingSM + editH + extrasH + bottomPad;
   NSView *container =
       [[NSView alloc] initWithFrame:NSMakeRect(0, 0, w, totalH)];
+  // Close button top-left, before the header - same affordance as the keypose /
+  // constants popover so a fixed-position companion is easy to dismiss (the
+  // default close-on-focus-loss still applies).
+  NSButton *closeButton = [self _makePopoverCloseButton];
+  [container addSubview:closeButton];
   [container addSubview:header];
+  // Trailing end of the title row, where the keypose / constants popovers put
+  // their size pill: the segment's own [Reset][Make Default] actions.
+  // The editor can shrink itself (the Frequency row collapses on a curve that
+  // has none) - resize the open popover to match, same path a layer re-scope
+  // takes.
+  __weak typeof(self) weakHeight = self;
+  __weak KKSegmentEditView *weakEditH = edit;
+  edit.onContentHeightChanged = ^{
+    __strong typeof(weakHeight) sh = weakHeight;
+    __strong KKSegmentEditView *eh = weakEditH;
+    if (sh && eh)
+      [sh _resizeOpenSegmentPopoverToEditor:eh];
+  };
+  NSView *defaults = [edit defaultsAccessoryView];
+  [container addSubview:defaults];
   [container addSubview:edit];
   _openSegEditHeightConstraint =
       [edit.heightAnchor constraintEqualToConstant:editH];
   [NSLayoutConstraint activateConstraints:@[
-    [header.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
-                                         constant:KKPaddingMD],
+    [closeButton.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
+                                              constant:KKPaddingMD],
+    [closeButton.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
+    // Match the keypose / constants popover close button (22pt square).
+    [closeButton.widthAnchor constraintEqualToConstant:22.0],
+    [closeButton.heightAnchor constraintEqualToConstant:22.0],
+    [header.leadingAnchor constraintEqualToAnchor:closeButton.trailingAnchor
+                                         constant:KKSpacingMD],
     [header.topAnchor constraintEqualToAnchor:container.topAnchor
                                      constant:KKPaddingMD],
+    [header.trailingAnchor
+        constraintLessThanOrEqualToAnchor:defaults.leadingAnchor
+                                 constant:-KKSpacingSM],
+    [defaults.trailingAnchor constraintEqualToAnchor:container.trailingAnchor
+                                            constant:-KKPaddingMD],
+    [defaults.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
     [edit.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
     [edit.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
     [edit.topAnchor constraintEqualToAnchor:header.bottomAnchor
@@ -225,18 +268,33 @@
 
   _openExtraRows = extras;
   __weak typeof(self) weak = self;
-  // Boundary/segment popovers anchor to a point IN the timeline lane, so they
-  // open BELOW the boundary handle (not to the side like the inspector-button
-  // popovers).
-  NSPopover *pop = [self _showPopoverWithContent:container
-                                        fromView:anchor
-                                   preferredEdge:NSRectEdgeMinY
-                                         onClose:^{
-                                           if (onClose)
-                                             onClose();
-                                           __strong typeof(weak) s = weak;
-                                           s->_openExtraRows = nil;
-                                         }];
+  // Anchor beside the inspector's timeline area (whichever side has more screen
+  // space), NOT at the clicked gap - a companion that switches content in
+  // place, sitting in one consistent spot out of the work area. Matches the
+  // static-values / keypose popover. The graph tints the active gap instead
+  // (see the Basic / Advanced views' _gapPopoverShowing highlight). The
+  // presenter swaps content on the live window when already shown (gap-to-gap,
+  // or coming from any other popover), so the buttons inside never go dead from
+  // a reopen.
+  NSPopover *pop =
+      [self _showPopoverWithContent:container
+                           fromView:self
+                      preferredEdge:[self _inspectorSidePreferredEdge]
+                            onClose:^{
+                              if (onClose)
+                                onClose();
+                              __strong typeof(weak) s = weak;
+                              if (!s)
+                                return;
+                              s->_openExtraRows = nil;
+                              // Signal close so the graphs clear their
+                              // active-gap highlight (same companion signal the
+                              // static-values / manage popovers post).
+                              [NSNotificationCenter.defaultCenter
+                                  postNotificationName:
+                                      KKStaticValuesPopoverDidCloseNotification
+                                                object:s];
+                            }];
   // Signal the open so a multi-layer host (Canvas) can attach its layer-list
   // companion beside the "Applies to" checklist (Basic only - Advanced's
   // popover is opened on one lane that already lives on a single layer).
@@ -277,8 +335,11 @@
   // host just switched layers - update the open checklist + curve in place
   // instead of building a new popover (no close/reopen flicker).
   if (_rescopingGapPopover && _openGapEditor) {
-    if (partLanes)
+    if (partLanes) {
       [_openGapEditor rescopeParticipationLanes:partLanes states:partStates];
+      [_openGapEditor
+          selectParticipationLayerKey:[self _hostSelectedLayerKeyIn:partLanes]];
+    }
     // Re-wire the toggle to the NEW layer's callback - it captures this layer's
     // (tagged) labels, so without this a tick writes to the old layer.
     [self _wireSegmentEditor:_openGapEditor
@@ -299,6 +360,10 @@
                                    bulkHeader:NO
                            participationLanes:partLanes
                           participationStates:partStates];
+  // A multi-owner list opens on the owner the host has selected (the rack entry
+  // / layer the user came from), not on the first one. Before presenting, so
+  // the popover is sized to that owner's row count.
+  [edit selectParticipationLayerKey:[self _hostSelectedLayerKeyIn:partLanes]];
   [self _wireSegmentEditor:edit
            onParticipation:onParticipation
                onDragBegin:onDragBegin
@@ -378,35 +443,6 @@
   }
 }
 
-// KKSegmentEditView (Hold kind) pills are indexed by KKHoldEffect
-// (0 None, 1 Bounce, 2 Wiggle); the model stores KKIntervalModulation. The
-// evaluator maps Wiggle→Wiggle, Oscillate→Bounce (KKTimingEvaluation.m), so
-// the pill index and the stored enum are NOT interchangeable.
-NSInteger KKModulationToPill(KKIntervalModulation m) {
-  switch (m) {
-  case KKIntervalModulationWiggle:
-    return KKHoldEffectWiggle;
-  case KKIntervalModulationOscillate:
-    return KKHoldEffectBounce;
-  case KKIntervalModulationHandheld:
-    return KKHoldEffectHandheld;
-  default:
-    return KKHoldEffectNone;
-  }
-}
-static KKIntervalModulation KKPillToModulation(NSInteger pill) {
-  switch (pill) {
-  case KKHoldEffectWiggle:
-    return KKIntervalModulationWiggle;
-  case KKHoldEffectBounce:
-    return KKIntervalModulationOscillate;
-  case KKHoldEffectHandheld:
-    return KKIntervalModulationHandheld;
-  default:
-    return KKIntervalModulationNone;
-  }
-}
-
 - (void)
     _presentHoldModulationPopoverFromAnchor:(NSView *)anchor
                               startFraction:(double)startFraction
@@ -421,6 +457,8 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                                                 partCompoundLabels
                                  partStates:(NSArray<NSArray<NSNumber *> *> *)
                                                 partCompoundStates
+                                  partLanes:
+                                      (NSArray<KKLane *> *)partCompoundLanesIn
                               partRebuilder:
                                   (NSArray<NSArray<NSNumber *> *> *_Nullable (
                                       ^)(void))partRebuilder
@@ -441,10 +479,14 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                             intervalMutator:
                                 (KKGapIntervalMutator)intervalMutator {
   // "Applies to" as the Animated-style checklist (master + indented component
-  // rows) instead of the compound pill bar - see the Transition path. Resolve
-  // each compound's lane for the category pill nav.
+  // rows) instead of the compound pill bar - see the Transition path. The graph
+  // hands over the live lane behind each compound (its category + owner drive
+  // the two pill navs); the label-matched fallback only covers a caller that
+  // passes none.
   NSArray<KKLane *> *partCompoundLanes =
-      [self _compoundLanesForCompounds:partCompoundLabels];
+      (partCompoundLanesIn.count == partCompoundLabels.count)
+          ? partCompoundLanesIn
+          : [self _compoundLanesForCompounds:partCompoundLabels];
 
   // Layer re-scope: update the open modulation editor's checklist + state in
   // place instead of building a new popover (see the gap popover for the rate).
@@ -452,6 +494,8 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
     [_openHoldModEditor rescopeCompoundParticipationLanes:partCompoundLanes
                                                 compounds:partCompoundLabels
                                                    states:partCompoundStates];
+    [_openHoldModEditor selectParticipationLayerKey:
+                            [self _hostSelectedLayerKeyIn:partCompoundLanes]];
     // Re-wire the toggle to this layer's callback (captures its tagged labels).
     [self _wireSegmentEditor:_openHoldModEditor
              onParticipation:onParticipation
@@ -475,6 +519,10 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                    participationCompoundLanes:partCompoundLanes
                        participationCompounds:partCompoundLabels
                   participationCompoundStates:partCompoundStates];
+  // Open on the host's selected owner (see the Transition path), before the
+  // popover is sized to the row count.
+  [edit selectParticipationLayerKey:
+            [self _hostSelectedLayerKeyIn:partCompoundLanes]];
   [self _wireSegmentEditor:edit
            onParticipation:onParticipation
                onDragBegin:onDragBegin
@@ -484,7 +532,6 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   edit.frequency = frequency;
   edit.seed = seed;
   edit.linked = linked;
-  __weak KKSegmentEditView *weakEdit = edit;
   edit.onCurveTypeChanged = ^(NSInteger ct) {
     if (onModulation)
       onModulation(KKPillToModulation(ct));
@@ -498,12 +545,6 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
       onFrequency(v);
   };
   edit.onSeedChanged = ^(uint32_t s) {
-    if (onSeed)
-      onSeed(s);
-  };
-  edit.onSeedReroll = ^{
-    uint32_t s = arc4random();
-    weakEdit.seed = s;
     if (onSeed)
       onSeed(s);
   };
@@ -543,6 +584,27 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                         sc->_openHoldModRebuilder = nil;
                         sc->_openHoldModIntervalReader = nil;
                       }];
+}
+
+- (NSButton *)_makePopoverCloseButton {
+  NSImage *img = [NSImage imageWithSystemSymbolName:@"xmark"
+                           accessibilityDescription:nil];
+  NSButton *b =
+      [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
+                         target:self
+                         action:@selector(_segmentCloseButtonClicked:)];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  // Fire on mouseDOWN so the close survives a popover reopen (FCP forwards the
+  // mouseDown but not the matching mouseUp to a reused-then-reopened window).
+  [b.cell sendActionOn:NSEventMaskLeftMouseDown];
+  return b;
+}
+
+- (void)_segmentCloseButtonClicked:(id)sender {
+  [_openContentPopover close];
 }
 
 // Unified static-values popover presenter. Constants AND keypose (boundary)

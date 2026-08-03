@@ -15,7 +15,7 @@
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingGuide.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 // Spotlight the keypose at this index (a middle one, so the boundary popover
 // opens with frames on both sides in the filmstrip).
@@ -32,11 +32,11 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniViewerView *c) {
 
 + (KKTimeline *)seedTimelineForConfig:(KKTimingGuideConfig *)config {
   KKTimeline *tl = [KKTimeline timeline];
-  KKLane *primary = [KKLane laneWithLabel:config.primaryLabel];
+  KKLane *primary = [KKLane laneWithKey:config.primaryLabel label:config.primaryLabel];
   primary.enabled = YES; // animatable, so the Advanced sequencer shows keyposes
   primary.valueType = (KKLaneValueType)config.primaryValueType;
   // Mirror the real lane's aspect-link so OSC drags during the guide follow the
-  // same path the plugin uses (e.g. Glow's radius ring: uniform when linked).
+  // same path the plugin uses (e.g. a radius ring: uniform when linked).
   primary.aspectLinkable = config.primaryAspectLinked;
   primary.aspectLinked = config.primaryAspectLinked;
   NSArray<NSArray<NSNumber *> *> *frames = config.miniViewerSeedValues;

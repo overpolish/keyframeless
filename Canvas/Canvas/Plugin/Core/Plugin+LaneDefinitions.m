@@ -9,13 +9,29 @@
 // instance state - split out of Plugin+CustomUI.m (which keeps the inspector
 // view lifecycle + callback wiring).
 
-#import "CanvasStrokeGlyphs.h" // Line Cap / Join / Marker pill glyphs
+#import "CanvasLayerTimeline.h" // CanvasLaneScope (templateScopeMask bits)
+#import "CanvasStrokeGlyphs.h"  // Line Cap / Join / Marker pill glyphs
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKColorLanes.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @implementation CanvasPlugin (LaneDefinitions)
+
+// One declarative spec per lane: WHO the property applies to
+// (templateScopeMask, interpreted by CanvasLaneAppliesToPath) and WHERE its
+// flat value lives on the layer (templateSeedProvider - the constant keypose
+// seeded when a path has no stored lane yet). Lives here, beside the
+// definitions, so the timeline builder needs no per-label cascade.
+static void CanvasSetLaneSpec(KKLane *lane, NSUInteger scope,
+                              NSArray<NSNumber *> * (^seed)(KKBezierPath *p)) {
+  lane.templateScopeMask = scope;
+  if (seed)
+    lane.templateSeedProvider = ^NSArray<NSNumber *> *(id ctx) {
+      return [ctx isKindOfClass:[KKBezierPath class]] ? seed((KKBezierPath *)ctx)
+                                                      : nil;
+    };
+}
 
 + (NSArray<KKLane *> *)availableLanes {
   // Transform group. These are lane TEMPLATES: each layer owns its own timeline
@@ -23,10 +39,9 @@
   // layer's), so a fresh layer starts at identity. The render ignores them
   // until the transform plumbing lands; stroke / fill groups come later.
   //
-  // Scale: 2-component aspect-linked percent, modelled on MagicMove's box-OSC
-  // Scale lane so the box OSC drops straight in. Identity = 100%. Unbounded
-  // above (like MagicMove); 0 floor.
-  KKLane *scale = [KKLane laneWithLabel:@"Scale"];
+  // Scale: 2-component aspect-linked percent, shaped so the box OSC drops
+  // straight in. Identity = 100%. Unbounded above; 0 floor.
+  KKLane *scale = [KKLane laneWithKey:@"Scale" label:@"Scale"];
   scale.valueType = KKLaneValueTypeFloat;
   scale.componentMin = @[ @0.0, @0.0 ];
   scale.componentUnits = @[ @"%", @"%" ];
@@ -41,9 +56,9 @@
                                          values:@[ @100.0, @100.0 ]]];
 
   // Position: 2D spatial, stored normalised 0..1 (0.5,0.5 = centred =
-  // identity), displayed as pixels. Same reusable curved-path Position as
-  // Glow/MagicMove (spatialCurvable). Off-canvas allowed, so no min/max.
-  KKLane *position = [KKLane laneWithLabel:@"Position"];
+  // identity), displayed as pixels. The reusable curved-path Position
+  // (spatialCurvable). Off-canvas allowed, so no min/max.
+  KKLane *position = [KKLane laneWithKey:@"Position" label:@"Position"];
   position.valueType = KKLaneValueTypeGeneric;
   position.componentMin = @[];
   position.componentMax = @[];
@@ -56,12 +71,12 @@
   position.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
   [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
-  // Rotation: 3-axis (X/Y/Z) Euler degrees, modelled on MagicMove's Rotation
-  // lane so the kit's KKRotationOSC + mini rotation rings drop straight in.
+  // Rotation: 3-axis (X/Y/Z) Euler degrees, shaped so the kit's KKRotationOSC
+  // + mini rotation rings drop straight in.
   // Identity = 0. Unbounded (angles accumulate past 360). Z is the in-plane
   // spin (rendered today); X/Y tilt renders once the perspective transform
-  // lands. Axis ring colours match MagicMove (X red, Y green, Z blue).
-  KKLane *rotation = [KKLane laneWithLabel:@"Rotation"];
+  // lands. Axis ring colours: X red, Y green, Z blue.
+  KKLane *rotation = [KKLane laneWithKey:@"Rotation" label:@"Rotation"];
   rotation.valueType = KKLaneValueTypeAngle;
   rotation.componentMin = @[];
   rotation.componentMax = @[];
@@ -80,10 +95,10 @@
 
   // Anchor: the pivot Rotation and Scale swing around. 2-component, stored
   // normalised 0..1 (0.5,0.5 = the layer centre = identity), displayed as
-  // pixels, same space as Position. Off-layer allowed, so no min/max. Modelled
-  // on MagicMove's Anchor lane so the kit's KKAnchorOSC + mini drop straight
+  // pixels, same space as Position. Off-layer allowed, so no min/max. Shaped
+  // so the kit's KKAnchorOSC + mini drop straight
   // in. On its own it does nothing - it only moves where rotation/scale pivot.
-  KKLane *anchor = [KKLane laneWithLabel:@"Anchor"];
+  KKLane *anchor = [KKLane laneWithKey:@"Anchor" label:@"Anchor"];
   anchor.valueType = KKLaneValueTypeGeneric;
   anchor.componentMin = @[];
   anchor.componentMax = @[];
@@ -109,7 +124,7 @@
   // stored as morph snapshots; the render interpolates - wired separately).
   // Scoped to vector-path layers in CanvasLayerTimelineForPath (images / groups
   // have no editable points). Its anchors OSC is the "Points" element.
-  KKLane *points = [KKLane laneWithLabel:@"Points"];
+  KKLane *points = [KKLane laneWithKey:@"Points" label:@"Points"];
   points.valueType = KKLaneValueTypeGeneric;
   points.componentMin = @[];
   points.componentMax = @[];
@@ -129,7 +144,7 @@
   // animatable; vector paths only (ownerScoped, so images / groups don't get it
   // re-seeded). Seeded per-path from the layer's flat strokeEnabled. Listed
   // FIRST so it heads the group.
-  KKLane *strokeOn = [KKLane laneWithLabel:@"Enabled"];
+  KKLane *strokeOn = [KKLane laneWithKey:@"Enabled" label:@"Enabled"];
   strokeOn.valueType = KKLaneValueTypeFloat;
   strokeOn.isToggle = YES;
   strokeOn.animatable = NO;
@@ -151,7 +166,7 @@
   // per-path from the layer's flat strokeWidth/endWidth there, so existing
   // paths are unchanged; the template default matches a freshly-drawn path
   // (20px).
-  KKLane *strokeWidth = [KKLane laneWithLabel:@"Stroke Width"];
+  KKLane *strokeWidth = [KKLane laneWithKey:@"Stroke Width" label:@"Stroke Width"];
   strokeWidth.valueType = KKLaneValueTypeFloat;
   strokeWidth.componentMin = @[ @0.0, @0.0 ]; // no negative width
   strokeWidth.componentUnits = @[ @"px", @"px" ];
@@ -171,13 +186,13 @@
   // popover, animated dropdown, lane filter, Advanced graph) - the one source
   // of truth being the toggle's value. Every later Stroke lane (color, dash,
   // ...) wires the same rule, so the whole group hides as one.
-  strokeWidth.visibleWhenLabel = @"Enabled";
+  strokeWidth.visibleWhenKey = @"Enabled";
   strokeWidth.visibleWhenValues = @[ @1 ];
   [strokeWidth insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                                values:@[ @20.0, @20.0 ]]];
 
   // Stroke colour: the shared reusable colour group (Mode pill + solid swatch +
-  // composite gradient), the SAME helper Glow uses. No Dynamic mode - a vector
+  // composite gradient). No Dynamic mode - a vector
   // stroke has no source pixels to sample - so the modes are Solid (default) +
   // Gradient. Labels are prefixed ("Stroke Mode" / "Stroke Solid" / "Stroke
   // Gradient") so a future Fill colour group can't collide. Seeded per-path
@@ -198,7 +213,7 @@
   // when its controller is itself hidden - so Enabled=off hides Mode, which
   // hides both.
   KKLane *strokeMode = strokeColor[0];
-  strokeMode.visibleWhenLabel = @"Enabled";
+  strokeMode.visibleWhenKey = @"Enabled";
   strokeMode.visibleWhenValues = @[ @1 ];
 
   // Line Cap (open-path ends) + Line Join (corners): NON-animatable structural
@@ -206,7 +221,7 @@
   // accessibility / value names). Seeded per-path from the flat
   // lineCap/lineJoin in CanvasLayerTimelineForPath; gated by Enabled like the
   // rest of the group.
-  KKLane *lineCap = [KKLane laneWithLabel:@"Line Cap"];
+  KKLane *lineCap = [KKLane laneWithKey:@"Line Cap" label:@"Line Cap"];
   lineCap.valueType = KKLaneValueTypeFloat;
   lineCap.choiceLabels = @[ @"Butt", @"Round", @"Square" ];
   lineCap.choiceIcons = CanvasLineCapGlyphs();
@@ -218,11 +233,11 @@
   lineCap.ownerScoped = YES;
   lineCap.categoryKey = @"Stroke";
   lineCap.categorySymbol = @"lineweight";
-  lineCap.visibleWhenLabel = @"Enabled";
+  lineCap.visibleWhenKey = @"Enabled";
   lineCap.visibleWhenValues = @[ @1 ];
   [lineCap insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
 
-  KKLane *lineJoin = [KKLane laneWithLabel:@"Line Join"];
+  KKLane *lineJoin = [KKLane laneWithKey:@"Line Join" label:@"Line Join"];
   lineJoin.valueType = KKLaneValueTypeFloat;
   lineJoin.choiceLabels = @[ @"Miter", @"Round", @"Bevel" ];
   lineJoin.choiceIcons = CanvasLineJoinGlyphs();
@@ -234,7 +249,7 @@
   lineJoin.ownerScoped = YES;
   lineJoin.categoryKey = @"Stroke";
   lineJoin.categorySymbol = @"lineweight";
-  lineJoin.visibleWhenLabel = @"Enabled";
+  lineJoin.visibleWhenKey = @"Enabled";
   lineJoin.visibleWhenValues = @[ @1 ];
   [lineJoin insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
 
@@ -243,7 +258,7 @@
   // Ants Speed - via the visibleWhen cascade keyed on this lane (which is
   // itself gated by Enabled, so the whole sub-group hides when the stroke is
   // off).
-  KKLane *strokeStyle = [KKLane laneWithLabel:@"Stroke Style"];
+  KKLane *strokeStyle = [KKLane laneWithKey:@"Stroke Style" label:@"Stroke Style"];
   strokeStyle.valueType = KKLaneValueTypeFloat;
   strokeStyle.choiceLabels = @[ @"Solid", @"Dashed", @"Dotted" ];
   strokeStyle.componentMin = @[ @0.0 ];
@@ -254,7 +269,7 @@
   strokeStyle.ownerScoped = YES;
   strokeStyle.categoryKey = @"Stroke";
   strokeStyle.categorySymbol = @"lineweight";
-  strokeStyle.visibleWhenLabel = @"Enabled";
+  strokeStyle.visibleWhenKey = @"Enabled";
   strokeStyle.visibleWhenValues = @[ @1 ];
   [strokeStyle insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
 
@@ -267,7 +282,7 @@
   // slider snaps between 0 and 1.
   KKLane * (^strokeScalar)(NSString *, double, double, NSArray *) =
       ^KKLane *(NSString *label, double seed, double max, NSArray *visVals) {
-        KKLane *l = [KKLane laneWithLabel:label];
+        KKLane *l = [KKLane laneWithKey:label label:label];
         l.valueType = KKLaneValueTypeFloat;
         l.componentMin = @[ @0.0 ];
         l.componentMax = @[ @(max) ];
@@ -277,7 +292,7 @@
         l.ownerScoped = YES;
         l.categoryKey = @"Stroke";
         l.categorySymbol = @"lineweight";
-        l.visibleWhenLabel = @"Stroke Style";
+        l.visibleWhenKey = @"Stroke Style";
         l.visibleWhenValues = visVals;
         [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(seed) ]]];
         return l;
@@ -296,7 +311,7 @@
   // Enabled like the rest of the group.
   KKLane * (^markerType)(NSString *, BOOL) = ^KKLane *(NSString *label,
                                                        BOOL isStart) {
-    KKLane *l = [KKLane laneWithLabel:label];
+    KKLane *l = [KKLane laneWithKey:label label:label];
     l.valueType = KKLaneValueTypeFloat;
     l.choiceLabels =
         @[ @"None", @"Arrow", @"Circle", @"Square", @"Arrowhead", @"Line" ];
@@ -310,7 +325,7 @@
     l.ownerScoped = YES;
     l.categoryKey = @"Stroke";
     l.categorySymbol = @"lineweight";
-    l.visibleWhenLabel = @"Enabled";
+    l.visibleWhenKey = @"Enabled";
     l.visibleWhenValues = @[ @1 ];
     [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
     return l;
@@ -321,7 +336,7 @@
   // the stroke is off too (transitive controller carry).
   KKLane * (^markerWidth)(NSString *, NSString *) =
       ^KKLane *(NSString *label, NSString *typeLabel) {
-        KKLane *l = [KKLane laneWithLabel:label];
+        KKLane *l = [KKLane laneWithKey:label label:label];
         l.valueType = KKLaneValueTypeFloat;
         l.componentMin = @[ @0.0 ];
         l.componentMax = @[ @2000.0 ]; // field hard cap (% of stroke width)
@@ -332,7 +347,7 @@
         l.ownerScoped = YES;
         l.categoryKey = @"Stroke";
         l.categorySymbol = @"lineweight";
-        l.visibleWhenLabel = typeLabel;
+        l.visibleWhenKey = typeLabel;
         l.visibleWhenValues = @[ @1, @2, @3, @4, @5 ];
         [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @300.0 ]]];
         return l;
@@ -351,7 +366,7 @@
   // percentage like Opacity; the render reads /100.
   KKLane * (^drawOn)(NSString *, double) =
       ^KKLane *(NSString *label, double seed) {
-        KKLane *l = [KKLane laneWithLabel:label];
+        KKLane *l = [KKLane laneWithKey:label label:label];
         l.valueType = KKLaneValueTypeFloat;
         l.componentMin = @[ @0.0 ];
         l.componentMax = @[ @100.0 ];
@@ -361,7 +376,7 @@
         l.ownerScoped = YES;
         l.categoryKey = @"Stroke";
         l.categorySymbol = @"lineweight";
-        l.visibleWhenLabel = @"Enabled";
+        l.visibleWhenKey = @"Enabled";
         l.visibleWhenValues = @[ @1 ];
         [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(seed) ]]];
         return l;
@@ -385,7 +400,7 @@
   // Not animatable; vector paths only (ownerScoped). Labelled "Fill Enabled"
   // (NOT "Enabled") so it can't collide with the Stroke group's toggle in the
   // label-keyed timeline. Seeded per-path from the flat fillEnabled.
-  KKLane *fillOn = [KKLane laneWithLabel:@"Fill Enabled"];
+  KKLane *fillOn = [KKLane laneWithKey:@"Fill Enabled" label:@"Fill Enabled"];
   fillOn.valueType = KKLaneValueTypeFloat;
   fillOn.isToggle = YES;
   fillOn.animatable = NO;
@@ -415,14 +430,14 @@
   // lane needs the gate; Solid / Gradient are visibleWhen Mode, and the cascade
   // hides a lane when its controller is hidden).
   KKLane *fillMode = fillColor[0];
-  fillMode.visibleWhenLabel = @"Fill Enabled";
+  fillMode.visibleWhenKey = @"Fill Enabled";
   fillMode.visibleWhenValues = @[ @1 ];
 
   // Fill Amount: IMAGE-layer tint strength (0 = original image, 100 = fully the
   // fill colour). Only meaningful for image layers (a vector path's fill is the
   // shape itself), so the timeline builder scopes this lane to images; gated by
   // Fill Enabled like the rest of the group. Animatable percent.
-  KKLane *fillAmount = [KKLane laneWithLabel:@"Fill Amount"];
+  KKLane *fillAmount = [KKLane laneWithKey:@"Fill Amount" label:@"Fill Amount"];
   fillAmount.valueType = KKLaneValueTypeFloat;
   fillAmount.componentMin = @[ @0.0 ];
   fillAmount.componentMax = @[ @100.0 ];
@@ -435,7 +450,7 @@
   // Only a Solid fill tints (a hachure has no tint amount). Gated on Fill Style
   // = Solid, which is itself gated by Fill Enabled (so the cascade hides this
   // when the fill is off too).
-  fillAmount.visibleWhenLabel = @"Fill Style";
+  fillAmount.visibleWhenKey = @"Fill Style";
   fillAmount.visibleWhenValues = @[ @0 ];
   [fillAmount insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0 ]]];
 
@@ -443,7 +458,7 @@
   // cross-hatch / zigzag / dots line pattern (clipped to the shape, in the fill
   // colour). Structural enum, gated by Fill Enabled. (Independent of the Sketch
   // feature's hand-drawn roughness.)
-  KKLane *fillStyle = [KKLane laneWithLabel:@"Fill Style"];
+  KKLane *fillStyle = [KKLane laneWithKey:@"Fill Style" label:@"Fill Style"];
   fillStyle.valueType = KKLaneValueTypeFloat;
   // Short labels (the glyph carries the meaning, like the Line Cap pills) so
   // the 5 pills stay compact - a long label ("Cross-hatch") wraps the row to
@@ -460,7 +475,7 @@
   fillStyle.ownerScoped = YES;
   fillStyle.categoryKey = @"Fill";
   fillStyle.categorySymbol = @"rectangle.trailinghalf.filled";
-  fillStyle.visibleWhenLabel = @"Fill Enabled";
+  fillStyle.visibleWhenKey = @"Fill Enabled";
   fillStyle.visibleWhenValues = @[ @1 ];
   [fillStyle insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
 
@@ -469,7 +484,7 @@
   KKLane * (^hachure)(NSString *, double, double, double, NSString *) =
       ^KKLane *(NSString *label, double seed, double mn, double mx,
                 NSString *unit) {
-        KKLane *l = [KKLane laneWithLabel:label];
+        KKLane *l = [KKLane laneWithKey:label label:label];
         l.valueType = KKLaneValueTypeFloat;
         l.componentMin = @[ @(mn) ];
         l.componentMax = @[ @(mx) ];
@@ -479,7 +494,7 @@
         l.ownerScoped = YES;
         l.categoryKey = @"Fill";
         l.categorySymbol = @"rectangle.trailinghalf.filled";
-        l.visibleWhenLabel = @"Fill Style";
+        l.visibleWhenKey = @"Fill Style";
         l.visibleWhenValues = @[ @1, @2, @3, @4 ];
         [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(seed) ]]];
         return l;
@@ -489,7 +504,7 @@
   // Fill Angle uses the same angle control as the Transform Rotation (a dial),
   // so valueType Angle + unbounded; degrees, converted to radians in the
   // render.
-  KKLane *fillAngle = [KKLane laneWithLabel:@"Fill Angle"];
+  KKLane *fillAngle = [KKLane laneWithKey:@"Fill Angle" label:@"Fill Angle"];
   fillAngle.valueType = KKLaneValueTypeAngle;
   fillAngle.componentMin = @[];
   fillAngle.componentMax = @[];
@@ -499,7 +514,7 @@
   fillAngle.ownerScoped = YES;
   fillAngle.categoryKey = @"Fill";
   fillAngle.categorySymbol = @"rectangle.trailinghalf.filled";
-  fillAngle.visibleWhenLabel = @"Fill Style";
+  fillAngle.visibleWhenKey = @"Fill Style";
   fillAngle.visibleWhenValues = @[ @1, @2, @3, @4 ];
   [fillAngle insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(-41.0) ]]];
 
@@ -512,7 +527,7 @@
   // (Fill Enabled OR the Stroke "Enabled" toggle) uses the kit's visibleWhenOr:
   // on an image the absent Stroke toggle counts as off, so it reduces to "Fill
   // Enabled". Seeded per-path from the flat sketch* props.
-  KKLane *sketchOn = [KKLane laneWithLabel:@"Sketch Enabled"];
+  KKLane *sketchOn = [KKLane laneWithKey:@"Sketch Enabled" label:@"Sketch Enabled"];
   sketchOn.valueType = KKLaneValueTypeFloat;
   sketchOn.isToggle = YES;
   sketchOn.animatable = NO;
@@ -523,9 +538,9 @@
   sketchOn.ownerScoped = YES;
   sketchOn.categoryKey = @"Sketch";
   sketchOn.categorySymbol = @"scribble.variable";
-  sketchOn.visibleWhenLabel = @"Fill Enabled";
+  sketchOn.visibleWhenKey = @"Fill Enabled";
   sketchOn.visibleWhenValues = @[ @1 ];
-  sketchOn.visibleWhenOrLabel = @"Enabled"; // the Stroke group's toggle
+  sketchOn.visibleWhenOrKey = @"Enabled"; // the Stroke group's toggle
   sketchOn.visibleWhenOrValues = @[ @1 ];
   [sketchOn insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
 
@@ -537,7 +552,7 @@
                            NSString *) =
       ^KKLane *(NSString *label, double seed, double mn, double mx,
                 BOOL animatable, NSString *unit) {
-        KKLane *l = [KKLane laneWithLabel:label];
+        KKLane *l = [KKLane laneWithKey:label label:label];
         l.valueType = KKLaneValueTypeFloat;
         l.componentMin = @[ @(mn) ];
         l.componentMax = @[ @(mx) ];
@@ -547,7 +562,7 @@
         l.ownerScoped = YES;
         l.categoryKey = @"Sketch";
         l.categorySymbol = @"scribble.variable";
-        l.visibleWhenLabel = @"Sketch Enabled";
+        l.visibleWhenKey = @"Sketch Enabled";
         l.visibleWhenValues = @[ @1 ];
         [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(seed) ]]];
         return l;
@@ -561,7 +576,7 @@
   // value 0 = Single (1 pass), 1 = Double (2 passes). A constant slider for a
   // 1-2 range sat oddly among the animatable Roughness/Bowing sliders; the pill
   // is right-aligned chrome, so it also keeps those two sliders the only bars.
-  KKLane *sketchStrokes = [KKLane laneWithLabel:@"Sketch Strokes"];
+  KKLane *sketchStrokes = [KKLane laneWithKey:@"Sketch Strokes" label:@"Sketch Strokes"];
   sketchStrokes.valueType = KKLaneValueTypeFloat;
   sketchStrokes.choiceLabels = @[ @"Single", @"Double" ];
   sketchStrokes.componentMin = @[ @0.0 ];
@@ -572,16 +587,123 @@
   sketchStrokes.ownerScoped = YES;
   sketchStrokes.categoryKey = @"Sketch";
   sketchStrokes.categorySymbol = @"scribble.variable";
-  sketchStrokes.visibleWhenLabel = @"Sketch Enabled";
+  sketchStrokes.visibleWhenKey = @"Sketch Enabled";
   sketchStrokes.visibleWhenValues = @[ @1 ];
   [sketchStrokes insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @1.0 ]]];
   // Seed: a value-only random integer with a re-roll dice (KKSeedView), never a
-  // lane - the same control Glow's noise seed uses. integerValued + animatable
+  // lane. integerValued + animatable
   // NO + seedField YES.
   KKLane *sketchSeed =
       sketchScalar(@"Sketch Seed", 1.0, 0.0, 999999.0, NO, @"");
   sketchSeed.integerValued = YES;
   sketchSeed.seedField = YES;
+
+  // Applicability + flat-value seeds, one line per lane (see
+  // CanvasSetLaneSpec). Transform lanes (scale/position/rotation/anchor/
+  // opacity) apply everywhere and keep their template identity defaults, so
+  // they carry no spec.
+  const NSUInteger kVec = CanvasLaneScopeVectorOnly;
+  const NSUInteger kVecOpen = kVec | CanvasLaneScopeOpenEndOnly;
+  const NSUInteger kNoGrp = CanvasLaneScopeNotGroup;
+  CanvasSetLaneSpec(points, kVec, nil);
+  CanvasSetLaneSpec(strokeOn, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.strokeEnabled ? 1.0 : 0.0) ];
+  });
+  CanvasSetLaneSpec(strokeWidth, kVec, ^(KKBezierPath *p) {
+    double sw = p.strokeWidth, ew = p.endWidth > 0 ? p.endWidth : sw;
+    return @[ @(sw), @(ew) ];
+  });
+  CanvasSetLaneSpec(strokeColor[0], kVec, ^(KKBezierPath *p) {
+    return @[ @(p.strokeColorMode) ];
+  });
+  CanvasSetLaneSpec(strokeColor[1], kVec, ^(KKBezierPath *p) {
+    return @[ @(p.strokeR), @(p.strokeG), @(p.strokeB), @1.0 ];
+  });
+  CanvasSetLaneSpec(strokeColor[2], kVec, nil); // gradient keeps its default
+  CanvasSetLaneSpec(lineCap, kVecOpen, ^(KKBezierPath *p) {
+    return @[ @(p.lineCap) ];
+  });
+  CanvasSetLaneSpec(lineJoin, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.lineJoin) ];
+  });
+  CanvasSetLaneSpec(startMarker, kVecOpen, ^(KKBezierPath *p) {
+    return @[ @(p.startMarker) ];
+  });
+  CanvasSetLaneSpec(startMarkerWidth, kVecOpen, ^(KKBezierPath *p) {
+    return @[ @(p.startMarkerSize * 100.0) ];
+  });
+  CanvasSetLaneSpec(endMarker, kVecOpen, ^(KKBezierPath *p) {
+    return @[ @(p.endMarker) ];
+  });
+  CanvasSetLaneSpec(endMarkerWidth, kVecOpen, ^(KKBezierPath *p) {
+    return @[ @(p.endMarkerSize * 100.0) ];
+  });
+  CanvasSetLaneSpec(drawOnStart, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.drawOnStart * 100.0) ];
+  });
+  CanvasSetLaneSpec(drawOnEnd, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.drawOnEnd * 100.0) ];
+  });
+  CanvasSetLaneSpec(drawOnOffset, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.drawOnOrigin * 100.0) ];
+  });
+  CanvasSetLaneSpec(strokeStyle, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.strokeStyle) ];
+  });
+  CanvasSetLaneSpec(dashLength, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.dashLength) ];
+  });
+  CanvasSetLaneSpec(dashGap, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.dashGap) ];
+  });
+  CanvasSetLaneSpec(dotGap, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.dotGap) ];
+  });
+  CanvasSetLaneSpec(marchSpeed, kVec, ^(KKBezierPath *p) {
+    return @[ @(p.marchingAntsSpeed) ];
+  });
+  CanvasSetLaneSpec(fillOn, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.fillEnabled ? 1.0 : 0.0) ];
+  });
+  CanvasSetLaneSpec(fillColor[0], kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.fillColorMode) ];
+  });
+  CanvasSetLaneSpec(fillColor[1], kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.fillR), @(p.fillG), @(p.fillB), @1.0 ];
+  });
+  CanvasSetLaneSpec(fillColor[2], kNoGrp, nil); // gradient keeps its default
+  CanvasSetLaneSpec(fillAmount, CanvasLaneScopeImageOnly, ^(KKBezierPath *p) {
+    return @[ @(p.fillTint * 100.0) ];
+  });
+  CanvasSetLaneSpec(fillStyle, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.sketchFillStyle) ];
+  });
+  CanvasSetLaneSpec(fillGap, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.sketchFillGap) ];
+  });
+  CanvasSetLaneSpec(fillAngle, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.sketchFillAngle) ];
+  });
+  CanvasSetLaneSpec(fillWeight, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.sketchFillWeight) ];
+  });
+  CanvasSetLaneSpec(sketchOn, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.sketchEnabled ? 1.0 : 0.0) ];
+  });
+  CanvasSetLaneSpec(sketchRoughness, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.sketchRoughness) ];
+  });
+  CanvasSetLaneSpec(sketchBowing, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.sketchBowing) ];
+  });
+  CanvasSetLaneSpec(sketchStrokes, kNoGrp, ^(KKBezierPath *p) {
+    // Pill index: flat sketchStrokes 2 (or default) -> Double (1), 1 ->
+    // Single (0).
+    return @[ @((p.sketchStrokes >= 2 || p.sketchStrokes == 0) ? 1.0 : 0.0) ];
+  });
+  CanvasSetLaneSpec(sketchSeed, kNoGrp, ^(KKBezierPath *p) {
+    return @[ @(p.sketchSeed ?: 1) ];
+  });
 
   return @[
     points,         strokeOn,         strokeWidth,     strokeColor[0],

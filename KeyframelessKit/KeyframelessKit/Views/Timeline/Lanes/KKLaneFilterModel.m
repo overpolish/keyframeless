@@ -7,7 +7,11 @@
 #import "KKLocalized.h"
 
 @implementation KKLaneFilterModel {
-  NSArray<NSString *> *_allLabels; // every lane, in order
+  // Every lane's KEY, in order - the identity the host matches a hidden set
+  // against (KKTimelineAdvancedView tests `l.key`). NOT the display label:
+  // labels are template-canonical and may repeat, and a dynamic lane's label
+  // ("Ramp") differs from its key ("uRamp") entirely.
+  NSArray<NSString *> *_allLabels;
   NSArray<NSString *>
       *_laneSignature; // label + layer name + category, per lane
   // Per compound, per segment: the lane labels that segment toggles. A master
@@ -26,7 +30,7 @@
   _visible = [NSMutableSet set];
   _soloLabels = [NSMutableSet set];
   for (KKLane *l in lanes)
-    [_visible addObject:l.label];
+    [_visible addObject:l.key];
   [self _rebuildForLanes:lanes];
   return self;
 }
@@ -34,7 +38,7 @@
 - (BOOL)applyLanes:(NSArray<KKLane *> *)lanes {
   if ([[self _signatureForLanes:lanes] isEqualToArray:_laneSignature])
     return NO; // same lanes + layer names + order - nothing to rebuild
-  NSArray<NSString *> *newLabels = [lanes valueForKey:@"label"];
+  NSArray<NSString *> *newLabels = [lanes valueForKey:@"key"];
   NSMutableSet<NSString *> *vis = [NSMutableSet set];
   for (NSString *lab in newLabels) {
     if (![_allLabels containsObject:lab])
@@ -52,7 +56,7 @@
 }
 
 - (void)_rebuildForLanes:(NSArray<KKLane *> *)lanes {
-  _allLabels = [lanes valueForKey:@"label"];
+  _allLabels = [lanes valueForKey:@"key"];
   _laneSignature = [self _signatureForLanes:lanes];
   _displayLabels = [self _buildCompoundsForLanes:lanes]; // sets _seg* ivars
   _masterExcludedIndices = [self _computeMasterExcludedIndices];
@@ -66,7 +70,7 @@
 - (NSArray<NSString *> *)_signatureForLanes:(NSArray<KKLane *> *)lanes {
   NSMutableArray<NSString *> *sig = [NSMutableArray array];
   for (KKLane *l in lanes)
-    [sig addObject:[NSString stringWithFormat:@"%@\x1f%@\x1f%@", l.label ?: @"",
+    [sig addObject:[NSString stringWithFormat:@"%@\x1f%@\x1f%@", l.key ?: @"",
                                               l.layerLabel ?: @"",
                                               l.categoryKey ?: @""]];
   return sig;
@@ -100,26 +104,33 @@
     KKLane *l = lanes[i];
     NSString *cat = l.categoryKey;
     if (cat.length) {
-      NSMutableArray<NSString *> *grp =
-          [NSMutableArray arrayWithObject:l.label];
+      // Hold the lanes, not just names: `targets` needs the stable identity
+      // (`key`) while `display` needs the user-facing `displayName` - a
+      // shader groups every lane under one category, so using one for both
+      // showed uniform names for the whole run.
+      NSMutableArray<KKLane *> *grp = [NSMutableArray arrayWithObject:l];
       NSInteger j = i + 1;
       while (j < (NSInteger)lanes.count && [lanes[j].categoryKey
                                                isEqualToString:cat]) {
-        [grp addObject:lanes[j].label];
+        [grp addObject:lanes[j]];
         j++;
       }
+      NSMutableArray<NSString *> *grpLabels =
+          [NSMutableArray arrayWithCapacity:grp.count];
+      for (KKLane *gl in grp)
+        [grpLabels addObject:gl.key];
       [display addObject:KKLocalizedParamName(cat)];
-      [targets addObject:[grp copy]];
+      [targets addObject:[grpLabels copy]];
       [isMaster addObject:@YES];
-      for (NSString *lab in grp) {
-        [display addObject:KKLocalizedParamName(lab)];
-        [targets addObject:@[ lab ]];
+      for (KKLane *gl in grp) {
+        [display addObject:KKLocalizedParamName(gl.displayName)];
+        [targets addObject:@[ gl.key ]];
         [isMaster addObject:@NO];
       }
       i = j;
     } else {
-      [display addObject:KKLocalizedParamName(l.label)];
-      [targets addObject:@[ l.label ]];
+      [display addObject:KKLocalizedParamName(l.displayName)];
+      [targets addObject:@[ l.key ]];
       [isMaster addObject:@NO];
       i++;
     }
@@ -141,7 +152,7 @@
   NSMutableArray<NSNumber *> *cm = [NSMutableArray array];
   if (masterLabel.length) {
     [cd addObject:masterLabel];
-    [ct addObject:[lanes valueForKey:@"label"]];
+    [ct addObject:[lanes valueForKey:@"key"]];
     [cm addObject:@YES];
   }
   [self _appendCategorySegmentsForLanes:lanes

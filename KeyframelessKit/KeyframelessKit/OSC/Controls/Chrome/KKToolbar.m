@@ -11,7 +11,7 @@
 #import <KeyframelessKit/KKShaderTypes.h>
 
 static NSString *const kToolbarPipelineID =
-    @"co.overpolish.keyframelesskit.Toolbar";
+    @"com.keyframeless.kit.Toolbar";
 
 static const CGFloat kIconSize = 28.0;
 static const CGFloat kButtonSize = 48.0;
@@ -403,9 +403,7 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
       buildAndRegisterPipelineStateForPluginID:kToolbarPipelineID
                                     registryID:registryID
                                    pixelFormat:pixelFormat
-                                      bundleID:@"co.overpolish"
-                                                ".keyframeless"
-                                                ".KeyframelessKit"
+                                      bundleID:@"com.keyframeless.KeyframelessKit"
                                   vertexShader:@"KKVertexShader"
                                 fragmentShader:@"KKLabelFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];

@@ -14,7 +14,7 @@
 #import "CanvasLayerListView.h"
 #import "CanvasLocalized.h"
 #import <KeyframelessKit/KKBezierPath.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @implementation CanvasLayerListController (NonSelectable)
 
@@ -63,6 +63,10 @@
   _listView.nonSelectableReason =
       [self _nonSelectableReasonForKind:_openPopoverKind];
   [_listView setNonSelectableLayerIDs:ns];
+  // The panel may still be attaching (built lazily out of the open turn), and
+  // -onDidAttach applies this set rather than re-deriving: keep it current or
+  // the attach would resurrect the set from before the reload / navigation.
+  _pendingNonSelectable = ns;
 }
 
 // Layers (by layerID) that have NO keypose at clip fraction `frac` in any of
@@ -179,7 +183,7 @@
     NSString *moveLane = (p.isImage || p.isGroup) ? @"Position" : @"Points";
     KKTimeline *tl = [KKTimeline timelineFromJSON:p.animationJSON];
     for (KKLane *l in tl.lanes)
-      if ([l.label isEqualToString:moveLane]) {
+      if ([l.key isEqualToString:moveLane]) {
         if (l.enabled && l.keyposes.count >= 2)
           [out addObject:p.layerID];
         break;

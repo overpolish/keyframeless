@@ -22,17 +22,18 @@ actor WaveformLoader {
 			return cached
 		}
 		let buckets = max(200, Int(clip.sourceDuration * 200))
-		let renderedURL = try await ProcessedAudioRenderer.shared.renderedURL(for: clip)
-		let raw = try loadFromAudioFile(
-			url: renderedURL, durationSeconds: clip.sourceDuration, buckets: buckets,
-			onProgress: onProgress)
-		let samples = smoothed(raw)
+		let samples = try await ProcessedAudioRenderer.shared.withRenderedAudio(for: clip) { url in
+			let raw = try Self.loadFromAudioFile(
+				url: url, durationSeconds: clip.sourceDuration, buckets: buckets,
+				onProgress: onProgress)
+			return Self.smoothed(raw)
+		}
 		cache[key] = samples
 		onProgress?(samples)
 		return samples
 	}
 
-	private func loadFromAudioFile(
+	private static func loadFromAudioFile(
 		url: URL, durationSeconds: Double, buckets: Int,
 		onProgress: (@Sendable ([Float]) -> Void)? = nil
 	) throws -> [Float] {
@@ -44,7 +45,16 @@ actor WaveformLoader {
 
 		let chunkSize: AVAudioFrameCount = 65536
 		var result = [Float](repeating: 0, count: buckets)
-		let bucketSize = max(1, Int(totalFrames) / buckets)
+		// Fractional, NOT `totalFrames / buckets`. Integer division floored the true
+		// ratio (e.g. 239.985 -> 239), and since a bucket index is frame/ratio, a
+		// too-small ratio pushes every event to a higher index - the waveform
+		// stretches right, drifting further the longer the clip. On a 10-minute clip
+		// that 0.4% error is 2.6 seconds.
+		//
+		// The ratio is fractional because `totalFrames` is the rendered file's real
+		// length, which AAC priming leaves a few ms short of the clip's duration -
+		// enough to drag the ratio just under the integer boundary.
+		let framesPerBucket = max(1.0, Double(totalFrames) / Double(buckets))
 		var framesRead: Int = 0
 
 		guard
@@ -65,16 +75,20 @@ actor WaveformLoader {
 			// Compute bucket peaks for this chunk using vDSP
 			let chunkStart = framesRead
 			let chunkEnd = framesRead + count
-			let firstBucket = min(chunkStart / bucketSize, buckets - 1)
-			let lastBucket = min((chunkEnd - 1) / bucketSize, buckets - 1)
+			let firstBucket = min(Int(Double(chunkStart) / framesPerBucket), buckets - 1)
+			let lastBucket = min(Int(Double(chunkEnd - 1) / framesPerBucket), buckets - 1)
 
 			guard firstBucket <= lastBucket else {
 				framesRead += count
 				continue
 			}
 			for b in firstBucket...lastBucket {
-				let bStart = max(b * bucketSize, chunkStart) - chunkStart
-				let bEnd = min((b + 1) * bucketSize, chunkEnd) - chunkStart
+				// A bucket straddling two chunks is filled by both - `result[b]` maxes,
+				// so the halves combine rather than one overwriting the other.
+				let bucketStart = Int(Double(b) * framesPerBucket)
+				let bucketEnd = min(Int(Double(b + 1) * framesPerBucket), Int(totalFrames))
+				let bStart = max(bucketStart, chunkStart) - chunkStart
+				let bEnd = min(bucketEnd, chunkEnd) - chunkStart
 				let length = bEnd - bStart
 				guard length > 0 else { continue }
 
@@ -97,7 +111,7 @@ actor WaveformLoader {
 		return result
 	}
 
-	private func smoothed(_ input: [Float]) -> [Float] {
+	private static func smoothed(_ input: [Float]) -> [Float] {
 		guard input.count > 2 else { return input }
 		let radius = 5
 		var output = [Float](repeating: 0, count: input.count)

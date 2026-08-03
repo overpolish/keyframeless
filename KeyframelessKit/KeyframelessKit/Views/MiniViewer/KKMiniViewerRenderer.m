@@ -5,12 +5,20 @@
 
 #import "KKMiniViewerRenderer.h"
 
+#import "KKMiniElement.h"
 #import "KKMiniViewerCropEditor.h"
+#import "KKOSCGlyphStyle.h"
+#import "KKOSCVisibilityModel.h"
 #import "KKResizeCursor.h"
+#import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKLocalized.h>
+#import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
+#import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKWatermark.h>
 
 // Map a KKMiniViewerCropEditor handle index (0-7: TL, TC, TR, RC, BR, BC, BL,
 // LC) to a resize-cursor kind. Mirrors the crop box's corner/edge layout.
@@ -43,6 +51,13 @@ static const int kKKRotationRingSamples = 192;
 static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 
 @implementation KKMiniViewerRenderer {
+  BOOL _previewMotionBlurSampling;
+  // Motion-blur sample targets, rebuilt only when the preview's size or format
+  // changes (see -_motionBlurSampleTexturesCount:like:).
+  NSArray<id<MTLTexture>> *_mbSampleTextures;
+  NSUInteger _mbSampleW;
+  NSUInteger _mbSampleH;
+  MTLPixelFormat _mbSampleFormat;
   KKMiniViewerCropEditor *_cropEditor;
   // Live-override store: per-label in-flight drag values. Populated by the
   // popover's onHandleValue during a drag, cleared on drag end. Bound to
@@ -52,10 +67,16 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *_liveValues;
   double _liveFraction;
   BOOL _hasLiveFraction;
+  // Diagnostic only: the last (label, fractions) an override was REFUSED for,
+  // so a refusal that repeats every frame of a drag is logged once rather than
+  // sixty times a second.
+  NSString *_liveRefusedLabel;
+  double _liveRefusedAt;
+  double _liveRefusedWanted;
   BOOL _pointGrabbed;
   BOOL _rotationGrabbed;
   // Rotation drag state (set by the default rotation hooks; mirrored on the
-  // viewer side by `KKRotationOSC` / MagicMove OSC.m).
+  // viewer side by `KKRotationOSC`).
   NSInteger _rotActiveAxis; // -1, 0, 1, 2
   double _rotPressAngle;    // ring t at the press point
   double _rotPressTangentX; // Y-DOWN screen-space tangent, unit
@@ -69,12 +90,29 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   double _rotLastWrittenRz;
 }
 
+// The canvas is a PAUSED MTKView driven by setNeedsDisplay, so a swapped-in
+// timeline (browser template load, preset apply, undo, the host's
+// parameterChanged pump) leaves the last render on screen until something else
+// happens to dirty the view. The main viewer has the render nudge for exactly
+// this; marking the canvas here is the mini's equivalent, so every path that
+// replaces the timeline re-renders instead of only the ones that remembered to.
+- (void)setTimeline:(KKTimeline *)timeline {
+  _timeline = [timeline copy];
+  [self.canvas setNeedsDisplay:YES];
+  [self.canvas setHandlesNeedDisplay];
+}
+
 - (instancetype)init {
   self = [super init];
   if (self) {
     _cropEditor = [[KKMiniViewerCropEditor alloc] init];
     _currentSlotCount = 1;
     _rotActiveAxis = -1;
+    _clipTimelineStartSec = -1.0; // unknown until the inspector pushes it
+    // Warm the app-group container off-thread so the first parameter-link
+    // resolve in this (inspector/ViewBridge) process doesn't stall on the ~1-2s
+    // cold container lookup. Harmless no-op when nothing links.
+    [KKLinkBus warmUp];
   }
   return self;
 }
@@ -111,7 +149,10 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   return KKMiniHandleStylePoint;
 }
 - (CGFloat)pointHandleSizeScale {
-  return 1.0;
+  // Every shipped plugin overrode the old 1.0 default to 0.6 so its handles
+  // match the motion-path anchor dots - so the family scale IS the default
+  // now (shared constant, KKOSCGlyphStyle.h). Override only to deviate.
+  return KKOSCAnchorDotScale;
 }
 - (BOOL)pointHandleIsActive {
   return _pointGrabbed;
@@ -157,8 +198,8 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 }
 
 // Default precedence is rotation > point (the ring is the larger target). A
-// plugin whose point handle draws ON TOP of the rings (e.g. MagicMove's
-// Position arc, matching the viewer's layering) overrides this to YES so the
+// plugin whose point handle draws ON TOP of the rings (e.g. a Position
+// arc, matching the viewer's layering) overrides this to YES so the
 // hit-test / drag / opt-click all prefer the point where they overlap.
 - (BOOL)pointHandleBeatsRotation {
   return NO;
@@ -166,18 +207,48 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 
 #pragma mark - Rotation gizmo: small accessor defaults
 
+- (KKRotationAxes)rotationEnabledAxes {
+  return KKRotationAxesAll;
+}
+
+// Expand a lane value (one component per enabled axis, X/Y/Z order) to a full
+// [X,Y,Z] Euler in degrees; disabled axes read 0.
+- (NSArray<NSNumber *> *)_eulerDegFromLaneValues:(NSArray<NSNumber *> *)v {
+  KKRotationAxes axes = [self rotationEnabledAxes];
+  double xyz[3] = {0.0, 0.0, 0.0};
+  NSUInteger idx = 0;
+  if (axes & KKRotationAxisX)
+    xyz[0] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  if (axes & KKRotationAxisY)
+    xyz[1] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  if (axes & KKRotationAxisZ)
+    xyz[2] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  return @[ @(xyz[0]), @(xyz[1]), @(xyz[2]) ];
+}
+
+// Collapse a full [X,Y,Z] Euler back to the lane's components (enabled axes
+// only, X/Y/Z order).
+- (NSArray<NSNumber *> *)_laneValuesFromEulerDeg:(NSArray<NSNumber *> *)e {
+  KKRotationAxes axes = [self rotationEnabledAxes];
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  if (axes & KKRotationAxisX)
+    [out addObject:e[0]];
+  if (axes & KKRotationAxisY)
+    [out addObject:e[1]];
+  if (axes & KKRotationAxisZ)
+    [out addObject:e[2]];
+  return out;
+}
+
 - (NSArray<NSNumber *> *)rotationEulerDegrees {
   NSString *label = self.rotationLabel;
   if (!label)
     return @[ @0.0, @0.0, @0.0 ];
-  NSArray<NSNumber *> *v = [self valuesForLabel:label];
-  if (v.count >= 3)
-    return v;
-  // Pad short lanes to length 3.
-  return @[
-    v.count > 0 ? v[0] : @0.0, v.count > 1 ? v[1] : @0.0,
-    v.count > 2 ? v[2] : @0.0
-  ];
+  // ROOT value: this drives the rotation GIZMO (ring draw, hit-test, drag
+  // seed), which edits the lane's own value - not the link-expression result
+  // (else a drag would compound). The rendered object uses the resolved
+  // valuesForLabel:.
+  return [self _eulerDegFromLaneValues:[self rootValuesForLabel:label]];
 }
 
 - (CGPoint)rotationCenterForContentRect:(CGRect)cr {
@@ -246,81 +317,76 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
          self.onHandleVisibilityToggled != nil;
 }
 
-// "Peek and use" mode: the master is off (handlesHidden) and Opt is held. Every
-// control reveals and is interactive, so its ghost draws at FULL alpha (it
-// reads as usable, not as a dimmed re-show target). Distinct from a single
-// element you individually hid while the master is on - that ghost stays dimmed
-// at 0.3.
+// The mini's inputs to the shared visibility rules (KKOSCVisibilityModel) -
+// every shown/ghost/peek decision below routes through the model so the mini
+// cannot drift from the viewer's KKOnScreenControl rules.
+- (KKOSCVisibilityState)_visibilityState {
+  return (KKOSCVisibilityState){.locked = _handlesLocked,
+                                .masterOff = _handlesHidden,
+                                .revealActive = [self _revealActive]};
+}
+
+// "Peek and use" mode: the master is off (handlesHidden) and Opt is held.
+// Every control reveals and is interactive, so its ghost draws at FULL alpha.
 - (BOOL)_peekActive {
-  return _handlesHidden && [self _revealActive];
+  return KKOSCVisibilityPeek([self _visibilityState]);
 }
 
 // A handle/element is "user-hidden" (master tick off or its own pill off) -
 // eligible to be revealed as a ghost. Boundary-phase suppression is separate.
 - (BOOL)_userHiddenLabel:(NSString *)label {
-  return _handlesHidden ||
-         (label && [_hiddenHandleLabels containsObject:label]);
+  return _handlesHidden || [self _individuallyHiddenLabel:label];
 }
 
-// Hidden by its own pill, independent of the master tick.
+// Hidden by its own pill (or a hidden dot-hierarchy ancestor), independent of
+// the master tick.
 - (BOOL)_individuallyHiddenLabel:(NSString *)label {
-  return label && [_hiddenHandleLabels containsObject:label];
+  return KKOSCLabelHiddenInSet(_hiddenHandleLabels, label);
 }
 
 // Whether `label`'s handle should be drawn + hit-tested this frame.
-//   master on  : visible unless individually hidden; Opt-hold reveals a hidden
-//                one as a dim ghost (so an Opt-click can re-show it).
-//   master off : Opt-hold "peek" shows ONLY the controls left enabled - the
-//   ones
-//                you turned off stay off (peek mirrors a flip back to
-//                master-on, so it respects your per-element config rather than
-//                flashing everything).
 - (BOOL)_shownLabel:(NSString *)label {
-  if (_handlesLocked)
-    return NO;
-  BOOL hidden = [self _individuallyHiddenLabel:label];
-  if (_handlesHidden)
-    return [self _revealActive] && !hidden;
-  return !hidden || [self _revealActive];
+  return KKOSCVisibilityShown([self _visibilityState],
+                              [self _individuallyHiddenLabel:label]);
 }
 
 // A specific rotation ring is user-hidden if the master tick is off, the whole
 // Rotation compound is hidden, or that ring's own key is hidden. The popover
-// stores ring keys as "<rotationLabel>.X/.Y/.Z" (e.g. @"Rotation.X").
+// stores ring keys as "<rotationLabel>.X/.Y/.Z" (e.g. @"Rotation.X") - the
+// parent-compound rule is the model's dot-hierarchy walk.
 - (BOOL)_ringUserHiddenAtAxis:(int)k {
   if (_handlesHidden)
     return YES;
   return [self _ringIndividuallyHiddenAtAxis:k];
 }
 
+- (NSString *)_ringKeyAtAxis:(int)k {
+  NSString *axis = (k == 0) ? @"X" : (k == 1) ? @"Y" : @"Z";
+  return [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+}
+
 // As above but independent of the master tick: the ring's own pill, or its
 // parent Rotation compound, turned off.
 - (BOOL)_ringIndividuallyHiddenAtAxis:(int)k {
-  if (self.rotationLabel &&
-      [_hiddenHandleLabels containsObject:self.rotationLabel])
-    return YES;
-  NSString *axis = (k == 0) ? @"X" : (k == 1) ? @"Y" : @"Z";
-  NSString *key =
-      [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
-  return [_hiddenHandleLabels containsObject:key];
+  if (!self.rotationLabel)
+    return NO;
+  return KKOSCLabelHiddenInSet(_hiddenHandleLabels, [self _ringKeyAtAxis:k]);
 }
 
-// Ring is drawn / hit-tested this frame. Mirrors -_shownLabel: : master-off
-// peek shows only the rings left enabled.
+// Ring is drawn / hit-tested this frame. Same model rule as -_shownLabel:.
 - (BOOL)_ringShownAtAxis:(int)k {
-  if (_handlesLocked)
+  // A disabled axis (e.g. X/Y on a 2D plugin's Z-only rotation) never shows or
+  // hit-tests.
+  if (!([self rotationEnabledAxes] & (1 << k)))
     return NO;
-  BOOL hidden = [self _ringIndividuallyHiddenAtAxis:k];
-  if (_handlesHidden)
-    return [self _revealActive] && !hidden;
-  return !hidden || [self _revealActive];
+  return KKOSCVisibilityShown([self _visibilityState],
+                              [self _ringIndividuallyHiddenAtAxis:k]);
 }
 
 // Per-ring draw alpha: dim when it's a revealed ghost, full in peek mode.
 - (float)_ringAlphaAtAxis:(int)k {
-  if ([self _peekActive])
-    return 1.0f;
-  return [self _ringUserHiddenAtAxis:k] ? 0.3f : 1.0f;
+  return KKOSCVisibilityGhostAlpha([self _visibilityState],
+                                   [self _ringUserHiddenAtAxis:k]);
 }
 
 - (BOOL)rotationOSCCenter:(out CGPoint *)outCenter
@@ -334,9 +400,6 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   KKRotMatrix3 m = [self _currentRotationMatrix];
   NSArray<NSColor *> *cols = [self rotationRingColors];
   KKRotationOSCParams p = {
-      .rotCol0 = m.col0,
-      .rotCol1 = m.col1,
-      .rotCol2 = m.col2,
       // ringHalfWidth / outlineWidth are fractions of radius; the canvas's
       // encode helper rescales them into the shader's normalized space. The
       // 3.5/90 ratio reads as a chunky grab target on the mini.
@@ -355,6 +418,9 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
            [self _ringShownAtAxis:1] ? [self _ringAlphaAtAxis:1] : 0.0f,
            [self _ringShownAtAxis:2] ? [self _ringAlphaAtAxis:2] : 0.0f},
   };
+  // Built-in path is the classic full 3-axis gizmo: every ring under the one
+  // pose (trackball semantics).
+  KKRotationOSCParamsSetRingBases(&p, m, m, m);
   *outParams = p;
   return YES;
 }
@@ -446,9 +512,12 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                              &_rotLastWrittenRy, &_rotLastWrittenRz, &rx, &ry,
                              &rz);
   const double kRadToDeg = 180.0 / M_PI;
-  NSArray<NSNumber *> *newValues =
+  NSArray<NSNumber *> *euler =
       @[ @(rx * kRadToDeg), @(ry * kRadToDeg), @(rz * kRadToDeg) ];
-  [self commitValues:newValues forLabel:label canvas:canvas];
+  // Persist only the enabled axes (the lane carries one component per axis).
+  [self commitValues:[self _laneValuesFromEulerDeg:euler]
+            forLabel:label
+              canvas:canvas];
 }
 
 #pragma mark - Provided to subclasses
@@ -460,7 +529,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // through a drag - no mid-drag exemption needed.
 - (BOOL)isConstantLabel:(NSString *)label {
   for (KKLane *lane in self.timeline.lanes)
-    if ([lane.label isEqualToString:label])
+    if ([lane.key isEqualToString:label])
       // Constants popover: a constant (disabled) lane shows its handle.
       // Boundary popover: only the *animatable* lanes being edited there
       // show theirs (so a disabled property's handle doesn't intrude).
@@ -473,9 +542,89 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     NSArray<NSNumber *> *live = _liveValues[label];
     if (live.count > 0 && fabs(self.editFraction - _liveFraction) < 1e-4)
       return live;
+    // An in-flight value that the fraction gate then refuses is a live preview
+    // the user is watching not happen: the picture stays on the committed
+    // timeline for the whole gesture and the edit appears in one step on
+    // mouse-up. Logged (once per distinct refusal) rather than silently
+    // dropped, because the two fractions name who disagreed - the pusher or the
+    // encode pass that moved editFraction under it.
+    if (live.count > 0 && (![_liveRefusedLabel isEqualToString:label] ||
+                           fabs(_liveRefusedAt - self.editFraction) > 1e-4 ||
+                           fabs(_liveRefusedWanted - _liveFraction) > 1e-4)) {
+      _liveRefusedLabel = [label copy];
+      _liveRefusedAt = self.editFraction;
+      _liveRefusedWanted = _liveFraction;
+      KKLogWarn(@"[MiniViewer] live override for \"%@\" refused: pushed at "
+                @"fraction %.6f, rendering at %.6f",
+                label, _liveFraction, self.editFraction);
+    }
   }
   for (KKLane *lane in self.timeline.lanes) {
-    if (![lane.label isEqualToString:label])
+    if (![lane.key isEqualToString:label])
+      continue;
+    // An expression-driven lane resolves through the same path the render uses
+    // (its own value plus any `${refs}` sampled at the playhead's project time)
+    // so the mini-viewer PREVIEW matches - this method feeds the shader-uniform
+    // reads that draw the object. Non-expression lanes keep the plain sampler.
+    // NB: the OSC handles must NOT use this (they'd seed a drag from value*expr
+    // and compound the write) - they read `rootValuesForLabel:` instead.
+    if (lane.linkExpression.length) {
+      // Resolve `${refs}` that point at a lane in THIS SAME clip to the LIVE
+      // timeline value, not the published bus curve. The bus only updates on
+      // commit, so a derived lane (e.g. rotation = min(${...Split}, 90)) would
+      // otherwise lag its source until mouse-up. When static the timeline and
+      // bus agree, so this is byte-identical then; during an edit the timeline
+      // is live, so the derived lane tracks in real time. Identity-checked by
+      // KKLinkSelfClipLaneForRef: another clip, another layer, or a param with
+      // no lane here falls through to the bus (republished by its source every
+      // tick), as does an expression-driven source (resolved recursively
+      // there).
+      KKTimeline *tl = self.timeline;
+      double editFrac = self.editFraction;
+      NSString *selfUUID = self.linkSelfUUID;
+      KKLinkRefOverride refOverride =
+          ^NSArray<NSNumber *> *(NSString *refName) {
+        KKLane *l = KKLinkSelfClipLaneForRef(refName, selfUUID, tl.lanes);
+        if (!l || l.linkExpression.length)
+          return nil;
+        // Display evaluation, matching what the bus publishes for this
+        // source when static - a raw read here would skip the visual
+        // projection + join smoothing the committed curve carries.
+        return KKLaneDisplayValueAtFraction(l, editFrac);
+      };
+      NSArray<NSNumber *> *rv = KKLinkResolvedLaneValueWithOverride(
+          lane, self.editFraction, self.linkTimelineSec,
+          self.clipDurationSeconds, refOverride);
+      if (rv.count > 0)
+        return rv;
+    }
+    // Display evaluation (visual projection + join smoothing), matching the
+    // real render - this feeds the shader-uniform reads that draw the object.
+    // A raw read here made the mini's picture skip the Basic hold projection
+    // and the C1 join fillet the FCP render applies.
+    NSArray<NSNumber *> *v =
+        KKLaneDisplayValueAtFraction(lane, self.editFraction);
+    if (v.count > 0)
+      return v;
+  }
+  return [self defaultValuesForLabel:label];
+}
+
+- (NSArray<NSNumber *> *)rootValuesForLabel:(NSString *)label {
+  // The lane's OWN value (NO link-expression resolution) - what the OSC handles
+  // edit. Identical to valuesForLabel: minus the expression pass: same
+  // live-drag override, same sampler, same default. An OSC drag on an
+  // expression lane must seed + write THIS (else it seeds from value*expr and
+  // compounds the write); the rendered object still uses the resolved
+  // valuesForLabel:, so the handle sits at the root value just like the main
+  // FCP viewer's OSC.
+  if (_hasLiveFraction) {
+    NSArray<NSNumber *> *live = _liveValues[label];
+    if (live.count > 0 && fabs(self.editFraction - _liveFraction) < 1e-4)
+      return live;
+  }
+  for (KKLane *lane in self.timeline.lanes) {
+    if (![lane.key isEqualToString:label])
       continue;
     NSArray<NSNumber *> *v =
         KKTimelineLaneValueAtFraction(lane, self.editFraction);
@@ -483,6 +632,34 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
       return v;
   }
   return [self defaultValuesForLabel:label];
+}
+
+// Filmstrip/onion fan-out for a generator: the distinct keypose times across
+// the ANIMATED lanes. Mirrors what the boundary popover collects for a source
+// plugin (every kp.time on enabled lanes, snapped + de-duplicated), but derived
+// straight from our own timeline - a generator has no FCP source round-trip.
+// A constant-only timeline yields [0] (one cell).
+- (NSArray<NSNumber *> *)miniViewerKeyposeFractions:(KKMiniViewerView *)canvas {
+  NSMutableArray<NSNumber *> *fracs = [NSMutableArray array];
+  for (KKLane *lane in self.timeline.lanes) {
+    if (!lane.enabled) // constants (single t=0 keypose) don't fan out
+      continue;
+    for (KKKeyPose *kp in lane.keyposes) {
+      double t = MAX(0.0, MIN(1.0, kp.time));
+      BOOL dup = NO;
+      for (NSNumber *f in fracs)
+        if (fabs(f.doubleValue - t) < 1e-4) {
+          dup = YES;
+          break;
+        }
+      if (!dup)
+        [fracs addObject:@(t)];
+    }
+  }
+  if (fracs.count == 0)
+    return @[ @0.0 ];
+  [fracs sortUsingSelector:@selector(compare:)];
+  return fracs;
 }
 
 - (void)setLiveValues:(NSArray<NSNumber *> *)values
@@ -525,8 +702,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 - (KKTimeline *)_timelineBySettingValues:(NSArray<NSNumber *> *)values
                                 forLabel:(NSString *)label {
   // The boundary (keypose) popover in a multi-owner timeline passes a
-  // LAYER-TAGGED label ("Stroke Width\x1f<id>"), but this renderer's timeline is
-  // single-owner with PLAIN labels - so match on the plain label or the live
+  // LAYER-TAGGED label ("Stroke Width\x1f<id>"), but this renderer's timeline
+  // is single-owner with PLAIN labels - so match on the plain label or the live
   // value edit finds no lane and the mini never re-renders (it worked in
   // Constants only because that popover is single-owner / plain). No-op for
   // single-owner plugins (plain == plain).
@@ -543,7 +720,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
     NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      if (![KKPlainLaneLabel(lanes[i].label) isEqualToString:plain])
+      if (![KKPlainLaneLabel(lanes[i].key) isEqualToString:plain])
         continue;
       if (lanes[i].keyposes.count)
         lanes[i] = KKLaneBySettingValuesNearestFraction(
@@ -557,7 +734,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
   BOOL replaced = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([KKPlainLaneLabel(lanes[i].label) isEqualToString:plain]) {
+    if ([KKPlainLaneLabel(lanes[i].key) isEqualToString:plain]) {
       // Copy the existing lane so EVERY property survives a constant value edit
       // - aspectLinked especially. A fresh lane that only carried
       // valueType/enabled/min/max dropped aspectLinked, so the first scale-box
@@ -576,7 +753,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     // metadata (aspect-link, units, bounds) - a bare lane drops those, which on
     // a fresh instance clears e.g. Radius/Scale aspect-lock on the first drag.
     KKLane *tmpl = [self templateLaneForLabel:label];
-    KKLane *lane = tmpl ? [tmpl copy] : [KKLane laneWithLabel:label];
+    KKLane *lane = tmpl ? [tmpl copy] : [KKLane laneWithKey:label label:label];
     lane.valueType = (KKLaneValueType)[self valueTypeForLabel:label];
     lane.enabled = NO; // a value edit must not opt the property in
     lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
@@ -604,7 +781,158 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   self.canvas = canvas;
   if (!source || !dest || !cb)
     return NO;
+  return [self _encodeProcessedSource:source into:dest commandBuffer:cb];
+}
+
+- (BOOL)_encodeProcessedSource:(id<MTLTexture>)source
+                          into:(id<MTLTexture>)dest
+                 commandBuffer:(id<MTLCommandBuffer>)cb {
+  if ([self _motionBlurSampleCount] >= 2) {
+    // Fast first when the subclass can do it: fixed cost instead of N renders.
+    // It declines (returns NO) if unsupported or setup fails, and accumulate is
+    // the correct fallback in both cases.
+    if (_previewMotionBlurTechnique == 0 &&
+        [self encodeFastMotionBlurFromSource:source
+                                        into:dest
+                             shutterFraction:_previewMotionBlurShutterSeconds /
+                                             _clipDurationSeconds
+                               commandBuffer:cb])
+      return YES;
+    return [self _encodeMotionBlurredFromSource:source
+                                           into:dest
+                                  commandBuffer:cb];
+  }
   return [self encodeEffectFromSource:source into:dest commandBuffer:cb];
+}
+
+- (BOOL)encodeFastMotionBlurFromSource:(id<MTLTexture>)source
+                                  into:(id<MTLTexture>)dest
+                       shutterFraction:(double)shutterFraction
+                         commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
+  return NO; // no velocity buffer by default
+}
+
+// 0 = don't blur. Every term has to be usable: the shutter only becomes a clip
+// FRACTION (which is all `editFraction` understands) once the clip duration is
+// known.
+- (NSInteger)_motionBlurSampleCount {
+  if (!_previewMotionBlurEnabled || _previewMotionBlurSamples < 2 ||
+      _previewMotionBlurShutterSeconds <= 0.0 || _clipDurationSeconds <= 0.0)
+    return 0;
+  return MIN(_previewMotionBlurSamples, (NSInteger)KK_MOTION_BLUR_MAX_SAMPLES);
+}
+
+// Pooled sample targets, one per sample, matching dest's size and format.
+// Rebuilt only when those change - the preview redraws at 60fps, so allocating
+// per frame would churn badly at high sample counts.
+- (NSArray<id<MTLTexture>> *)_motionBlurSampleTexturesCount:(NSInteger)n
+                                                       like:(id<MTLTexture>)
+                                                                dest {
+  if (_mbSampleTextures.count == (NSUInteger)n && _mbSampleW == dest.width &&
+      _mbSampleH == dest.height && _mbSampleFormat == dest.pixelFormat)
+    return _mbSampleTextures;
+
+  MTLTextureDescriptor *td =
+      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:dest.pixelFormat
+                                                         width:dest.width
+                                                        height:dest.height
+                                                     mipmapped:NO];
+  td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  td.storageMode = MTLStorageModePrivate;
+  NSMutableArray<id<MTLTexture>> *out = [NSMutableArray arrayWithCapacity:n];
+  for (NSInteger i = 0; i < n; i++) {
+    id<MTLTexture> t = [dest.device newTextureWithDescriptor:td];
+    if (!t)
+      return nil;
+    [out addObject:t];
+  }
+  _mbSampleTextures = out;
+  _mbSampleW = dest.width;
+  _mbSampleH = dest.height;
+  _mbSampleFormat = dest.pixelFormat;
+  return _mbSampleTextures;
+}
+
+- (BOOL)_encodeMotionBlurredFromSource:(id<MTLTexture>)source
+                                  into:(id<MTLTexture>)dest
+                         commandBuffer:(id<MTLCommandBuffer>)cb {
+  NSInteger n = [self _motionBlurSampleCount];
+  NSArray<id<MTLTexture>> *samples = [self _motionBlurSampleTexturesCount:n
+                                                                     like:dest];
+  id<MTLRenderPipelineState> acc = [self _motionBlurAccumulatePipelineFor:dest];
+  if (samples.count != (NSUInteger)n ||
+      !acc) // fall back rather than draw nothing
+    return [self encodeEffectFromSource:source into:dest commandBuffer:cb];
+
+  // Match the render's sample distribution exactly (see
+  // +[KKMotionBlur sampleTimesForState:]): the window TRAILS the frame,
+  // spanning [t - shutter, t], so the blur streaks behind the current position.
+  // Centring it here would put the smear on the wrong side of the movement.
+  double shutterFrac = _previewMotionBlurShutterSeconds / _clipDurationSeconds;
+  double base = _editFraction;
+  BOOL ok = YES;
+  _previewMotionBlurSampling = YES;
+  for (NSInteger i = 0; i < n && ok; i++) {
+    double t = (double)i / (double)(n - 1);
+    // Assign the ivar, not the property: subclasses may react to the setter,
+    // and this is a transient value restored before anything else observes it.
+    _editFraction = MAX(0.0, MIN(1.0, base - shutterFrac * t));
+    ok = [self encodeEffectFromSource:source into:samples[i] commandBuffer:cb];
+  }
+  _previewMotionBlurSampling = NO;
+  _editFraction = base;
+  if (!ok)
+    return [self encodeEffectFromSource:source into:dest commandBuffer:cb];
+
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = dest;
+  rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+  rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+  id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
+  float dw = (float)dest.width, dh = (float)dest.height;
+  [enc setViewport:(MTLViewport){0, 0, dw, dh, -1.0, 1.0}];
+  KKVertex2D verts[] = {
+      {{dw / 2.0f, -dh / 2.0f}, {1.0, 1.0}},
+      {{-dw / 2.0f, -dh / 2.0f}, {0.0, 1.0}},
+      {{dw / 2.0f, dh / 2.0f}, {1.0, 0.0}},
+      {{-dw / 2.0f, dh / 2.0f}, {0.0, 0.0}},
+  };
+  simd_uint2 vp = {(unsigned)dw, (unsigned)dh};
+  [enc setVertexBytes:verts
+               length:sizeof(verts)
+              atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&vp
+               length:sizeof(vp)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setRenderPipelineState:acc];
+  for (NSUInteger i = 0; i < samples.count; i++)
+    [enc setFragmentTexture:samples[i] atIndex:i];
+  int sc = (int)n;
+  [enc setFragmentBytes:&sc length:sizeof(sc) atIndex:0];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+          vertexStart:0
+          vertexCount:4];
+  [enc endEncoding];
+  return YES;
+}
+
+- (id<MTLRenderPipelineState>)_motionBlurAccumulatePipelineFor:
+    (id<MTLTexture>)dest {
+  // Same shader the render path accumulates with, so the averaging matches.
+  return [[KKMetalDeviceCache sharedCache]
+      buildAndRegisterPipelineStateForPluginID:@"KKMiniViewerMotionBlur"
+                                    registryID:dest.device.registryID
+                                   pixelFormat:dest.pixelFormat
+                                      bundleID:[NSBundle
+                                                   bundleForClass:
+                                                       [KKMiniViewerRenderer
+                                                           class]]
+                                                   .bundleIdentifier
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKMotionBlurAccumulateFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
 }
 
 - (BOOL)_labelSuppressed:(NSString *)label {
@@ -646,25 +974,23 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // Crop draw alpha: dim when it's a revealed ghost (border + corner handles),
 // full in peek mode.
 - (CGFloat)cropGhostAlpha {
-  if ([self _peekActive])
-    return 1.0;
-  return [self _userHiddenLabel:self.cropLabel] ? 0.3 : 1.0;
+  return [self ghostAlphaForLabel:self.cropLabel];
 }
 
 - (CGFloat)scaleGhostAlpha {
-  return 1.0; // no scale box by default; MagicMove overrides
+  return 1.0; // no scale box by default; subclasses override
 }
 
 - (CGFloat)anchorSquareGhostAlpha {
-  return 1.0; // no anchor square by default; MagicMove overrides
+  return 1.0; // no anchor square by default; subclasses override
 }
 
 - (CGFloat)positionHandleGhostAlpha {
-  return 1.0; // no secondary Position handle by default; Glow overrides
+  return 1.0; // no secondary Position handle by default; subclasses override
 }
 
 - (BOOL)positionHandleIsActive {
-  return NO; // no secondary Position handle by default; Glow overrides
+  return NO; // no secondary Position handle by default; subclasses override
 }
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
@@ -722,9 +1048,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (CGFloat)pointHandleGhostAlpha {
-  if ([self _peekActive])
-    return 1.0;
-  return [self _userHiddenLabel:self.pointLabel] ? 0.3 : 1.0;
+  return [self ghostAlphaForLabel:self.pointLabel];
 }
 
 - (BOOL)labelVisibleOrRevealing:(NSString *)label {
@@ -732,9 +1056,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (CGFloat)ghostAlphaForLabel:(NSString *)label {
-  if ([self _peekActive])
-    return 1.0;
-  return [self _userHiddenLabel:label] ? 0.3 : 1.0;
+  return KKOSCVisibilityGhostAlpha([self _visibilityState],
+                                   [self _userHiddenLabel:label]);
 }
 
 - (NSCursor *)kkVisibilityCursorForLabel:(NSString *)label {
@@ -885,10 +1208,20 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   } else if ([self _rotationActiveForContentRect:cr] &&
              [self rotationHitTestAtPoint:p contentRect:cr] &&
              self.rotationLabel) {
-    NSString *axis = (_rotActiveAxis == 0)   ? @"X"
-                     : (_rotActiveAxis == 1) ? @"Y"
-                                             : @"Z";
-    label = [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+    // A single-axis rotation gizmo is keyed on the FLAT label (matching the
+    // viewer OSC's -oscElementKeyForActivePart:); only a multi-axis gizmo
+    // qualifies the key by axis. Emitting "Rotation.Z" for a single-axis lane
+    // would toggle a key nothing else checks, so the hide would silently no-op.
+    KKRotationAxes axes = [self rotationEnabledAxes];
+    BOOL singleAxis = axes != 0 && (axes & (axes - 1)) == 0;
+    if (singleAxis) {
+      label = self.rotationLabel;
+    } else {
+      NSString *axis = (_rotActiveAxis == 0)   ? @"X"
+                       : (_rotActiveAxis == 1) ? @"Y"
+                                               : @"Z";
+      label = [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+    }
   } else if ([self _pointActiveForContentRect:cr] &&
              [self pointHandleHitAtPoint:p contentRect:cr] && self.pointLabel) {
     label = self.pointLabel;
@@ -1000,6 +1333,229 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                forLabel:(NSString *)label {
   if (values.count)
     self.timeline = [self _timelineBySettingValues:values forLabel:label];
+}
+
+// THE aggregate element assembly: translate every legacy per-kind hook into
+// typed KKMiniElement descriptors, in the canvas's historical draw order
+// (rings, motion paths, boxes, rotations, primary point, extra glyphs, fixed
+// glyphs, anchor square, secondary Position arc). Subclasses keep overriding
+// the legacy hooks and inherit the descriptor surface for free; a subclass
+// that has outgrown the hooks overrides THIS instead and returns elements
+// directly. The view consults ONLY this for OSC drawing.
+- (NSArray<KKMiniElement *> *)miniViewer:(KKMiniViewerView *)canvas
+                  elementsForContentRect:(CGRect)cr {
+  NSMutableArray<KKMiniElement *> *els = [NSMutableArray array];
+  self.canvas = canvas;
+
+  // Single ring OSC (radius ring) - emphasis + ghost from the legacy hooks.
+  {
+    CGPoint c = CGPointZero;
+    CGFloat rx = 0, ry = 0;
+    if ([self respondsToSelector:@selector(miniViewer:ringCenter:radiusX:
+                                           radiusY:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                        ringCenter:&c
+                                           radiusX:&rx
+                                           radiusY:&ry
+                                       contentRect:cr] &&
+        rx > 0.5 && ry > 0.5) {
+      NSInteger emph =
+          [self respondsToSelector:@selector(miniViewerRingEmphasis:)]
+              ? [(id<KKMiniViewerDelegate>)self miniViewerRingEmphasis:canvas]
+              : 0;
+      CGFloat a =
+          [self respondsToSelector:@selector(miniViewerRingGhostAlpha:)]
+              ? [(id<KKMiniViewerDelegate>)self miniViewerRingGhostAlpha:canvas]
+              : 1.0;
+      [els addObject:[KKMiniElement ringAt:c
+                                   radiusX:rx
+                                   radiusY:ry
+                                  emphasis:emph
+                                     alpha:a]];
+    }
+  }
+  // Extra rings (multiple dynamic ring OSCs).
+  if ([self
+          respondsToSelector:@selector(miniViewer:extraRingsForContentRect:)]) {
+    for (NSDictionary<NSString *, id> *b in
+         [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                           extraRingsForContentRect:cr]) {
+      CGFloat rx = [b[@"radiusX"] doubleValue];
+      CGFloat ry = [b[@"radiusY"] doubleValue];
+      if (rx <= 0.5 || ry <= 0.5)
+        continue;
+      [els addObject:[KKMiniElement
+                           ringAt:[b[@"center"] pointValue]
+                          radiusX:rx
+                          radiusY:ry
+                         emphasis:[b[@"emphasis"] integerValue]
+                            alpha:b[@"alpha"] ? [b[@"alpha"] doubleValue]
+                                              : 1.0]];
+    }
+  }
+
+  // Primary motion path (Position trajectory + tangents + anchors).
+  if ([self respondsToSelector:
+                @selector(miniViewer:motionPathPolylineForContentRect:)]) {
+    NSArray<NSValue *> *poly = [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                         motionPathPolylineForContentRect:cr];
+    NSArray<NSValue *> *segs =
+        [self respondsToSelector:
+                  @selector(miniViewer:motionPathHandleSegmentsForContentRect:)]
+            ? [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                  motionPathHandleSegmentsForContentRect:cr]
+            : nil;
+    NSArray<NSValue *> *anchors =
+        [self
+            respondsToSelector:@selector(
+                                   miniViewer:motionPathAnchorsForContentRect:)]
+            ? [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                         motionPathAnchorsForContentRect:cr]
+            : nil;
+    if (poly.count >= 2 || segs.count || anchors.count)
+      [els addObject:[KKMiniElement
+                         motionPathWithPolyline:poly
+                                 handleSegments:segs
+                                        anchors:anchors
+                                          alpha:[self motionPathGhostAlpha]]];
+  }
+  // Extra motion paths (one per additional point OSC).
+  if ([self
+          respondsToSelector:@selector(
+                                 miniViewer:extraMotionPathsForContentRect:)]) {
+    for (NSDictionary<NSString *, id> *b in
+         [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                     extraMotionPathsForContentRect:cr]) {
+      [els addObject:[KKMiniElement
+                         motionPathWithPolyline:b[@"poly"]
+                                 handleSegments:b[@"segs"]
+                                        anchors:b[@"anchors"]
+                                          alpha:b[@"alpha"]
+                                                    ? [b[@"alpha"] doubleValue]
+                                                    : 1.0]];
+    }
+  }
+
+  // Boxes (crop / scale / future box gizmos). Element alpha = the box's own
+  // ghostAlpha - the per-kind cropGhostAlpha hook dissolves into the element.
+  if ([self respondsToSelector:@selector(miniViewer:boxesForContentRect:)]) {
+    for (KKMiniBox *box in [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                                  boxesForContentRect:cr]) {
+      KKMiniElement *e = [KKMiniElement boxWithRect:box.rect
+                                      handleCenters:box.handleCenters
+                                            readout:box.readout
+                                              alpha:box.ghostAlpha];
+      e.sizeScale = [self pointHandleSizeScale]; // box handles match the dots
+      [els addObject:e];
+    }
+  }
+
+  // Rotation gizmos: the single delegate path (which carries the base's
+  // visibility gating) + the multi array.
+  {
+    CGPoint c = CGPointZero;
+    CGFloat r = 0;
+    KKRotationOSCParams p = {0};
+    if ([self respondsToSelector:@selector(miniViewer:rotationOSCCenter:
+                                           radiusPx:params:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                 rotationOSCCenter:&c
+                                          radiusPx:&r
+                                            params:&p
+                                       contentRect:cr])
+      [els addObject:[KKMiniElement rotationAt:c radiusPx:r params:p]];
+  }
+  if ([self respondsToSelector:@selector(
+                                   miniViewer:rotationOSCsForContentRect:)]) {
+    for (KKMiniRotation *r in [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                              rotationOSCsForContentRect:cr])
+      [els addObject:[KKMiniElement rotationAt:r.center
+                                      radiusPx:r.radiusPx
+                                        params:r.params]];
+  }
+
+  // Primary point handle - style/active/ghost fold onto the element.
+  {
+    CGPoint c = CGPointZero;
+    if ([self respondsToSelector:
+                  @selector(miniViewer:pointHandleCenter:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                 pointHandleCenter:&c
+                                       contentRect:cr]) {
+      KKMiniElement *e = [KKMiniElement glyphAt:c
+                                          style:[self pointHandleStyle]
+                                          alpha:[self pointHandleGhostAlpha]];
+      e.active = [self pointHandleIsActive];
+      e.sizeScale = [self pointHandleSizeScale];
+      e.label = self.pointLabel;
+      [els addObject:e];
+    }
+  }
+  // Extra point handles (every one drawn with the primary's style).
+  if ([self respondsToSelector:
+                @selector(miniViewer:extraPointHandleGlyphsForContentRect:)]) {
+    for (NSDictionary<NSString *, id> *g in
+         [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+               extraPointHandleGlyphsForContentRect:cr]) {
+      KKMiniElement *e =
+          [KKMiniElement glyphAt:[g[@"center"] pointValue]
+                           style:[self pointHandleStyle]
+                           alpha:g[@"alpha"] ? [g[@"alpha"] doubleValue] : 1.0];
+      e.sizeScale = [self pointHandleSizeScale];
+      [els addObject:e];
+    }
+  }
+  // Fixed-glyph handles (style chosen per handle).
+  if ([self
+          respondsToSelector:@selector(
+                                 miniViewer:extraFixedGlyphsForContentRect:)]) {
+    for (NSDictionary<NSString *, id> *g in
+         [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                     extraFixedGlyphsForContentRect:cr]) {
+      KKMiniElement *e =
+          [KKMiniElement glyphAt:[g[@"center"] pointValue]
+                           style:[g[@"style"] integerValue]
+                           alpha:g[@"alpha"] ? [g[@"alpha"] doubleValue] : 1.0];
+      e.whiteFill = [g[@"white"] boolValue];
+      e.sizeScale = [self pointHandleSizeScale];
+      [els addObject:e];
+    }
+  }
+
+  // Anchor pivot square (topmost-but-one, matching viewer layering).
+  {
+    CGPoint c = CGPointZero;
+    if ([self respondsToSelector:
+                  @selector(miniViewer:anchorSquareCenter:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                anchorSquareCenter:&c
+                                       contentRect:cr]) {
+      KKMiniElement *e = [KKMiniElement glyphAt:c
+                                          style:KKMiniHandleStyleSquare
+                                          alpha:[self anchorSquareGhostAlpha]];
+      e.sizeScale = [self pointHandleSizeScale];
+      [els addObject:e];
+    }
+  }
+
+  // Secondary Position arc handle (topmost).
+  {
+    CGPoint c = CGPointZero;
+    if ([self respondsToSelector:
+                  @selector(miniViewer:positionHandleCenter:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                              positionHandleCenter:&c
+                                       contentRect:cr]) {
+      KKMiniElement *e =
+          [KKMiniElement glyphAt:c
+                           style:KKMiniHandleStyleArc
+                           alpha:[self positionHandleGhostAlpha]];
+      e.active = [self positionHandleIsActive];
+      [els addObject:e];
+    }
+  }
+
+  return els;
 }
 
 @end

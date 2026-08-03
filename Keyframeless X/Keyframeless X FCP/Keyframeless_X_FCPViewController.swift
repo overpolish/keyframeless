@@ -20,6 +20,10 @@ import SwiftUI
 	override func viewDidLoad() {
 		super.viewDidLoad()
 
+		// Before anything can render audio or fetch a model, so the sweep's
+		// "older than now" cutoff can only ever match a dead run's leftovers.
+		TempJanitor.sweepOnce()
+
 		let hostingVC = NSHostingController(rootView: AppShell(audioModel: model))
 		hostingVC.sizingOptions = []
 		addChild(hostingVC)

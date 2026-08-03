@@ -7,7 +7,7 @@
 
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKGapPopoverTypes.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @protocol KKMiniViewerDelegate;
 @class KKMiniViewerView;
@@ -40,6 +40,14 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Does not fire onTimelineMutated.
 - (void)applyTimeline:(KKTimeline *)timeline;
 
+/// The editing clip's instance uuid, so its expression popover can read the
+/// clip's own manifest off the bus and scope the reference picker to the clip's
+/// project (the project id lives on the manifest, written by the render
+/// process). Resolved on the view side because the render process can't push
+/// across to the ViewBridge-hosted popover. Empty / nil = unknown (picker stays
+/// library-wide).
+- (void)setLinkSelfUUID:(nullable NSString *)uuid;
+
 /// Optional all-owners (all-layers) timeline. When set, BOTH graphs (Basic +
 /// Advanced) render and edit this instead of the single-owner `timeline`: every
 /// animated lane across every layer shows, all editable, independent of which
@@ -67,6 +75,19 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Host's selected layer (multi-owner), so a freshly-opened keypose popover
 /// scopes its params to that layer (nil => the first animated layer).
 @property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// Multi-owner keypose popovers: how a param of the popover's owner that does
+/// NOT participate in the clicked boundary / keypose is presented.
+///  - NO (default, Canvas): it keeps the "Animate" affordance - a message row
+///    whose button arms the property here. Canvas's layers are independently
+///    keyed, so arming one is a normal edit and the affordance is the
+///    documented way to reach it.
+///  - YES (Mirage's shader rack): it is dimmed + inert instead. A rack entry's
+///    keyposes are one co-timed set, so arming a property that has no keypose
+///    at this time is exactly the edit the rule forbids.
+/// Single-owner timelines keep their Animate rows either way, and neither the
+/// foreign-owner scoping nor the node-switcher eligibility is affected - those
+/// match Canvas already.
+@property(nonatomic) BOOL keyposeStrictCoTimed;
 /// Host hint (multi-owner): YES if SOME layer still has a constant param, so
 /// the Constants button stays available even when the selected layer is fully
 /// animated (open it, then pick the layer with constants in the panel).
@@ -100,6 +121,17 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// unknown. Read from the Basic motion graph; used by "apply preset at
 /// playhead".
 @property(nonatomic, readonly) double playheadFraction;
+
+/// The clip fraction the open static-values popover is currently EDITING: the
+/// keypose's own fraction for a keypose popover, and the live playhead for a
+/// constants one (which previews wherever the playhead is).
+///
+/// Live, not the value the popover opened with. Both move without the popover
+/// reopening - keypose navigation walks between keyposes in place, and the
+/// playhead moves whenever the user scrubs - so a companion panel that captured
+/// the open notification's `fraction` reads animated lanes at the wrong time
+/// for the rest of the popover's life. Returns 0 with no popover open.
+@property(nonatomic, readonly) double staticPopoverEditFraction;
 
 /// The current timeline state. KVO-unsafe; read only from the main queue.
 @property(nonatomic, readonly) KKTimeline *currentTimeline;
@@ -139,6 +171,15 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Fired when the Basic graph zoom/pan changes (YES = zoomed in, not fit).
 @property(nonatomic, copy, nullable) void (^onZoomChanged)(BOOL zoomed);
 
+/// Fired (debounced) after a `KKLaneValueTypeCode` lane's text is committed. A
+/// host whose lane set is derived from that source (e.g. a shader's `// #color`
+/// directive) uses this to re-derive and swap the available lanes live.
+@property(nonatomic, copy, nullable) void (^onCodeCommitted)(NSString *code);
+
+/// Swap the available-lanes template set and rebuild the visible rows, so
+/// source-derived lanes can appear/disappear live without a reselect.
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes;
+
 /// Reset the Basic graph's pinch-zoom/pan back to fit.
 - (void)resetZoom;
 
@@ -170,6 +211,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// May be empty.
 @property(nonatomic, readonly) NSArray<NSView *> *accessoryButtons;
 @property(nonatomic, copy, nullable) void (^onAccessoryButtonsChanged)(void);
+
+/// Fires when the shared popover starts / stops showing CONSTANTS (as opposed
+/// to a keypose, gap, or nothing), so the inspector can light up the Constants
+/// button. YES on constants open (fresh or a keypose->constants switch), NO
+/// when it closes or switches to a keypose/gap.
+@property(nonatomic, copy, nullable) void (^onConstantsPopoverActiveChanged)
+    (BOOL active);
 
 /// The lane-visibility filter cluster (filter glyph + clear), hosted CENTERED
 /// in the inspector's header row rather than in the right-aligned accessory
@@ -241,6 +289,31 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, copy, nullable) void (^onStaticValueDragEnded)
     (NSString *label, NSArray<NSNumber *> *values);
 
+/// A host strip mounted inside the static-values popover, between the
+/// mini-viewer band and the parameter rows (Mirage's shader rack). The block is
+/// called once per popover CREATION - the popover owns the view it returns, and
+/// the strip is gone when the popover closes - so the host must hold its
+/// reference weakly and rebuild on the next call.
+///
+/// `staticValuesAccessoryHeight` is what the strip occupies: the popover grows
+/// by it rather than taking it out of the rows, so the parameter UI below is
+/// never clipped or overlapped. Both nil/0 by default - a host that sets
+/// neither gets the popover unchanged.
+@property(nonatomic, copy, nullable) NSView * (^staticValuesAccessoryProvider)
+    (void);
+@property(nonatomic) CGFloat staticValuesAccessoryHeight;
+
+/// Optional scope for the CONSTANTS editor only: return NO for a lane the
+/// constants popover should not list. The graphs, the Animated dropdown and
+/// every write path are untouched - the timeline still holds every lane under
+/// its full key, which is what lets the scope change without a write.
+///
+/// For a host whose one timeline carries several owners' controls at once and
+/// whose accessory strip picks between them (Mirage's shader rack: chained
+/// shaders, one selected). Read live on every call, so the host only has to
+/// re-drive the view when its selection moves. nil (the default) = no scoping.
+@property(nonatomic, copy, nullable) BOOL (^constantsLaneFilter)(KKLane *lane);
+
 /// Guide-only observation hooks, fired ALONGSIDE the functional callbacks (so
 /// they never clobber persistence / navigation). `renderModeChanged` fires when
 /// the boundary popover's render-mode pill switches mode;
@@ -296,6 +369,20 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// boundary preview resolves without manual scrubbing.
 @property(nonatomic, copy, nullable) void (^onBoundaryPreviewNeedsRender)(void);
 
+/// Move the HOST playhead to this clip fraction because the user is looking at
+/// a keypose there (popover open, keypose navigation, and the settle
+/// ping-back).
+///
+/// The render nudge above is not enough on its own: for an effect on an
+/// adjustment layer, FCP composites source requests only from the segment UNDER
+/// the playhead, so a keypose past a cut in the storyline below comes back as
+/// the wrong clip's pixels (held) or black. The only correct frame is the one
+/// rendered with the playhead actually at the keypose - which is also the
+/// behaviour a keypose click had before, and what FCP's own keyframe UI does.
+/// Wired to the same host seek as onScrub.
+@property(nonatomic, copy, nullable) void (^onBoundarySeekHostPlayhead)
+    (double frac);
+
 /// Cold-start clip aspect (w/h) for the mini viewer before a source resolves.
 /// Defaults to 16:9.
 @property(nonatomic) CGFloat miniViewerClipAspect;
@@ -305,10 +392,10 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, weak, nullable) id<KKMiniViewerDelegate>
     miniViewerDelegate;
 
-/// Forwarded to the popover mini's -grabsKeyFocusOnClick: when YES, clicking the
-/// mini makes it the key window so bare keys (e.g. Delete) are handled inside the
-/// popover instead of reaching the host. Default NO. Opt in from a plugin whose
-/// mini handles keys (e.g. Canvas's delete-selected-layer).
+/// Forwarded to the popover mini's -grabsKeyFocusOnClick: when YES, clicking
+/// the mini makes it the key window so bare keys (e.g. Delete) are handled
+/// inside the popover instead of reaching the host. Default NO. Opt in from a
+/// plugin whose mini handles keys (e.g. Canvas's delete-selected-layer).
 @property(nonatomic) BOOL miniGrabsKeyFocusOnClick;
 
 @end
@@ -321,6 +408,25 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Open the static-values popover anchored to the given view.
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor;
 
+/// The owner a layer-navigable dropdown should open on, resolved against
+/// `lanes`: the host's LIVE selection (`constantsLaneFilter`) when it supplies
+/// one, else our stored `activeLayerKey`. nil = no owner resolved (every
+/// single-owner plugin), which leaves a nav on its first layer.
+///
+/// Public so the popovers the INSPECTOR owns - the on-screen-control visibility
+/// checklist and the parameter-order list - open on the same entry the Animated
+/// dropdown does, off the one resolution rather than a second guess at it.
+- (nullable NSString *)hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes;
+
+/// The owners the OPEN keypose popover can edit: the layerKeys carrying a
+/// keypose at its time. Empty when no keypose popover is open, and when the
+/// lanes declare no owner at all (single-owner plugins - nothing to gate).
+///
+/// A host disables everything outside this set in its own owner switcher, so an
+/// owner with nothing at this time can't be selected into an empty editor -
+/// Canvas grays those rows in its layer list, Mirage its rack boxes.
+- (NSSet<NSString *> *)openKeyposePopoverLayerKeys;
+
 /// Present arbitrary `content` in a companion-capable popover (same keep-alive
 /// outside-click handling as the value popovers) and post the open/close
 /// signals a companion side panel (Canvas's layer list) observes, tagged with
@@ -330,6 +436,27 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
                            fromView:(NSView *)anchor
                                kind:(NSString *)kind
                             onClose:(nullable void (^)(void))onClose;
+
+/// Present `content` as an OPTION-PICKER popover (parameter order, motion
+/// blur): same reliable outside-click dismiss as the companion popovers, but it
+/// closes on ANY click outside itself (including elsewhere in the inspector),
+/// and a click on its own `anchor` toggle button is left for that button to
+/// handle. Reuses the shared popover instance, so opening it dismisses any open
+/// value / gap popover. Returns the popover (resize its contentSize as content
+/// changes).
+- (NSPopover *)showOptionPopover:(NSView *)content
+                        fromView:(NSView *)anchor
+                   preferredEdge:(NSRectEdge)preferredEdge
+                         onClose:(nullable void (^)(void))onClose;
+
+/// Push live-playback state to the currently-open keypose or constants
+/// popover's mini preview. While `playing`, the mini follows the playhead (each
+/// feed frame rendered at its own tag) with its on-screen controls hidden, so
+/// the clip can be played back without closing the popover; when it goes NO the
+/// mini snaps back to the edited keypose with its controls. A no-op when no
+/// mini popover is open. Gated on the same play-button state that the playhead
+/// poll drives.
+- (void)setOpenPopoverLivePlaying:(BOOL)playing;
 
 /// The value-editor row (slider/fields) for `label` in the currently open
 /// static-values popover, or nil if it isn't open / no such lane. Lets a
@@ -371,15 +498,16 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 - (void)commitGuideConstantFieldForLabel:(NSString *)label
                                component:(NSInteger)component;
 /// Screen rect of the choice-pill segment at `index` in `label`'s constant row
-/// (a radio enum, e.g. an end-marker type), NSZeroRect if the popover isn't open
-/// or the row has no choice pill. Spotlight target.
+/// (a radio enum, e.g. an end-marker type), NSZeroRect if the popover isn't
+/// open or the row has no choice pill. Spotlight target.
 - (NSRect)guideConstantChoicePillScreenRectForLabel:(NSString *)label
                                             atIndex:(NSInteger)index;
 /// Screen rect of the constant popover's category-nav pill for `key` (e.g.
 /// @"Stroke"), NSZeroRect if the popover isn't open or has no such category.
 - (NSRect)guideConstantCategoryPillScreenRectForKey:(NSString *)key;
-/// Screen rect of `label`'s "add to animated" gutter button in the open constant
-/// popover, NSZeroRect if not open or the row has none. Spotlight target.
+/// Screen rect of `label`'s "add to animated" gutter button in the open
+/// constant popover, NSZeroRect if not open or the row has none. Spotlight
+/// target.
 - (NSRect)guideConstantAddToAnimatedButtonScreenRectForLabel:(NSString *)label;
 /// Scroll `label`'s constant row into the popover's visible area (no-op if the
 /// popover isn't open or the row is hidden by the current category tab).

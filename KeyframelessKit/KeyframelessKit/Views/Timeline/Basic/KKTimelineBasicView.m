@@ -5,9 +5,11 @@
 
 #import "KKLocalized.h"
 #import "KKTimelineBasicView_Private.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
 
 #import "KKCheckboxView.h"
 #import "KKKeyposeSymbol.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineScale.h"
 #import "KKTimelineZoomPan.h"
 #import "KKTokens.h"
@@ -24,6 +26,11 @@
 
 @implementation KKTimelineBasicView
 
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes {
+  _availableLanes = [availableLanes copy];
+  [self setNeedsDisplay:YES];
+}
+
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
                               timeline:(KKTimeline *)timeline {
   self = [super initWithFrame:NSZeroRect];
@@ -35,8 +42,30 @@
     _snappedScrubFrac = NAN;
     _zp = [[KKTimelineZoomPan alloc] init];
     [self _buildUI];
+    // Clear the active-keypose highlight when the boundary popover closes.
+    [NSNotificationCenter.defaultCenter
+        addObserver:self
+           selector:@selector(_boundaryPopoverDidClose:)
+               name:KKStaticValuesPopoverDidCloseNotification
+             object:nil];
   }
   return self;
+}
+
+- (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)_boundaryPopoverDidClose:(NSNotification *)note {
+  [self clearPopoverHighlights];
+}
+
+- (void)clearPopoverHighlights {
+  if (!_boundaryPopoverShowing && !_gapPopoverShowing)
+    return;
+  _boundaryPopoverShowing = NO;
+  _gapPopoverShowing = NO;
+  [self setNeedsDisplay:YES];
 }
 
 - (void)_buildUI {
@@ -133,6 +162,13 @@
   [self setNeedsDisplay:YES];
 }
 
+- (void)setEmptyMessage:(NSString *)emptyMessage {
+  if (_emptyMessage == emptyMessage || [_emptyMessage isEqual:emptyMessage])
+    return;
+  _emptyMessage = [emptyMessage copy];
+  [self setNeedsDisplay:YES];
+}
+
 // The canonical Basic shape of a lane. The two Hold keyposes are ALWAYS
 // present (so drift / modulation are always possible); an In adds a keypose
 // at t≈0, an Out at t≈1. Keypose counts: neither 2, In 3, Out 3, both 4.
@@ -143,51 +179,9 @@
 //   n==3: [in@0, hold@t_inEnd, hold@outEndFrac]         - In only  (mid<0.5)
 //   n==3: [hold@0, hold@t_outStart, out@outEndFrac]     - Out only (mid≥0.5)
 //   n==4: [in@0, hold@t_inEnd, hold@t_outStart, out@outEndFrac]
-KKHoldShape KKShapeOfLane(KKLane *lane) {
-  KKHoldShape s = {NO, NO, 0, 0};
-  NSArray<KKKeyPose *> *k = lane.keyposes;
-  if (k.count < 2)
-    return s;
-  // Explicit holdShape overrides the count/time heuristic. Set every time
-  // Basic rebuilds, so once a lane has been touched the projection is no
-  // longer guessing - dragging the boundary past 0.5 stays In (or Out).
-  switch (lane.holdShape) {
-  case KKLaneHoldShapeNone:
-    break;
-  case KKLaneHoldShapeInOnly:
-    s.inEnabled = YES;
-    break;
-  case KKLaneHoldShapeOutOnly:
-    s.outEnabled = YES;
-    break;
-  case KKLaneHoldShapeBoth:
-    s.inEnabled = YES;
-    s.outEnabled = YES;
-    break;
-  case KKLaneHoldShapeAuto: {
-    // Legacy blobs without the annotation: infer from KP count + middle
-    // time. Breaks for boundary > 0.5 in single-phase but that's exactly
-    // what the explicit field is for; legacy data hasn't been through a
-    // rebuild yet.
-    NSInteger n = (NSInteger)k.count;
-    if (n == 4) {
-      s.inEnabled = YES;
-      s.outEnabled = YES;
-    } else if (n == 3) {
-      if (k[1].time < 0.5)
-        s.inEnabled = YES;
-      else
-        s.outEnabled = YES;
-    }
-    break;
-  }
-  }
-  s.holdStart = s.inEnabled ? 1 : 0;
-  s.holdEnd = (NSInteger)k.count - (s.outEnabled ? 2 : 1);
-  if (s.holdEnd < s.holdStart)
-    s.holdEnd = s.holdStart;
-  return s;
-}
+// KKShapeOfLane moved to the Math layer (KKTimingEvaluation) - the evaluator
+// and keypose visibility share it, so rendering and this view's drawing can
+// never disagree about a lane's shape.
 
 - (double)_clipDuration {
   if (_clipDurationSeconds > 0.0)
@@ -383,7 +377,7 @@ double KKBasicMotionY(double t, KKBasicProj p) {
 }
 
 // The drawn curve: `KKBasicMotionY` with the same C1 join smoothing the
-// render evaluator applies (`KKTimelineLaneValueAtFractionSmoothed`), so the
+// render evaluator applies (`KKLaneDisplayValueAtFraction`), so the
 // graph shows exactly what plays - transitions glide into/out of the Hold
 // with no detectable stop. Only an *enabled* In/Out is a real join (a
 // disabled phase is already a flat continuation). Diamonds/handles keep the
@@ -645,6 +639,8 @@ void KKBasicValueExtent(KKBasicProj p, double *outLo, double *outHi) {
 
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  if (KKTrackingAreaMatches(_trackingArea, NSZeroRect))
+    return; // InVisibleRect: the rect is AppKit's, so nothing to track here
   if (_trackingArea)
     [self removeTrackingArea:_trackingArea];
   _trackingArea = [[NSTrackingArea alloc]

@@ -4,6 +4,7 @@
  */
 
 #import "KKPathMorph.h"
+#import "KKCubicBezier.h"
 #import "KKShape.h"
 
 // Cubic-bezier-based morph implementation. Mirrors the recipe shared across
@@ -24,13 +25,6 @@ typedef struct {
 
 static const NSUInteger kSubstepsPerSegment = 24;
 static const NSUInteger kMinSampleCount = 8;
-
-static simd_float2 evalCubic(simd_float2 p0, simd_float2 c0, simd_float2 c1,
-                             simd_float2 p1, float t) {
-  float u = 1.0f - t;
-  return u * u * u * p0 + 3.0f * u * u * t * c0 + 3.0f * u * t * t * c1 +
-         t * t * t * p1;
-}
 
 // Snapshot blob layout:
 //   uint32 count
@@ -83,7 +77,8 @@ static NSArray<NSNumber *> *readRadii(NSData *blob, uint32_t pointCount) {
   return out;
 }
 
-// Applies a radii array (from readRadii) onto a path that already has its points.
+// Applies a radii array (from readRadii) onto a path that already has its
+// points.
 static void applyRadii(NSArray<NSNumber *> *radii, KKBezierPath *path) {
   if (!radii)
     return;
@@ -171,9 +166,9 @@ NSData *KKMorphSnapshotCapture(KKBezierPath *path) {
   NSUInteger nContours = path.contourCount;
   size_t tailBytes = shapePayload ? shapePayload.length + 1 : 0;
   size_t radiiBytes = hasRadii ? count * sizeof(float) : 0;
-  NSMutableData *data =
-      [NSMutableData dataWithCapacity:5 + count * sizeof(KKBezierPoint) +
-                                      radiiBytes + 2 + nContours * 4 + tailBytes];
+  NSMutableData *data = [NSMutableData
+      dataWithCapacity:5 + count * sizeof(KKBezierPoint) + radiiBytes + 2 +
+                       nContours * 4 + tailBytes];
   [data appendBytes:&count length:4];
   [data appendBytes:&flags length:1];
   for (uint32_t i = 0; i < count; i++) {
@@ -219,7 +214,8 @@ void KKMorphSnapshotApply(NSData *blob, KKBezierPath *path) {
   [path setBezierPoints:pts count:count closed:closed];
   [path setContourStarts:readContours(blob, count)];
   [path restoreShape:readShapeTail(blob)];
-  applyRadii(readRadii(blob, count), path); // after setBezierPoints (clears them)
+  applyRadii(readRadii(blob, count),
+             path); // after setBezierPoints (clears them)
 }
 
 double KKMorphSnapshotSignature(NSData *blob) {
@@ -632,7 +628,7 @@ static BOOL densePolyline(const KKBezierPoint *pts, NSUInteger count,
     for (NSUInteger k = 0; k < kSubstepsPerSegment; k++) {
       float t = (float)k / (float)kSubstepsPerSegment;
       simd_float2 q =
-          bezier ? evalCubic(p0, c0, c1, p1, t) : p0 + (p1 - p0) * t;
+          bezier ? KKEvalCubic(p0, c0, c1, p1, t) : p0 + (p1 - p0) * t;
       if (s == 0 && k == 0) {
         dense[w++] = q;
       } else {

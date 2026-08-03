@@ -46,7 +46,7 @@
 
 - (nullable KKLane *)_anchorLane {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -72,7 +72,7 @@
 // the default clip-space pivot geometry.
 - (NSArray<NSNumber *> *)_positionValuesAtFraction:(double)frac {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.positionLaneLabel]) {
+    if ([lane.key isEqualToString:self.positionLaneLabel]) {
       NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
       return v.count >= 2 ? v : @[ @0.5, @0.5 ];
     }
@@ -264,41 +264,38 @@
 - (void)_writeAnchorValues:(NSArray<NSNumber *> *)newValues
                     atTime:(CMTime)time
                forceUpdate:(BOOL *)forceUpdate {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
+  __block BOOL wrote = NO;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (!setAPI)
+          return;
 
-  double frac = [self fractionAtTime:time];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                              snap, self.laneLabel, frac, newValues)
-                        : nil;
-  if (!tl) {
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    KKLane *anchorLane =
-        [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
-    anchorLane.enabled = NO;
-    anchorLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
-    [lanes addObject:anchorLane];
-    tl.lanes = lanes;
-  }
+        double frac = [self fractionAtTime:time];
+        KKTimeline *snap = KKProcessTimelineSnapshot();
+        KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
+                                    snap, self.laneLabel, frac, newValues)
+                              : nil;
+        if (!tl) {
+          tl = snap ? [snap copy] : [KKTimeline timeline];
+          NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+          KKLane *anchorLane =
+              [self.templateLane copy] ?: [KKLane laneWithKey:self.laneLabel label:self.laneLabel];
+          anchorLane.enabled = NO;
+          anchorLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+          [lanes addObject:anchorLane];
+          tl.lanes = lanes;
+        }
 
-  if (self.onTimelinePersist)
-    self.onTimelinePersist(tl);
-  else
-    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                             kKKParamTimelineData);
-  [actionAPI endAction:self];
-  if (forceUpdate)
+        if (self.onTimelinePersist)
+          self.onTimelinePersist(tl);
+        else
+          KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                                   kKKParamTimelineData);
+        wrote = YES;
+      });
+  if (wrote && forceUpdate)
     *forceUpdate = YES;
 }
 

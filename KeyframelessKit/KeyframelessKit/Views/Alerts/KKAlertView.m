@@ -5,9 +5,10 @@
 
 #import "KKAlertView.h"
 #import "KKFonts.h"
-#import "KKTokens.h"
-#import "NSColor+KKColors.h"
 #import "KKHostInfo.h"
+#import "KKTokens.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
+#import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 #import <AppKit/NSView.h>
 #import <CoreFoundation/CFCGTypes.h>
@@ -376,6 +377,8 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
 
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  if (_renderedLabel && KKTrackingAreaMatches(_trackingArea, self.bounds))
+    return;
   if (_trackingArea)
     [self removeTrackingArea:_trackingArea];
   if (_renderedLabel) {

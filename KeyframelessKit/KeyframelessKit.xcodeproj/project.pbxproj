@@ -11,11 +11,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = MagicMove.xcodeproj; path = ../MagicMove/MagicMove.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FxPlug.framework; path = ../../../../../Library/Developer/Frameworks/FxPlug.framework; sourceTree = "<group>"; };
-		F2330A742F8577290020CB71 /* Glow.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Glow.xcodeproj; path = ../Glow/Glow.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		F26E02092F4DE539009D949A /* Rounded.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Rounded.xcodeproj; path = ../Rounded/Rounded.xcodeproj; sourceTree = SOURCE_ROOT; };
+		F297A4D53010C710002058F9 /* Mirage.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Mirage.xcodeproj; path = ../Mirage/Mirage.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = "Keyframeless X.xcodeproj"; path = "../Keyframeless X/Keyframeless X.xcodeproj"; sourceTree = SOURCE_ROOT; };
 		F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Canvas.xcodeproj; path = ../Canvas/Canvas.xcodeproj; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -24,6 +22,8 @@
 		F26E01BB2F4DE280009D949A /* Exceptions for "KeyframelessKit" folder in "KeyframelessKit" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			publicHeaders = (
+				Audio/KKSonarTicket.h,
+				Audio/KKSpectrogram.h,
 				KeyframelessKit.h,
 				KKLog.h,
 				Math/Geometry/KKBezierPath.h,
@@ -35,21 +35,26 @@
 				Math/Geometry/KKShape.h,
 				Math/Geometry/KKSpatialCurve.h,
 				Math/Geometry/KKSVGParser.h,
+				Math/Timing/KKCurveDefaults.h,
 				Math/Timing/KKEasing.h,
 				Math/Timing/KKMotionLean.h,
+				Math/Timing/KKScopedDefaults.h,
+				Math/Timing/KKSlotInstances.h,
+				Math/Timing/KKTimeline.h,
 				Math/Timing/KKTimelineAIMerge.h,
 				Math/Timing/KKTimingCompat.h,
 				Math/Timing/KKTimingEvaluation.h,
-				Math/Timing/KKTimingLane.h,
-				Math/Timing/KKTimingStage.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKMotionBlur.h,
 				Metal/KKMotionBlurReconstruct.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
+				Metal/KKWatermark.h,
 				OSC/Base/KKOnScreenControl.h,
 				"OSC/Base/KKOnScreenControl+CoordinateSpace.h",
+				OSC/Base/KKOSCGlyphStyle.h,
 				OSC/Base/KKOSCShaderTypes.h,
+				OSC/Base/KKOSCVisibilityDefaults.h,
 				OSC/Base/KKRotationOSCMath.h,
 				OSC/Controls/Chrome/KKIconButtonOSC.h,
 				OSC/Controls/Chrome/KKOSCLabel.h,
@@ -78,6 +83,11 @@
 				Plugin/Support/KKConstants.h,
 				Plugin/Support/KKDataBlob.h,
 				Plugin/Support/KKHostInfo.h,
+				Plugin/Support/KKLicense.h,
+				Plugin/Support/KKLinkBus.h,
+				Plugin/Support/KKLinkExpr.h,
+				Plugin/Support/KKLinkWatcher.h,
+				Plugin/Support/KKPaletteGenerator.h,
 				Plugin/Support/KKPlayheadPoller.h,
 				Plugin/Support/KKPluginHost.h,
 				Plugin/Support/KKPluginInstanceState.h,
@@ -87,16 +97,21 @@
 				Update/KKUpdateChecker.h,
 				Views/Alerts/KKAlertStackView.h,
 				Views/Alerts/KKAlertView.h,
+				Views/Controls/CodeEditor/KKCodeTabInterchange.h,
+				Views/Controls/CodeEditor/KKGLSLSyntax.h,
 				Views/Controls/Containers/KKCustomGroupHeaderView.h,
 				Views/Controls/Containers/KKPaddedScrollView.h,
 				Views/Controls/Decoration/KKChevronView.h,
 				Views/Controls/Decoration/KKSeparatorView.h,
 				Views/Controls/Fields/KKCheckboxView.h,
 				Views/Controls/Fields/KKColorWellView.h,
+				Views/Controls/Fields/KKFieldEditorSupport.h,
+				Views/Controls/Fields/KKInlineRenameField.h,
 				Views/Controls/Fields/KKPopupSelectView.h,
 				Views/Controls/Fields/KKSeedView.h,
 				Views/Controls/Popover/KKGapPopoverTypes.h,
 				Views/Controls/Popover/KKPopoverExtraRow.h,
+				Views/Controls/Rows/KKListRowViews.h,
 				Views/Controls/Text/KKKbd.h,
 				Views/Controls/Text/KKLabelView.h,
 				Views/Controls/Text/KKMarkup.h,
@@ -118,12 +133,18 @@
 				Views/Joyride/Steps/KKOSCGuide.h,
 				Views/Joyride/Steps/KKTimingGuide.h,
 				Views/MiniViewer/KKAnchorMiniController.h,
+				Views/MiniViewer/KKBoxOSCSet.h,
+				Views/MiniViewer/KKMiniElement.h,
 				Views/MiniViewer/KKMiniViewerCropEditor.h,
 				Views/MiniViewer/KKMiniViewerFeed.h,
 				Views/MiniViewer/KKMiniViewerGuideScroll.h,
 				Views/MiniViewer/KKMiniViewerRenderer.h,
 				Views/MiniViewer/KKMiniViewerView.h,
+				Views/MiniViewer/KKPointOSCSet.h,
 				Views/MiniViewer/KKPositionMiniController.h,
+				Views/MiniViewer/KKRadialOSCSet.h,
+				Views/MiniViewer/KKRingOSCSet.h,
+				Views/MiniViewer/KKRotationOSCSet.h,
 				Views/MiniViewer/KKScaleMiniController.h,
 				Views/Rows/KKCheckboxRowView.h,
 				Views/Rows/KKLaneRowView.h,
@@ -134,12 +155,15 @@
 				Views/Rows/KKSliderRowView.h,
 				Views/Segment/KKSegmentEditView.h,
 				"Views/Segment/KKSegmentEditView+Guide.h",
+				Views/Shared/KKCompanionPanelController.h,
+				Views/Shared/KKFloatingPanel.h,
 				Views/Timeline/Advanced/KKTimelineAdvancedView.h,
 				Views/Timeline/Basic/KKTimelineBasicView.h,
 				"Views/Timeline/Basic/KKTimelineBasicView+Guide.h",
 				Views/Timeline/Inspector/KKTimelineInspectorButtons.h,
 				Views/Timeline/Inspector/KKTimelineInspectorView.h,
 				"Views/Timeline/Inspector/KKTimelineInspectorView+Guide.h",
+				Views/Timeline/KKBoundaryEditingGraph.h,
 				Views/Timeline/Lanes/KKPopoverKeepAlive.h,
 				Views/Timeline/Lanes/KKTimelineLanesView.h,
 				"Views/Timeline/Lanes/KKTimelineLanesView+Guide.h",
@@ -171,13 +195,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		F20816252F73D0A6004260DF /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		F21E97D42F4EE9CC00DF8CF3 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -186,24 +203,15 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		F2330AB82F8577290020CB71 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		F26E01AC2F4DE280009D949A = {
 			isa = PBXGroup;
 			children = (
+				F297A4D53010C710002058F9 /* Mirage.xcodeproj */,
 				F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */,
-				F2330A742F8577290020CB71 /* Glow.xcodeproj */,
 				F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */,
-				F26E02092F4DE539009D949A /* Rounded.xcodeproj */,
 				F26E01B82F4DE280009D949A /* KeyframelessKit */,
 				F21E97D42F4EE9CC00DF8CF3 /* Frameworks */,
 				F26E01B72F4DE280009D949A /* Products */,
-				F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */,
 			);
 			sourceTree = "<group>";
 		};
@@ -215,7 +223,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		F26E02462F4DE539009D949A /* Products */ = {
+		F297A5BA3010C711002058F9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -314,20 +322,12 @@
 					ProjectRef = F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */;
 				},
 				{
-					ProductGroup = F2330AB82F8577290020CB71 /* Products */;
-					ProjectRef = F2330A742F8577290020CB71 /* Glow.xcodeproj */;
-				},
-				{
 					ProductGroup = F29C84D72F68205F0073B1A9 /* Products */;
 					ProjectRef = F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */;
 				},
 				{
-					ProductGroup = F20816252F73D0A6004260DF /* Products */;
-					ProjectRef = F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */;
-				},
-				{
-					ProductGroup = F26E02462F4DE539009D949A /* Products */;
-					ProjectRef = F26E02092F4DE539009D949A /* Rounded.xcodeproj */;
+					ProductGroup = F297A5BA3010C711002058F9 /* Products */;
+					ProjectRef = F297A4D53010C710002058F9 /* Mirage.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -392,7 +392,7 @@
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.KeyframelessKit;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keyframeless.KeyframelessKit;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
@@ -435,7 +435,7 @@
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.KeyframelessKit;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keyframeless.KeyframelessKit;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;

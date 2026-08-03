@@ -10,33 +10,15 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h> // KKWriteCustomParamString
+#import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKPlugin.h>   // KKPerformUndoable
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
-#import <KeyframelessKit/KKTimingStage.h>
-#import <KeyframelessKit/KKTokens.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <QuartzCore/QuartzCore.h>
 
-// Panel sits to the left of the popover card with a small gap, ordered behind
-// the popover. Width is fixed for now; height matches the popover card.
+// Panel sits to the left of the popover card, ordered behind it. Width is fixed
+// for now; height matches the popover card (KKCompanionPanelController).
 static const CGFloat kPanelWidth = 200.0;
-static const CGFloat kPanelGap = 8.0;
-// Corner radius of the macOS popover chrome we're matching (tweak to taste).
-static const CGFloat kPanelCornerRadius = 9.0;
-// Hold off until the popover has nearly finished its own entrance, so the two
-// don't animate on top of each other.
-static const NSTimeInterval kShowDelay = 0.1;
-static const NSTimeInterval kFadeDuration = 0.28;
-static const CGFloat kSlideDistance = 12.0;
-
-// Borderless panels can't become key by default, which blocks text editing
-// (inline layer rename). `becomesKeyOnlyIfNeeded` keeps button clicks from
-// stealing focus while still letting a text field become key when edited.
-@interface CanvasLayerPanel : NSPanel
-@end
-@implementation CanvasLayerPanel
-- (BOOL)canBecomeKeyWindow {
-  return YES;
-}
-@end
 
 @implementation CanvasLayerListController
 
@@ -53,24 +35,34 @@ static const CGFloat kSlideDistance = 12.0;
            selector:@selector(_popoverDidClose:)
                name:KKStaticValuesPopoverDidCloseNotification
              object:lanesView];
+    // Arrowing between keyposes (or an in-place keypose <-> constants switch)
+    // moves what the OPEN popover edits without reopening it, and the gray set
+    // is a function of that kind + time. Deliberately a separate, narrower
+    // handler than the open one: it must not re-run the panel show path (the
+    // panel would re-slide on every arrow press).
+    [nc addObserver:self
+           selector:@selector(_popoverDidNavigate:)
+               name:KKStaticValuesPopoverDidNavigateNotification
+             object:lanesView];
   }
   return self;
 }
 
 - (void)invalidate {
   [NSNotificationCenter.defaultCenter removeObserver:self];
-  // Teardown path (called from -[CanvasInspectorView dealloc]). _hide fires host
-  // callbacks (onNonSelectableLayersChanged / ...Marquee...) that are blocks
-  // defined in the inspector's init and capture inspector state - invoking them
-  // while the inspector is mid-dealloc reads freed memory (SIGSEGV; also stalls
-  // the inspector reload after a popover edit -> ViewBridge placeholder). Drop
-  // them first so _hide only tears the panel down.
+  // Teardown path (called from -[CanvasInspectorView dealloc]). Hiding fires
+  // host callbacks (onNonSelectableLayersChanged / ...Marquee...) that are
+  // blocks defined in the inspector's init and capture inspector state -
+  // invoking them while the inspector is mid-dealloc reads freed memory
+  // (SIGSEGV; also stalls the inspector reload after a popover edit ->
+  // ViewBridge placeholder). Drop them first so the hide only tears the panel
+  // down.
   self.onPrimaryLayerSelected = nil;
   self.onLayerHovered = nil;
   self.onAutoSelectToggled = nil;
   self.onNonSelectableLayersChanged = nil;
   self.onMarqueeNonSelectableLayersChanged = nil;
-  [self _hide];
+  [_panelController hide];
 }
 
 - (void)reload {
@@ -130,154 +122,125 @@ static const CGFloat kSlideDistance = 12.0;
   id<PROAPIAccessing> api = _apiManager;
   if (!api)
     return;
-  id<FxCustomParameterActionAPI_v4> action =
-      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!action)
-    return;
-  id target = self.paramActionTarget ?: self;
-  [action startAction:target];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSData *blob = [KKBezierPath blobFromPaths:paths];
-  KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
-                           kParamLayerData);
-  // Set the selection in the SAME action so a blob+selection change undoes as
-  // one step. Read -> patch -> write kParamUIState (mirrors KKPlugin
-  // -patchUIStateKeys, but inside this action scope rather than its own). nil
-  // ids = leave selection untouched (blob-only write).
-  if (ids) {
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
-    NSMutableDictionary *state =
-        (existing.length
-             ? [[NSJSONSerialization
-                   JSONObjectWithData:
-                       [existing dataUsingEncoding:NSUTF8StringEncoding]
-                              options:0
-                                error:nil] mutableCopy]
-             : nil)
-            ?: [NSMutableDictionary dictionary];
-    state[@"selectedLayerID"] = ids.firstObject ?: @"";
-    state[@"selectedLayerIDs"] = ids;
-    NSString *json = [[NSString alloc]
-        initWithData:[NSJSONSerialization dataWithJSONObject:state
-                                                     options:0
-                                                       error:nil]
-            encoding:NSUTF8StringEncoding];
-    KKWriteCustomParamString(setAPI, json, kParamUIState);
-  }
-  [action endAction:target];
+  KKPerformUndoable(
+      api, self.paramActionTarget ?: self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        NSData *blob = [KKBezierPath blobFromPaths:paths];
+        KKWriteCustomParamString(
+            setAPI, [blob base64EncodedStringWithOptions:0], kParamLayerData);
+        // Set the selection in the SAME action so a blob+selection change
+        // undoes as one step. Read -> patch -> write kParamUIState (mirrors
+        // KKPlugin -patchUIStateKeys, but inside this action scope rather than
+        // its own). nil ids = leave selection untouched (blob-only write).
+        if (ids) {
+          NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
+          NSMutableDictionary *state =
+              (existing.length
+                   ? [[NSJSONSerialization
+                         JSONObjectWithData:
+                             [existing dataUsingEncoding:NSUTF8StringEncoding]
+                                    options:0
+                                      error:nil] mutableCopy]
+                   : nil)
+                  ?: [NSMutableDictionary dictionary];
+          state[@"selectedLayerID"] = ids.firstObject ?: @"";
+          state[@"selectedLayerIDs"] = ids;
+          NSString *json = [[NSString alloc]
+              initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                           options:0
+                                                             error:nil]
+                  encoding:NSUTF8StringEncoding];
+          KKWriteCustomParamString(setAPI, json, kParamUIState);
+        }
+      });
   // Rebuild the open panel from the just-written param (no-op when closed).
-  [_listView reloadFromParam];
+  [self->_listView reloadFromParam];
 }
 
 - (void)dealloc {
   [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
-// Resizable rounded-rect mask. NSVisualEffectView uses this both to clip the
-// vibrancy AND to shape the window shadow, so the shadow follows the corners.
-+ (NSImage *)_roundedMaskImageWithRadius:(CGFloat)radius {
-  CGFloat dim = radius * 2.0 + 1.0;
-  NSImage *image =
-      [NSImage imageWithSize:NSMakeSize(dim, dim)
-                     flipped:NO
-              drawingHandler:^BOOL(NSRect rect) {
-                [[NSColor blackColor] set];
-                [[NSBezierPath bezierPathWithRoundedRect:rect
-                                                 xRadius:radius
-                                                 yRadius:radius] fill];
-                return YES;
-              }];
-  image.capInsets = NSEdgeInsetsMake(radius, radius, radius, radius);
-  image.resizingMode = NSImageResizingModeStretch;
-  return image;
-}
-
-- (NSPanel *)_ensurePanel {
-  if (_panel)
-    return _panel;
-  NSPanel *p = [[CanvasLayerPanel alloc]
-      initWithContentRect:NSMakeRect(0, 0, kPanelWidth, 300)
-                styleMask:NSWindowStyleMaskBorderless |
-                          NSWindowStyleMaskNonactivatingPanel
-                  backing:NSBackingStoreBuffered
-                    defer:YES];
-  // Take key so a text field (inline rename) can capture keyboard.
-  // (Nonactivating means it does so WITHOUT activating our XPC process /
-  // deactivating FCP.)
-  p.becomesKeyOnlyIfNeeded = NO;
-  p.hasShadow = YES;
-  p.releasedWhenClosed = NO;
-  p.backgroundColor = NSColor.clearColor;
-  p.opaque = NO;
-  // We drive the fade ourselves; suppress AppKit's default order-in animation.
-  p.animationBehavior = NSWindowAnimationBehaviorNone;
-
+// The companion panel and everything about the window it lives in comes from
+// the kit; this builds the content and reacts to attach / hide.
+- (KKCompanionPanelController *)_ensurePanelController {
+  if (_panelController)
+    return _panelController;
+  __weak typeof(self) weakSelf = self;
+  KKCompanionPanelController *pc =
+      [[KKCompanionPanelController alloc] initWithPanelWidth:kPanelWidth
+                                                      logTag:@"LayerList"];
   // The Layers panel content (header + scrollable well + empty state). Fills
   // the panel; its own internal padding matches the popover's content inset.
-  CanvasLayerListView *content =
-      [[CanvasLayerListView alloc] initWithFrame:NSZeroRect];
-  content.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-  content.apiManager = _apiManager;
-  content.paramActionTarget = self.paramActionTarget;
-  __weak typeof(self) weakSelf = self;
-  content.onPrimaryLayerSelected = ^(NSString *layerID) {
+  pc.contentBuilder = ^NSView * {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s.onPrimaryLayerSelected)
-      s.onPrimaryLayerSelected(layerID);
+    if (!s)
+      return nil;
+    CanvasLayerListView *content =
+        [[CanvasLayerListView alloc] initWithFrame:NSZeroRect];
+    content.apiManager = s->_apiManager;
+    content.paramActionTarget = s.paramActionTarget;
+    content.onPrimaryLayerSelected = ^(NSString *layerID) {
+      __strong typeof(weakSelf) inner = weakSelf;
+      if (inner.onPrimaryLayerSelected)
+        inner.onPrimaryLayerSelected(layerID);
+    };
+    content.onLayerHovered = ^(NSString *layerID) {
+      __strong typeof(weakSelf) inner = weakSelf;
+      if (inner.onLayerHovered)
+        inner.onLayerHovered(layerID);
+    };
+    content.onAutoSelectToggled = ^(BOOL on) {
+      __strong typeof(weakSelf) inner = weakSelf;
+      if (!inner)
+        return;
+      inner->_autoSelect = on;
+      if (inner.onAutoSelectToggled)
+        inner.onAutoSelectToggled(on);
+    };
+    content.autoSelect = s->_autoSelect;
+    s->_listView = content;
+    return content;
   };
-  content.onLayerHovered = ^(NSString *layerID) {
-    __strong typeof(weakSelf) s = weakSelf;
-    if (s.onLayerHovered)
-      s.onLayerHovered(layerID);
-  };
-  content.onAutoSelectToggled = ^(BOOL on) {
+  pc.onDidAttach = ^{
     __strong typeof(weakSelf) s = weakSelf;
     if (!s)
       return;
-    s->_autoSelect = on;
-    if (s.onAutoSelectToggled)
-      s.onAutoSelectToggled(on);
+    // Keypose popover: gray the layers with no keypose at its time (can't be
+    // selected). Constants: nil = every layer selectable.
+    s->_listView.nonSelectableReason =
+        [s _nonSelectableReasonForKind:s->_openPopoverKind];
+    [s->_listView setNonSelectableLayerIDs:s->_pendingNonSelectable];
+    // Apply the pending FULL selection (requested before the list view existed)
+    // so every selected row highlights, not just the primary. Empty clears all.
+    NSArray<NSString *> *pending =
+        s->_highlightLayerIDs
+            ?: (s->_highlightLayerID.length ? @[ s->_highlightLayerID ] : @[]);
+    [s->_listView setSelectionToLayerIDs:pending];
+    // Reflect the current toggle state (may have changed via undo/redo while
+    // the panel was closed).
+    [s->_listView setAutoSelect:s->_autoSelect];
   };
-  content.autoSelect = _autoSelect;
-  _listView = content;
-
-  if (@available(macOS 26.0, *)) {
-    // Match the popover: it's drawn with the new Liquid Glass material
-    // (NSGlassEffectView). cornerRadius gives a soft glass edge - no hard
-    // outline, no maskImage seam. Appearance is copied from the popover at
-    // show time so the tint matches.
-    NSGlassEffectView *glass =
-        [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
-    glass.cornerRadius = kPanelCornerRadius;
-    glass.contentView = content;
-    p.contentView = glass;
-  } else {
-    // Pre-26 fallback: flat vibrancy + rounded mask (mask drives the shadow,
-    // so it stays rounded). The mask alone doesn't stroke an outline, so on
-    // Sequoia the panel edge melts into the background - add a hairline border
-    // (clipped to the same rounded shape by the mask) to give it the same
-    // defined edge the Tahoe glass path and system windows have.
-    NSVisualEffectView *fx =
-        [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
-    fx.material = NSVisualEffectMaterialContentBackground;
-    fx.blendingMode = NSVisualEffectBlendingModeBehindWindow;
-    fx.state = NSVisualEffectStateActive;
-    fx.wantsLayer = YES;
-    fx.layer.cornerRadius = kPanelCornerRadius;
-    fx.layer.borderColor = NSColor.separatorColor.CGColor;
-    fx.layer.borderWidth = 1.0;
-    fx.maskImage = [CanvasLayerListController
-        _roundedMaskImageWithRadius:kPanelCornerRadius];
-    content.frame = fx.bounds;
-    [fx addSubview:content];
-    p.contentView = fx;
-  }
-
-  _panel = p;
-  return _panel;
+  pc.onPrepareHide = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    // popover gone: stop re-deriving its non-selectable set
+    if (s)
+      s->_openPopoverKind = nil;
+  };
+  pc.onDidHide = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    s->_highlightLayerID = nil;
+    [s->_listView setNonSelectableLayerIDs:nil];
+    if (s.onNonSelectableLayersChanged)
+      s.onNonSelectableLayersChanged(nil);
+    if (s.onMarqueeNonSelectableLayersChanged)
+      s.onMarqueeNonSelectableLayersChanged(nil);
+  };
+  _panelController = pc;
+  return pc;
 }
 
 - (void)_popoverDidOpen:(NSNotification *)note {
@@ -289,9 +252,9 @@ static const CGFloat kSlideDistance = 12.0;
   // arrow padding, so it's taller/wider than the card).
   NSValue *cardVal = note.userInfo[@"contentRect"];
   NSRect card = cardVal ? cardVal.rectValue : popoverWindow.frame;
-  // Keep the content view so we can recompute the card if the popover later
-  // resizes or flips edge (e.g. switching layers retargets the popover).
-  _popoverContentView = note.userInfo[@"contentView"];
+  // Hand the content view over too, so the panel can recompute the card if the
+  // popover later resizes or flips edge (e.g. switching layers retargets it).
+  NSView *contentView = note.userInfo[@"contentView"];
 
   // A keypose popover edits one moment in time: layers with no keypose at that
   // time can't be selected (grayed). The Constants popover (isBoundary NO)
@@ -332,20 +295,25 @@ static const CGFloat kSlideDistance = 12.0;
       _highlightLayerIDs = @[ _selectedLayerID ];
   }
 
-  // Mark this popover as the pending target, then show after a delay so the
-  // popover's own entrance plays first.
-  _parentWindow = popoverWindow;
-  __weak typeof(self) weakSelf = self;
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kShowDelay * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        __strong typeof(weakSelf) s = weakSelf;
-        if (!s || s->_parentWindow != popoverWindow || !popoverWindow.isVisible)
-          return; // popover closed (or replaced) during the delay
-        [s _showBesideCard:card
-                  ofWindow:popoverWindow
-             nonSelectable:nonSelectable];
-      });
+  // Mark this popover as the pending target, then show once it is actually on
+  // screen - the delay also lets the popover's own entrance play first.
+  _pendingNonSelectable = nonSelectable;
+  // Off the notification turn. The popover is presented from this process but
+  // composites through ViewBridge on this same thread, so every millisecond
+  // spent building the panel here is a millisecond the popover is not yet on
+  // screen. Everything the open needs is captured; the panel's own show path
+  // re-reads the live card anyway.
+  NSInteger generation = ++_openGeneration;
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weak) s = weak;
+    // The popover closed (or another opened) inside that one tick.
+    if (!s || s->_openGeneration != generation)
+      return;
+    [[s _ensurePanelController] openBesideCard:card
+                                 popoverWindow:popoverWindow
+                            popoverContentView:contentView];
+  });
 }
 
 // NO when a popover is open AND `layerID` is non-selectable in it (e.g. a new
@@ -359,179 +327,23 @@ static const CGFloat kSlideDistance = 12.0;
   return ![ns containsObject:layerID];
 }
 
-- (void)_showBesideCard:(NSRect)card
-               ofWindow:(NSWindow *)popoverWindow
-          nonSelectable:(NSSet<NSString *> *)nonSelectable {
-  if (_visible)
-    [self _hide];
-
-  NSPanel *panel = [self _ensurePanel];
-  // Inherit the popover's appearance (FCP's NOXInspector) so the glass tints
-  // the same instead of rendering under the default system appearance.
-  panel.appearance = popoverWindow.appearance;
-  // Prefer the LIVE card over the open-time snapshot: the popover may have
-  // settled or flipped edge during the show delay (before our move/resize
-  // observers existed), which would otherwise leave the panel at the wrong
-  // height/position.
-  NSView *cv = _popoverContentView;
-  if (cv.window) {
-    NSRect live = [cv.window convertRectToScreen:[cv convertRect:cv.bounds
-                                                          toView:nil]];
-    if (!NSIsEmptyRect(live))
-      card = live;
-  }
-  NSRect finalFrame = [self _panelFrameForCard:card];
-  NSRect startFrame = finalFrame;
-  // Emerge from UNDER the popover: a left-placed panel starts to its right (the
-  // popover side) and slides left into place; a right-placed panel mirrors it.
-  BOOL panelOnLeft = NSMidX(finalFrame) < NSMidX(card);
-  startFrame.origin.x += panelOnLeft ? kSlideDistance : -kSlideDistance;
-
-  // Follow the popover if it later resizes or flips edge (e.g. switching layers
-  // retargets the popover above<->below the anchor). The card is recomputed
-  // from the live content view, so the height always excludes the arrow.
-  NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
-  [nc removeObserver:self name:NSWindowDidMoveNotification object:nil];
-  [nc removeObserver:self name:NSWindowDidResizeNotification object:nil];
-  [nc addObserver:self
-         selector:@selector(_popoverFrameChanged:)
-             name:NSWindowDidMoveNotification
-           object:popoverWindow];
-  [nc addObserver:self
-         selector:@selector(_popoverFrameChanged:)
-             name:NSWindowDidResizeNotification
-           object:popoverWindow];
-
-  // Fade the CONTENT view, not the window: window alphaValue doesn't animate
-  // for a ViewBridge child window (only the frame does), and the glass material
-  // ignores it too. View-level alpha (layer opacity) animates reliably.
-  panel.alphaValue = 1.0;
-  panel.contentView.alphaValue = 0.0;
-  [panel setFrame:startFrame display:NO];
-
-  // Child window ordered BELOW the popover (tucks under it, no seam) but still
-  // above FCP; keep-alive so a click inside it doesn't trip the popover's
-  // outside-click dismissal.
-  _parentWindow = popoverWindow;
-  [popoverWindow addChildWindow:panel ordered:NSWindowBelow];
-  KKPopoverAddKeepAliveWindow(panel);
-  // Keypose popover: gray the layers with no keypose at its time (can't be
-  // selected). Constants: nil = every layer selectable.
-  _listView.nonSelectableReason =
-      [self _nonSelectableReasonForKind:_openPopoverKind];
-  [_listView setNonSelectableLayerIDs:nonSelectable];
-  // Apply the pending FULL selection (requested before the list view existed)
-  // so every selected row highlights, not just the primary. Empty clears all.
-  NSArray<NSString *> *pending =
-      _highlightLayerIDs
-          ?: (_highlightLayerID.length ? @[ _highlightLayerID ] : @[]);
-  [_listView setSelectionToLayerIDs:pending];
-  // Reflect the current toggle state (may have changed via undo/redo while the
-  // panel was closed).
-  [_listView setAutoSelect:_autoSelect];
-  _visible = YES;
-
-  // Animate on the next runloop tick - once the window is actually on screen,
-  // so the alpha tween isn't dropped (animating it in the same callstack as
-  // orderFront only slid the frame, never faded).
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
-      ctx.duration = kFadeDuration;
-      ctx.timingFunction = [CAMediaTimingFunction
-          functionWithName:kCAMediaTimingFunctionEaseOut];
-      panel.contentView.animator.alphaValue = 1.0;
-      [panel.animator setFrame:finalFrame display:YES];
-    }];
-  });
-}
-
-// Panel frame for a popover card: pinned beside the card, matching its top and
-// height (so the arrow above/below is excluded). Prefers the LEFT of the card,
-// but flips to the RIGHT when the left placement would run off the screen (a
-// narrow FCP window puts the popover near the left edge, so the companion would
-// otherwise clip). Clamps into the visible frame as a last resort.
-- (NSRect)_panelFrameForCard:(NSRect)card {
-  NSRect vis = [self _screenVisibleFrameForCard:card];
-  CGFloat left = card.origin.x - kPanelWidth - kPanelGap;
-  CGFloat right = NSMaxX(card) + kPanelGap;
-  CGFloat x = left;
-  if (left < NSMinX(vis) && right + kPanelWidth <= NSMaxX(vis))
-    x = right; // left clips but the right side has room - flip beside the card
-  x = MAX(NSMinX(vis), MIN(x, NSMaxX(vis) - kPanelWidth)); // last-resort clamp
-  return NSMakeRect(x, card.origin.y, kPanelWidth, card.size.height);
-}
-
-// Visible frame of the screen the popover card sits on (so flip/clamp respects
-// the Dock/menu-bar insets). Falls back to the main screen.
-- (NSRect)_screenVisibleFrameForCard:(NSRect)card {
-  NSPoint center = NSMakePoint(NSMidX(card), NSMidY(card));
-  for (NSScreen *s in NSScreen.screens)
-    if (NSPointInRect(center, s.frame))
-      return s.visibleFrame;
-  NSScreen *fallback = _popoverContentView.window.screen ?: NSScreen.mainScreen;
-  return fallback.visibleFrame;
-}
-
-// Snap the panel to the popover's current card (live content view -> screen, so
-// the arrow is always excluded whichever edge it's on).
-- (void)_alignPanelToPopover {
-  NSView *cv = _popoverContentView;
-  if (!_visible || !cv.window)
+- (void)_popoverDidNavigate:(NSNotification *)note {
+  // No popover of ours is open (close already cleared the scope): nothing to
+  // re-derive, and adopting a kind here would gray rows with no popover up.
+  if (!_openPopoverKind.length)
     return;
-  NSRect card = [cv.window convertRectToScreen:[cv convertRect:cv.bounds
-                                                        toView:nil]];
-  if (NSIsEmptyRect(card))
-    return;
-  [_panel setFrame:[self _panelFrameForCard:card] display:YES];
-}
-
-// The popover moved or resized (incl. flipping above<->below when re-anchoring
-// to the new layer's keypose row). DEFER the re-align: AppKit applies the
-// parent->child move as a delta to our panel AFTER this notification, and the
-// popover's reposition may still be settling, so aligning synchronously here
-// gets overwritten by exactly the popover's move distance (the symptom: the
-// panel ends up offset by an amount that tracks the keypose row). A
-// next-runloop snap runs after the delta + layout land, and a short settle pass
-// catches an animated reposition.
-- (void)_popoverFrameChanged:(NSNotification *)note {
-  if (!_visible)
-    return;
-  __weak typeof(self) weak = self;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [weak _alignPanelToPopover];
-  });
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.12 * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        [weak _alignPanelToPopover];
-      });
+  NSString *kind = note.userInfo[@"kind"];
+  if (kind.length)
+    _openPopoverKind = [kind copy];
+  _openPopoverFraction = [note.userInfo[@"fraction"] doubleValue];
+  KKLogDebug(@"[LayerList] popover navigated: kind=%@ fraction=%.4f",
+             _openPopoverKind, _openPopoverFraction);
+  [self _refreshNonSelectableForOpenPopover];
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {
-  [self _hide];
-}
-
-- (void)_hide {
-  NSWindow *parent = _parentWindow;
-  _parentWindow = nil;
-  _openPopoverKind =
-      nil; // popover gone: stop re-deriving its non-selectable set
-  if (!_visible)
-    return;
-  _visible = NO;
-  _highlightLayerID = nil;
-  _popoverContentView = nil;
-  NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
-  [nc removeObserver:self name:NSWindowDidMoveNotification object:nil];
-  [nc removeObserver:self name:NSWindowDidResizeNotification object:nil];
-  [_listView setNonSelectableLayerIDs:nil];
-  if (self.onNonSelectableLayersChanged)
-    self.onNonSelectableLayersChanged(nil);
-  if (self.onMarqueeNonSelectableLayersChanged)
-    self.onMarqueeNonSelectableLayersChanged(nil);
-  KKPopoverRemoveKeepAliveWindow(_panel);
-  [parent removeChildWindow:_panel];
-  [_panel orderOut:nil];
+  _openGeneration++;
+  [_panelController hide];
 }
 
 @end

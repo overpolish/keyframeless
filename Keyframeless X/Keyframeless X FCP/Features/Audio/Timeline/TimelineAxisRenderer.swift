@@ -24,6 +24,27 @@ struct TimelineAxisRenderer {
 	let playingIndex: Int?
 	let labelForTime: ((Double) -> String)?
 	var skipWaveforms: Bool = false
+	/// Sonar: reserve the spectrogram lane. Kept separate from the data so the
+	/// lane holds its space when nothing is selected - otherwise the clips
+	/// resize and the whole timeline jumps as you change selection.
+	var showSpectrogramLane: Bool = false
+	/// Sonar: a pre-rendered spectrogram drawn as a lane under the clips. Living
+	/// inside this canvas means it shares the timeline's zoom and scroll by
+	/// construction - the two can't drift out of sync.
+	var spectrogramImage: CGImage? = nil
+	/// Sonar: sharper raster of just the visible slice, drawn over the overview
+	/// once zoom outruns it. nil when the overview already resolves every frame.
+	var spectrogramDetailImage: CGImage? = nil
+	var spectrogramDetailStart: Double = 0
+	var spectrogramDetailDuration: Double = 0
+	/// Sonar: an analysis is in flight, so the band's picture is stale.
+	var spectrogramLoading: Bool = false
+	var spectrogramStart: Double = 0
+	var spectrogramDuration: Double = 0
+	/// Sonar: draw the role name top-right. Off for Steno, where every clip is
+	/// dialogue and the label would just be noise. Role *colouring* is applied
+	/// in both, so the tabs stay consistent with FCP and each other.
+	var showRoleLabels: Bool = false
 	var dirtyRect: CGRect = .null
 
 	let playBtnSize: CGFloat = 12
@@ -39,7 +60,84 @@ struct TimelineAxisRenderer {
 		drawEmptyRegion(in: ctx, pps: pps, emptyX: emptyX)
 		drawTickMarks(in: ctx, pps: pps)
 		drawClips(in: ctx, pps: pps, emptyX: emptyX, cachedClipRects: &cachedClipRects)
+		drawSpectrogram(in: ctx, pps: pps)
 		drawOverlapRegions(in: ctx, pps: pps)
+	}
+
+	private let spectrogramBandHeight: CGFloat = 88
+	private let spectrogramGap: CGFloat = 6
+
+	/// Vertical space the spectrogram lane takes out of the clip area. Reserved
+	/// whenever the lane is shown, whether or not there's anything to draw in it.
+	private var spectrogramReserved: CGFloat {
+		showSpectrogramLane ? spectrogramBandHeight + spectrogramGap : 0
+	}
+
+	private func drawSpectrogram(in ctx: CGContext, pps: CGFloat) {
+		guard showSpectrogramLane else { return }
+		let y = bounds.height - spectrogramBandHeight - 4
+
+		// The lane's bed spans the whole canvas and is drawn even when empty, so
+		// selecting nothing leaves a quiet gap rather than collapsing the layout.
+		let bed = CGRect(x: 0, y: y, width: bounds.width, height: spectrogramBandHeight)
+		ctx.setFillColor(NSColor.black.withAlphaComponent(0.28).cgColor)
+		ctx.addPath(CGPath(roundedRect: bed, cornerWidth: 4, cornerHeight: 4, transform: nil))
+		ctx.fillPath()
+
+		// Overview first, then the sharper visible-slice raster over the top. The
+		// overview stays underneath so there's never a hole while the detail pass
+		// is still working or has been superseded by a scroll.
+		func drawBand(_ image: CGImage, start: Double, span: Double) {
+			guard span > 0 else { return }
+			let rect = CGRect(
+				x: CGFloat(start) * pps, y: y,
+				width: CGFloat(span) * pps, height: spectrogramBandHeight)
+			ctx.saveGState()
+			ctx.addPath(
+				CGPath(roundedRect: bed, cornerWidth: 4, cornerHeight: 4, transform: nil))
+			ctx.clip()
+			// The bitmap is at the data's own resolution, so zooming past it has no
+			// detail left to show - nearest keeps it honestly blocky instead of
+			// smearing, and skips the resampling work entirely.
+			ctx.interpolationQuality = .none
+			// The view is flipped (y grows downward); flip back around the band so
+			// the image lands the right way up.
+			ctx.translateBy(x: 0, y: rect.midY)
+			ctx.scaleBy(x: 1, y: -1)
+			ctx.translateBy(x: 0, y: -rect.midY)
+			ctx.draw(image, in: rect)
+			ctx.restoreGState()
+		}
+
+		if let image = spectrogramImage {
+			drawBand(image, start: spectrogramStart, span: spectrogramDuration)
+		}
+		if let detail = spectrogramDetailImage {
+			drawBand(detail, start: spectrogramDetailStart, span: spectrogramDetailDuration)
+		}
+
+		// Drawn last, over the picture: analysis runs off-thread and the band keeps
+		// showing the PREVIOUS spectrogram meanwhile, which without this reads as
+		// "my selection did nothing". Centred on the visible slice rather than the
+		// canvas, so it stays on screen when zoomed in.
+		guard spectrogramLoading else { return }
+		let attrs: [NSAttributedString.Key: Any] = [
+			.font: NSFont.systemFont(ofSize: 10, weight: .medium),
+			.foregroundColor: NSColor.white.withAlphaComponent(0.65),
+		]
+		let str = String(localized: "Analyzing…") as NSString
+		let size = str.size(withAttributes: attrs)
+		let visible = dirtyRect.isNull ? bed : bed.intersection(dirtyRect)
+		guard !visible.isNull else { return }
+		let box = CGRect(
+			x: visible.midX - size.width / 2 - 6, y: bed.midY - size.height / 2 - 3,
+			width: size.width + 12, height: size.height + 6)
+		ctx.setFillColor(NSColor.black.withAlphaComponent(0.55).cgColor)
+		ctx.addPath(CGPath(roundedRect: box, cornerWidth: 3, cornerHeight: 3, transform: nil))
+		ctx.fillPath()
+		str.draw(
+			at: CGPoint(x: visible.midX - size.width / 2, y: bed.midY - size.height / 2),
+			withAttributes: attrs)
 	}
 
 	private func drawOverlapRegions(in ctx: CGContext, pps: CGFloat) {
@@ -132,7 +230,7 @@ struct TimelineAxisRenderer {
 		let tickHeight: CGFloat = 12
 		let laneGap: CGFloat = 4
 		let clipAreaTop: CGFloat = baseline + tickHeight + 6
-		let clipAreaHeight = bounds.height - clipAreaTop - 4
+		let clipAreaHeight = bounds.height - clipAreaTop - 4 - spectrogramReserved
 		let assignments = laneAssignments(for: clips)
 		let numLanes = CGFloat((assignments.max() ?? 0) + 1)
 		let laneHeight = max(4, (clipAreaHeight - laneGap * (numLanes - 1)) / numLanes)
@@ -163,6 +261,11 @@ struct TimelineAxisRenderer {
 		let cornerRadius: CGFloat
 		let laneHeight: CGFloat
 		let w: CGFloat
+	}
+
+	private struct RoleLabelLayout {
+		let text: String
+		let rect: CGRect
 	}
 
 	private func drawClipBackground(_ state: ClipDrawState, in ctx: CGContext) {
@@ -228,6 +331,14 @@ struct TimelineAxisRenderer {
 			&& state.laneHeight >= minHeightForControls
 			&& state.w > playBtnSize + 8
 			&& state.clip.url != nil
+		let showsTitle = hasAudioControls || (state.laneHeight >= 16 && state.w > 30)
+		let titleX =
+			hasAudioControls
+			? state.rect.minX + 4 + playBtnSize + 10
+			: state.rect.minX + 6
+		let roleLayout = roleLabelLayout(
+			for: state, titleMinX: showsTitle ? titleX : nil)
+		let titleMaxX = roleLayout.map { $0.rect.minX - 5 } ?? state.rect.maxX - 6
 
 		if showWaveforms, !skipWaveforms, let samples = waveforms[state.index], !samples.isEmpty {
 			drawClipWaveform(
@@ -237,9 +348,12 @@ struct TimelineAxisRenderer {
 		}
 
 		if hasAudioControls {
-			drawAudioControls(state, in: ctx)
+			drawAudioControls(state, titleMaxX: titleMaxX, in: ctx)
 		} else if state.laneHeight >= 16 && state.w > 30 {
-			drawClipTitle(state, in: ctx)
+			drawClipTitle(state, titleMaxX: titleMaxX, in: ctx)
+		}
+		if let roleLayout {
+			drawRoleLabel(roleLayout, in: ctx)
 		}
 	}
 
@@ -309,7 +423,9 @@ struct TimelineAxisRenderer {
 		}
 	}
 
-	private func drawAudioControls(_ state: ClipDrawState, in ctx: CGContext) {
+	private func drawAudioControls(
+		_ state: ClipDrawState, titleMaxX: CGFloat, in ctx: CGContext
+	) {
 		let isPlaying = playingIndex == state.index
 		let playBtnRect = CGRect(
 			x: state.rect.minX + 4, y: state.rect.minY + 4,
@@ -317,7 +433,7 @@ struct TimelineAxisRenderer {
 		drawPlayButton(in: playBtnRect, context: ctx, isPlaying: isPlaying)
 
 		let titleX = state.rect.minX + 4 + playBtnSize + 10
-		let titleW = state.rect.maxX - titleX - 6
+		let titleW = titleMaxX - titleX
 		if titleW > 10 {
 			drawInlineTitle(
 				state.clip.name, x: titleX, width: titleW,
@@ -328,7 +444,9 @@ struct TimelineAxisRenderer {
 		drawScrubBar(in: state.rect, context: ctx)
 	}
 
-	private func drawClipTitle(_ state: ClipDrawState, in ctx: CGContext) {
+	private func drawClipTitle(
+		_ state: ClipDrawState, titleMaxX: CGFloat, in ctx: CGContext
+	) {
 		let isSelected = selectedClips.contains(state.index)
 		let para = NSMutableParagraphStyle()
 		para.lineBreakMode = .byTruncatingTail
@@ -341,7 +459,7 @@ struct TimelineAxisRenderer {
 		let titleH = titleStr.size(withAttributes: titleAttrs).height
 		let titleRect = CGRect(
 			x: state.rect.minX + 6, y: state.rect.midY - titleH / 2,
-			width: state.rect.width - 12, height: titleH)
+			width: max(0, titleMaxX - state.rect.minX - 6), height: titleH)
 		titleStr.draw(
 			with: titleRect, options: .usesLineFragmentOrigin,
 			attributes: titleAttrs, context: nil)
@@ -463,11 +581,66 @@ struct TimelineAxisRenderer {
 		ctx.fillPath()
 	}
 
+	/// Clips tint by their audio role using FCP's own palette, in both Steno and
+	/// Sonar, so the timeline reads the same as FCP's. Compound clips keep their
+	/// distinct variant on top of the role colour.
 	private func clipColor(for clip: FCPXMLParser.AudioClip, isDimmed: Bool) -> NSColor {
-		isDimmed
-			? NSColor.secondaryLabelColor
-			: clip.isCompound
-				? NSColor.controlAccentColor.compound() : NSColor.controlAccentColor
+		if isDimmed { return NSColor.secondaryLabelColor }
+		let base = RoleColors.color(for: clip.role)
+		return clip.isCompound ? base.compound() : base
+	}
+
+	private var roleLabelAttributes: [NSAttributedString.Key: Any] {
+		let paragraph = NSMutableParagraphStyle()
+		paragraph.lineBreakMode = .byTruncatingTail
+		return [
+			.font: NSFont.systemFont(ofSize: 9, weight: .semibold),
+			.foregroundColor: NSColor.white.withAlphaComponent(0.6),
+			.paragraphStyle: paragraph,
+		]
+	}
+
+	/// The clip's audio role, drawn top-right. Paired with role colouring so a
+	/// user whose roles are recoloured can still read what each clip is.
+	private func roleLabelLayout(
+		for state: ClipDrawState, titleMinX: CGFloat?
+	) -> RoleLabelLayout? {
+		guard showRoleLabels, state.laneHeight >= minHeightForControls,
+			let text = RoleColors.label(for: state.clip.role)
+		else { return nil }
+
+		let attrs = roleLabelAttributes
+		let naturalWidth = (text as NSString).size(withAttributes: attrs).width
+		let rightX = state.rect.maxX - 5
+		var availableWidth = rightX - state.rect.minX - 5
+		if let titleMinX {
+			let titleAttrs: [NSAttributedString.Key: Any] = [
+				.font: NSFont.systemFont(ofSize: 10, weight: .medium)
+			]
+			let firstTitleCharacter = state.clip.name.first.map(String.init) ?? ""
+			let minimumTitle = ((firstTitleCharacter + "…") as NSString)
+				.size(withAttributes: titleAttrs).width
+			availableWidth = rightX - titleMinX - minimumTitle - 5
+		}
+
+		let firstRoleCharacter = text.first.map(String.init) ?? ""
+		let minimumRole = ((firstRoleCharacter + "…") as NSString)
+			.size(withAttributes: attrs).width
+		guard availableWidth >= minimumRole else { return nil }
+
+		let width = min(naturalWidth, availableWidth)
+		let height = (text as NSString).size(withAttributes: attrs).height
+		return RoleLabelLayout(
+			text: text,
+			rect: CGRect(
+				x: rightX - width, y: state.rect.minY + 3,
+				width: width, height: height))
+	}
+
+	private func drawRoleLabel(_ layout: RoleLabelLayout, in ctx: CGContext) {
+		(layout.text as NSString).draw(
+			with: layout.rect, options: .usesLineFragmentOrigin,
+			attributes: roleLabelAttributes, context: nil)
 	}
 
 	private func laneAssignments(for clips: [FCPXMLParser.AudioClip]) -> [Int] {

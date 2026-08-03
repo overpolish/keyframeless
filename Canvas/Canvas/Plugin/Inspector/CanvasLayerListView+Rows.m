@@ -8,11 +8,12 @@
 
 #import "CanvasLayerListView_Private.h"
 
-#import "CanvasLayerRowViews.h"
 #import "CanvasLayerTree.h"
 #import "CanvasLocalized.h"
 
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKInlineRenameField.h>
+#import <KeyframelessKit/KKListRowViews.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 
@@ -80,12 +81,11 @@
                                index:(NSUInteger)idx {
   if (path.isGroup) {
     BOOL collapsed = [_collapsedGroups containsObject:path.groupID ?: @""];
-    return CanvasLayerIconButton(collapsed ? @"chevron.right" : @"chevron.down",
-                                 _symConfig, self, @selector(toggleCollapse:),
-                                 idx, NSColor.secondaryLabelColor);
+    return KKListIconButton(collapsed ? @"chevron.right" : @"chevron.down",
+                            _symConfig, self, @selector(toggleCollapse:), idx,
+                            NSColor.secondaryLabelColor);
   }
-  NSView *spacer =
-      [[CanvasLayerPassthroughView alloc] initWithFrame:NSZeroRect];
+  NSView *spacer = [[KKListPassthroughView alloc] initWithFrame:NSZeroRect];
   [spacer.widthAnchor constraintEqualToConstant:KKIconSizeSM].active = YES;
   [spacer.heightAnchor constraintEqualToConstant:KKIconSizeSM].active = YES;
   return spacer;
@@ -103,20 +103,19 @@
 // Fixed-size identity glyph: folder / image thumbnail / shape. A passthrough
 // view so click-select and reorder-drag over it reach the row.
 - (NSView *)_glyphColumnForPath:(KKBezierPath *)path {
-  CanvasLayerGlyphView *glyph;
+  KKListGlyphView *glyph;
   if (path.isGroup) {
-    glyph =
-        [CanvasLayerGlyphView imageViewWithImage:[self _symbolGlyph:@"folder"]];
+    glyph = [KKListGlyphView imageViewWithImage:[self _symbolGlyph:@"folder"]];
     glyph.contentTintColor = NSColor.secondaryLabelColor;
   } else if (path.isImage && path.imagePath.length) {
     NSImage *img = [self _thumbnailForPath:path.imagePath]
                        ?: [NSImage imageWithSystemSymbolName:@"photo.fill"
                                     accessibilityDescription:nil];
-    glyph = [CanvasLayerGlyphView imageViewWithImage:img];
+    glyph = [KKListGlyphView imageViewWithImage:img];
     glyph.imageScaling = NSImageScaleProportionallyUpOrDown;
   } else {
-    glyph = [CanvasLayerGlyphView
-        imageViewWithImage:[self _symbolGlyph:@"scribble"]];
+    glyph =
+        [KKListGlyphView imageViewWithImage:[self _symbolGlyph:@"scribble"]];
     glyph.contentTintColor = NSColor.secondaryLabelColor;
   }
   [glyph.widthAnchor constraintEqualToConstant:kLeadGlyphSize].active = YES;
@@ -130,8 +129,7 @@
 - (NSView *)_nameColumnForPath:(KKBezierPath *)path index:(NSUInteger)idx {
   NSString *displayName = path.name.length ? path.name : @"Layer";
   if ((NSInteger)idx == _editingIndex) {
-    NSTextField *field =
-        [CanvasLayerRenameField textFieldWithString:displayName];
+    NSTextField *field = [KKInlineRenameField textFieldWithString:displayName];
     field.font = [NSFont systemFontOfSize:KKFontSizeSM];
     // Match the value-edit fields (KKValueTextField): borderless, clear, no
     // focus ring, single-line, inspector label color - edits in place.
@@ -154,7 +152,7 @@
     _editingField = field;
     return field;
   }
-  NSTextField *name = [CanvasLayerNameLabel labelWithString:displayName];
+  NSTextField *name = [KKListNameLabel labelWithString:displayName];
   name.alignment = NSTextAlignmentLeft;
   name.font = path.isGroup ? [NSFont boldSystemFontOfSize:KKFontSizeSM]
                            : [NSFont systemFontOfSize:KKFontSizeSM];
@@ -182,11 +180,11 @@
   NSArray<NSView *> *views = @[
     [self _disclosureColumnForPath:path index:idx],
     [self _glyphColumnForPath:path],
-    CanvasLayerIconButton(path.hidden ? @"eye.slash" : @"eye.fill", _symConfig,
-                          self, @selector(toggleVisibility:), idx, eyeColor),
+    KKListIconButton(path.hidden ? @"eye.slash" : @"eye.fill", _symConfig, self,
+                     @selector(toggleVisibility:), idx, eyeColor),
     [self _nameColumnForPath:path index:idx],
-    CanvasLayerIconButton(path.locked ? @"lock.fill" : @"lock.open", _symConfig,
-                          self, @selector(toggleLock:), idx, lockColor),
+    KKListIconButton(path.locked ? @"lock.fill" : @"lock.open", _symConfig,
+                     self, @selector(toggleLock:), idx, lockColor),
   ];
 
   CanvasLayerRow *row = [[CanvasLayerRow alloc] initWithFrame:NSZeroRect];

@@ -67,7 +67,7 @@
     BOOL applies =
         isOut ? (s.outEnabled && !lane.keyposes[s.holdEnd].outgoing.holdsFlat)
               : (s.inEnabled && !lane.keyposes.firstObject.outgoing.holdsFlat);
-    [partLabels addObject:lane.label];
+    [partLabels addObject:lane.key];
     [partStates addObject:@(applies)];
   }
 
@@ -130,7 +130,7 @@
       },
       self.onDragBegin, self.onDragEnd,
       // Representative interval + its lane label so plugins can gate extras
-      // by lane (e.g. MagicMove's rotate-with-motion only on Position). The
+      // by lane (e.g. a rotate-with-motion extra only on Position). The
       // mutator targets ONLY that lane's interval - the property is lane-
       // specific and shouldn't pollute other lanes' userProperties dicts.
       repLabel,
@@ -142,6 +142,12 @@
       ^(void (^_Nonnull mutate)(KKInterval *_Nonnull)) {
         [weak _mutateIntervalInLaneLabel:repLabel section:capSec with:mutate];
       });
+  // Highlight the section the (now fixed-position) gap popover edits. Set AFTER
+  // present: presenting closes any previously-open popover, whose close
+  // notification clears these flags (see _boundaryPopoverDidClose:).
+  _gapPopoverShowing = YES;
+  _activeGapSection = sec;
+  [self setNeedsDisplay:YES];
 }
 
 - (NSString *)_representativeLaneLabelForSection:(KKBasicSection)section {
@@ -153,7 +159,7 @@
       continue;
     if (section == KKBasicSectionIn && !s.inEnabled)
       continue;
-    return lane.label;
+    return lane.key;
   }
   return nil;
 }
@@ -185,25 +191,23 @@
   return nil;
 }
 
-// Multi-owner (Canvas) timelines carry every layer's lanes; the gap / modulate
-// "Applies to" must list only the active layer's, exactly like the keypose
-// popover. Single-owner timelines (no layerKey / no active key) include all.
-- (BOOL)_laneInActiveLayer:(KKLane *)lane {
-  return !_activeLayerKey.length || !lane.layerKey.length ||
-         [lane.layerKey isEqualToString:_activeLayerKey];
-}
-
 // The animatable lanes that appear in a gap / modulation "Applies to": enabled,
-// shaped (>=2 keyposes), visible under the mode-gating cascade, and on the
-// active layer. ONE source of truth so each builder and its cmd-Z rebuilder
-// stay in lock-step (a mismatch silently no-ops the state refresh).
+// shaped (>=2 keyposes) and visible under the mode-gating cascade. ONE source
+// of truth so each builder and its cmd-Z rebuilder stay in lock-step (a
+// mismatch silently no-ops the state refresh).
+//
+// EVERY owner's lanes, not just the active layer's: the checklist that renders
+// them pages by owner behind a layer pill (opened on the host's selected
+// owner), so a multi-owner list stays navigable instead of burying one shader's
+// parameters in a flat run of every shader's. A single-owner timeline carries
+// no layerKey at all, so the nav never appears and the list is unchanged.
 - (NSArray<KKLane *> *)_gapParticipatingLanes {
   NSSet<NSString *> *visible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   NSMutableArray<KKLane *> *out = [NSMutableArray array];
   for (KKLane *lane in _timeline.lanes)
     if (lane.enabled && lane.keyposes.count >= 2 &&
-        [visible containsObject:lane.label] && [self _laneInActiveLayer:lane])
+        [visible containsObject:lane.key])
       [out addObject:lane];
   return out;
 }
@@ -246,7 +250,7 @@
     BOOL othersApply = NO;
     for (KKLane *lane in _timeline.lanes) {
       if (!lane.enabled || lane.keyposes.count < 2 ||
-          [lane.label isEqualToString:label])
+          [lane.key isEqualToString:label])
         continue;
       KKHoldShape s = KKShapeOfLane(lane);
       BOOL applies =
@@ -270,7 +274,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
-    if (!lane.enabled || ![lane.label isEqualToString:label] ||
+    if (!lane.enabled || ![lane.key isEqualToString:label] ||
         lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
@@ -343,7 +347,7 @@
   NSMutableArray<NSNumber *> *driftStates = [NSMutableArray array];
   for (KKLane *lane in [self _gapParticipatingLanes]) {
     KKInterval *liv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
-    [holdLabels addObject:lane.label];
+    [holdLabels addObject:lane.key];
     [driftStates addObject:@(liv && !liv.endpointsLinked)];
   }
 
@@ -395,6 +399,9 @@
                                    section:KKBasicSectionHold
                                       with:mutate];
         });
+    _gapPopoverShowing = YES;
+    _activeGapSection = KKBasicSectionHold;
+    [self setNeedsDisplay:YES];
     return;
   }
 
@@ -424,6 +431,9 @@
   // the single-segment compound for a single-component lane.
   NSMutableArray<NSString *> *partLaneLabels = [NSMutableArray array];
   NSMutableArray<NSNumber *> *partComponentIdx = [NSMutableArray array];
+  // The live lane behind each compound, in compound order: the checklist pages
+  // the rows by its category + owner, which the display labels can't name.
+  NSMutableArray<KKLane *> *partCompoundLanes = [NSMutableArray array];
   for (KKLane *lane in [self _gapParticipatingLanes]) {
     BOOL isGradient = (lane.valueType == KKLaneValueTypeGradient);
     BOOL gradientLinear =
@@ -441,11 +451,11 @@
         compLabels.count > 1 && compCount > 1) {
       showsLinked = YES;
       NSIndexSet *mask = liv.modulationComponents;
-      NSMutableArray<NSString *> *segLabels =
-          [NSMutableArray arrayWithObject:lane.label];
+      NSMutableArray<NSString *> *segLabels = [NSMutableArray
+          arrayWithObject:KKLocalizedParamName(lane.displayName)];
       NSMutableArray<NSNumber *> *segStates =
           [NSMutableArray arrayWithObject:@(laneModActive)];
-      [partLaneLabels addObject:lane.label];
+      [partLaneLabels addObject:lane.key];
       [partComponentIdx addObject:@(-1)]; // master segment
       for (NSUInteger c = 0; c < compCount; c++) {
         NSString *cn =
@@ -455,17 +465,20 @@
         [segLabels addObject:cn];
         BOOL on = laneModActive && (!mask || [mask containsIndex:c]);
         [segStates addObject:@(on)];
-        [partLaneLabels addObject:lane.label];
+        [partLaneLabels addObject:lane.key];
         [partComponentIdx addObject:@(c)];
       }
       [partCompoundLabels addObject:segLabels];
       [partCompoundStates addObject:segStates];
+      [partCompoundLanes addObject:lane];
     } else {
       // The gradient's lone toggle reads "Angle" but still targets its lane.
-      NSString *disp = isGradient ? KKLocalizedParamName(@"Angle") : lane.label;
+      NSString *disp = isGradient ? KKLocalizedParamName(@"Angle")
+                                  : KKLocalizedParamName(lane.displayName);
       [partCompoundLabels addObject:@[ disp ]];
       [partCompoundStates addObject:@[ @(laneModActive) ]];
-      [partLaneLabels addObject:lane.label];
+      [partCompoundLanes addObject:lane];
+      [partLaneLabels addObject:lane.key];
       [partComponentIdx addObject:@(-2)]; // single-segment, lane-level
     }
   }
@@ -509,7 +522,7 @@
   self.onHoldModulationPopover(
       _popoverAnchor, p.inEndFrac, p.outStartFrac, mod, mInten, mFreq, seed,
       linked, showsLinked, partCompoundLabels, partCompoundStates,
-      partRebuilder,
+      partCompoundLanes, partRebuilder,
       ^(KKIntervalModulation m) {
         [weak _mutateHoldModWith:^(KKInterval *iv) {
           iv.modulation = m;
@@ -563,6 +576,9 @@
                                  section:KKBasicSectionHold
                                     with:mutate];
       });
+  _gapPopoverShowing = YES;
+  _activeGapSection = KKBasicSectionHold;
+  [self setNeedsDisplay:YES];
 }
 
 // Apply `mut` to the In / Hold / Out interval of every animatable lane -
@@ -571,8 +587,8 @@
 // (setNeedsDisplay re-reads from the projection); the host coalesces the
 // per-tick blob writes into the slider drag's undo group.
 // Per-lane variant: write only to the named lane's phase interval. Used by
-// gap-popover extras whose semantics are lane-specific (e.g. MagicMove's
-// rotate-with-motion is a property of the Position curve, not of every
+// gap-popover extras whose semantics are lane-specific (e.g. a
+// rotate-with-motion extra is a property of the Position curve, not of every
 // participating lane). nil/empty label is a no-op.
 - (void)_mutateIntervalInLaneLabel:(NSString *)laneLabel
                            section:(KKBasicSection)section
@@ -583,7 +599,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
-    if (![lane.label isEqualToString:laneLabel])
+    if (![lane.key isEqualToString:laneLabel])
       continue;
     if (!lane.enabled || lane.keyposes.count < 2)
       return;

@@ -4,16 +4,10 @@
  */
 
 #import "KKBezierPath.h"
+#import "KKCubicBezier.h"
 #import "KKShape.h"
 
 static const NSUInteger kArcLengthSamples = 64;
-
-static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
-                                   simd_float2 c1, simd_float2 p1, float t) {
-  float u = 1.0f - t;
-  return u * u * u * p0 + 3.0f * u * u * t * c0 + 3.0f * u * t * t * c1 +
-         t * t * t * p1;
-}
 
 @implementation KKBezierPath {
   KKBezierPoint *_points;
@@ -908,8 +902,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   _count++;
   // Keep the radii array (if materialized) in step: the new anchor is sharp.
   if (_cornerRadii)
-    [_cornerRadii insertObject:@0.0f
-                       atIndex:MIN(index, _cornerRadii.count)];
+    [_cornerRadii insertObject:@0.0f atIndex:MIN(index, _cornerRadii.count)];
   _shape = nil;
 }
 
@@ -1264,7 +1257,7 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
                     atT:(float)t {
   if (type0 == KKBezierPointLinear && type1 == KKBezierPointLinear)
     return p0 + t * (p1 - p0);
-  return evalCubicBezier(p0, p0 + outH, p1 + inH, p1, t);
+  return KKEvalCubic(p0, p0 + outH, p1 + inH, p1, t);
 }
 
 - (simd_float2)evaluateSegment:(NSUInteger)segIndex
@@ -1304,7 +1297,7 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
   simd_float2 b = {p1.x, p1.y};
   if (p0.type == KKBezierPointLinear && p1.type == KKBezierPointLinear)
     return a + t * (b - a);
-  return evalCubicBezier(a, cp0, cp1, b, t);
+  return KKEvalCubic(a, cp0, cp1, b, t);
 }
 
 - (simd_float2)evaluateTangentAtIndex:(NSUInteger)index

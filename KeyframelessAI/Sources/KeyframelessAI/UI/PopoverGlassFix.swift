@@ -11,10 +11,12 @@ public struct PopoverGlassFix: ViewModifier {
 
 	public func body(content: Content) -> some View {
 		content
-			// A dark backing wash subdues macOS 26's Liquid Glass so the popover UI
-			// keeps contrast over bright viewer backgrounds. Mirrors the kit's 0.2
-			// black wash on the timeline inspector / layer-list popovers.
-			.background(Color.black.opacity(0.2))
+			// An OPAQUE inspector-matched fill so the popover UI reads on a flat
+			// surface instead of see-through liquid glass. Sits on top of the glass
+			// (it's our hosted content), so it guarantees legibility regardless of
+			// the private popover-frame hierarchy. Mirrors the kit's opaque
+			// KKApplyPopoverBackground on the ObjC popovers.
+			.background(Color.aiPopoverBackground.opacity(0.5))
 			.background(PopoverGlassFixProbe())
 	}
 }
@@ -50,6 +52,9 @@ private struct PopoverGlassFixProbe: NSViewRepresentable {
 				current = c.superview
 			}
 			guard let popoverFrame else { return }
+			let fill = NSColor(
+				red: 0x16 / 255.0, green: 0x16 / 255.0, blue: 0x16 / 255.0, alpha: 0.5
+			).cgColor
 			for sub in popoverFrame.subviews {
 				guard NSStringFromClass(type(of: sub)).contains("GlassView") else { continue }
 				for glassSub in sub.subviews {
@@ -58,7 +63,7 @@ private struct PopoverGlassFixProbe: NSViewRepresentable {
 					if name.contains("CoreHostingView") {
 						glassSub.layer?.opacity = 0
 					} else if name.contains("ContentHolderView") {
-						glassSub.layer?.backgroundColor = NSColor.clear.cgColor
+						glassSub.layer?.backgroundColor = fill
 					}
 				}
 				break

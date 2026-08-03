@@ -14,9 +14,22 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+// KKRotationAxes (which axes the control drives) is defined in
+// KKRotationOSCMath.h so the viewer OSC + mini-viewer renderer share it.
+
+/// Build a rotation lane in the shared kit style: a `KKLaneValueTypeAngle`
+/// circular dial (NOT a slider), one component per enabled axis in X/Y/Z order,
+/// with the standard X=red / Y=green / Z=blue tints, degree units, and
+/// unconstrained (accumulates past 360°). Pass `KKRotationAxesAll` for the
+/// classic 3-axis [X,Y,Z] lane, or e.g. `KKRotationAxisZ` for a 2D plugin's
+/// single-Z dial. The caller still sets plugin-specific flags (enabled,
+/// categoryKey, animatable, visibleWhen…) on the returned lane.
+FOUNDATION_EXPORT KKLane *KKRotationLaneWithLabel(NSString *label,
+                                                  KKRotationAxes axes);
+
 /// 3-ring sphere rotation gizmo. Each ring is the great-circle perpendicular
 /// to its axis, drawn with the current world rotation `R = Ry * Rx * Rz`
-/// applied (matching MagicMove's shader order) so the rings visually tilt
+/// applied (matching the shader order) so the rings visually tilt
 /// as the pose changes. Per-ring axis drag: grab a ring, drag tangentially,
 /// rotate that axis only.
 ///
@@ -55,6 +68,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// live activePart.
 @property(nonatomic) NSInteger rotationActivePart;
 
+/// Which Euler axes the bound lane drives (see KKRotationAxes). Default
+/// `KKRotationAxesAll` (classic 3-component [X,Y,Z] lane). Set e.g.
+/// `KKRotationAxisZ` for a 2D plugin whose lane is a single Z angle; the gizmo
+/// then shows only the Z ring and reads/writes a 1-component lane.
+@property(nonatomic) KKRotationAxes enabledAxes;
+
 /// The host mirrors its FxPlug `isDragging` here each draw tick.
 @property(nonatomic) BOOL dragging;
 
@@ -83,11 +102,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) float rotZ;
 
 /// A parent/world rotation pre-applied to the DISPLAYED pose (rings tilt + drag
-/// tangent), so a control on an object nested in a rotated parent (e.g. a Canvas
-/// member inside a rotated group) shows rings in the parent's frame. The drag
-/// still writes the object's OWN Euler (the parent factors out of the value), so
-/// this only affects display + which screen direction each ring drags along.
-/// Default identity.
+/// tangent), so a control on an object nested in a rotated parent (e.g. a
+/// Canvas member inside a rotated group) shows rings in the parent's frame. The
+/// drag still writes the object's OWN Euler (the parent factors out of the
+/// value), so this only affects display + which screen direction each ring
+/// drags along. Default identity.
 @property(nonatomic) KKRotMatrix3 baseRotation;
 
 /// Per-axis ring colors. Default red / green / blue.
@@ -110,16 +129,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) float ringAlphaZ;
 
 /// 0 = X, 1 = Y, 2 = Z, -1 = none. Set by `hitTestAtMousePositionX:...`
-/// and consumed by the draw call to highlight the grabbed ring + by
-/// `angleDeltaFromPressPoint:currentPoint:` to choose the axis to rotate.
+/// and consumed by the draw call to highlight the grabbed ring + by the
+/// drag to choose the axis to rotate (KKRingDragAngleDelta).
 @property(nonatomic, readonly) NSInteger activeAxis;
-
-/// Convert a screen-space drag (press → current, in canvas pixels) into the
-/// rotation delta (radians) to apply to `activeAxis`. Projects the screen
-/// displacement onto the ring's screen-space tangent at the press point,
-/// then divides by radius. Returns 0 if no ring is active.
-- (double)angleDeltaFromPressPoint:(CGPoint)pressPoint
-                      currentPoint:(CGPoint)currentPoint;
 
 /// High-level, self-contained API (requires `laneLabel`). The host forwards
 /// these from its drawOSC / hitTest / mouse callbacks after setting `center`

@@ -12,9 +12,23 @@
 @class KKPlayheadPoller;
 
 @interface CanvasPlugin ()
+/// Covariant re-type of the KKPlugin base property (one storage, @dynamic in
+/// the implementation).
 @property(nonatomic, weak, nullable) CanvasInspectorView *inspectorView;
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
+/// Link-source advertisement: one KKLinkLayerSource per layer (stable
+/// layerID + display name + effective lanes), rebuilt in -pluginState: when
+/// the layer blob changes and consumed by the base -writeLinkManifest hook.
+@property(nonatomic, copy, nullable)
+    NSArray<KKLinkLayerSource *> *linkLayerSources;
+/// Hash of the layer blob linkLayerSources was built from, so an unchanged
+/// blob skips the per-tick decode.
+@property(nonatomic) NSUInteger linkLayerBlobHash;
+/// Cross-clip subscriber: watches the sources this clip's layer expressions
+/// reference and nudges a re-render when one changes (FCP renders clips
+/// independently and won't refresh a subscriber otherwise).
+@property(nonatomic, strong, nullable) KKLinkWatcher *linkWatcher;
 /// Set while restoring the selected layer from an undo/redo of kParamUIState,
 /// so the selection-change callback skips its (otherwise undoable) re-persist
 /// and doesn't push a duplicate entry onto the undo stack.
@@ -64,11 +78,6 @@
 @property(nonatomic, strong, nullable) id<MTLTexture> mbColorTex;
 @property(nonatomic, strong, nullable) id<MTLTexture> mbVelocityTex;
 @property(nonatomic, strong, nullable) id<MTLTexture> mbBlurredTex;
-/// Returns a copy of `timeline` with every lane's lastKnownClipDuration set to
-/// the current effect duration (seconds). Must be called inside an action
-/// scope (FxTimingAPI resolves there).
-- (nullable KKTimeline *)timelineStampedWithClipDuration:
-    (nullable KKTimeline *)timeline;
 @end
 
 NS_ASSUME_NONNULL_BEGIN

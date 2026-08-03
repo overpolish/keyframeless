@@ -73,7 +73,8 @@ NS_ASSUME_NONNULL_BEGIN
   /// per-plugin NSUserDefaults flag ("shown once"); `_introAutostartTimer`
   /// polls for the guide-enable gate (the effect selected + its OSC drawn) and
   /// fires the intro exactly once; `_introAutostartBridge` caches the config's
-  /// OSC-bridge accessor (KKOSCGuideBridge(^)(void), id-typed) used for the gate.
+  /// OSC-bridge accessor (KKOSCGuideBridge(^)(void), id-typed) used for the
+  /// gate.
   NSString *_introSeenKey;
   NSTimer *_introAutostartTimer;
   id _introAutostartBridge;
@@ -131,6 +132,18 @@ NS_ASSUME_NONNULL_BEGIN
   NSDictionary<NSString *, NSString *> *_paramOrderCatByLabel;
   NSArray<NSString *> *_paramOrderCategoryKeys;
   NSString *_paramOrderSelectedCategory;
+  // Owner (layer) nav above the category pills, present only when the params
+  // carry two or more distinct layerKeys (Mirage's shader rack): a rack's
+  // entries share category NAMES, so without it two entries' "Center" rows sit
+  // on one page indistinguishable from each other. Picking an owner re-scopes
+  // the category nav and the rows, so the category bar is rebuilt with it.
+  NSView *_paramOrderHeader;
+  NSView *_paramOrderScroll;
+  NSLayoutConstraint *_paramOrderScrollTop;
+  NSView *_paramOrderLayerBar;
+  NSView *_paramOrderCategoryBar;
+  NSDictionary<NSString *, NSString *> *_paramOrderLayerByLabel;
+  NSString *_paramOrderSelectedLayer;
   KKParameterRowView *_presetsRow;
   NSButton *_presetsButton;
   id _presetsPopover;
@@ -139,12 +152,15 @@ NS_ASSUME_NONNULL_BEGIN
   NSInteger _mbSamples;
   KKMotionBlurTechnique _mbTechnique;
   NSArray<KKLane *> *_availableLanes;
+  NSString *_lastDerivedCode; // last code source the availableLanesProvider ran
   BOOL _isDetachedCopy;
   BOOL _detachedAttached;
   __weak KKTimelineInspectorView *_detachedOwner;
   KKTimelineInspectorView *_detachedView;
   double _clipDurationSeconds;
   double _frameDurationSeconds;
+  double _clipProjectStartSec;
+  double _playheadFraction;
 }
 
 /// Internal accessor so the +Guide category can read the play-button view
@@ -184,6 +200,11 @@ NS_ASSUME_NONNULL_BEGIN
                                     outCheckbox
                           gearButton:
                               (NSButton *__strong _Nonnull *_Nonnull)outGear;
+/// Mirror the motion-blur row onto the mini-viewer renderer so the preview
+/// blurs like the render does. Called from every setter that changes a term
+/// of it (enabled / shutter angle / samples / frame duration). Implemented in
+/// the main .m beside -_pushLinkTimeToMiniViewer, which pushes the same way.
+- (void)pushMotionBlurToMiniViewer;
 @end
 
 // Layout constants shared between the main .m and the +ParameterRows category.

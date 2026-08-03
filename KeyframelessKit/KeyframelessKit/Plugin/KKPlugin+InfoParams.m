@@ -11,7 +11,7 @@ static BOOL KKAddParam(BOOL ok, NSError **err, NSString *desc) {
   if (ok)
     return YES;
   if (err)
-    *err = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+    *err = [NSError errorWithDomain:@"com.keyframeless.error"
                                code:1
                            userInfo:@{NSLocalizedDescriptionKey : desc}];
   return NO;

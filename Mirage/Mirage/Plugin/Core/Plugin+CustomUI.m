@@ -1,0 +1,1128 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "Constants.h"
+#import "MirageAISchema.h"
+#import "MirageDirectives.h"
+#import "MirageInspectorView+Guides.h"
+#import "MirageInspectorView.h"
+#import "MirageLaneCatalog.h"
+#import "MirageLocalized.h"
+#import "MirageMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
+#import "MirageOSCBlockRuntime.h" // // @osc custom-handling blocks (checklist)
+#import "MirageOSCSnapshot.h" // OSC timeline snapshot + frame-duration setters
+#import "MiragePresets.h"     // MirageBuiltinPresets (built-in look presets)
+#import "MirageShaderTabs.h"  // // #tab blob <-> lane sections (AI code route)
+#import "Plugin_Private.h"
+#import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKCodeTabInterchange.h> // // #tab split (AI answers)
+#import <KeyframelessKit/KKColorLanes.h>
+#import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKGLSLSyntax.h> // KKExprCatalogMarkdown (AI reference)
+#import <KeyframelessKit/KKHelpSection.h>
+#import <KeyframelessKit/KKLicense.h>
+#import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
+#import <KeyframelessKit/KKPluginInstanceState.h> // rack selection (AI target)
+#import <KeyframelessKit/KKPresets.h>
+#import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKTimelineAIMerge.h>
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
+#import <KeyframelessKit/KKTimingCompat.h>
+#import <KeyframelessKit/KKUpdateChecker.h>
+#import <KeyframelessKit/NSColor+KKColors.h>
+@import KeyframelessAI;
+
+// Apply-an-AI-result helpers, one per result kind. Each owns its FCP action
+// scope and, on success, lights the green "done" sparkle. Parsing/mutating a
+// timeline needs no scope - only the param write does - so the shared writer
+// takes the finished JSON and just opens the scope around the write.
+
+// Open an action scope on `plugin`, write `json` to the timeline-data param,
+// close it, and light the done sparkle. Sets the AI error and returns NO if the
+// scope can't be opened.
+static BOOL MirageAIWriteTimelineJSON(MiragePlugin *plugin, NSString *json,
+                                      NSString *scopeError) {
+  BOOL scoped = KKPerformUndoable(
+      plugin.apiManager, plugin, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (json.length)
+          KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
+      });
+  if (!scoped) {
+    [KKAIDraft setError:scopeError];
+    return NO;
+  }
+  [KKAIDraft setAnswer:nil];
+  [KKAIDraft setCompleted:YES]; // green done sparkle
+  [KKAIDraft clearPrompt];
+  return YES;
+}
+
+// Every section name the shader lane can hold, Image (the primary section,
+// stored in `codeString`) first and the rest in catalog order. Read off the
+// lane template rather than spelled out here, so the AI's tab vocabulary can
+// never drift from the "+" menu the user sees.
+static NSArray<NSString *> *MirageAIShaderTabNames(void) {
+  NSMutableArray<NSString *> *names = [NSMutableArray arrayWithObject:@"Image"];
+  for (KKLane *l in MirageBuildAvailableLanes())
+    if ([l.key isEqualToString:kMirageCodeLaneLabel]) {
+      for (NSString *n in l.codeTabCatalog)
+        if (![names containsObject:n])
+          [names addObject:n];
+      break;
+    }
+  return names;
+}
+
+// Code authoring: set the AI-written GLSL on the "Mirage" code lane (creating
+// it if the persisted timeline has none) and write back; applyTimeline
+// re-transpiles and rebuilds the controls (same path a manual code commit
+// takes). A multi-pass answer arrives as one `// #tab` blob and is split back
+// into sections here - one lane, one write, so it stays one undo entry.
+static void MirageAIApplyShaderSource(MiragePlugin *plugin, NSString *newSrc,
+                                      NSString *timelineBlob) {
+  if (!newSrc.length) {
+    KKLogError(@"AI[err] empty shader source");
+    [KKAIDraft setError:@"AI returned an empty shader."];
+    return;
+  }
+  KKTimeline *tl = timelineBlob.length
+                       ? [KKTimeline timelineFromJSON:timelineBlob]
+                       : [KKTimeline timeline];
+  if (!tl)
+    tl = [KKTimeline timeline];
+  // The rack strip's selected entry is what "the shader" means once a project
+  // chains more than one - the same entry the code editor and the browser
+  // write. Read from the per-instance state the strip stamps on every
+  // selection (never a static: each instance is its own XPC process).
+  NSString *entryID =
+      KKInstanceStateForAPI(plugin.apiManager).selectedRackEntryID;
+  NSString *codeKey = MirageRackCodeLaneKey(
+      MirageRackEntryIDOrSentinel(entryID), kMirageCodeLaneLabel);
+  KKLane *shaderLane = nil;
+  for (KKLane *l in tl.lanes)
+    if ([l.key isEqualToString:codeKey]) {
+      shaderLane = l;
+      break;
+    }
+  if (!shaderLane) {
+    shaderLane = [KKLane laneWithKey:codeKey label:kMirageCodeLaneLabel];
+    shaderLane.valueType = KKLaneValueTypeCode;
+    shaderLane.animatable = NO;
+    shaderLane.enabled = NO;
+    tl.lanes = [tl.lanes arrayByAddingObject:shaderLane];
+  }
+  NSArray<NSString *> *knownTabs = MirageAIShaderTabNames();
+  NSDictionary<NSString *, NSString *> *split =
+      KKCodeSplitTabbedText(newSrc, knownTabs);
+  if (!split) {
+    shaderLane.codeString = newSrc; // single-pass answer: no markers to split
+  } else {
+    if (split[@"Image"])
+      shaderLane.codeString = split[@"Image"];
+    NSArray<NSDictionary<NSString *, NSString *> *> *tabs =
+        MirageShaderTabsMerged(shaderLane.codeTabs, split, knownTabs);
+    shaderLane.codeTabs = tabs.count ? tabs : nil;
+  }
+  MirageAIWriteTimelineJSON(
+      plugin, [KKTimeline jsonFromTimeline:tl],
+      @"Couldn't open the FCP action scope to apply the shader.");
+}
+
+// Expression authoring: for each {lane, expression} op set that lane's
+// linkExpression (friendly ${Clip.Param} refs translated to the stored
+// ${uuid.label} form via the current manifests), then write back so
+// applyTimeline re-derives the driven values.
+//
+// The op names a lane by its KEY (what the agent is handed and told to answer
+// with), with a label match as the fallback for a model that answered with the
+// display name anyway - for a directive-derived control the two differ (key =
+// uniform name, label = the `name=` string). Neither matching means the lane
+// does not exist: every Mirage lane is derived from the shader source, so
+// inventing one here would only add a row nothing renders.
+static void MirageAIApplyExpressionOps(MiragePlugin *plugin, NSString *opsJSON,
+                                       NSString *timelineBlob) {
+  NSData *opsData = [opsJSON dataUsingEncoding:NSUTF8StringEncoding];
+  NSDictionary *opsObj = opsData
+                             ? [NSJSONSerialization JSONObjectWithData:opsData
+                                                               options:0
+                                                                 error:nil]
+                             : nil;
+  NSArray *ops =
+      [opsObj isKindOfClass:[NSDictionary class]] ? opsObj[@"operations"] : nil;
+  if (![ops isKindOfClass:[NSArray class]] || ops.count == 0) {
+    [KKAIDraft setError:@"AI returned no expression."];
+    return;
+  }
+  KKTimeline *tl = timelineBlob.length
+                       ? [KKTimeline timelineFromJSON:timelineBlob]
+                       : [KKTimeline timeline];
+  if (!tl)
+    tl = [KKTimeline timeline];
+  NSArray<KKLinkManifest *> *manifests = [KKLinkBus allManifests];
+  NSMutableArray<KKLane *> *lanes = [tl.lanes mutableCopy];
+  NSUInteger applied = 0;
+  for (NSDictionary *op in ops) {
+    if (![op isKindOfClass:[NSDictionary class]])
+      continue;
+    NSString *name = op[@"lane"];
+    NSString *expr = op[@"expression"];
+    if (![name isKindOfClass:[NSString class]] || name.length == 0 ||
+        ![expr isKindOfClass:[NSString class]] || expr.length == 0)
+      continue;
+    NSString *stored = KKLinkStoredExpressionFromDisplay(expr, manifests);
+    KKLane *target = nil;
+    for (KKLane *l in lanes)
+      if ([l.key isEqualToString:name]) {
+        target = l;
+        break;
+      }
+    if (!target)
+      for (KKLane *l in lanes)
+        if ([l.label isEqualToString:name]) {
+          target = l;
+          break;
+        }
+    if (!target) {
+      KKLogWarn(@"AI[expr] no lane named '%@' - skipping its expression", name);
+      continue;
+    }
+    target.linkExpression = stored;
+    applied++;
+  }
+  if (!applied) {
+    [KKAIDraft setError:@"AI targeted a control that doesn't exist."];
+    return;
+  }
+  tl.lanes = lanes;
+  MirageAIWriteTimelineJSON(
+      plugin, [KKTimeline jsonFromTimeline:tl],
+      @"Couldn't open the FCP action scope to apply the expression.");
+}
+
+// Keypose mutation: merge into the current timeline (snapping final keyposes to
+// the last renderable frame), write back, and - when the result isn't Basic-
+// representable - switch the inspector to Advanced so the user sees the real
+// structure instead of the compatibility banner.
+static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
+                                  NSString *mutationJSON, double clipDurSec) {
+  NSString *merged = KKTimelineAIMergeMutationJSON(
+      currentJSON, mutationJSON, clipDurSec, KKProcessFrameDurationSeconds());
+  if (!merged) {
+    KKLogError(@"AI[err] merge returned nil");
+    [KKAIDraft setError:@"AI returned an invalid timeline mutation."];
+    return;
+  }
+  BOOL scoped = KKPerformUndoable(
+      plugin.apiManager, plugin, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        KKWriteCustomParamString(setAPI, merged, kKKParamTimelineData);
+        KKTimeline *resultTimeline = [KKTimeline timelineFromJSON:merged];
+        double mergeFrameDur = KKProcessFrameDurationSeconds();
+        double aiEndFrac = (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                            mergeFrameDur < clipDurSec)
+                               ? (clipDurSec - mergeFrameDur) / clipDurSec
+                               : 1.0;
+        if (resultTimeline &&
+            !KKTimelineIsBasicCompatible(resultTimeline, aiEndFrac))
+          [plugin patchUIStateKey:@"activeTab"
+                            value:@(1)
+                          paramID:kParamUIState];
+      });
+  if (!scoped) {
+    [KKAIDraft setError:@"Couldn't open the FCP action scope to apply the "
+                        @"mutation."];
+    return;
+  }
+  [KKAIDraft setAnswer:nil];
+  [KKAIDraft setCompleted:YES]; // green done sparkle
+  [KKAIDraft clearPrompt];
+}
+
+@implementation MiragePlugin (CustomUI)
+
+- (BOOL)usesMotionBlur {
+  return YES;
+}
+
++ (NSArray<KKLane *> *)availableLanes {
+  return MirageBuildAvailableLanes();
+}
+
+// Source-aware lane set: the Core lanes plus whatever dynamic lanes the given
+// shader source declares (e.g. the `// #color` Colours group).
++ (NSArray<KKLane *> *)availableLanesForShaderSource:(NSString *)source {
+  return [self availableLanesForShaderSource:source audioTickets:nil];
+}
+
++ (NSArray<KKLane *> *)
+    availableLanesForShaderSource:(NSString *)source
+                     audioTickets:(NSDictionary<NSString *, id> *)tickets {
+  return MirageBuildAvailableLanesForSource(
+      source.length ? source : MirageCustomDefaultShaderSource(), tickets);
+}
+
++ (NSArray<KKLane *> *)
+    availableLanesForShaderSource:(NSString *)source
+                     audioTickets:(NSDictionary<NSString *, id> *)tickets
+                         timeline:(KKTimeline *)timeline {
+  // Rack-aware: every entry the timeline registers contributes its lanes, on
+  // keys scoped to it. A timeline with no rack registry - every project made
+  // before the rack - has exactly one (sentinel) entry, and this returns what
+  // the single-source build always returned.
+  //
+  return [self availableLanesForShaderSource:source
+                                audioTickets:tickets
+                                    timeline:timeline
+                                 rackEntryID:nil];
+}
+
++ (NSArray<KKLane *> *)
+    availableLanesForShaderSource:(NSString *)source
+                     audioTickets:(NSDictionary<NSString *, id> *)tickets
+                         timeline:(KKTimeline *)timeline
+                      rackEntryID:(NSString *)entryID {
+  // `source` is ONE entry's source when the caller hands one over: the editor
+  // derives lanes from mid-edit code before it commits, and that code has to
+  // win over the stored code lane while the other entries still build from
+  // theirs. The entry it belongs to is the one the rack strip has selected,
+  // because that is the entry the editor is bound to.
+  return MirageBuildAvailableLanesForRack(timeline, tickets, source, entryID);
+}
+
+// The current shader source from a timeline's "Mirage" code lane (the baked
+// default when absent/empty), for deriving the source-aware lane set.
++ (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline {
+  return [self shaderSourceFromTimeline:timeline forRackEntry:nil];
+}
+
++ (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline
+                          forRackEntry:(NSString *)entryID {
+  NSString *key = MirageRackCodeLaneKey(MirageRackEntryIDOrSentinel(entryID),
+                                        kMirageCodeLaneLabel);
+  for (KKLane *l in timeline.lanes)
+    if ([l.key isEqualToString:key] && l.codeString.length)
+      return l.codeString;
+  return MirageCustomDefaultShaderSource();
+}
+
++ (NSArray<KKLane *> *)slotPrototypeLanesForShaderSource:(NSString *)source
+                                                   group:(NSString *)groupName {
+  return MirageSlotPrototypeLanesForGroup(
+      source.length ? source : MirageCustomDefaultShaderSource(), groupName,
+      nil);
+}
+
++ (NSArray<NSArray<NSString *> *> *)oscCompounds {
+  // Static fallback: the real set is per-shader (oscCompoundsForShaderSource:).
+  return @[];
+}
+
+// The OSC element set the current shader declares, for the visibility popover /
+// settings cog. Each `osc`-annotated lane is one compound (single element for a
+// point handle; a rotation gizmo is one compound of its master + per-axis
+// rings).
++ (NSArray<NSArray<NSString *> *> *)oscCompoundsForShaderSource:
+    (NSString *)source {
+  return [self oscCompoundsForShaderSource:source rackEntryID:nil];
+}
+
++ (NSArray<NSArray<NSString *> *> *)
+    oscCompoundsForShaderSource:(NSString *)source
+                    rackEntryID:(NSString *)entryID {
+  // The runtimes are the single source of truth: every inline `osc=` directive
+  // arrives as SUGAR (a synthesized block) alongside the authored `// @osc`
+  // blocks, in checklist order matching the viewer's oscElementKeys. They also
+  // carry the rack scope, so the keys here are the very strings MirageOSC gates
+  // on - which is what keeps the checklist rows, the hide persistence and the
+  // opt-click toggle addressing the same elements.
+  NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];
+  if (!source.length)
+    return out;
+  for (MirageOSCBlockRuntime *b in
+       [MirageOSCBlockRuntime runtimesForSource:source
+                                          lanes:@[]
+                                    rackEntryID:entryID]) {
+    if ([b.primitive isEqualToString:@"position"]) {
+      // A position also owns a motion-PATH element, toggleable independently
+      // of its handle (a separate Position + Path).
+      [out addObject:@[ b.laneKey ]];
+      [out addObject:@[ [b.laneKey stringByAppendingString:@" Path"] ]];
+      continue;
+    }
+    if ([b.primitive isEqualToString:@"rotate"]) {
+      // ONE compound of the gizmo's master + per-axis rings (keyed on its LANE
+      // label), so the checklist shows a "Rotation" group with X/Y/Z children.
+      NSMutableArray<NSString *> *group =
+          [NSMutableArray arrayWithObject:b.laneKey];
+      NSString *lower = b.axes.lowercaseString;
+      BOOL any = NO;
+      const char *canon = "XYZ";
+      for (int a = 0; a < 3; a++)
+        if ([lower containsString:[[NSString stringWithFormat:@"%c", canon[a]]
+                                      lowercaseString]]) {
+          [group
+              addObject:[b.laneKey stringByAppendingFormat:@".%c", canon[a]]];
+          any = YES;
+        }
+      if (!any)
+        [group addObject:[b.laneKey stringByAppendingString:@".Z"]];
+      [out addObject:group];
+      continue;
+    }
+    [out addObject:@[ b.elementKey ]];
+  }
+  return out;
+}
+
+// EVERY rack entry's OSC compounds, in rack order.
+//
+// The checklist shows the whole rack rather than the selected entry alone,
+// because the popover carries its own owner (node) pill row: scoping is the
+// LIST's job there, and handing it one entry would leave it with a single owner
+// and no pills to scope with. It is also what the persist path needs -
+// -kkSetOSCElement: rebuilds the whole `oscElements` map from the key set it is
+// given, so a narrowed set would drop every other entry's stored visibility on
+// the next toggle.
+//
+// `overrideCode` is the editor's uncommitted source, which belongs to the
+// SELECTED entry (`overrideEntryID`); every other entry contributes from its
+// own code lane.
++ (NSArray<NSArray<NSString *> *> *)
+    oscCompoundsForRackTimeline:(KKTimeline *)timeline
+                   overrideCode:(NSString *)overrideCode
+                overrideEntryID:(NSString *)overrideEntryID {
+  NSString *owner = overrideEntryID.length
+                        ? overrideEntryID
+                        : (NSString *)kMirageRackSentinelEntryID;
+  NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];
+  for (NSString *entryID in MirageRackEntryIDs(timeline)) {
+    NSString *src = (overrideCode && [entryID isEqualToString:owner])
+                        ? overrideCode
+                        : [self shaderSourceFromTimeline:timeline
+                                            forRackEntry:entryID];
+    [out addObjectsFromArray:[self oscCompoundsForShaderSource:src
+                                                   rackEntryID:entryID]];
+  }
+  return out;
+}
+
++ (NSArray<NSString *> *)oscElementKeysForRackTimeline:(KKTimeline *)timeline {
+  return [KKPlugin
+      kkOSCElementKeysForCompounds:[self oscCompoundsForRackTimeline:timeline
+                                                        overrideCode:nil
+                                                     overrideEntryID:nil]];
+}
+
+// Re-point the OSC-visibility checklist at the rack as it stands now.
+//
+// The one funnel for all three triggers - inspector creation, a code commit and
+// a rack-selection move - because they are the same event to this surface: the
+// compound set is a function of (which entries exist, what each one's source
+// declares), and each trigger changes one of those. Re-wiring rather than
+// patching, because -kkWireOSCVisibilityForView: re-captures the compounds and
+// the toggle indexing is positional.
+//
+// The SELECTION does not narrow the list - the checklist's own node pills do
+// that, opening on the lanes view's active layer, which IS the selected entry.
+// What the selection changes here is only which entry the editor's uncommitted
+// code belongs to.
+//
+// `uiState` nil = leave the visibility STATE alone and rebuild only the rows. A
+// code commit and a selection move both do (the in-memory hidden set already
+// spans every entry's keys); only creation, which is where the blob is read,
+// seeds it.
+- (void)mirageRewireOSCVisibilityForView:(KKTimelineInspectorView *)view
+                                renderer:(KKMiniViewerRenderer *)renderer
+                                 uiState:(NSDictionary *)uiState
+                                timeline:(KKTimeline *)timeline
+                            overrideCode:(NSString *)overrideCode {
+  if (!view || !renderer)
+    return;
+  NSString *entryID =
+      KKInstanceStateForAPI(self.apiManager).selectedRackEntryID.length
+          ? KKInstanceStateForAPI(self.apiManager).selectedRackEntryID
+          : (NSString *)kMirageRackSentinelEntryID;
+  NSArray<NSArray<NSString *> *> *compounds =
+      [MiragePlugin oscCompoundsForRackTimeline:timeline
+                                   overrideCode:overrideCode
+                                overrideEntryID:entryID];
+  if (uiState)
+    [self kkApplyOSCVisibilityFromState:uiState
+                            elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
+                                                      compounds]
+                               renderer:renderer];
+  [self kkWireOSCVisibilityForView:view
+                          renderer:renderer
+                         compounds:compounds
+                           paramID:kParamUIState];
+  KKLogDebug(@"[Rack] OSC checklist rewired: %lu compounds across the rack "
+             @"(editor entry %@)",
+             (unsigned long)compounds.count, entryID);
+}
+
+- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == kParamInspectorUI) {
+    __block KKTimeline *timeline = nil;
+    __block NSString *shaderSrc = nil;
+    __block NSArray<KKLane *> *available = nil;
+    __block BOOL oscMasterVisible = YES;
+    __block NSDictionary *uiState = nil;
+    __block KKMiniViewerRenderMode renderMode = 0;
+    MirageInspectorView *view = (MirageInspectorView *)[self
+        kkCreateInspectorViewWithUIStateParamID:kParamUIState
+        renderNudgeParamID:kParamRenderNudge
+        dragUndoLabel:KKUndoLabelAdjust(@"Mirage")
+        detachedWindowSize:CGSizeMake(720.0, 460.0)
+        builtinPresets:MirageBuiltinPresets()
+        inScope:^(KKInspectorCreateContext *ctx,
+                  id<FxParameterRetrievalAPI_v6> getAPI) {
+          KKInspectorPersistedState *st = ctx.persistedState;
+          oscMasterVisible = st.oscMasterVisible;
+          uiState = st.uiState;
+          renderMode = (KKMiniViewerRenderMode)st.renderMode;
+          timeline = [self timelineStampedWithClipDuration:st.timeline];
+          // Cold-boot seed for the OSC. Without this, the first drawOSC tick
+          // after FCP relaunch sees an empty snapshot -> falls through to "no
+          // lane = constant", Origin reads default 0.5,0.5 -> the handle sits
+          // at frame centre regardless of saved state. parameterChanged
+          // eventually catches up, but only after a redraw nudge.
+          MirageSetTimelineSnapshot(timeline);
+          if (ctx.seedFrameDurSec > 0)
+            MirageSetFrameDurationSeconds(ctx.seedFrameDurSec);
+          // Seed the per-instance OSC master tick while the state is scoped.
+          ctx.instanceState.oscMasterVisible = st.oscMasterVisible;
+          // Cold-boot seed for the rack selection, for the same reason: the
+          // OSC and the AI author read the entry off the instance state, and
+          // parameterChanged only fires on a CHANGE. Read-only - resolving a
+          // stored selection must not write one.
+          NSString *seededEntry = uiState[@"selectedRackEntryID"];
+          if ([seededEntry isKindOfClass:[NSString class]] &&
+              seededEntry.length)
+            ctx.instanceState.selectedRackEntryID = seededEntry;
+        }
+        buildView:^KKTimelineInspectorView *(KKInspectorCreateContext *ctx) {
+          // Catches bindings this instance made before tickets existed, and
+          // any made while its inspector was closed. Opens its own scope, so
+          // it runs after the template's scope rather than inside it.
+          [self syncAudioTicketsForTimeline:timeline];
+          // Source-aware: derive the lane set (incl. the dynamic Colours
+          // group) from the current shader source, so a shader's `// #color`
+          // directive surfaces its swatches + palette generator.
+          shaderSrc = [MiragePlugin shaderSourceFromTimeline:timeline];
+          // Timeline-aware: a `// #slots` group's controls are prototypes, and
+          // the rows are one set per registered instance. A group this project
+          // has never seen is brought up to its declared default here, which is
+          // what a fresh apply and a pre-`#slots` project both look like.
+          available =
+              [MiragePlugin availableLanesForShaderSource:shaderSrc
+                                             audioTickets:self.audioTickets
+                                                 timeline:timeline];
+          KKInspectorPersistedState *st = ctx.persistedState;
+          MirageInspectorView *v = [[MirageInspectorView alloc]
+                 initWithAPIManager:self.apiManager
+                        loopEnabled:st.loopEnabled
+              maintainTimingEnabled:st.maintainTimingEnabled
+                          activeTab:st.activeTab
+                     availableLanes:available
+                           timeline:timeline];
+          // Every Mirage lane is declared by the shader (or is a fixed Core
+          // lane), so the template set IS the complete list of what exists -
+          // anything else in the timeline is a control the source has stopped
+          // declaring, and showing it as a live row under its raw uniform name
+          // just offers an edit that goes nowhere.
+          v.hidesLanesWithoutTemplate = YES;
+          // The stored selection, straight onto the fresh view: everything the
+          // strip scopes (rows, color panel, activeLayerKey) is derived during
+          // the rest of this build, so a reopened inspector comes up on the
+          // entry the project was left on rather than on the first box. Direct
+          // assignment, not the funnel - there is nothing to re-drive yet and
+          // nothing to persist.
+          NSString *storedEntry = uiState[@"selectedRackEntryID"];
+          if ([storedEntry isKindOfClass:[NSString class]] &&
+              storedEntry.length &&
+              [MirageRackEntryIDs(timeline) containsObject:storedEntry])
+            v.selectedRackEntryID = storedEntry;
+          // Per-instance rendezvous paths (keyed by the instance UUID) so two
+          // stacked Mirage clips read/write distinct /tmp files instead of
+          // the clip below showing the top clip's source in its mini-viewer.
+          v.miniViewerDescriptorPath =
+              MirageMiniViewerDescriptorPathForUUID(ctx.instanceUUID);
+          v.miniViewerRequestPath =
+              MirageMiniViewerRequestPathForUUID(ctx.instanceUUID);
+          // Live source-derived lanes: when the shader code commits
+          // (debounced), the inspector re-derives the lane set from the new
+          // source. Cached tickets, not a fresh read: this fires from a
+          // code-commit callback, outside any action scope, where the param
+          // APIs return nil.
+          __weak __typeof(self) weakLaneSelf = self;
+          __weak MirageInspectorView *weakLaneView = v;
+          v.availableLanesProvider =
+              ^NSArray<KKLane *> *(NSString *code, KKTimeline *against) {
+            // Never the one captured above: a code commit that adds a
+            // `// #slots` block has to stamp its default instances into the
+            // timeline the user is editing.
+            //
+            // The caller's timeline wins when it hands one over. It does so
+            // exactly when it is deriving for a timeline that has not been
+            // applied yet - an undo restoring a slot instance - where the lanes
+            // view is still holding the timeline being replaced, and deriving
+            // against that would answer about the instance count the undo just
+            // reverted. Otherwise the live one, which is what a code commit
+            // means by "now".
+            KKTimeline *stamp =
+                against ?: weakLaneView.basicLanesView.currentTimeline;
+            return [MiragePlugin
+                availableLanesForShaderSource:code
+                                 audioTickets:weakLaneSelf.audioTickets
+                                     timeline:stamp
+                                  rackEntryID:weakLaneView.selectedRackEntryID];
+          };
+          return v;
+        }];
+    if (!view)
+      return nil;
+
+    // On-screen-control visibility: master tick + per-element pills (Origin,
+    // Path) + opt-click-hide + opt-reveal. The element key is the lane label
+    // (KKPositionOSC / the mini controller key their visibility on it). Shared
+    // glue in KKPlugin (OSCVisibility); the renderer is the mini-viewer
+    // delegate.
+    KKMiniViewerRenderer *oscRenderer =
+        (KKMiniViewerRenderer *)view.miniViewerDelegate;
+    // The Scale mini box reads the plugin's lane templates for the aspect-link
+    // default of an untouched (not-yet-in-timeline) constant Scale.
+    if ([oscRenderer isKindOfClass:[MirageMiniViewerRenderer class]]) {
+      ((MirageMiniViewerRenderer *)oscRenderer).laneTemplates = available;
+      // The mini's control sets are derived from ONE entry's source, exactly
+      // like the viewer's - seed them with whatever this instance was last left
+      // on so a reopened inspector doesn't start on the sentinel.
+      ((MirageMiniViewerRenderer *)oscRenderer).rackEntryID =
+          view.selectedRackEntryID;
+    }
+    oscRenderer.handlesHidden = !oscMasterVisible;
+    [self mirageRewireOSCVisibilityForView:view
+                                  renderer:oscRenderer
+                                   uiState:uiState
+                                  timeline:timeline
+                              overrideCode:nil];
+    // The OSC element set is source-derived (each `osc` directive is a
+    // compound), so a code edit that adds/removes an OSC or changes a rotate's
+    // axis set must re-wire the visibility checklist - otherwise the dropdown
+    // keeps the old axes/handles. Re-derive the compounds on every code commit
+    // and re-wire (the wire re-captures the compounds so the toggle indexing
+    // stays aligned).
+    __weak __typeof(self) weakSelf = self;
+    __weak KKTimelineInspectorView *weakView = view;
+    __weak KKMiniViewerRenderer *weakOscRenderer = oscRenderer;
+    // Whether the CURRENT shader says `off`. Tracked rather than read on
+    // demand: the source lives in the editor and changes under us.
+    __block BOOL mbOffDeclared =
+        MirageMotionBlurModeForSource(shaderSrc) == MirageMotionBlurModeOff;
+    view.onCodeCommitted = ^(NSString *code) {
+      __strong __typeof(weakSelf) strongSelf = weakSelf;
+      KKTimelineInspectorView *v = weakView;
+      KKMiniViewerRenderer *r = weakOscRenderer;
+      if (!strongSelf || !v || !r)
+        return;
+      // The committed code belongs to the SELECTED entry, so it overrides that
+      // entry's stored source while every other entry contributes from its own.
+      [strongSelf
+          mirageRewireOSCVisibilityForView:v
+                                  renderer:r
+                                   uiState:nil
+                                  timeline:v.basicLanesView.currentTimeline
+                              overrideCode:code];
+      // `// #motionblur off` means this shader will not blur, so the control
+      // must not keep claiming it is on. Clear the PERSISTED state, not just
+      // the checkbox: a user who enabled blur and then edited the shader to
+      // `off` would otherwise reopen to a ticked toggle that does nothing.
+      mbOffDeclared =
+          MirageMotionBlurModeForSource(code) == MirageMotionBlurModeOff;
+      if (mbOffDeclared) {
+        [v setMotionBlurEnabled:NO];
+        if (v.onMotionBlurChanged)
+          v.onMotionBlurChanged(NO, 180.0, [v motionBlurDefaultSamples],
+                                KKMotionBlurTechniqueAccurate);
+      }
+    };
+
+    // Selecting a different rack row is the same event to the OSC surfaces as a
+    // recompile: a different entry means a different source AND a different set
+    // of lane keys. The VIEWER's controls need no push - MirageOSC re-reads the
+    // per-instance selection at the top of every tick - but the checklist and
+    // the mini's control sets are pushed state.
+    __weak MirageInspectorView *weakMirageView = view;
+    view.onRackSelectionChanged = ^(NSString *entryID) {
+      __strong __typeof(weakSelf) strongSelf = weakSelf;
+      MirageInspectorView *v = weakMirageView;
+      KKMiniViewerRenderer *r = weakOscRenderer;
+      if (!strongSelf || !v || !r)
+        return;
+      if ([r isKindOfClass:[MirageMiniViewerRenderer class]])
+        ((MirageMiniViewerRenderer *)r).rackEntryID = entryID;
+      [strongSelf
+          mirageRewireOSCVisibilityForView:v
+                                  renderer:r
+                                   uiState:nil
+                                  timeline:v.basicLanesView.currentTimeline
+                              overrideCode:nil];
+    };
+
+    // Selecting a row is undoable, the way it is in every editor: one key into
+    // the UI-state blob, in its own action scope, so a click is exactly one
+    // Cmd-Z. Suppressed while a restore is being pushed back into the view -
+    // that value came OUT of the param, and writing it again would put a
+    // duplicate entry behind the one the user is walking through. No render
+    // nudge: the blob write already round-trips a render, and a second write
+    // would only cost a phantom undo step.
+    view.onRackSelectionPersist = ^(NSString *entryID) {
+      __strong __typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf || strongSelf.restoringRackSelection)
+        return;
+      KKLogInfo(@"[Rack] persisting selection %@", entryID);
+      [strongSelf patchUIStateKey:@"selectedRackEntryID"
+                            value:(entryID ?: @"")paramID:kParamUIState];
+    };
+
+    // A mutation that also moves the selection. Same two writes the kit's
+    // onTimelineMutated makes (blob + render nudge), plus the selection, in ONE
+    // action scope - so undoing an append takes back the chain and the
+    // selection together instead of costing two Cmd-Z.
+    view.onRackTimelineMutatedSelecting =
+        ^(KKTimeline *updated, NSString *entryID) {
+          __strong __typeof(weakSelf) strongSelf = weakSelf;
+          if (!strongSelf)
+            return;
+          [strongSelf kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                                        id<FxParameterSettingAPI_v5> setAPI,
+                                        CMTime actionTime) {
+            NSString *json = [KKTimeline jsonFromTimeline:updated];
+            if (json)
+              KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
+            NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
+            NSMutableDictionary *state =
+                (existing.length
+                     ? [[NSJSONSerialization
+                           JSONObjectWithData:
+                               [existing dataUsingEncoding:NSUTF8StringEncoding]
+                                      options:0
+                                        error:nil] mutableCopy]
+                     : nil)
+                    ?: [NSMutableDictionary dictionary];
+            state[@"selectedRackEntryID"] = entryID ?: @"";
+            NSString *stateJSON = [[NSString alloc]
+                initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                             options:0
+                                                               error:nil]
+                    encoding:NSUTF8StringEncoding];
+            if (stateJSON)
+              KKWriteCustomParamString(setAPI, stateJSON, kParamUIState);
+            KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString],
+                                     kParamRenderNudge);
+          }];
+          KKLogInfo(@"[Rack] committed mutation selecting %@ (one undo entry)",
+                    entryID);
+        };
+
+    // An `off` shader must REFUSE the toggle, not merely start unticked -
+    // otherwise the user ticks it straight back on and holds a control that
+    // does nothing. Decorate the shared handler the kit installed above rather
+    // than duplicating its blob write.
+    void (^hostMBChanged)(BOOL, double, NSInteger, KKMotionBlurTechnique) =
+        view.onMotionBlurChanged;
+    __weak KKTimelineInspectorView *weakMBView = view;
+    view.onMotionBlurChanged = ^(BOOL enabled, double shutterAngle,
+                                 NSInteger samples,
+                                 KKMotionBlurTechnique technique) {
+      BOOL allowed = enabled && !mbOffDeclared;
+      if (enabled && mbOffDeclared)
+        [weakMBView setMotionBlurEnabled:NO]; // bounce the tick straight back
+      if (hostMBChanged)
+        hostMBChanged(allowed, shutterAngle, samples, technique);
+    };
+    [view setOSCVisible:oscMasterVisible];
+    [view setRenderMode:renderMode];
+
+    // Force OSCs visible while a guide runs (so its mini-viewer + viewer
+    // handles are usable), then restore the user's OSC setting on guide end.
+    [self kkInstallGuideOSCForcingOnHost:[(MirageInspectorView *)
+                                                 view timingGuideHost]
+                                    view:view
+                             elementKeys:
+                                 [MiragePlugin
+                                     oscElementKeysForRackTimeline:timeline]
+                            nudgeParamID:kParamRenderNudge];
+
+    // Let the intro guide's closing step spotlight this effect's Help button
+    // (owned by the plugin's logo banner, resolved live).
+    __weak typeof(self) weakHelp = self;
+    view.guideHelpButtonScreenRectProvider = ^NSRect {
+      return [weakHelp helpButtonScreenRect];
+    };
+
+    if (!self.playheadPoller) {
+      self.playheadPoller =
+          [[KKPlayheadPoller alloc] initWithAPIManager:self.apiManager
+                                          actionTarget:self
+                                           renderCache:self.renderCache];
+    }
+    [self.playheadPoller setInspectorView:view];
+    // The render tick may have established timing before the inspector
+    // view existed (poller nil then, ensureRunning was a no-op nil-send).
+    // Kick it now so the scrubber appears without needing a user scrub.
+    if (self.renderCache.effectDurSec > 0.0)
+      [self.playheadPoller ensureRunning];
+    return view;
+  }
+  typedef NSView *(*ViewIMP)(id, SEL, UInt32);
+  ViewIMP imp = (ViewIMP)[KKPlugin instanceMethodForSelector:_cmd];
+  return imp(self, _cmd, parameterID);
+}
+
+- (NSArray<KKHelpGuide *> *)helpGuides {
+  // The Introduction + Advanced Timing entries (copy, gating, completion
+  // wiring) are identical across plugins, so the kit builds them. Mirage only
+  // supplies the canvas-reference gate (the final Basic step's viewer cutout
+  // needs an OSC draw tick) and the live inspector.
+  __weak typeof(self) weak = self;
+  return [KKTimingGuide
+      standardHelpGuidesForInspectorProvider:^KKTimelineInspectorView * {
+        __strong typeof(weak) strong = weak;
+        return strong.inspectorView;
+      }
+      enabledProvider:^BOOL {
+        return MirageHasCanvasReference();
+      }];
+}
+
+- (NSNotificationName)helpGuideRefreshNotificationName {
+  return kMirageOSCPositionNotification;
+}
+
+- (nullable NSView *)aiAccessoryView {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    // Shared timeline docs now live in the kit framework bundle (so the kit
+    // help window can render the same source); register them from there.
+    [KKAIKnowledge registerSharedTimelineDocsWithBundle:
+                       [NSBundle bundleForClass:[KKOnScreenControl class]]];
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Mirage"
+                            bundle:[NSBundle
+                                       bundleForClass:[MiragePlugin class]]
+                      subdirectory:@"AIKnowledge"];
+    // Shared on-screen-control docs live in the kit framework (flattened to its
+    // Resources root). Mirage's own OSCs are directive-driven (see the
+    // directives doc), not the standard lane-bound Rotation/Scale controls
+    // those kit docs describe, so pull in only the shared visibility behaviour.
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"On-Screen Controls"
+                            bundle:[NSBundle
+                                       bundleForClass:[KKOnScreenControl class]]
+                      subdirectory:nil
+                      onlyTopicIDs:@[ @"visibility" ]];
+    // Audio-reactive shaders. The docs live in the kit (Sonar publishes the
+    // data, Mirage consumes it - neither owns it), so the workflow extension
+    // and every future consumer read the same source. Both topics, not just the
+    // directive: a user asking how to drive a shader from audio needs to know
+    // Sonar exists and that they have to publish first.
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Audio-Reactive"
+                            bundle:[NSBundle
+                                       bundleForClass:[KKOnScreenControl class]]
+                      subdirectory:nil
+                      onlyTopicIDs:@[
+                        @"audio-sonar", @"audio-shader-directive"
+                      ]];
+    // The expression function/variable reference, GENERATED from the editor's
+    // own KKExprCatalog so the AI's vocabulary can never drift from the
+    // autocomplete (the expressions.md prose teaches concepts; this is the
+    // exhaustive list). Each agent pulls the entries it names by topic id: this
+    // one rides with the EXPRESSION agent (alongside `expressions`). The
+    // shader-code agent deliberately doesn't take it - GLSL has no expression
+    // vocabulary.
+    [KKAIKnowledge registerInlineDocWithName:@"Expression Reference"
+                                     topicID:@"expression-functions"
+                                     summary:@"Every expression variable and "
+                                             @"function with its signature."
+                                     content:KKExprCatalogMarkdown()];
+  });
+
+  NSString *productContext = RLoc(
+      @"Mirage, a Final Cut Pro effect that runs a Shadertoy-style GLSL shader "
+      @"live on a clip. The look is defined by the shader source (the "
+      @"\"Mirage\" "
+      @"code lane), which you can write or edit for the user; the clip is "
+      @"available to the shader as iChannel0. Uniforms annotated with // # "
+      @"directives become inspector + on-screen controls, and every control "
+      @"animates on the shared Keyframeless timeline (Basic and Advanced "
+      @"timing, "
+      @"easing). Always refer to yourself as Mirage. Detailed feature "
+      @"information is in the reference docs below.",
+      @"AI assistant product context for Mirage plugin.");
+
+  NSArray<NSArray<NSString *> *> *examples = @[
+    @[
+      RLoc(@"Plasma background", @"AI example chip: generator shader."),
+      RLoc(@"Write a shader for a colourful flowing plasma background.",
+           @"AI example value: generator shader.")
+    ],
+    @[
+      RLoc(@"Wavy distortion", @"AI example chip: filter shader."),
+      RLoc(@"Write a shader that distorts the clip with a wavy ripple.",
+           @"AI example value: filter shader.")
+    ],
+    @[
+      RLoc(@"Add a control", @"AI example chip: add a directive control."),
+      RLoc(@"Add a slider to control the amount.",
+           @"AI example value: add a directive control.")
+    ],
+    @[
+      RLoc(@"How do controls work?", @"AI example chip: directives question."),
+      RLoc(@"How do I turn a uniform into an on-screen control?",
+           @"AI example value: directives question.")
+    ],
+  ];
+
+  NSString *placeholder = RLoc(@"Ask a question or describe a shader…",
+                               @"AI prompt field placeholder for Mirage.");
+
+  // Wire the "Keyframeless AI update available" banner: the popover fires this
+  // when it opens, we run the standalone-helper update check (its own installer
+  // + version, read by KKUpdateChecker) and push the result into the popover.
+  // This is the one spot that links both KeyframelessKit and KeyframelessAI.
+  __weak typeof(self) weakSelf = self;
+  return [KKAIBannerHost
+      makeStandardPluginButtonWithProductContext:productContext
+      examplePairs:examples
+      placeholder:placeholder
+      checkForAIUpdate:^(
+          void (^report)(NSString *version, NSString *notesURL)) {
+        [[KKUpdateChecker shared] checkAIUpdateWithCompletion:^(BOOL avail) {
+          KKUpdateChecker *c = [KKUpdateChecker shared];
+          report(c.aiAvailableVersion, c.aiNotesURL.absoluteString);
+        }];
+      }
+      onRun:^(NSString *prompt) {
+        __strong typeof(weakSelf) strong = weakSelf;
+        if (!strong)
+          return;
+        [strong _runAIPrompt:prompt productContext:productContext];
+      }];
+}
+
+- (nullable NSView *)licenseAccessoryView {
+  __weak typeof(self) weakSelf = self;
+  return [KKLicenseBannerHost
+      makeButtonWithProductID:KKLicenseProductMirage
+                  productName:@"Mirage"
+                  purchaseURL:@"https://keyframeless.com"
+                    tintColor:[NSColor accentMatchingHost]
+                  onActivated:^{
+                    // FCP keeps serving the cached (watermarked) frame at a
+                    // static playhead; a fresh nonce on the scratch param
+                    // forces the clean re-render immediately.
+                    [weakSelf
+                        kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                                          id<FxParameterSettingAPI_v5> setAPI,
+                                          CMTime actionTime) {
+                          KKWriteCustomParamString(setAPI,
+                                                   [[NSUUID UUID] UUIDString],
+                                                   kParamRenderNudge);
+                        }];
+                  }];
+}
+
+- (void)_runAIPrompt:(NSString *)prompt
+      productContext:(NSString *)productContext {
+  [KKAIDraft setRouting:YES];
+  [KKAIDraft setError:nil];
+
+  // Read current timeline + clip duration inside an action scope.
+  __block NSString *currentJSON = nil;
+  __block NSString *availableSources = nil;
+  __block NSString *timelineBlob = nil;
+  __block NSString *aiShaderSrc = @"";
+  __block NSString *currentMode = @"Basic";
+  __block double clipDurSec = 5.0;
+  BOOL scoped = KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        currentJSON =
+            KKTimelineAICurrentJSON(getAPI, [MiragePlugin availableLanes]);
+        // Other clips this one can reference in a cross-clip ${Clip.Param}
+        // expression (excluding itself), for the AI's expression route.
+        NSString *selfLinkUUID = KKInstanceUUIDForAPI(self.apiManager);
+        availableSources = KKLinkAvailableSourcesJSON(
+            selfLinkUUID, KKLinkDocumentIDForAPI(self.apiManager));
+        // Raw timeline blob (carries the "Mirage" code lane the AI may rewrite)
+        // and the current shader source. Pass "" when it's the untouched
+        // default so a from-scratch ask starts clean; a customised shader is
+        // passed so the AI edits it in place ("add a slider", "make the ripples
+        // bigger"). A multi-pass shader goes over as the flat `// #tab` blob,
+        // which is also the shape the answer comes back in.
+        timelineBlob = KKReadCustomParamString(getAPI, kKKParamTimelineData);
+        KKTimeline *readTimeline =
+            timelineBlob.length ? [KKTimeline timelineFromJSON:timelineBlob]
+                                : nil;
+        // The SELECTED rack entry's code lane, matching where
+        // MirageAIApplyShaderSource writes the answer back. Reading entry 0
+        // while writing entry 2 would hand the model the wrong shader to edit
+        // and then overwrite a third one with the result.
+        NSString *aiCodeKey = MirageRackCodeLaneKey(
+            KKInstanceStateForAPI(self.apiManager).selectedRackEntryID.length
+                ? KKInstanceStateForAPI(self.apiManager).selectedRackEntryID
+                : (NSString *)kMirageRackSentinelEntryID,
+            kMirageCodeLaneLabel);
+        KKLane *readShaderLane = nil;
+        for (KKLane *l in readTimeline.lanes)
+          if ([l.key isEqualToString:aiCodeKey]) {
+            readShaderLane = l;
+            break;
+          }
+        // The default check is on the Image source alone: extra sections mean
+        // the user has been in the editor, so there is nothing untouched about
+        // it even if Image still matches the seed.
+        aiShaderSrc = (!readShaderLane ||
+                       (readShaderLane.codeTabs.count == 0 &&
+                        [readShaderLane.codeString
+                            isEqualToString:MirageCustomDefaultShaderSource()]))
+                          ? @""
+                          : MirageShaderTabsBlob(readShaderLane.codeString,
+                                                 readShaderLane.codeTabs);
+        NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
+        NSDictionary *uiState =
+            (uiJson.length
+                 ? [NSJSONSerialization
+                       JSONObjectWithData:
+                           [uiJson dataUsingEncoding:NSUTF8StringEncoding]
+                                  options:0
+                                    error:nil]
+                 : nil)
+                ?: @{};
+        NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+        currentMode = (activeTab == 1) ? @"Advanced" : @"Basic";
+        id<FxTimingAPI_v4> timingAPI =
+            [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+        CMTime clipDur = kCMTimeZero;
+        if (timingAPI)
+          [timingAPI durationTimeForEffect:&clipDur];
+        clipDurSec = CMTimeGetSeconds(clipDur);
+        if (clipDurSec <= 0 || isnan(clipDurSec))
+          clipDurSec = 5.0;
+      });
+  if (!scoped) {
+    [KKAIDraft setRouting:NO];
+    [KKAIDraft setError:@"Couldn't open the FCP action scope."];
+    return;
+  }
+
+  NSString *schema = MirageAILaneSchemaText();
+
+  __weak typeof(self) weakSelf = self;
+  // Custom-only plugin: the look is the GLSL source, so the code-authoring
+  // entry point adds the "code" route (write / edit the shader) on top of the
+  // standard per-lane / Q&A pipeline.
+  [KKAIPluginAgent
+      runCodeAuthoringWithPrompt:prompt
+                  productContext:productContext
+                  laneSchemaText:schema
+             currentTimelineJSON:currentJSON
+             clipDurationSeconds:clipDurSec
+            currentInspectorMode:currentMode
+             currentShaderSource:aiShaderSrc
+                availableSources:availableSources
+                      completion:^(KKAIPluginResult *result, NSError *err) {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                          __strong typeof(weakSelf) strong = weakSelf;
+                          if (!strong)
+                            return;
+                          [KKAIDraft setRouting:NO];
+                          if (err) {
+                            KKLogError(@"AI[err] %@", err.localizedDescription);
+                            [KKAIDraft setError:err.localizedDescription];
+                            return;
+                          }
+                          if (!result) {
+                            KKLogError(@"AI[err] empty result");
+                            [KKAIDraft setError:@"Empty AI response."];
+                            return;
+                          }
+                          switch (result.kind) {
+                          case KKAIPluginResultKindAnswer:
+                            [KKAIDraft setAnswer:result.answer];
+                            break;
+                          case KKAIPluginResultKindAuthorCode:
+                            MirageAIApplyShaderSource(
+                                strong, result.shaderSource, timelineBlob);
+                            break;
+                          case KKAIPluginResultKindAuthorExpression:
+                            MirageAIApplyExpressionOps(
+                                strong, result.expressionOps, timelineBlob);
+                            break;
+                          default: // .mutation
+                            MirageAIApplyMutation(strong, currentJSON,
+                                                  result.mutationJSON,
+                                                  clipDurSec);
+                            break;
+                          }
+                        });
+                      }];
+}
+
+- (nullable NSString *)helpHeaderTitle {
+  return RLoc(@"Mirage", @"Help section title (plugin name).");
+}
+
+- (nullable NSImage *)helpHeaderIcon {
+  return [NSImage imageWithSystemSymbolName:@"square.dotted"
+                   accessibilityDescription:nil];
+}
+
+- (NSArray<KKHelpSection *> *)helpSections {
+  // Single-sourced from the AIKnowledge markdown - the same docs the AI reads -
+  // so help and AI never drift. Three user-facing topics (the per-directive /
+  // audio deep docs stay AI-only), then an on-screen-control shortcut table.
+  // topicID is the .md filename stem in the bundle's AIKnowledge subdir.
+  NSString * (^loc)(NSString *) = ^NSString *(NSString *tip) {
+    return RLoc(tip, @"Mirage help tip (from AIKnowledge markdown).");
+  };
+  KKHelpSection *overview = [self
+      helpSectionFromKnowledgeTopic:@"shader"
+                              title:RLoc(@"Mirage", @"Help section: overview.")
+                             symbol:@"square.dotted"
+                          localizer:loc];
+  KKHelpSection *writing = [self
+      helpSectionFromKnowledgeTopic:@"custom-shader"
+                              title:RLoc(@"Writing a shader",
+                                         @"Help section: the shader language.")
+                             symbol:@"chevron.left.forwardslash.chevron.right"
+                          localizer:loc];
+  KKHelpSection *directives =
+      [self helpSectionFromKnowledgeTopic:@"directives"
+                                    title:RLoc(@"Controls (directives)",
+                                               @"Help section: directives.")
+                                   symbol:@"slider.horizontal.3"
+                                localizer:loc];
+
+  NSMutableArray<KKHelpShortcut *> *rows =
+      [[KKPlugin sharedOnScreenControlShortcuts] mutableCopy];
+  KKHelpSection *shortcuts =
+      [KKHelpSection sectionWithTitle:RLoc(@"On-screen control shortcuts",
+                                           @"Help section title.")
+                            tipMarkup:nil
+                            shortcuts:rows];
+  shortcuts.icon = [NSImage imageWithSystemSymbolName:@"hand.point.up.left"
+                             accessibilityDescription:nil];
+
+  return @[ overview, writing, directives, shortcuts ];
+}
+
+@end

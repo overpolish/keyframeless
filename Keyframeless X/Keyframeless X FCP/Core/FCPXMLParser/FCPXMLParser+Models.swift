@@ -19,7 +19,8 @@ extension FCPXMLParser {
 			frameDuration: "100/6000s",
 			width: 1920,
 			height: 1080,
-			sequenceDuration: 0
+			sequenceDuration: 0,
+			tcStart: nil
 		)
 
 		let name: String
@@ -27,6 +28,17 @@ extension FCPXMLParser {
 		let width: Int
 		let height: Int
 		let sequenceDuration: Double
+		/// The sequence's start timecode in seconds (02:00:00:00 -> 7200).
+		///
+		/// FCP's timeline clock STARTS here - a clip at project 6.05s in a project
+		/// starting at 7200 is timeline second 7206.05, which is what
+		/// `timelineTime:fromInputTime:` reports to a plugin. Clip positions are
+		/// normalised against it (they count from 0), so anything published for a
+		/// plugin has to add it back.
+		///
+		/// Optional: added after this was already persisted, and a non-optional
+		/// field would fail to decode every stored project.
+		let tcStart: Double?
 
 		private var fps: Double? {
 			let raw =
@@ -134,6 +146,10 @@ extension FCPXMLParser {
 		let sourceChannels: [Int]?
 		let unhandledAdjustments: [String]?
 		let outer: OuterCompound?
+		/// Base audio role ("dialogue" / "music" / "effects" / custom), shown as a
+		/// label on the Sonar timeline. Optional so previously-persisted clips
+		/// still decode.
+		var role: String?
 
 		struct ResolvedURL {
 			let url: URL
@@ -178,6 +194,9 @@ extension FCPXMLParser {
 		let url: URL
 		let bookmark: Data?
 		let mediaStart: Double
+		/// Whether the underlying media carries any audio at all. A video-only
+		/// asset declares neither `hasAudio` nor `audioSources`.
+		let hasAudio: Bool
 	}
 
 	/// Carries the mapping context when walking inside a compound clip's

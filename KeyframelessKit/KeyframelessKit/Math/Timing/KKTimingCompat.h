@@ -6,7 +6,7 @@
 #pragma once
 
 #import <Foundation/Foundation.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

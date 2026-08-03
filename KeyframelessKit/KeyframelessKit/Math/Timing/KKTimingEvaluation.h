@@ -8,54 +8,21 @@
 #import <Foundation/Foundation.h>
 #import <simd/simd.h>
 
-#import <KeyframelessKit/KKTimingLane.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Returns the segment of `segments` covering the fraction `frac`, clamping
-/// to the first segment when `frac < firstStart` and to the last when
-/// `frac >= lastEnd`. Returns nil only when `segments` is empty.
-FOUNDATION_EXPORT KKTimingSegment *_Nullable KKTimingSegmentForFraction(
-    NSArray<KKTimingSegment *> *segments, double frac);
-
-/// Evaluates `lane` at fraction `frac` (0–1 of clip duration) and returns
-/// the per-component values appropriate for the lane's `valueComponentKinds`.
+/// The AUTHORING (exact) evaluator: `lane` at fraction `frac` (0–1 of clip
+/// duration), per-component interpolated from the STORED keyposes - no join
+/// smoothing, no Basic visual projection, no link expression.
 ///
-/// - **Float lanes** return a flat scalar array, one per component.
-/// - **Color lanes** return `[R, G, B]`.
-/// - **Point lanes** return `[X, Y]`.
-/// - **Gradient lanes** return a flat LUT (`KK_GRADIENT_LUT_SIZE × [r,g,b]`)
-///   computed from the active segment's stops, optionally modulated when
-///   the segment carries a hold effect.
-/// - **Bool components** are stepped - they use the active segment's own
-///   value verbatim across transitions rather than easing-interpolated.
-///
-/// Returns nil when `lane.segments` is empty. Disabled lanes are still
-/// evaluated by this function - call sites that want the kill-switch
-/// behaviour should check `lane.enabled` themselves.
-FOUNDATION_EXPORT NSArray<NSNumber *> *_Nullable KKTimingLaneValueAtFraction(
-    KKTimingLane *lane, double frac);
-
-/// Evaluates a position along the bezier curve stored on a Position-lane
-/// transition segment, applying the segment's easing.
-///
-/// Caller computes `localT` (0–1 within the segment) and `isAnimateOut`
-/// (true when the segment is the last in its lane - easing is flipped to
-/// preserve the standard ease-in/out semantics for animate-out tails).
-/// `fromPos` / `toPos` are the segment's start/end anchor positions, used
-/// both as scaling input to `positionAtT:` and as fallback when the path
-/// data fails to decode.
-///
-/// Returns NO when the segment is not a transition, has no `pathData`, or
-/// the data fails to decode. On success writes the eased position to
-/// `outPos` and returns YES.
-FOUNDATION_EXPORT BOOL KKEvaluateBezierPathPosition(
-    KKTimingSegment *active, BOOL isAnimateOut, double localT,
-    simd_float2 fromPos, simd_float2 toPos, simd_float2 *outPos);
-
-/// Evaluates `lane` at fraction `frac` (0–1 of clip duration) and returns
-/// the per-component interpolated values.
+/// Use ONLY where exactness against the stored data is the point: seeding a
+/// new keypose / an OSC handle drag (a handle must sit exactly on the keypose
+/// anchor), popover row values, graph curves that draw the stored shape.
+/// Anything that produces or previews PIXELS reads
+/// `KKLaneDisplayValueAtFraction` (or `KKLinkResolvedLaneValue*` when the
+/// lane may carry a link expression) instead - mixing the two is how a
+/// preview drifts from the render.
 ///
 /// - Adjacent keyposes with equal values evaluate as a hold (same values
 ///   returned across the span between them).
@@ -71,7 +38,7 @@ NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFraction(KKLane *lane,
                                                              double frac);
 
 /// Fraction of the smaller adjacent span used as the half-window for C1
-/// join smoothing (see `KKTimelineLaneValueAtFractionSmoothed`). Shared so
+/// join smoothing (see `KKLaneDisplayValueAtFraction`). Shared so
 /// the Basic graph preview and the render evaluator round joins identically.
 /// Small on purpose: just a corner fillet at the joins, not a reshape of
 /// the transition/hold.
@@ -95,27 +62,55 @@ FOUNDATION_EXPORT double KKHermiteJoinBlend(double frac, double boundary,
                                             double window,
                                             double (^sample)(double f));
 
-/// Like `KKTimelineLaneValueAtFraction` but with C1 join smoothing applied
-/// at every interior keypose, so transitions glide into/out of holds with
-/// no detectable "stop" while long flats away from the joins are preserved.
-/// The render / OSC / graph paths use this; authoring reads stay on the
-/// exact (raw) `KKTimelineLaneValueAtFraction`.
+/// THE display evaluator - the ONE entry point for every read that produces
+/// or previews pixels (render properties, motion blur, OSC/mini previews,
+/// pool fills). Applies C1 join smoothing at interior keyposes (transitions
+/// glide into/out of holds with no detectable "stop"; cheap - degrades to
+/// the exact evaluator for <3 keyposes, gradients, and outside join
+/// windows). Stored keypose times ARE visual times (the Basic rebuild
+/// anchors the hold pair at [0, lastFrameFrac] when a phase is off), so no
+/// visual->data remap exists anymore. Lanes that may carry a link expression
+/// resolve through `KKLinkResolvedLaneValue*`, which wraps this. Authoring
+/// reads stay on the exact `KKTimelineLaneValueAtFraction` by explicit
+/// choice.
 FOUNDATION_EXPORT
-NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFractionSmoothed(
-    KKLane *lane, double frac);
+NSArray<NSNumber *> *_Nullable KKLaneDisplayValueAtFraction(KKLane *lane,
+                                                            double visualFrac);
 
-/// Same as `KKTimelineLaneValueAtFractionSmoothed` but with a Basic-view-
-/// shape-aware fraction remap applied first. The Basic view stores Hold
-/// keyposes at fixed tIn/tOut even when In/Out is off, but visually projects
-/// the Hold-start to t=0 (In off) and Hold-end to t=1 (Out off). This call
-/// applies that same projection on read, so a Hold-only drift evaluates
-/// across the full clip rather than only between the stored kp times.
+/// Clamp `values` component-wise to the lane's declared value range
+/// (`componentMin` / `componentMax`). A component with no declared bound - the
+/// arrays are empty, or shorter than the value - passes through untouched, so
+/// a deliberately unbounded lane (draw-on Offset, Rotation) is unaffected.
 ///
-/// Inside an enabled In or Out transition region the remap is identity, so
-/// In/Out easing is preserved unchanged.
-FOUNDATION_EXPORT
-NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtVisualFractionSmoothed(
-    KKLane *lane, double visualFrac);
+/// This is the VALUE clamp, not the slider clamp: `sliderMin`/`sliderMax` stop
+/// the widget short of the real range on purpose and must not narrow a value.
+/// It also does NOT consult `componentMaxByControllerValue` - that effective
+/// max depends on another lane's current value, which only the inspector has
+/// in hand, so a controller-driven max still bounds typing but not expressions.
+///
+/// Keypose edits are already clamped on the way in; this exists for the paths
+/// that compute a value rather than store one, which is link expressions.
+///
+/// Non-finite input: +/-infinity resolve to their bound, and NaN takes the
+/// floor (an expression that divided by zero should read as off, not as full).
+/// A component with no floor passes NaN through unchanged.
+FOUNDATION_EXPORT NSArray<NSNumber *> *_Nullable KKLaneClampToComponentRange(
+    KKLane *_Nullable lane, NSArray<NSNumber *> *_Nullable values);
+
+/// A Basic-mode lane's hold shape: which In/Out phases exist and which
+/// keypose indices bracket the Hold. THE one shape resolver - `lane.holdShape`
+/// (stamped by every Basic rebuild) is authoritative; the count/middle-time
+/// heuristic survives ONLY for legacy `Auto` blobs that predate the
+/// annotation. Shared by the evaluator, keypose visibility, and the Basic
+/// view so rendering and drawing can never disagree about a lane's shape.
+typedef struct {
+  BOOL inEnabled;
+  BOOL outEnabled;
+  NSInteger holdStart;
+  NSInteger holdEnd;
+} KKHoldShape;
+
+FOUNDATION_EXPORT KKHoldShape KKShapeOfLane(KKLane *lane);
 
 // 2D spatial (curved Position) path helpers live in KKSpatialCurve.h.
 
@@ -138,7 +133,16 @@ NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtVisualFractionSmoothed(
 FOUNDATION_EXPORT BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac,
                                                double frameDurSec);
 
-/// Look-back window (seconds) used by both Canvas and MagicMove for the
+/// Like KKLaneVisibleAtFraction, but the flat lead-in (before the first kp) and
+/// lead-out (after the last kp) do NOT count - only a fraction sitting ON a
+/// keypose returns YES for an animated lane (constants still always YES). Use
+/// this where "the handle sits exactly on a keypose" is the question (e.g. an
+/// OSC arc that should appear only at keyposes, and the anchor dot it covers),
+/// so a lane parked past its final keypose still shows every anchor.
+FOUNDATION_EXPORT BOOL KKLaneKeyedAtFraction(KKLane *lane, double frac,
+                                             double frameDurSec);
+
+/// Look-back window (seconds) used for the
 /// rotate-with-motion velocity sample.
 FOUNDATION_EXPORT const double KKRotateWithMotionWindowSeconds;
 

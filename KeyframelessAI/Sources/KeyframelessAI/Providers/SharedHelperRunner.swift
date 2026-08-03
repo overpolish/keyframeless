@@ -7,7 +7,7 @@ import Darwin
 import Foundation
 import os
 
-private let clientLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.helper")
+private let clientLog = Logger(subsystem: "com.keyframeless", category: "ai.helper")
 
 /// `LocalLLMRunner` that talks to the SHARED out-of-process helper over a
 /// Unix-domain socket in the app-group container. Used by every memory-capped or
@@ -55,11 +55,11 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 	private static let idleTimeout: TimeInterval = 120
 
 	private let socketPath: String
-	private let queue = DispatchQueue(label: "co.overpolish.ai.helper.client")
+	private let queue = DispatchQueue(label: "com.keyframeless.ai.helper.client")
 	private var conn: FileHandle?
 
 	/// Fails to init when the app-group socket path is unavailable (missing
-	/// `group.co.overpolish.keyframeless` entitlement) - local inference is then
+	/// `group.com.keyframeless` entitlement) - local inference is then
 	/// unavailable and the caller (`LocalLLM.defaultRunner`) returns nil.
 	public init?() {
 		guard let path = LocalAIHelperSocket.sharedSocketPath() else { return nil }

@@ -257,13 +257,15 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
       return;
     KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);
     s.gradientJSONSnapshot = json;
-    BOOL inDrag = strongSelf.gradientDragUndoActive;
+    BOOL inDrag = strongSelf.gradientDragSession.active;
     id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
     if (!inDrag)
       [actAPI startAction:strongSelf];
     BOOL ug =
-        inDrag ? NO : KKBeginUndoGroup(strongSelf.apiManager, @"Edit Gradient");
+        inDrag ? NO
+               : KKBeginUndoGroup(strongSelf.apiManager,
+                                  KKUndoLabelEditGradient());
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     KKWriteCustomParamString(setAPI, json, kKKParamGradientData);
@@ -275,45 +277,20 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
 
   control.onDragBegin = ^{
     __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf || strongSelf.gradientDragUndoActive)
+    if (!strongSelf || strongSelf.gradientDragSession.active)
       return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!actAPI)
-      return;
-    [actAPI startAction:strongSelf];
-    KKBeginUndoGroup(strongSelf.apiManager, @"Edit Gradient");
-    strongSelf.gradientDragUndoActive = YES;
+    strongSelf.gradientDragSession =
+        [KKDragUndoSession beginWithAPIManager:strongSelf.apiManager
+                                     principal:strongSelf
+                                          name:KKUndoLabelEditGradient()
+                                          mode:KKDragUndoSessionModeHoldScope];
   };
   control.onDragEnd = ^{
     __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf || !strongSelf.gradientDragUndoActive)
+    if (!strongSelf)
       return;
-    // Flush the multi-stage "Gradient" lane write inline INSIDE the
-    // still-open drag scope. Without this, the host's post-endAction
-    // `parameterChanged:` echo for kKKParamGradientData arrives async
-    // and `multiStageDeferLiveUpdateForLabel:` opens its own
-    // startAction/endAction 16ms later - landing the MS-data write in
-    // a separate undo entry (so cmd-Z needs two presses to revert
-    // gradient + UI together).
-    KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);
-    NSArray<KKGradientStop *> *stopsNow =
-        KKGradientStopsFromJSON(s.gradientJSONSnapshot);
-    NSArray<NSNumber *> *flat =
-        stopsNow ? KKGradientFlatFromStops(stopsNow) : @[];
-    if (flat.count) {
-      [strongSelf multiStageUpdateSelectedSegmentForLabel:@"Gradient"
-                                                   values:flat];
-      // Swallow the post-endAction echo for ~100ms so its deferred
-      // animatable-update doesn't re-write what we just wrote.
-      s.liveUpdateSuppressUntil = CACurrentMediaTime() + 0.1;
-      [s.pendingLiveUpdates removeAllObjects];
-    }
-    KKEndUndoGroup(strongSelf.apiManager, YES);
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI endAction:strongSelf];
-    strongSelf.gradientDragUndoActive = NO;
+    [strongSelf.gradientDragSession finish];
+    strongSelf.gradientDragSession = nil;
   };
 
   return control;

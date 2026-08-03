@@ -43,6 +43,15 @@ struct TimelineAxisView: View {
 	var dimmedIndices: Set<Int> = []
 	var overlapRegions: [CaptionBuilder.OverlapRegion] = []
 	var showWaveforms: Bool = true
+	var showRoleLabels: Bool = false
+	/// Sonar: reserve the spectrogram lane, so it holds its space even with
+	/// nothing selected. Off in Steno.
+	var showSpectrogramLane: Bool = false
+	/// Sonar: drawn as a lane under the clips, sharing this timeline's zoom and
+	/// scroll. nil in Steno, or when nothing is selected.
+	var spectrogram: Spectrogram? = nil
+	/// Sonar: an analysis is running, so the band shows a stale picture.
+	var spectrogramLoading: Bool = false
 	var hoveredClipIndex: Binding<Int?> = .constant(nil)
 	var onClickDimmed: ((Int) -> Void)? = nil
 	var onLoadingChanged: ((Set<Int>) -> Void)? = nil
@@ -64,6 +73,10 @@ struct TimelineAxisView: View {
 				dimmedIndices: dimmedIndices,
 				overlapRegions: overlapRegions,
 				showWaveforms: showWaveforms,
+				showRoleLabels: showRoleLabels,
+				showSpectrogramLane: showSpectrogramLane,
+				spectrogram: spectrogram,
+				spectrogramLoading: spectrogramLoading,
 				hoveredClipIndex: hoveredClipIndex,
 				onClickDimmed: onClickDimmed,
 				onLoadingChanged: onLoadingChanged
@@ -93,6 +106,10 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	var dimmedIndices: Set<Int> = []
 	var overlapRegions: [CaptionBuilder.OverlapRegion] = []
 	var showWaveforms: Bool
+	var showRoleLabels: Bool = false
+	var showSpectrogramLane: Bool = false
+	var spectrogram: Spectrogram?
+	var spectrogramLoading: Bool = false
 	var hoveredClipIndex: Binding<Int?>
 	var onClickDimmed: ((Int) -> Void)?
 	var onLoadingChanged: ((Set<Int>) -> Void)?
@@ -165,6 +182,22 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		docView.audioPlayer = audioPlayer
 		docView.overlapRegions = overlapRegions
 
+		if docView.showSpectrogramLane != showSpectrogramLane {
+			docView.showSpectrogramLane = showSpectrogramLane
+			docView.needsDisplay = true
+		}
+		if docView.spectrogramID != spectrogram?.id {
+			docView.setSpectrogram(spectrogram)
+			docView.needsDisplay = true
+		}
+		if docView.spectrogramLoading != spectrogramLoading {
+			docView.spectrogramLoading = spectrogramLoading
+			docView.needsDisplay = true
+		}
+		if docView.showRoleLabels != showRoleLabels {
+			docView.showRoleLabels = showRoleLabels
+			docView.needsDisplay = true
+		}
 		let oldHovered = docView.hoveredClipIndex
 		docView.hoveredClipIndex = hoveredClipIndex.wrappedValue
 		if hoveredClipIndex.wrappedValue != oldHovered {
@@ -231,7 +264,165 @@ private class AxisDocumentView: NSView {
 	var overlapRegions: [CaptionBuilder.OverlapRegion] = []
 	var showWaveforms: Bool = true
 	var hoveredClipIndex: Int?
+	var showRoleLabels = false
+	var showSpectrogramLane = false
 	var onHoverClip: ((Int?) -> Void)?
+
+	/// Rasterising the spectrogram is expensive, so keep the bitmap and rebuild
+	/// only when a new analysis arrives (tracked by id) or the zoom changes
+	/// enough that the current bitmap would be visibly upscaled.
+	private(set) var spectrogramID: UUID?
+	fileprivate var spectrogram: Spectrogram?
+	fileprivate var spectrogramCG: CGImage?
+	fileprivate var spectrogramLoading = false
+	/// One column per STFT frame up to here; past it the overview buckets frames
+	/// together and `detailCG` takes over for the visible slice.
+	fileprivate static let overviewMaxColumns = 16384
+	fileprivate var detailCG: CGImage?
+	fileprivate var detailStart: Double = 0
+	fileprivate var detailDuration: Double = 0
+	private var detailRange: Range<Int>?
+	private var detailRequestedRange: Range<Int>?
+	private var detailTask: Task<Void, Never>?
+	fileprivate var spectrogramStart: Double = 0
+	fileprivate var spectrogramDuration: Double = 0
+	private var rasterTask: Task<Void, Never>?
+
+	/// `spectrogramStart`/`spectrogramDuration` describe the image currently on
+	/// screen, NOT the data - they're updated only when a raster lands. Holding
+	/// the last good picture until its replacement is ready is what stops the
+	/// band flashing empty on every re-render, and keeping the range with the
+	/// pixels is what stops the old image being stretched across the new one's
+	/// time span while we wait.
+	func setSpectrogram(_ spectrogram: Spectrogram?) {
+		self.spectrogram = spectrogram
+		spectrogramID = spectrogram?.id
+		detailRange = nil
+		detailRequestedRange = nil
+		detailCG = nil
+		guard spectrogram != nil else {
+			rasterTask?.cancel()
+			detailTask?.cancel()
+			spectrogramCG = nil
+			spectrogramStart = 0
+			spectrogramDuration = 0
+			setNeedsDisplay(bounds)
+			return
+		}
+		rebuildSpectrogram()
+	}
+
+	/// Rasterise ONCE per spectrogram, at the data's own resolution (one column
+	/// per STFT frame, capped at a sane texture size).
+	///
+	/// Deliberately independent of zoom. Sizing the bitmap to the zoomed canvas
+	/// meant every zoom step rebuilt the whole timeline - cost scaling with
+	/// project length x zoom, to show a screenful. At data resolution there's no
+	/// more detail to be had, so zooming is just Core Graphics drawing the image,
+	/// clipped to the dirty rect: bounded by screen pixels, like the waveform.
+	fileprivate func rebuildSpectrogram() {
+		guard let spectrogram else { return }
+		let target = max(1, min(spectrogram.numFrames, Self.overviewMaxColumns))
+		rasterTask?.cancel()
+		let spec = spectrogram
+		let renderedID = spec.id
+		rasterTask = Task { [weak self] in
+			guard let buffer = await spec.rgbPixels(maxWidth: target), !Task.isCancelled,
+				let self, self.spectrogramID == renderedID, let image = buffer.cgImage()
+			else { return }
+			// Pixels and their time range land together, so the band never draws one
+			// spectrogram's image against another's span.
+			self.spectrogramCG = image
+			self.spectrogramStart = spec.timelineStart
+			self.spectrogramDuration = spec.duration
+			self.setNeedsDisplay(self.bounds)
+			self.rebuildSpectrogramDetailIfNeeded()
+		}
+	}
+
+	/// Rasters the visible slice at screen resolution, drawn over the overview.
+	///
+	/// The overview caps at `overviewMaxColumns`, so detail stops improving at
+	/// roughly 8x zoom no matter how long the project is - fine for a 4-minute
+	/// timeline (whose every frame fits under the cap), useless for an hour-long
+	/// one where you can never look closer than ~7 minutes of timeline. This
+	/// covers only what's on screen, so its cost is screen-sized and constant
+	/// rather than growing with the project.
+	///
+	/// Skipped entirely when the overview already has a column per frame on
+	/// screen - there's no more detail in the data to fetch.
+	fileprivate func rebuildSpectrogramDetailIfNeeded() {
+		guard let spectrogram, duration > 0, bounds.width > 0, spectrogram.numFrames > 0,
+			let clipView = superview as? NSClipView
+		else { return }
+		let visible = clipView.documentVisibleRect
+		guard visible.width > 1 else { return }
+
+		let pps = bounds.width / CGFloat(duration)
+		let startTime = max(Double(visible.minX / pps), spectrogram.timelineStart)
+		let endTime = min(
+			Double(visible.maxX / pps), spectrogram.timelineStart + spectrogram.duration)
+		guard endTime > startTime else { return }
+
+		let hop = spectrogram.hopSeconds
+		let loFrame = max(0, Int((startTime - spectrogram.timelineStart) / hop))
+		let hiFrame = min(
+			spectrogram.numFrames, Int(((endTime - spectrogram.timelineStart) / hop).rounded(.up)))
+		guard hiFrame > loFrame else { return }
+
+		// Screen columns available for those frames. If the overview already
+		// resolves them one-to-one, the detail pass would be identical work for an
+		// identical picture.
+		let screenColumns = Int((CGFloat(endTime - startTime) * pps).rounded())
+		let overviewColumnsHere =
+			Int(
+				(CGFloat(endTime - startTime) / CGFloat(spectrogram.duration))
+					* CGFloat(min(spectrogram.numFrames, Self.overviewMaxColumns)))
+		guard screenColumns > overviewColumnsHere, hiFrame - loFrame > overviewColumnsHere else {
+			// The overview already resolves every frame on screen; a detail pass
+			// would be the same work for the same picture.
+			detailRequestedRange = nil
+			if detailCG != nil {
+				detailCG = nil
+				setNeedsDisplay(bounds)
+			}
+			return
+		}
+
+		// Pad beyond the visible slice and snap to a coarse grid, so nudging the
+		// scroll reuses the same raster instead of starting a new one every pixel.
+		let pad = (hiFrame - loFrame) / 2
+		let grid = 256
+		let lo = max(0, ((loFrame - pad) / grid) * grid)
+		let hi = min(spectrogram.numFrames, (((hiFrame + pad) / grid) + 1) * grid)
+		guard hi > lo else { return }
+		let range = lo..<hi
+
+		// Guard on the REQUESTED range, not the rendered one: a zoom gesture
+		// redraws constantly, and comparing against the rendered range would cancel
+		// and restart the in-flight raster on every frame so it never finished.
+		guard range != detailRequestedRange else { return }
+		detailRequestedRange = range
+
+		let target = max(1, min(screenColumns * 2, range.count, Self.overviewMaxColumns))
+		detailTask?.cancel()
+		let spec = spectrogram
+		let renderedID = spec.id
+		detailTask = Task { [weak self] in
+			// Let a gesture settle before spending anything.
+			try? await Task.sleep(for: .milliseconds(120))
+			guard !Task.isCancelled,
+				let buffer = await spec.rgbPixels(maxWidth: target, frameRange: range),
+				!Task.isCancelled, let self, self.spectrogramID == renderedID,
+				let image = buffer.cgImage()
+			else { return }
+			self.detailCG = image
+			self.detailRange = range
+			self.detailStart = spec.timelineStart + Double(range.lowerBound) * spec.hopSeconds
+			self.detailDuration = Double(range.count) * spec.hopSeconds
+			self.setNeedsDisplay(self.bounds)
+		}
+	}
 	var onToggleClip: ((Int) -> Void)?
 	var onSetClipSelected: ((Int, Bool) -> Void)?
 	fileprivate var dragTargetSelected: Bool?
@@ -400,6 +591,10 @@ private class AxisDocumentView: NSView {
 	override func draw(_ dirtyRect: NSRect) {
 		guard let ctx = NSGraphicsContext.current?.cgContext else { return }
 
+		// Cheap: returns immediately unless the visible frame range actually
+		// changed. Unlike the old per-draw rebuild, it can't kick off a raster of
+		// the whole timeline - only of what's on screen.
+		rebuildSpectrogramDetailIfNeeded()
 		let renderer = TimelineAxisRenderer(
 			bounds: bounds,
 			duration: duration,
@@ -418,6 +613,15 @@ private class AxisDocumentView: NSView {
 			playingIndex: audioPlayer?.playingIndex,
 			labelForTime: labelForTime,
 			skipWaveforms: inLiveResize,
+			showSpectrogramLane: showSpectrogramLane,
+			spectrogramImage: spectrogramCG,
+			spectrogramDetailImage: detailCG,
+			spectrogramDetailStart: detailStart,
+			spectrogramDetailDuration: detailDuration,
+			spectrogramLoading: spectrogramLoading,
+			spectrogramStart: spectrogramStart,
+			spectrogramDuration: spectrogramDuration,
+			showRoleLabels: showRoleLabels,
 			dirtyRect: dirtyRect
 		)
 		renderer.draw(in: ctx, cachedClipRects: &cachedClipRects)

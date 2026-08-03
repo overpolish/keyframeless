@@ -8,6 +8,7 @@
 #import "KKKeyposeSymbol.h"
 #import "KKMiniViewerView.h"
 #import "KKSegmentEditView.h"
+#import "KKTimelineHintText.h"
 #import "KKTimelineScale.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
@@ -18,11 +19,16 @@
 
 - (void)drawRect:(NSRect)dirtyRect {
   KKBasicProj p = [self _projection];
-  if (!p.anyAnimatable)
-    return;
   NSRect g = [self _graphRect];
   if (NSWidth(g) <= 0 || NSHeight(g) <= 0)
     return;
+  // No animatable lanes: keep the container + ruler + playhead so the timeline
+  // stays scrubbable, with the empty-state message where the phases would be.
+  if (!p.anyAnimatable) {
+    if (self.emptyMessage.length)
+      [self _drawEmptyStateInRect:g proj:p];
+    return;
+  }
 
   // The container background fills the full track width (independent of the
   // graph rect's half-pill content inset + 1px right padding) so the box keeps
@@ -37,6 +43,40 @@
   double lo = 0.0, hi = 1.0;
   KKBasicValueExtent(p, &lo, &hi);
 
+  // Active-gap band: while a curve/modulation popover is open, tint its section
+  // (In / Hold / Out) span in the same translucent gap-selection style Advanced
+  // uses, so the user sees which gap the fixed-position popover edits. Colour
+  // tracks the section's value (warn when it's a real transition/drift, accent
+  // when flat), matching the section's curve/pill colour. Drawn behind the
+  // curve + pills as a background band.
+  if (_gapPopoverShowing) {
+    double bandA = 0.0, bandB = 0.0;
+    BOOL bandWarn = NO;
+    if (_activeGapSection == KKBasicSectionIn) {
+      bandA = 0.0;
+      bandB = p.inEndFrac;
+      bandWarn = [self _inIsTransition];
+    } else if (_activeGapSection == KKBasicSectionOut) {
+      bandA = p.outStartFrac;
+      bandB = 1.0;
+      bandWarn = [self _outIsTransition];
+    } else { // Hold
+      bandA = p.inEnabled ? p.inEndFrac : 0.0;
+      bandB = p.outEnabled ? p.outStartFrac : 1.0;
+      bandWarn = [self _holdDrift];
+    }
+    CGFloat bx0 = KKBasicXForFrac(bandA, g, p);
+    CGFloat bx1 = KKBasicXForFrac(bandB, g, p);
+    if (bx1 - bx0 >= 1.0) {
+      NSColor *bandTint =
+          (bandWarn ? [NSColor warning] : [NSColor accentMatchingHost]);
+      [[bandTint colorWithAlphaComponent:0.15] setFill];
+      NSRectFillUsingOperation(
+          NSMakeRect(bx0, NSMinY(g), bx1 - bx0, NSHeight(g)),
+          NSCompositingOperationSourceOver);
+    }
+  }
+
   // Render is always live (log warp). Stable cursor tracking comes from
   // solving the drag fixed point each frame in -mouseDragged:, not from
   // freezing the map (which caused a jarring re-warp on release).
@@ -45,10 +85,8 @@
   // Phase dividers used to be drawn here; the boundary pills (further down)
   // serve as the divider now - one less stroke per frame.
 
-  // Stroke per section, all solid. A live transition (enabled In/Out) is
-  // "non-hold" - warn-tinted so it reads distinctly. A disabled In/Out is
-  // just the flat hold extended (hold color), so the whole thing looks
-  // like one continuous hold line with no dashing.
+  // Stroke per section. Duration-locked gaps use a subtle dash in the same
+  // value-derived colour; unlocked gaps remain solid.
   NSColor *hold = [NSColor accentMatchingHost];
   NSColor *warn = [NSColor warning];
   // Value-based colour (matches Advanced's per-keypose rule): a section/pill is
@@ -75,7 +113,7 @@
                     rect:g
                       lo:lo
                       hi:hi
-                  dashed:NO
+                  dashed:[self _sectionHasDurationLock:KKBasicSectionIn]
                    color:inTrans ? warn : hold];
   [self _strokeCurveFrom:p.inEndFrac
                       to:p.outStartFrac
@@ -84,7 +122,7 @@
                     rect:g
                       lo:lo
                       hi:hi
-                  dashed:NO
+                  dashed:[self _sectionHasDurationLock:KKBasicSectionHold]
                    color:holdC];
   [self _strokeCurveFrom:p.outStartFrac
                       to:1.0
@@ -93,7 +131,7 @@
                     rect:g
                       lo:lo
                       hi:hi
-                  dashed:NO
+                  dashed:[self _sectionHasDurationLock:KKBasicSectionOut]
                    color:outTrans ? warn : hold];
   [NSGraphicsContext restoreGraphicsState];
 
@@ -150,41 +188,95 @@
     [[hold colorWithAlphaComponent:0.7] setStroke];
     [tie stroke];
   }
+
   [NSGraphicsContext restoreGraphicsState];
+
+  // Active-keypose highlight: while the boundary popover is open, ring the pill
+  // it's editing so the user sees which keypose the (fixed-position) popover
+  // controls. The ring colour tracks that pill's own value colour (warn when
+  // the endpoint is a real transition, accent when flat), matching the diamond
+  // it highlights. Drawn unclipped so the ring isn't shaved at the track edges.
+  if (_boundaryPopoverShowing && p.anyAnimatable) {
+    double af;
+    NSColor *hlColor;
+    if (_curDiamond == 1) {
+      af = p.inEnabled ? 0.0 : p.inEndFrac;
+      hlColor = p.inEnabled ? (inTrans ? warn : hold) : holdStartC;
+    } else if (_curDiamond == 3) {
+      af = p.outStartFrac;
+      hlColor = holdEndC;
+    } else if (_curDiamond == 4) {
+      af = p.outEnabled ? 1.0 : p.outStartFrac;
+      hlColor = p.outEnabled ? (outTrans ? warn : hold) : holdEndC;
+    } else {
+      af = p.inEndFrac; // d == 2 (hold-start) / default
+      hlColor = holdStartC;
+    }
+    CGFloat cx = round(KKBasicXForFrac(af, g, xp)) + 0.5;
+    NSRect pill = NSMakeRect(cx - kPillW * 0.5, NSMinY(g) + kPillInsetY, kPillW,
+                             NSHeight(g) - 2.0 * kPillInsetY);
+    NSBezierPath *hl =
+        [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(pill, -3.0, -3.0)
+                                        xRadius:kPillW
+                                        yRadius:kPillW];
+    hl.lineWidth = 2.0;
+    [hlColor setStroke];
+    [hl stroke];
+  }
 
   [self _drawRulerInRect:g proj:p xproj:xp];
 
-  // Playhead: a thin line spanning ruler→track plus a small top knob, mapped
-  // through the same warp as everything else. < 0 = hidden (not playing).
-  if (_playheadFraction >= 0.0) {
-    CGFloat px = KKBasicXForFrac(_playheadFraction, g, p);
-    px = round(px) + 0.5; // crisp 1px line
-    CGFloat top = NSMaxY(g) + kRulerGap + kRulerH;
-    NSColor *phc = [NSColor inspectorLabel];
-    // Contain the scrubber horizontally to the visible container; vertical is
-    // left free so the knob still sits up in the ruler.
-    NSRect cont = [self _containerRect];
-    [NSGraphicsContext saveGraphicsState];
-    NSRectClip(NSMakeRect(NSMinX(cont), NSMinY(g), NSWidth(cont),
-                          NSMaxY(self.bounds) - NSMinY(g)));
-    NSBezierPath *line = [NSBezierPath bezierPath];
-    [line moveToPoint:NSMakePoint(px, NSMinY(g))];
-    [line lineToPoint:NSMakePoint(px, top)];
-    line.lineWidth = 1.0;
-    [[phc colorWithAlphaComponent:0.85] setStroke];
-    [line stroke];
-    CGFloat kw = 7.0, kh = 6.0;
-    NSBezierPath *knob = [NSBezierPath bezierPath];
-    [knob moveToPoint:NSMakePoint(px - kw / 2.0, top)];
-    [knob lineToPoint:NSMakePoint(px + kw / 2.0, top)];
-    [knob lineToPoint:NSMakePoint(px + kw / 2.0, top - kh + 3.0)];
-    [knob lineToPoint:NSMakePoint(px, top - kh)];
-    [knob lineToPoint:NSMakePoint(px - kw / 2.0, top - kh + 3.0)];
-    [knob closePath];
-    [phc setFill];
-    [knob fill];
-    [NSGraphicsContext restoreGraphicsState];
-  }
+  [self _drawPlayheadInRect:g proj:p];
+}
+
+// Playhead: a thin line spanning ruler→track plus a small top knob, mapped
+// through the same warp as everything else. < 0 = hidden (not playing).
+- (void)_drawPlayheadInRect:(NSRect)g proj:(KKBasicProj)p {
+  if (_playheadFraction < 0.0)
+    return;
+  CGFloat px = KKBasicXForFrac(_playheadFraction, g, p);
+  px = round(px) + 0.5; // crisp 1px line
+  CGFloat top = NSMaxY(g) + kRulerGap + kRulerH;
+  NSColor *phc = [NSColor inspectorLabel];
+  // Contain the scrubber horizontally to the visible container; vertical is
+  // left free so the knob still sits up in the ruler.
+  NSRect cont = [self _containerRect];
+  [NSGraphicsContext saveGraphicsState];
+  NSRectClip(NSMakeRect(NSMinX(cont), NSMinY(g), NSWidth(cont),
+                        NSMaxY(self.bounds) - NSMinY(g)));
+  NSBezierPath *line = [NSBezierPath bezierPath];
+  [line moveToPoint:NSMakePoint(px, NSMinY(g))];
+  [line lineToPoint:NSMakePoint(px, top)];
+  line.lineWidth = 1.0;
+  [[phc colorWithAlphaComponent:0.85] setStroke];
+  [line stroke];
+  CGFloat kw = 7.0, kh = 6.0;
+  NSBezierPath *knob = [NSBezierPath bezierPath];
+  [knob moveToPoint:NSMakePoint(px - kw / 2.0, top)];
+  [knob lineToPoint:NSMakePoint(px + kw / 2.0, top)];
+  [knob lineToPoint:NSMakePoint(px + kw / 2.0, top - kh + 3.0)];
+  [knob lineToPoint:NSMakePoint(px, top - kh)];
+  [knob lineToPoint:NSMakePoint(px - kw / 2.0, top - kh + 3.0)];
+  [knob closePath];
+  [phc setFill];
+  [knob fill];
+  [NSGraphicsContext restoreGraphicsState];
+}
+
+- (void)_drawEmptyStateInRect:(NSRect)g proj:(KKBasicProj)p {
+  NSBezierPath *track =
+      [NSBezierPath bezierPathWithRoundedRect:[self _containerRect]
+                                      xRadius:KKRadiusMD
+                                      yRadius:KKRadiusMD];
+  [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
+  [track fill];
+
+  KKTimelineDrawCenteredHint(self.emptyMessage, g);
+
+  // With no lanes p is the default linear projection, so it doubles as the
+  // ruler's unwarped x-projection.
+  [self _drawRulerInRect:g proj:p xproj:p];
+  [self _drawPlayheadInRect:g proj:p];
 }
 
 - (void)_strokeCurveFrom:(double)t0

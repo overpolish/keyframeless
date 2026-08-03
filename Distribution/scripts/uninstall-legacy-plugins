@@ -1,0 +1,67 @@
+#!/bin/bash
+
+echo "Keyframeless Legacy Plugin Uninstaller"
+echo "======================================"
+echo ""
+echo "Rounded, Magic Move, and Glow have been retired - their effects now"
+echo "live in Mirage and the Keyframeless template library. Their standalone"
+echo "plugins are no longer shipped."
+echo ""
+echo "This script removes the standalone Rounded, Magic Move, and Glow apps"
+echo "and their Motion Templates. Your other Keyframeless plugins are untouched."
+echo ""
+
+APPS=(
+    "/Applications/Keyframeless/Rounded.app"
+    "/Applications/Keyframeless/MagicMove.app"
+    "/Applications/Keyframeless/Glow.app"
+)
+TEMPLATES=(
+    "$HOME/Movies/Motion Templates.localized/Effects.localized/Keyframeless/Rounded • KF"
+    "$HOME/Movies/Motion Templates.localized/Effects.localized/Keyframeless/Magic Move • KF"
+    "$HOME/Movies/Motion Templates.localized/Effects.localized/Keyframeless/Glow • KF"
+)
+
+FOUND=0
+echo "The following will be deleted:"
+for a in "${APPS[@]}"; do
+    [ -e "$a" ] && { echo "  $a"; FOUND=1; }
+done
+for t in "${TEMPLATES[@]}"; do
+    [ -e "$t" ] && { echo "  $t"; FOUND=1; }
+done
+if [ "$FOUND" -eq 0 ]; then
+    echo "  (nothing - already uninstalled)"
+    sleep 2
+    osascript -e 'tell application "Terminal" to close front window' &
+    exit 0
+fi
+echo ""
+
+read -p "Continue? (y/n) " -n 1 -r
+echo ""
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Uninstall cancelled."
+    exit 0
+fi
+
+for t in "${TEMPLATES[@]}"; do
+    if [ -e "$t" ]; then
+        rm -rf "$t"
+        echo "Removed template: $(basename "$t")"
+    fi
+done
+
+for a in "${APPS[@]}"; do
+    if [ -e "$a" ]; then
+        sudo rm -rf "$a"
+        echo "Removed app: $(basename "$a")"
+    fi
+done
+
+echo ""
+echo "Legacy plugins uninstalled. Restart Motion / Final Cut Pro"
+echo "for the change to take effect."
+sleep 2
+osascript -e 'tell application "Terminal" to close front window' &

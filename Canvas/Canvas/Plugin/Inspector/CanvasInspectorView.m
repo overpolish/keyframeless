@@ -11,7 +11,10 @@
 #import "CanvasMiniViewerRenderer.h"
 #import "CanvasOSCGuide.h" // shared OSC guide bridge (viewer rect + canvas ref)
 #import "CanvasPresets.h"
+#import "CanvasThumbnailBake.h" // link-picker poster bake
 #import "CanvasToolbar.h" // CanvasToolbarToolPen (arrow guide pen-tool step)
+#import <KeyframelessKit/KKLinkBus.h>
+#import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKJoyrideController.h>    // KKJoyrideStep / controller
 #import <KeyframelessKit/KKJoyrideDragStep.h>      // slider drag-to-zero step
@@ -48,6 +51,7 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   BOOL _dragging;             // a graph keypose drag is in progress
   id<PROAPIAccessing>
       _apiManager; // for per-instance OSC-visibility state reads
+  NSInteger _thumbBakeGeneration; // coalesces thumbnail bakes (see Mirage)
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
@@ -70,8 +74,11 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
     _miniViewerRenderer.timeline = timeline;
     _miniViewerRenderer.laneTemplates = availableLanes;
     // Per-instance UUID for the cross-process anchor-selection sync (createView
-    // mints it before building this view, so it resolves here).
+    // mints it before building this view, so it resolves here). The same
+    // identity gates the live-drag ref override (a `${uuid...}` expression
+    // ref only resolves locally when it targets THIS clip).
     _miniViewerRenderer.instanceUUID = KKInstanceUUIDForAPI(apiManager);
+    _miniViewerRenderer.linkSelfUUID = _miniViewerRenderer.instanceUUID;
     [self _retainMiniClipDurationFromTimeline:timeline];
     // Cold-boot seed for the viewer Position OSC (it reads the snapshot, not
     // the param). applyTimeline republishes on selection / edits.
@@ -537,7 +544,7 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
 
 // Show the inspector's OSC-visibility row (the global "show controls" toggle +
 // the Position/Path pills). The base defaults NO; Canvas has a viewer Transform
-// OSC, so opt in (matches MagicMove/Rounded).
+// OSC, so opt in.
 - (BOOL)showsOSCVisibilityRow {
   return YES;
 }
@@ -607,6 +614,53 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   // only source.) Groups publish like layers: their pivot lives in the stored
   // Anchor lane now, so no Position re-anchor shift is needed.
   [self _publishViewerSnapshot:timeline];
+  // Refresh this clip's reference-menu thumbnails when its look changes.
+  [self _scheduleThumbnailBake];
+}
+
+// Coalesced one-shot bake (the Mirage pattern): bump the generation, fire
+// ~0.8s later only if still the latest, so appear + an edit burst collapse to
+// one bake and the mini feed has had a moment to publish a frame.
+- (void)_scheduleThumbnailBake {
+  if (self.isDetachedCopy)
+    return;
+  NSInteger gen = ++_thumbBakeGeneration;
+  __weak typeof(self) weak = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        __strong typeof(weak) s = weak;
+        if (s && s->_thumbBakeGeneration == gen)
+          [s _bakeLinkThumbnails];
+      });
+}
+
+// Bake the effect-level poster plus one isolated poster per (non-group) layer,
+// all keyed by the instance UUID so the expression picker can show them at the
+// clip AND layer menu levels. writeThumbnailJPEG skips byte-identical writes.
+- (void)_bakeLinkThumbnails {
+  NSString *uuid = KKInstanceUUIDForAPI(_apiManager);
+  if (uuid.length == 0)
+    return; // instance UUID not created yet (lazy); a later bake catches it
+  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+  if (!device)
+    return;
+  id<MTLTexture> src = KKMiniViewerFeedLoadPrimarySource(
+      CanvasMiniViewerDescriptorPathForUUID(uuid), device);
+  NSData *jpeg =
+      CanvasRenderThumbnailJPEG(_miniViewerRenderer, 320, 180, src, nil);
+  if (jpeg.length)
+    [KKLinkBus writeThumbnailJPEG:jpeg forUUID:uuid];
+  for (KKBezierPath *p in _miniViewerRenderer.layers) {
+    if (p.layerID.length == 0)
+      continue;
+    NSData *layerJPEG = CanvasRenderThumbnailJPEG(_miniViewerRenderer, 320,
+                                                  180, src, p.layerID);
+    if (layerJPEG.length)
+      [KKLinkBus writeThumbnailJPEG:layerJPEG
+                            forUUID:uuid
+                            layerID:p.layerID];
+  }
 }
 
 // Track a live keypose drag so reloadLayerList knows the per-frame write echoes
@@ -692,7 +746,8 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   NSMutableArray<NSString *> *parts =
       [NSMutableArray arrayWithCapacity:timeline.lanes.count];
   for (KKLane *l in timeline.lanes)
-    [parts addObject:[NSString stringWithFormat:@"%@|%@|%d", l.label ?: @"",
+    [parts addObject:[NSString stringWithFormat:@"%@|%@|%@|%d", l.key ?: @"",
+                                                l.label ?: @"",
                                                 l.layerLabel ?: @"",
                                                 l.locked ? 1 : 0]];
   return [parts componentsJoinedByString:@"\n"];
@@ -725,6 +780,9 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   // window's "guides disabled" warning), so a first-time user is shown the
   // basics instead of having to discover the guides themselves.
   [self autostartIntroGuideOnceWithSeenKey:kCanvasIntroSeenKey];
+  // Bake thumbnails on plain selection too (applyTimeline only fires on a
+  // param change).
+  [self _scheduleThumbnailBake];
 }
 
 // Stage a demo subject before each timing guide seeds. Canvas is per-layer, so
@@ -822,8 +880,8 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   ((void (*)(id, SEL))base)(self, _cmd);
 }
 
-// Canvas teaches the Position lane (a 2D clip-space point, stored 0..1) the
-// same way MagicMove does - it has the clearest mini-viewer point handle - with
+// Canvas teaches the Position lane (a 2D clip-space point, stored 0..1) -
+// it has the clearest mini-viewer point handle - with
 // Scale as the second Advanced lane so the per-property timeline + marquee
 // multi-select steps have two rows. Both live in Canvas's "Transform" category,
 // so the Advanced lane-filter step groups them under the real capsule.

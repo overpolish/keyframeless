@@ -8,7 +8,7 @@
 #
 # Because SharedHelperRunner connects to the socket BEFORE trying to wake/launch the
 # helper, a manually-run helper is picked up transparently: just leave this running
-# and trigger a local AI action in a plugin (Glow etc.). No signing, no launchd, no
+# and trigger a local AI action in a plugin (Canvas etc.). No signing, no launchd, no
 # entitlement needed here - the --socket arg makes the helper bind the path directly
 # and skip the app-group lookup + Mach-service wake.
 #
@@ -19,7 +19,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="${1:-release}"
-GROUP="group.co.overpolish.keyframeless"
+GROUP="group.com.keyframeless"
 GC="$HOME/Library/Group Containers/$GROUP"
 SOCK="$GC/kkai.sock"
 CACHE="$GC/huggingface/hub"

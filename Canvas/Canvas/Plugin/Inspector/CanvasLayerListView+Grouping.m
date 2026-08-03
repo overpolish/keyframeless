@@ -182,7 +182,7 @@
 // a single cmd-Z removes the duplicates AND restores the prior selection.
 - (void)_duplicateTargetsForTag:(NSUInteger)tag {
   [self
-      _runInUndoGroup:@"Duplicate Layer"
+      _runInUndoGroup:KKUndoLabelDuplicateLayer()
                 block:^{
                   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
                     NSIndexSet *targets =
@@ -239,7 +239,7 @@
 - (void)deleteRow:(NSMenuItem *)sender {
   NSUInteger tag = (NSUInteger)sender.tag;
   [self
-      _runInUndoGroup:@"Delete Layer"
+      _runInUndoGroup:KKUndoLabelDeleteLayer()
                 block:^{
                   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
                     NSIndexSet *targets =
@@ -288,7 +288,7 @@
   // One undo group: the blob write (new group + reparenting) and the
   // group-becomes-selection write collapse into a single cmd-Z.
   [self
-      _runInUndoGroup:@"Group Layers"
+      _runInUndoGroup:KKUndoLabelGroupLayers()
                 block:^{
                   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
                     NSIndexSet *targets =

@@ -8,7 +8,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKPresets.h>
 #import <KeyframelessKit/KKShape.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <simd/simd.h>
 
 NSString *const kCanvasPresetPayloadKind = @"canvasLayers";
@@ -26,7 +26,7 @@ static NSString *CanvasDrawOnEndAnim(KKIntervalCurve curve, double intensity) {
   KKKeyPose *k0 = [KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]];
   k0.outgoing = iv;
   KKKeyPose *k1 = [KKKeyPose keyposeAtTime:1.0 values:@[ @100.0 ]];
-  KKLane *lane = [KKLane laneWithLabel:@"Draw On End"];
+  KKLane *lane = [KKLane laneWithKey:@"Draw On End" label:@"Draw On End"];
   lane.enabled = YES; // animated
   lane.keyposes = @[ k0, k1 ];
   KKTimeline *tl = [KKTimeline timeline];

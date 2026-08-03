@@ -252,11 +252,34 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
   return YES;
 }
 
+- (void)setActive:(BOOL)active {
+  if (_active == active)
+    return;
+  _active = active;
+  [self setNeedsDisplay:YES];
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
-  NSColor *tint = [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
+  // Accent highlight background + tint while active (its popover is showing
+  // constants). Full-radius pill to match the keypose pills, no outline - a
+  // filled highlight plus the accent icon/text is the whole selection cue.
+  if (_active) {
+    NSColor *accent = [NSColor accentMatchingHost];
+    CGFloat r = NSHeight(self.bounds) / 2.0;
+    NSBezierPath *fill = [NSBezierPath bezierPathWithRoundedRect:self.bounds
+                                                         xRadius:r
+                                                         yRadius:r];
+    [[accent colorWithAlphaComponent:0.18] setFill];
+    [fill fill];
+  }
+  NSColor *tint = _active
+                      ? [NSColor accentMatchingHost]
+                      : [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
   NSImage *tinted = KKTintedImage(KKConstantsImage(), tint);
 
-  static const CGFloat kPadX = 5.0, kGap = 3.0;
+  // Horizontal padding so the full-radius highlight reads as a balanced pill,
+  // matching the grouped tab pill's proportions.
+  CGFloat kPadX = KKPaddingLG, kGap = KKSpacingSM;
   CGFloat iconY = NSMidY(self.bounds) - tinted.size.height / 2.0;
   [tinted drawAtPoint:NSMakePoint(kPadX, iconY)
              fromRect:NSZeroRect
@@ -289,7 +312,9 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
       ceil([KKLoc(@"Constants", @"Constants editor tab/section header.")
                sizeWithAttributes:@{NSFontAttributeName : font}]
                .width);
-  static const CGFloat kPadX = 5.0, kGap = 3.0;
+  CGFloat kPadX = KKPaddingLG, kGap = KKSpacingSM;
+  // 18pt to match the Basic/Advanced tab pill it centres against, so the
+  // highlight lines up with those pills.
   return NSMakeSize(kPadX + ceil(img.size.width) + kGap + textW + kPadX, 18.0);
 }
 

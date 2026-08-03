@@ -13,6 +13,7 @@ static const CGFloat kSwatchSize = 14.0;
 
 @implementation KKColorWellView {
   BOOL _editing; // panel opened from this swatch and not yet closed
+  BOOL _ignoreNextColorPanel; // suppress the initial programmatic colour set
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -78,10 +79,16 @@ static const CGFloat kSwatchSize = 14.0;
 
 - (void)mouseDown:(NSEvent *)event {
   NSColorPanel *panel = [NSColorPanel sharedColorPanel];
-  panel.color = _color;
+  // Retarget the shared panel to THIS swatch before loading its colour. Setting
+  // panel.color can fire the panel's action synchronously; if the previous
+  // swatch were still the target that would overwrite it (and the guard stops
+  // this swatch's own initial set from writing back). Matches
+  // KKGradientBarView.
+  _ignoreNextColorPanel = YES;
   panel.target = self;
   panel.action = @selector(_colorPanelChanged:);
   panel.continuous = YES;
+  panel.color = _color;
 
   NSWindow *hostWindow = self.window;
   if (hostWindow && panel.parentWindow != hostWindow) {
@@ -91,6 +98,7 @@ static const CGFloat kSwatchSize = 14.0;
 
   [self _beginEditingWithPanel:panel];
   [panel orderFront:nil];
+  _ignoreNextColorPanel = NO;
 }
 
 - (void)_beginEditingWithPanel:(NSColorPanel *)panel {
@@ -124,6 +132,8 @@ static const CGFloat kSwatchSize = 14.0;
 }
 
 - (void)_colorPanelChanged:(NSColorPanel *)panel {
+  if (_ignoreNextColorPanel)
+    return;
   self.color = panel.color;
   if (_onColorChanged)
     _onColorChanged(_color);

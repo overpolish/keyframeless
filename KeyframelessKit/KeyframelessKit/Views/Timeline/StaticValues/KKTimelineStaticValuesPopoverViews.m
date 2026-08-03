@@ -25,14 +25,18 @@
   return NSMakeSize(NSViewNoIntrinsicMetric, kFloatRowH);
 }
 - (instancetype)initWithLabel:(NSString *)label
+                 displayLabel:(NSString *)displayLabel
                       message:(NSString *)message
                        gutter:(BOOL)gutter {
   self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, kFloatRowH)];
   if (!self)
     return nil;
   // Localize (also strips the `␟<layerID>` tag on multi-owner timelines) so the
-  // excluded row reads "Scale", not "Scale␟<uuid>", like the editable rows.
-  NSTextField *title = _KKMakeCaption(KKLocalizedParamName(label));
+  // excluded row reads "Scale", not "Scale␟<uuid>", like the editable rows. Use
+  // the display label when the plugin gave the lane a separate one (e.g. a
+  // shader uniform's "Center"), else fall back to the identity.
+  NSTextField *title = _KKMakeCaption(
+      KKLocalizedParamName(displayLabel.length ? displayLabel : label));
   NSTextField *msg = _KKMakeCaption(message);
   msg.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.4];
 
@@ -152,6 +156,9 @@
   // …) clips at the chevron instead of overflowing the field.
   NSMutableParagraphStyle *para = [[NSMutableParagraphStyle alloc] init];
   para.lineBreakMode = NSLineBreakByTruncatingTail;
+  // Right-aligned still truncates its TAIL, so a long summary keeps its start
+  // and loses its end either way - only the resting edge changes.
+  para.alignment = _rightAligned ? NSTextAlignmentRight : NSTextAlignmentLeft;
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
                                             weight:NSFontWeightRegular],

@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-static NSString *const kPluginID = @"co.overpolish.keyframeless.Template";
+static NSString *const kPluginID = @"com.keyframeless.Template";
 
 // OSC part IDs
 static const NSInteger kOSCPointPart = 1;

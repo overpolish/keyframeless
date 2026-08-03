@@ -6,11 +6,11 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class _KKManageRow, _KKSearchField, KKPillToggleRowView;
+@class _KKManageRow, _KKSearchField, KKPillToggleRowView, KKPillBar;
 
 /// Shared chrome for the timeline's searchable, category-navigable checkable
 /// lane lists: the Animated "manage" dropdown (`_KKManagePopoverView`) and the
@@ -26,9 +26,18 @@ NS_ASSUME_NONNULL_BEGIN
   NSStackView *_rowStack;
   NSMutableArray<_KKManageRow *> *_allRows;
   KKPillToggleRowView *_categoryPill;
+  KKPillBar *_categoryPillBar;
   NSString *_selectedCategory;
   NSDictionary<NSString *, NSString *> *_rowCategoryByLabel;
   BOOL _hasPill;
+  // Layer (owner) nav, one level ABOVE the categories: present only when the
+  // lanes carry two or more distinct `layerKey`s (Mirage's shader rack). There
+  // is no "all layers" page - one concrete owner is always selected.
+  KKPillToggleRowView *_layerPill;
+  KKPillBar *_layerPillBar;
+  NSString *_selectedLayer;
+  NSDictionary<NSString *, NSString *> *_rowLayerByLabel;
+  BOOL _hasLayerPill;
   CGFloat _minimumHeight;
   NSArray<KKLane *> *_lanes;
   // Embedded mode (hosted inside another popover, e.g. the gap "Applies to"
@@ -57,6 +66,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Set by the host so the list can resize the popover to the visible row count.
 @property(nonatomic, weak, nullable) NSPopover *popover;
+
+/// NO = single-select: rows draw as radios, and checking one unchecks the rest.
+/// Default YES, because every lane list here is a checklist - a picker (a
+/// shader's `#choice dropdown`) is the exception that opts out.
+///
+/// Only the LOOK and the sibling-unchecking live here. Which row is checked is
+/// still the subclass's state, so a subclass opting out sets this and keeps
+/// answering `-configureRow:` from its own selection.
+@property(nonatomic) BOOL allowsMultipleSelection;
+
+/// Check `row` and uncheck every other, without a rebuild. For a single-select
+/// subclass to call from a row's toggle so the mark moves on the same tick as
+/// the click, rather than after a round-trip through the host.
+- (void)checkOnlyRow:(_KKManageRow *)row;
 
 /// Subclass hook: configure a freshly-created row (`rowLabel` is already set)
 /// for `lane` - its checked/warning state and toggle handlers. Default: no-op.
@@ -96,6 +119,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// this so a "tap <lane>" step can spotlight a lane that lives outside the
 /// default (first) category page.
 - (void)selectCategoryForLabel:(NSString *)label;
+
+/// Distinct `layerKey`s across the current lane set, in first-seen order.
+/// Empty for a single-owner plugin (no lane declares one) - the layer nav only
+/// appears at two or more, so this is also how a host tests for it.
+- (NSArray<NSString *> *)layerKeys;
+
+/// Switch the layer nav to `layerKey`, re-scoping the category nav and the rows
+/// to that layer. nil / an unknown key falls back to the FIRST layer - the nav
+/// never sits on an "all owners" page, because a rack's parameter list is only
+/// meaningful per entry. No-op when there is no layer nav. A host calls this
+/// right after init to open on its own selected owner (Mirage's selected rack
+/// entry) instead of on the first one.
+- (void)selectLayerKey:(nullable NSString *)layerKey;
 
 + (CGFloat)preferredWidth;
 /// Height that hugs the currently-visible rows (>= the minimum height).

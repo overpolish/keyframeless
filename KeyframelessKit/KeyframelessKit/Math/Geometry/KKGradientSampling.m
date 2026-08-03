@@ -48,24 +48,13 @@ _KKResampleStopsAtPositions(NSArray<KKGradientStop *> *stops,
   return out;
 }
 
-NSArray<NSNumber *> *KKGradientCompositeInterp(NSArray<NSNumber *> *from,
-                                               NSArray<NSNumber *> *to,
-                                               double t) {
-  if (from.count < 2)
-    return from;
-  double type = from[0].doubleValue; // held - never interpolated
-  double aAngle = from[1].doubleValue;
-  double bAngle = to.count >= 2 ? to[1].doubleValue : aAngle;
-  double angle = aAngle + (bAngle - aAngle) * t;
-
-  NSArray<KKGradientStop *> *aStops =
-      from.count > 2 ? KKGradientStopsFromFlat([from
-                           subarrayWithRange:NSMakeRange(2, from.count - 2)])
-                     : nil;
-  NSArray<KKGradientStop *> *bStops =
-      to.count > 2 ? KKGradientStopsFromFlat(
-                         [to subarrayWithRange:NSMakeRange(2, to.count - 2)])
-                   : nil;
+NSArray<NSNumber *> *KKGradientStopsInterp(NSArray<NSNumber *> *fromFlat,
+                                           NSArray<NSNumber *> *toFlat,
+                                           double t) {
+  NSArray<KKGradientStop *> *aStops = KKGradientStopsFromFlat(fromFlat);
+  NSArray<KKGradientStop *> *bStops = KKGradientStopsFromFlat(toFlat);
+  if (!aStops.count)
+    return fromFlat;
 
   // When the two keyframes have different stop counts, resample both onto the
   // union of their stop positions so the colours still blend (rather than
@@ -87,32 +76,48 @@ NSArray<NSNumber *> *KKGradientCompositeInterp(NSArray<NSNumber *> *from,
     rb = _KKResampleStopsAtPositions(bStops, uniq);
   }
 
-  NSArray<KKGradientStop *> *outStops = ra;
-  if (ra.count && ra.count == rb.count) {
-    NSMutableArray<KKGradientStop *> *m =
-        [NSMutableArray arrayWithCapacity:ra.count];
-    for (NSUInteger i = 0; i < ra.count; i++) {
-      KKGradientStop *sa = ra[i], *sb = rb[i];
-      CGFloat ar, ag, ab, aa, br, bg, bb, ba;
-      _KKStopSRGBA(sa, &ar, &ag, &ab, &aa);
-      _KKStopSRGBA(sb, &br, &bg, &bb, &ba);
-      NSColor *c = [NSColor colorWithSRGBRed:ar + (br - ar) * t
-                                       green:ag + (bg - ag) * t
-                                        blue:ab + (bb - ab) * t
-                                       alpha:aa + (ba - aa) * t];
-      [m addObject:[KKGradientStop
-                       stopWithPosition:sa.position +
-                                        (sb.position - sa.position) * t
-                                  color:c
-                               midpoint:sa.midpoint +
-                                        (sb.midpoint - sa.midpoint) * t]];
-    }
-    outStops = m;
+  if (!ra.count || ra.count != rb.count)
+    return KKGradientFlatFromStops(ra);
+
+  NSMutableArray<KKGradientStop *> *m =
+      [NSMutableArray arrayWithCapacity:ra.count];
+  for (NSUInteger i = 0; i < ra.count; i++) {
+    KKGradientStop *sa = ra[i], *sb = rb[i];
+    CGFloat ar, ag, ab, aa, br, bg, bb, ba;
+    _KKStopSRGBA(sa, &ar, &ag, &ab, &aa);
+    _KKStopSRGBA(sb, &br, &bg, &bb, &ba);
+    NSColor *c = [NSColor colorWithSRGBRed:ar + (br - ar) * t
+                                     green:ag + (bg - ag) * t
+                                      blue:ab + (bb - ab) * t
+                                     alpha:aa + (ba - aa) * t];
+    [m addObject:[KKGradientStop
+                     stopWithPosition:sa.position +
+                                      (sb.position - sa.position) * t
+                                color:c
+                             midpoint:sa.midpoint +
+                                      (sb.midpoint - sa.midpoint) * t]];
   }
+  return KKGradientFlatFromStops(m);
+}
+
+NSArray<NSNumber *> *KKGradientCompositeInterp(NSArray<NSNumber *> *from,
+                                               NSArray<NSNumber *> *to,
+                                               double t) {
+  if (from.count < 2)
+    return from;
+  double type = from[0].doubleValue; // held - never interpolated
+  double aAngle = from[1].doubleValue;
+  double bAngle = to.count >= 2 ? to[1].doubleValue : aAngle;
+  double angle = aAngle + (bAngle - aAngle) * t;
+
+  NSArray<NSNumber *> *aFlat =
+      from.count > 2 ? [from subarrayWithRange:NSMakeRange(2, from.count - 2)]
+                     : @[];
+  NSArray<NSNumber *> *bFlat =
+      to.count > 2 ? [to subarrayWithRange:NSMakeRange(2, to.count - 2)] : @[];
 
   NSMutableArray<NSNumber *> *out = [@[ @(type), @(angle) ] mutableCopy];
-  if (outStops)
-    [out addObjectsFromArray:KKGradientFlatFromStops(outStops)];
+  [out addObjectsFromArray:KKGradientStopsInterp(aFlat, bFlat, t)];
   return out;
 }
 

@@ -10,10 +10,11 @@
 // layer preview before it persists.
 
 #import "CanvasFillProperties.h"
+#import "CanvasLayerTimeline.h"  // CanvasResolvedLaneValue
 #import "CanvasLayerTransform.h" // CanvasLayerEffectiveTimeline (shared)
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
 
 BOOL CanvasFillEnabledAtFraction(KKBezierPath *path, double frac,
                                  NSString *overrideLayerID,
@@ -22,10 +23,10 @@ BOOL CanvasFillEnabledAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (![lane.label isEqualToString:@"Fill Enabled"])
+    if (![lane.key isEqualToString:@"Fill Enabled"])
       continue;
-    if (lane.keyposes.count > 0) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    if (lane.keyposes.count > 0 || lane.linkExpression.length) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         on = v[0].doubleValue >= 0.5;
     }
@@ -43,8 +44,8 @@ KKColorLanesValue CanvasFillColorAtFraction(KKBezierPath *path, double frac,
   // back to the flat solid colour so it renders exactly as before.
   BOOL hasColorLanes = NO;
   for (KKLane *lane in tl.lanes)
-    if ([lane.label isEqualToString:KKColorLanesModeLabel(@"Fill")] ||
-        [lane.label isEqualToString:KKColorLanesSolidLabel(@"Fill")]) {
+    if ([lane.key isEqualToString:KKColorLanesModeLabel(@"Fill")] ||
+        [lane.key isEqualToString:KKColorLanesSolidLabel(@"Fill")]) {
       hasColorLanes = YES;
       break;
     }
@@ -55,13 +56,13 @@ KKColorLanesValue CanvasFillColorAtFraction(KKBezierPath *path, double frac,
     v.solidColor = simd_make_float3(path.fillR, path.fillG, path.fillB);
     return v;
   }
-  return KKColorLanesResolve(
-      @"Fill", /*includesDynamic=*/NO, ^NSArray<NSNumber *> *(NSString *l) {
-        for (KKLane *lane in tl.lanes)
-          if ([lane.label isEqualToString:l])
-            return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-        return nil;
-      });
+  return KKColorLanesResolve(@"Fill", /*includesDynamic=*/NO,
+                             ^NSArray<NSNumber *> *(NSString *l) {
+                               for (KKLane *lane in tl.lanes)
+                                 if ([lane.key isEqualToString:l])
+                                   return CanvasResolvedLaneValue(lane, frac);
+                               return nil;
+                             });
 }
 
 float CanvasFillTintAtFraction(KKBezierPath *path, double frac,
@@ -71,11 +72,10 @@ float CanvasFillTintAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (![lane.label isEqualToString:@"Fill Amount"])
+    if (![lane.key isEqualToString:@"Fill Amount"])
       continue;
     if (lane.keyposes.count > 0) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         tint = (float)fmax(0.0, fmin(1.0, v[0].doubleValue / 100.0));
     }
@@ -96,25 +96,22 @@ CanvasFillStyle CanvasFillStyleAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (lane.keyposes.count == 0)
+    if (lane.keyposes.count == 0 && lane.linkExpression.length == 0)
       continue;
-    if ([lane.label isEqualToString:@"Fill Style"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    if ([lane.key isEqualToString:@"Fill Style"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         s.style = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
-    } else if ([lane.label isEqualToString:@"Fill Gap"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.key isEqualToString:@"Fill Gap"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.gap = (float)fmax(1.0, v[0].doubleValue);
-    } else if ([lane.label isEqualToString:@"Fill Angle"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.key isEqualToString:@"Fill Angle"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.angle = (float)(v[0].doubleValue * kDegToRad);
-    } else if ([lane.label isEqualToString:@"Fill Weight"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.key isEqualToString:@"Fill Weight"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.weight = (float)fmax(0.5, v[0].doubleValue);
     }

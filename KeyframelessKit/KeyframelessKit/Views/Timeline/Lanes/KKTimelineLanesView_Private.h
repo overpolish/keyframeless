@@ -7,8 +7,8 @@
 
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKLaneRowView.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
-#import <KeyframelessKit/KKTimingStage.h>
 
 #import "KKLaneChecklistView.h" // _KKLaneChecklistView base
 
@@ -43,6 +43,15 @@ NS_ASSUME_NONNULL_BEGIN
 @interface _KKSearchField : NSSearchField
 @end
 
+/// Enter / Esc drop focus (blur) so spacebar (playback) and Esc (close
+/// popover) reach the popover again, matching every other field in a
+/// ViewBridge popover. Call from the owner's
+/// `control:textView:doCommandBySelector:` and return the result - every
+/// `_KKSearchField` host wants exactly this, so it is not spelled out per
+/// checklist.
+FOUNDATION_EXPORT BOOL KKSearchFieldBlurOnCommit(NSControl *control,
+                                                 SEL selector);
+
 @interface _KKManageRow : NSView
 @property(nonatomic, copy) NSString *rowLabel;
 @property(nonatomic) BOOL checked;
@@ -61,10 +70,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// "X"/"Y" share labels across lanes). nil = uncategorised (shows on all
 /// pages). Default nil.
 @property(nonatomic, copy, nullable) NSString *categoryKey;
+/// The row's owner (layer) key, so the checklist can page it under the right
+/// layer pill even when its label is not the lane key (the modulation
+/// checklist's master / component rows carry display labels, which no
+/// key-indexed map can resolve). nil = no owner (shows on all layer pages).
+/// Default nil.
+@property(nonatomic, copy, nullable) NSString *layerKey;
 @property(nonatomic, copy, nullable) void (^onToggle)(void);
 /// Fired on an option-click instead of `onToggle` (the lane filter solos the
 /// row). When nil, an option-click falls through to `onToggle`.
 @property(nonatomic, copy, nullable) void (^onOptionToggle)(void);
+/// Draw the glyph round instead of square: the shape is the affordance, so a
+/// single-select list (one row wins, picking another moves the mark) reads as
+/// radio buttons rather than as checkboxes that mysteriously refuse to
+/// multi-select. Set by the checklist from `allowsMultipleSelection`, not by
+/// row builders. Default NO.
+@property(nonatomic) BOOL radio;
 @end
 
 // The Animated "manage" dropdown's checkable lane list. Shared chrome (search,
@@ -87,9 +108,39 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 
 @interface _KKStaticValueRow : KKLaneRowView <NSTextFieldDelegate>
 @property(nonatomic, copy) NSString *laneLabel;
+/// YES for a `KKLaneValueTypeCode` row (a code editor). The host reuses these
+/// across a rows rebuild so the editor's live tab state isn't destroyed.
+@property(nonatomic, readonly) BOOL isCodeRow;
+/// YES for a palette-generator mode-button bar row (paletteGeneratorBar). A
+/// reused row whose structure flips (bar <-> value editor) must be remade, not
+/// updated in place.
+@property(nonatomic, readonly) BOOL isPaletteBar;
+/// YES when `lane` would build the SAME row structure this row was made with
+/// (same value type, seed/toggle/choice/palette shape, integer + unit + field
+/// count). NO means the row must be REMADE, not `applyLane:`d - e.g. a shader
+/// directive edited from `// #float` to `// #percent` (adds a % unit + integer
+/// formatting) or `// #seed` to `// #float` (dice control <-> number field).
+- (BOOL)renderShapeMatchesLane:(KKLane *)lane;
+/// The uniform label-column width this row was built with. The host compares it
+/// against the current shared column on a rows update: when the widest lane
+/// name changes the column shifts, and a reused (applyLane'd) row can't adopt
+/// the new width in place, so a mismatch forces a remake (else its value
+/// control starts at a different x than the rows around it).
+@property(nonatomic, readonly) CGFloat labelColumnWidth;
 /// New constant values for the lane (Float: [v]; Crop: [w,h,x,y]).
 @property(nonatomic, copy, nullable) void (^onValue)
     (NSArray<NSNumber *> *values);
+/// For a `KKLaneValueTypeCode` row: fired (debounced) when the user edits the
+/// code editor. The host writes the new string to the lane's `codeString`.
+@property(nonatomic, copy, nullable) void (^onCodeChanged)(NSString *code);
+/// For a tabbed `KKLaneValueTypeCode` row: fired (debounced) with the full
+/// section set (@{@"name",@"code"} each). The host writes section 0 to
+/// `codeString` and the rest to `codeTabs`.
+@property(nonatomic, copy, nullable) void (^onCodeSectionsChanged)
+    (NSArray<NSDictionary<NSString *, NSString *> *> *sections);
+/// For a `codeSavable` row: fired when the save-bar name is committed.
+@property(nonatomic, copy, nullable) void (^onCodeSaveNameChanged)
+    (NSString *name);
 /// Bracket a continuous slider drag so the host coalesces it to one undo /
 /// one persist (mirrors the mini viewer).
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
@@ -119,6 +170,17 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// slot as the smooth toggle) that flips the global aspect lock. Fires with the
 /// new state; the host persists `aspectLinked` on the lane.
 @property(nonatomic, copy, nullable) void (^onLinkToggled)(BOOL on);
+/// Right-click "Add / Remove Expression" on the lane label (parameter linking).
+/// Fired with the new expression (nil clears it back to a plain lane); the host
+/// persists `linkExpression`. While an expression is set the label tints with
+/// the host accent to signal the lane is expression-driven.
+@property(nonatomic, copy, nullable) void (^onSetLinkExpression)
+    (NSString *_Nullable expr);
+/// Right-click "Format Expression" on an expression-driven lane's label. Fired
+/// with no argument; the host reformats that lane's inline editor in place (the
+/// editor owns the text, so the row can't do it). Absent unless an expression
+/// is set.
+@property(nonatomic, copy, nullable) void (^onFormatExpression)(void);
 /// A KKLaneValueTypeColor row carries a colour swatch that opens the shared
 /// colour panel. Fires YES while that panel is open and NO when it closes, so
 /// the hosting popover can suspend its transient auto-dismiss during the edit.
@@ -130,6 +192,18 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// editable once the gradient is animated.
 @property(nonatomic, copy, nullable) void (^onGradientTypeChanged)
     (NSInteger type);
+/// A `paletteLockable` colour row carries a small lock toggle beside its
+/// swatch. Fires with the new state; the host tracks which colour labels are
+/// locked so a palette reroll can skip them. Transient UI state (not
+/// persisted).
+@property(nonatomic, copy, nullable) void (^onPaletteLockToggled)(BOOL locked);
+/// A `paletteGeneratorBar` row fires this with the chosen mode index
+/// (`KKPaletteMode`) when a mode button is tapped. The host regenerates the
+/// visible palette colours, keeping the locked ones.
+@property(nonatomic, copy, nullable) void (^onPaletteGenerate)(NSInteger mode);
+/// A `paletteGeneratorBar` row's "vary" button fires this; the host nudges the
+/// current colours slightly (see `KKPaletteGenerator refinedPaletteFrom:`).
+@property(nonatomic, copy, nullable) void (^onPaletteRefine)(void);
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
@@ -137,6 +211,24 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
               reservesGutter:(BOOL)reservesGutter
             labelColumnWidth:(CGFloat)labelColumnWidth
                 contentWidth:(CGFloat)contentWidth;
+
+/// Build a supplementary EDITOR row (e.g. the parameter-link expression editor)
+/// that reuses this row's gutter geometry so its spacing matches every value
+/// row: `contentView` fills the label+value columns; `leftView` sits in the
+/// leading gutter (the remove / add-to-animated glyph slot) and `rightView` in
+/// the trailing reset column - both optional overrides, both optically centred
+/// on the FIRST line so they stay put when the row grows. `height` is the
+/// initial row height (change it later with -setEditorRowHeight: for an
+/// expanded state); `firstLineH` is the collapsed one-line height the gutter
+/// views centre on. Callers size `leftView`/`rightView` themselves.
+- (instancetype)initEditorRowWithContentView:(NSView *)contentView
+                                    leftView:(nullable NSView *)leftView
+                                   rightView:(nullable NSView *)rightView
+                                  firstLineH:(CGFloat)firstLineH
+                                      height:(CGFloat)height;
+/// Change an editor row's height (drives the expand/collapse), re-laying the
+/// stack via intrinsic content size.
+- (void)setEditorRowHeight:(CGFloat)height;
 /// Width to pin every row's label column to, so the value controls line up
 /// regardless of label length (the widest localized param name). 0 = natural.
 + (CGFloat)labelColumnWidthForLanes:(NSArray<KKLane *> *)lanes;
@@ -151,6 +243,13 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// content width (the size pill resizes without rebuilding rows). No-op
 /// otherwise.
 - (void)updateContentWidth:(CGFloat)contentWidth;
+
+// A relabel elsewhere moved the shared label column (widest name changed):
+// restretch this row's title constraint in place - remaking the row for a
+// pure width change would tear down an actively-focused editor (the code
+// editor loses focus/scroll on its own commit when its rename widens the
+// column). Re-derives a wrapping pill row's height for the new column.
+- (void)updateLabelColumnWidth:(CGFloat)labelColumnWidth;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
@@ -171,19 +270,40 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 - (NSRect)guideAddToAnimatedButtonScreenRect;
 /// Set the displayed values (skips a field currently being edited).
 - (void)applyValues:(NSArray<NSNumber *> *)values;
-/// Refresh the aspect-link glyph state without rebuilding.
-- (void)applyLink:(BOOL)on;
-/// Refresh the smooth-toggle glyph state (e.g. after cmd-Z) without rebuilding.
-- (void)applySmooth:(BOOL)on;
 - (void)applyLane:(KKLane *)lane;
+/// Update the slider's upper bound live (e.g. a `maxControllerKey` lane whose
+/// max tracks another lane) without rebuilding the row. Re-clamps the slider
+/// thumb; the typed field keeps the stored value.
+- (void)applySliderMax:(double)maxValue;
 /// Re-render fields/slider from the stored values (e.g. after the display
 /// scale changes when the feed resolves its media size).
 - (void)refreshDisplay;
 + (CGFloat)heightForLane:(KKLane *)lane;
 @end
 
+/// Toggle glyphs (link / smooth / palette-lock) implemented in
+/// KKTimelineStaticValueRow+Toggles.m, declared as a category so the primary
+/// @implementation isn't expected to provide them (silences the
+/// -Wincomplete-implementation / -Wobjc-protocol-method pair).
+@interface _KKStaticValueRow (Toggles)
+/// Refresh the aspect-link glyph state without rebuilding.
+- (void)applyLink:(BOOL)on;
+/// Refresh the smooth-toggle glyph state (e.g. after cmd-Z) without rebuilding.
+- (void)applySmooth:(BOOL)on;
+/// Refresh the palette lock toggle (padlock open/closed + tint) without firing
+/// the callback. Used to restore the row's lock state after a rebuild.
+- (void)applyPaletteLock:(BOOL)locked;
+/// Palette "refine" button target - wired from the core-built row, defined in
+/// +Toggles.m.
+- (void)_paletteRefineTapped:(id)sender;
+@end
+
 @interface _KKStaticValuesPopoverView : NSView
 @property(nonatomic, weak, nullable) NSPopover *popover;
+/// The FCP document (project) id of the clip being edited, so the expression
+/// reference picker only lists OTHER clips in the SAME project. Empty / nil =
+/// unknown, which leaves the picker library-wide (legacy behaviour).
+@property(nonatomic, copy, nullable) NSString *documentID;
 /// The inner mini-viewer. Exposed so callers (e.g. the boundary popover
 /// path that wires onion-skin filmstrip clicks) can attach extra closures
 /// without threading another init parameter.
@@ -218,6 +338,30 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 @property(nonatomic, copy, nullable) void (^onCategoryChanged)
     (NSString *category);
 
+/// Fired (debounced) when a `KKLaneValueTypeCode` row's editor is edited. The
+/// host commits the new string to the lane's `codeString`.
+@property(nonatomic, copy, nullable) void (^onHandleCode)
+    (NSString *label, NSString *code);
+
+/// Fired (debounced) when a tabbed `KKLaneValueTypeCode` row is edited. The
+/// host commits section 0 to `codeString` and the rest to `codeTabs`.
+@property(nonatomic, copy, nullable) void (^onHandleCodeSections)
+    (NSString *label, NSArray<NSDictionary<NSString *, NSString *> *> *sections)
+        ;
+
+/// Fired when the save bar's name field is committed (blur / Enter) on a
+/// `codeSavable` row. The host writes it to the lane's `codeSaveName`.
+@property(nonatomic, copy, nullable) void (^onHandleCodeSaveName)
+    (NSString *label, NSString *name);
+
+/// Persist several lane constants at once, as ONE undo entry. Used by the
+/// palette generator (rerolling N colours) - the per-lane drag path can only
+/// commit one label per bracket, so a multi-lane write needs this. The host
+/// wraps the writes in a single undo group. `labels[i]` pairs with
+/// `valuesList[i]`. nil = fall back to per-label discrete commits.
+@property(nonatomic, copy, nullable) void (^onCommitBatch)
+    (NSArray<NSString *> *labels, NSArray<NSArray<NSNumber *> *> *valuesList);
+
 /// Wire the per-keypose smooth toggle (shown on `spatialCurvable` lane rows in
 /// the keypose popover). Fired with the lane label + new state; the host
 /// writes it to the keypose at the open fraction.
@@ -227,6 +371,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// constants and keypose popovers). Fired with the lane label + new state; the
 /// host writes `aspectLinked` on the lane (global, not per-keypose).
 - (void)setOnLinkToggled:(void (^)(NSString *label, BOOL on))handler;
+
+/// Wire the label's right-click "Add / Remove Expression" (parameter linking).
+/// Fired with the lane label + new expression (nil clears it); the host writes
+/// `linkExpression` and persists.
+- (void)setOnSetLinkExpression:(void (^)(NSString *label,
+                                         NSString *_Nullable expr))handler;
 
 /// Wire the gradient radial/linear type pill (keypose editor only). Fired with
 /// the lane label + new type index; the host applies it to every keypose of the
@@ -251,6 +401,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// popover has already persisted the global preference and resized itself; the
 /// host uses this only to advance the mini-viewer guide's size step.
 @property(nonatomic, copy, nullable) void (^onSizeChanged)(NSInteger sizeIndex);
+
+/// Fired when the header's close (X) button is tapped. The host closes the
+/// popover. The button sits leftmost in the header band, before the keypose
+/// nav.
+@property(nonatomic, copy, nullable) void (^onCloseTapped)(void);
 
 /// Guide-only: screen rect of the size pill's segment `index` (0/1/2), or
 /// NSZeroRect if there's no mini-viewer (so no size pill).
@@ -292,6 +447,29 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// re-render rows without reopening (which blinks the MTKView).
 - (void)rebuildRowsWithLanes:(NSArray<KKLane *> *)lanes
               excludedLabels:(NSArray<NSString *> *)excluded;
+/// Switch an already-open static-values popover between constants and boundary
+/// (keypose) mode IN PLACE, WITHOUT recreating the mini-viewer. Recreating it
+/// (close+reopen) rebuilds the overlay into the reused ViewBridge remote
+/// window, where FCP stops forwarding the drag session (OSC freezes) and
+/// opening an undo group on its drag can abort FCP. Keeping the same
+/// mini-viewer instance and only swapping mode + edit handlers + rows + the
+/// header band preserves the working overlay. Handles BOTH directions
+/// (add/remove the keypose nav, swap the header). The bidirectional analogue of
+/// -rebuildRowsWithLanes:.
+- (void)
+    reconfigureForEditsKeypose:(BOOL)editsKeypose
+                     withLanes:(NSArray<KKLane *> *)lanes
+                excludedLabels:(NSArray<NSString *> *)excludedLabels
+                   headerTitle:(NSString *)headerTitle
+                  headerDetail:(NSString *)headerDetail
+                    headerIcon:(NSImage *)headerIcon
+                    renderMode:(KKMiniViewerRenderMode)renderMode
+                 onModeChanged:(void (^)(KKMiniViewerRenderMode))onModeChanged
+                 onHandleValue:(void (^)(NSString *,
+                                         NSArray<NSNumber *> *))onHandleValue
+                   onDragBegin:(void (^)(void))onDragBegin
+                     onDragEnd:(void (^)(void))onDragEnd
+                    onNavigate:(void (^)(NSInteger))onNavigate;
 /// Set (Advanced only) to give editable rows a leading "−" remove button that
 /// fires `handler(label)`. Must be set before rows are (re)built; the present
 /// path rebuilds once after setting it. nil = no remove gutter.
@@ -351,6 +529,13 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// Switch the open popover to category `key` (nav pill + filter + height),
 /// without firing onCategoryChanged. No-op if `key` isn't a present category.
 - (void)guideSelectCategory:(NSString *)key;
+/// Mount a host strip between the mini-viewer band and the category nav / rows,
+/// `height` points tall (0 + nil removes it). The strip OCCUPIES that height:
+/// the popover's own content height grows by it, so nothing below is clipped or
+/// overlapped. Install it before the popover is shown (the presenter's
+/// -clampContentToScreenOfView: then sizes to include it); a later call re-fits
+/// the open popover.
+- (void)setAccessoryView:(nullable NSView *)view height:(CGFloat)height;
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(nullable NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect
@@ -373,6 +558,14 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// list as the field's text. The host owns the empty/placeholder decision by
 /// leaving this nil (then `selectedLabels` drives the placeholder).
 @property(nonatomic, copy, nullable) NSString *summaryOverride;
+/// Draw the text hard against the chevron instead of from the left edge.
+/// Default NO.
+///
+/// For a trigger sitting in a value column (a lane row's `#choice dropdown`),
+/// where every other row's field is right-aligned and a left-aligned one would
+/// break the column. The Animated dropdown's own trigger fills a footer, so it
+/// stays left.
+@property(nonatomic) BOOL rightAligned;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 
@@ -387,7 +580,10 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// in.
 @interface _KKExcludedRow : NSView
 @property(nonatomic, copy, nullable) void (^onAnimate)(void);
+// `displayLabel` is the user-facing name shown in the row (a dynamic plugin's
+// separate identity vs label); pass nil to fall back to `label`.
 - (instancetype)initWithLabel:(NSString *)label
+                 displayLabel:(nullable NSString *)displayLabel
                       message:(NSString *)message
                        gutter:(BOOL)gutter;
 @end

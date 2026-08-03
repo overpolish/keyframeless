@@ -8,18 +8,18 @@
 #import <Foundation/Foundation.h>
 
 /// Per-plugin logger. Each instance routes to the OS log and to a dedicated
-/// log file under ~/Library/Logs/co.overpolish.keyframeless/.
+/// log file under ~/Library/Logs/com.keyframeless/.
 ///
 /// Prefer the macros below over the instance API:
 ///   KKLogInfo(@"Plugin ready, count=%d", n);
 ///
 /// The legacy instance API is retained for existing call sites:
-///   _log = [KKLog loggerForPlugin:@"co.overpolish.myPlugin"];
+///   _log = [KKLog loggerForPlugin:@"com.keyframeless.myPlugin"];
 ///   [_log info:@"Plugin ready"];
 @interface KKLog : NSObject
 
 /// Process-wide shared logger. Writes to the unified
-/// ~/Library/Logs/co.overpolish.keyframeless/ folder; per-process file
+/// ~/Library/Logs/com.keyframeless/ folder; per-process file
 /// separation comes from DDFileLogger's process-name-based filenames.
 + (instancetype)shared;
 
@@ -33,6 +33,11 @@
 - (void)warn:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 - (void)error:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 
+/// Synchronously drain the async log queue so pending lines hit disk. Call
+/// right before a suspected crash point so the last line isn't lost in the
+/// buffer when the process aborts.
+- (void)flush;
+
 /// Macro entry point - captures call site, routes through +shared.
 - (void)logFlagValue:(NSUInteger)flag
                 file:(const char *)file
@@ -41,6 +46,8 @@
               format:(NSString *)format, ... NS_FORMAT_FUNCTION(5, 6);
 
 @end
+
+#define KKLogFlush() [[KKLog shared] flush]
 
 #define KKLogVerbose(fmt, ...)                                                 \
   [[KKLog shared] logFlagValue:(1 << 4) /* DDLogFlagVerbose */                 \

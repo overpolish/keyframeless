@@ -357,8 +357,8 @@
 }
 
 // Walks the row state and toggles the section warning. Text comes from the
-// first disabled guide's `disabledSubtitle` (Rounded's 4 guides all share the
-// same "select a Rounded clip…" text - picking the first is fine; if a future
+// first disabled guide's `disabledSubtitle` (a plugin's guides often all share
+// the same "select a clip…" text - picking the first is fine; if a future
 // plugin wants distinct per-guide reasons it can normalise them to one shared
 // message).
 - (void)_refreshSectionWarning {

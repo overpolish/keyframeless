@@ -11,7 +11,7 @@
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
 static NSString *const kIconButtonPipelineID =
-    @"co.overpolish.keyframelesskit.IconButton";
+    @"com.keyframeless.kit.IconButton";
 static const CGFloat kScale = 2.0;
 static const CGFloat kSymbolSize = 19.0;
 static const CGFloat kHitRadius = 16.0;
@@ -160,9 +160,7 @@ static NSColor *iconButtonStrokeColor(void) {
       buildAndRegisterPipelineStateForPluginID:kIconButtonPipelineID
                                     registryID:registryID
                                    pixelFormat:pixelFormat
-                                      bundleID:@"co.overpolish"
-                                                ".keyframeless"
-                                                ".KeyframelessKit"
+                                      bundleID:@"com.keyframeless.KeyframelessKit"
                                   vertexShader:@"KKVertexShader"
                                 fragmentShader:@"KKLabelFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];

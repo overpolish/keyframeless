@@ -6,7 +6,7 @@
 #import "KKColorLanes.h"
 #import "KKGradientBarView.h"
 #import "KKGradientSampling.h"
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 #import <AppKit/AppKit.h>
 
 static NSString *_KKColorLabel(NSString *_Nullable baseName, NSString *suffix) {
@@ -39,7 +39,7 @@ NSArray<KKLane *> *KKColorLanesMake(NSString *baseName, BOOL includesDynamic,
 
   // Mode: a structural enum pill (never animatable). Default 0 = Dynamic when
   // offered, else Solid.
-  KKLane *mode = [KKLane laneWithLabel:modeLabel];
+  KKLane *mode = [KKLane laneWithKey:modeLabel label:modeLabel];
   mode.valueType = KKLaneValueTypeFloat;
   mode.integerValued = YES;
   mode.animatable = NO;
@@ -51,7 +51,7 @@ NSArray<KKLane *> *KKColorLanesMake(NSString *baseName, BOOL includesDynamic,
 
   // Solid tint (sRGB [r,g,b,a]); shown only when Mode = Solid. Channel colours
   // tint the per-channel graph curves.
-  KKLane *solid = [KKLane laneWithLabel:KKColorLanesSolidLabel(baseName)];
+  KKLane *solid = [KKLane laneWithKey:KKColorLanesSolidLabel(baseName) label:KKColorLanesSolidLabel(baseName)];
   solid.valueType = KKLaneValueTypeColor;
   solid.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
   solid.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
@@ -62,20 +62,20 @@ NSArray<KKLane *> *KKColorLanesMake(NSString *baseName, BOOL includesDynamic,
     [NSColor colorWithSRGBRed:0.45 green:0.60 blue:0.95 alpha:1.0],
     [NSColor colorWithSRGBRed:0.70 green:0.70 blue:0.70 alpha:1.0],
   ];
-  solid.visibleWhenLabel = modeLabel;
+  solid.visibleWhenKey = modeLabel;
   solid.visibleWhenValues = @[ @(_KKSolidIndex(includesDynamic)) ];
   [solid insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                          values:@[ @1.0, @1.0, @1.0, @1.0 ]]];
 
   // Gradient (composite [type, angle, <flat stops>]); shown only when Mode =
   // Gradient. Default white -> blue so it reads as a gradient out of the box.
-  KKLane *gradient = [KKLane laneWithLabel:KKColorLanesGradientLabel(baseName)];
+  KKLane *gradient = [KKLane laneWithKey:KKColorLanesGradientLabel(baseName) label:KKColorLanesGradientLabel(baseName)];
   gradient.valueType = KKLaneValueTypeGradient;
   gradient.gradientShowsTypeAngle = YES;
   gradient.componentMin = @[];
   gradient.componentMax = @[];
   gradient.animatable = animatable;
-  gradient.visibleWhenLabel = modeLabel;
+  gradient.visibleWhenKey = modeLabel;
   gradient.visibleWhenValues = @[ @(_KKGradientIndex(includesDynamic)) ];
   NSArray<KKGradientStop *> *defStops = @[
     [KKGradientStop stopWithPosition:0.0

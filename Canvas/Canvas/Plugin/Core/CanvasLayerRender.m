@@ -19,6 +19,8 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 
 // Cached tessellated stroke geometry for one layer: the vertex strip (+ the
 // dash arc-length buffer + endpoint markers), all on the GPU. Keyed by the
@@ -58,16 +60,16 @@ NSMutableArray<KKBezierPath *> *CanvasReadLayerPaths(id<PROAPIAccessing> api,
                                                      id target) {
   if (!api)
     return [NSMutableArray array];
+  __block NSString *b64 = nil;
   id<FxCustomParameterActionAPI_v4> action =
       [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action)
     return [NSMutableArray array];
-  id token = target ?: (id)action;
-  [action startAction:token];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSString *b64 = KKReadCustomParamString(getAPI, kParamLayerData);
-  [action endAction:token];
+  KKPerformUndoable(api, target ?: (id)action, nil,
+                    ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                      id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+                      b64 = KKReadCustomParamString(getAPI, kParamLayerData);
+                    });
   if (b64.length == 0)
     return [NSMutableArray array];
   NSData *blob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
@@ -1553,10 +1555,14 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
     dp.revealLeadLen = revealLeadLen;
     dp.revealTrailLen = revealTrailLen;
     [encoder setFragmentBytes:&dp length:sizeof(dp) atIndex:0];
-    if (useGradient)
-      [encoder setFragmentBytes:cv.gradientLUT
-                         length:sizeof(cv.gradientLUT)
-                        atIndex:1];
+    // ALWAYS bound, gradient or not: KKStrokeDashFragment declares `lut` at
+    // buffer(1) unconditionally and only reads it when dp.useGradient != 0, but
+    // Metal requires every declared binding to exist. Leaving it out is a
+    // violation the driver happens to tolerate - and one Metal API Validation
+    // aborts on, so it only showed up under the debugger.
+    [encoder setFragmentBytes:cv.gradientLUT
+                       length:sizeof(cv.gradientLUT)
+                      atIndex:1];
   } else if (useGradient) {
     [encoder setFragmentBytes:cv.gradientLUT
                        length:sizeof(cv.gradientLUT)
