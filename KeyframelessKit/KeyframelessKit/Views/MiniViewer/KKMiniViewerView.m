@@ -83,10 +83,11 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
 
 // The compare flags live HERE, on the view, and nowhere else. They are not
 // parameters, not lanes and not kParamUIState: an honoured FxPlug write is one
-// undo entry, so a divider dragged across the frame would push a hundred of them
-// in front of the grade the user actually wants to undo. They are not carried on
-// KKPluginInstanceState either - a rebuilt mini is a new look at the frame, and
-// a split silently still on from the last popover reads as a broken preview.
+// undo entry, so a divider dragged across the frame would push a hundred of
+// them in front of the grade the user actually wants to undo. They are not
+// carried on KKPluginInstanceState either - a rebuilt mini is a new look at the
+// frame, and a split silently still on from the last popover reads as a broken
+// preview.
 - (BOOL)compareAvailable {
   NSUInteger i = [self _activeSlotIndex];
   if (i >= _filmstripSlots.count)
@@ -111,8 +112,9 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
 }
 
 // Clamped just inside the content rect: a divider flush against an edge has no
-// grab band left on one side and can't be dragged back. No state callback - this
-// fires on every tick of a drag, and the host's controls don't depend on it.
+// grab band left on one side and can't be dragged back. No state callback -
+// this fires on every tick of a drag, and the host's controls don't depend on
+// it.
 - (void)setCompareSplitFraction:(CGFloat)fraction {
   CGFloat f = MIN(MAX(fraction, 0.02), 0.98);
   if (fabs(_compareSplitFraction - f) < 1e-6)
@@ -323,6 +325,11 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   if (_livePlaybackActive == active)
     return;
   _livePlaybackActive = active;
+  // Space pressed mid-drag: the overlay's hit-test gate only stops NEW grabs,
+  // so a drag already latched would keep tracking handles that just went
+  // invisible.
+  if (active)
+    [_overlay endInteractionForLivePlayback];
   [self _startPollTimer];
 }
 
@@ -479,11 +486,11 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
     MTLPixelFormat pixelFormat = [format isEqualToString:@"rgba16Float"]
                                      ? MTLPixelFormatRGBA16Float
                                      : MTLPixelFormatBGRA8Unorm;
-    MTLTextureDescriptor *td = [MTLTextureDescriptor
-        texture2DDescriptorWithPixelFormat:pixelFormat
-                                     width:w
-                                    height:h
-                                 mipmapped:NO];
+    MTLTextureDescriptor *td =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
+                                                           width:w
+                                                          height:h
+                                                       mipmapped:NO];
     // PixelFormatView so a renderer can take an sRGB view for a linear-light
     // working pass (e.g. a blur runs in linear, not gamma-encoded, space).
     td.usage = MTLTextureUsageShaderRead | MTLTextureUsagePixelFormatView;
@@ -797,10 +804,10 @@ static const NSUInteger kFilmstripGridCols = 5;
   // the drawable), aspect-preserved and capped at the source size so we never
   // upscale. The processed texture is only ever blitted 1:1 into its cell, so
   // rendering it at full source res and then minifying into the small popover
-  // throws away the soft falloff of soft/bounds effects - making the preview read
-  // as a tighter/dimmer glow than the viewer. Rendering at the size it's shown
-  // keeps it faithful. (Handles/OSC use the content rect, not these pixels, so
-  // this is display-only.)
+  // throws away the soft falloff of soft/bounds effects - making the preview
+  // read as a tighter/dimmer glow than the viewer. Rendering at the size it's
+  // shown keeps it faithful. (Handles/OSC use the content rect, not these
+  // pixels, so this is display-only.)
   //
   // OPT-IN: only soft/bounds effects benefit. A renderer that normalizes by the
   // dest texture's own pixel size (e.g. a transform shader divides

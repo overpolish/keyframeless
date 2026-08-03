@@ -9,6 +9,7 @@
 // Type's Mirage lanes + the colour swatches). Extracted from Plugin+CustomUI.m
 // (which just returns MirageBuildAvailableLanes()). One function, cohesive.
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKEasing.h> // the Easing lane's curve set + names
 #import <KeyframelessKit/KKSlotInstances.h>
 #import <KeyframelessKit/KKSonarTicket.h>
 #import <KeyframelessKit/KKSpectrogram.h>
@@ -864,6 +865,56 @@ MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
     mode.categorySymbol = @"arrow.triangle.2.circlepath";
     [mode insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
     [lanes addObject:mode];
+
+    // How the sweep is PACED. The curve is the timing engine's own
+    // (KKEasingCurve / KKApplyEasing - the same set the timeline's segment
+    // editor offers), applied host-side to the clip fraction before it becomes
+    // iProgress, so a template needs no code to honour it and every transition
+    // gets the option whether or not it was written with one in mind. Linear
+    // is the identity, so an untouched lane renders the frac unchanged.
+    //
+    // `// #easing default="..."` moves only the STARTING curve, for a template
+    // whose look has always been an eased one.
+    _Static_assert((NSInteger)MirageEasingCurveLinear ==
+                           (NSInteger)KKEasingCurveLinear &&
+                       (NSInteger)MirageEasingCurveEaseIn ==
+                           (NSInteger)KKEasingCurveEaseIn &&
+                       (NSInteger)MirageEasingCurveEaseOut ==
+                           (NSInteger)KKEasingCurveEaseOut &&
+                       (NSInteger)MirageEasingCurveEaseInOut ==
+                           (NSInteger)KKEasingCurveEaseInOut &&
+                       (NSInteger)MirageEasingCurveElastic ==
+                           (NSInteger)KKEasingCurveElastic &&
+                       (NSInteger)MirageEasingCurveBounce ==
+                           (NSInteger)KKEasingCurveBounce &&
+                       KK_SHADER_EASING_CURVE_COUNT == KKEasingCurveCount,
+                   "The #easing directive's curve indices ARE KKEasingCurve's; "
+                   "they are restated only because the directive header "
+                   "compiles without the kit.");
+    KKLane *easing = [KKLane laneWithKey:@"Easing" label:@"Easing"];
+    easing.valueType = KKLaneValueTypeFloat;
+    easing.integerValued = YES;
+    easing.animatable = NO;
+    easing.enabled = NO;
+    NSMutableArray<NSString *> *curveNames = [NSMutableArray array];
+    for (NSInteger c = 0; c < KKEasingCurveCount; c++)
+      [curveNames addObject:KKEasingCurveDisplayName((KKEasingCurve)c)];
+    easing.choiceLabels = curveNames;
+    // Six named curves is past where pills read - they wrap into a wall in the
+    // inspector's width, and the Mode pill above is what a pill row is FOR
+    // here (three words, always visible). This is a menu.
+    easing.choiceUsesDropdown = YES;
+    easing.componentMin = @[ @0.0 ];
+    easing.componentMax = @[ @(KKEasingCurveCount - 1) ];
+    easing.groupKey = @"Easing";
+    easing.categoryKey = @"Transition";
+    easing.categorySymbol = @"arrow.triangle.2.circlepath";
+    [easing
+        insertKeypose:[KKKeyPose
+                          keyposeAtTime:0.0
+                                 values:@[ @(MirageEasingDefaultCurveForSource(
+                                            shaderSource, NULL)) ]]];
+    [lanes addObject:easing];
   }
 
   // The plugin is Custom-only (GLSL). The Type pill and the built-in per-type
@@ -1196,6 +1247,27 @@ MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
                                   @"Mirage frames directive offset-count "
                                   @"error."),
                              KK_SHADER_MAX_FRAME_OFFSETS];
+      }
+      // `// #easing`: the starting curve of the transition's Easing lane. A
+      // name the engine doesn't have is rejected rather than ignored - falling
+      // back to Linear would look exactly like the template shipping uneased,
+      // with nothing to say the line was misspelt.
+      MirageEasingDirectiveError easingError = MirageEasingDirectiveErrorNone;
+      MirageEasingDefaultCurveForSource(code, &easingError);
+      switch (easingError) {
+      case MirageEasingDirectiveErrorNone:
+        break;
+      case MirageEasingDirectiveErrorMultiple:
+        return RLoc(@"Use exactly one `#easing` directive in the Image shader",
+                    @"Mirage duplicate easing directive error.");
+      case MirageEasingDirectiveErrorMissing:
+        return RLoc(@"`#easing` needs default=\"ease-in-out\", the curve its "
+                    @"Easing menu starts on",
+                    @"Mirage easing directive missing-default error.");
+      case MirageEasingDirectiveErrorValue:
+        return RLoc(@"`#easing default=` must be linear, ease-in, ease-out, "
+                    @"ease-in-out, elastic, or bounce",
+                    @"Mirage invalid easing curve name error.");
       }
       MirageSurfaceRingBindingError bindingError =
           MirageSurfaceRingBindingErrorNone;

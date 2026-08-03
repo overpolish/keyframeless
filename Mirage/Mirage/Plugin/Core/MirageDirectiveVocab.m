@@ -53,8 +53,8 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
             @"optional waveform.",
             @"#audio "),
           E(@"#progress", @"#progress",
-            @"A 0-100% sweep that auto-runs across a "
-            @"transition.",
+            @"Optional: hands the user a reshapeable 0-100% sweep lane. A "
+            @"transition already gets the sweep from the built-in iProgress.",
             @"#progress "),
           E(@"#color-surface", @"#color-surface",
             @"Adds the Grading panel: scopes for this effect, plus handles for "
@@ -72,6 +72,10 @@ NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void) {
             @"Also deliver the clip at other frames, for trails and other "
             @"effects that read across time.",
             @"#frames offsets=\""),
+          E(@"#easing", @"#easing",
+            @"Which curve a transition's Easing menu starts on: linear, "
+            @"ease-in, ease-out, ease-in-out, elastic, or bounce.",
+            @"#easing default=\""),
           E(@"#speed", @"#speed",
             @"Adds a Speed control that scales the shader's time.", @"#speed"),
           E(@"#seed", @"#seed",
@@ -354,7 +358,13 @@ NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
       @"luma",
       @"luma-linear", // pick=
       @"selection",   // preview=
-      @"active-key"
+      @"active-key",
+      @"linear",
+      @"ease-in",
+      @"ease-out",
+      @"ease-in-out",
+      @"elastic",
+      @"bounce" // #easing default=
     ]];
   });
   return v;

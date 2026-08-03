@@ -9,6 +9,7 @@
 #import "MirageColorProps.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageDirectiveCommon.h"
+#import "MirageEasingDirective.h"
 #import "MirageFrameOffsets.h"
 #import "MirageOSCBlock.h"
 #import "MirageScalarParse.h"
@@ -559,6 +560,31 @@ int main(void) {
     KKRequire(fabs(MirageSurfaceAngleForDelta(angular, 270.0) + 90.0) < 1e-9,
               @"a bearing wraps rather than accumulating past half a turn");
 
+    // A puck POSITION through the same pair the drag uses, which is where the
+    // one radians->degrees conversion on this surface lives. A quarter turn is
+    // 90 degrees of hue and not 1.57 of it: read in radians the whole ring
+    // would move a control 1/57th of its range, which is a drag that looks like
+    // it is barely doing anything.
+    KKRequire(fabs(MirageSurfaceBearingDegrees(0.0, 0.6) - 90.0) < 1e-9,
+              @"the puck's bearing is measured in degrees");
+    KKRequire(fabs(MirageSurfaceBearingDegrees(-0.4, 0.0) - 180.0) < 1e-9,
+              @"half a turn reads as 180, not pi");
+    KKRequire(fabs(MirageSurfaceAngleDelta(
+                       angular, MirageSurfaceBearingDegrees(-0.4, 0.0)) -
+                   180.0) < 1e-9,
+              @"a Chroma-shaped a:+180 reaches its full range at half a turn");
+    // The radius the same drag reports, which is what a `r:` control reads.
+    // Clamped at the rim so a cursor dragged outside the circle cannot push a
+    // control past the value the puck is drawn at.
+    KKRequire(fabs(MirageSurfaceDistance(0.6, 0.8) - 1.0) < 1e-9 &&
+                  fabs(MirageSurfaceDistance(3.0, 4.0) - 1.0) < 1e-9,
+              @"the rim is full deflection and past it is still the rim");
+    KKRequire(fabs(MirageSurfaceCurveDelta(radial, 100.0,
+                                           MirageSurfaceDistance(3.0, 4.0),
+                                           radial.r) -
+                   100.0) < 1e-9,
+              @"a drag past the rim reaches a radial control's max exactly");
+
     MirageSurfacePolarFit fit = {0.0, 0, 0.0, 0.0, 0};
     MirageSurfacePolarAddRadius(&fit, 0.5);
     MirageSurfacePolarAddAngle(&fit, 90.0);
@@ -1007,6 +1033,70 @@ int main(void) {
     KKRequire(frames.count == 0 &&
                   framesError == MirageFramesDirectiveErrorNone,
               @"does not read #frames-per-second as #frames");
+
+    // `// #easing`: which curve a transition's Easing lane STARTS on. Linear
+    // is the identity, so every answer that isn't an explicit, well-formed
+    // curve name has to be Linear - a shader that fails validation still
+    // renders, and it must render exactly as it did before the directive
+    // existed.
+    MirageEasingDirectiveError easingError = MirageEasingDirectiveErrorNone;
+    NSString *transitionSrc =
+        @"// #template transition\nvoid mainImage(out vec4 O, in vec2 fc) { O "
+        @"= vec4(0.0); }\n";
+    KKRequire(MirageEasingDefaultCurveForSource(transitionSrc, &easingError) ==
+                      MirageEasingCurveLinear &&
+                  easingError == MirageEasingDirectiveErrorNone,
+              @"a transition with no #easing starts on Linear, the identity");
+    easingError = MirageEasingDirectiveErrorMultiple;
+    KKRequire(MirageEasingDefaultCurveForSource(
+                  [@"// #easing default=\"ease-in-out\"\n"
+                      stringByAppendingString:transitionSrc],
+                  &easingError) == MirageEasingCurveEaseInOut &&
+                  easingError == MirageEasingDirectiveErrorNone,
+              @"parses the canonical curve spelling");
+    KKRequire(MirageEasingCurveForToken(@"Ease In/Out") ==
+                      MirageEasingCurveEaseInOut &&
+                  MirageEasingCurveForToken(@"easeInOut") ==
+                      MirageEasingCurveEaseInOut &&
+                  MirageEasingCurveForToken(@"ease_in_out") ==
+                      MirageEasingCurveEaseInOut,
+              @"separators and case are noise - the menu's own spelling works");
+    KKRequire(
+        MirageEasingCurveForToken(@"bounce") == MirageEasingCurveBounce &&
+            MirageEasingCurveForToken(@"elastic") == MirageEasingCurveElastic &&
+            MirageEasingCurveForToken(@"linear") == MirageEasingCurveLinear,
+        @"every engine curve is nameable");
+    KKRequire(MirageEasingCurveForToken(@"smooth") < 0 &&
+                  MirageEasingCurveForToken(@"") < 0,
+              @"a curve the engine doesn't have is not a curve");
+    for (NSInteger c = 0; c < KK_SHADER_EASING_CURVE_COUNT; c++)
+      KKRequire(MirageEasingCurveForToken(MirageEasingCurveToken(c)) == c,
+                @"each curve's canonical token round-trips to it");
+    KKRequire(MirageEasingDefaultCurveForSource(
+                  [@"// #easing default=\"smoothstep\"\n"
+                      stringByAppendingString:transitionSrc],
+                  &easingError) == MirageEasingCurveLinear &&
+                  easingError == MirageEasingDirectiveErrorValue,
+              @"an unknown curve name is an error, and still renders linearly");
+    KKRequire(MirageEasingDefaultCurveForSource(
+                  [@"// #easing\n" stringByAppendingString:transitionSrc],
+                  &easingError) == MirageEasingCurveLinear &&
+                  easingError == MirageEasingDirectiveErrorMissing,
+              @"#easing with no default= is an error");
+    KKRequire(
+        MirageEasingDefaultCurveForSource(
+            [@"// #easing default=\"bounce\"\n// #easing "
+             @"default=\"elastic\"\n" stringByAppendingString:transitionSrc],
+            &easingError) == MirageEasingCurveLinear &&
+            easingError == MirageEasingDirectiveErrorMultiple,
+        @"a second #easing line is an error");
+    easingError = MirageEasingDirectiveErrorMultiple;
+    KKRequire(MirageEasingDefaultCurveForSource(
+                  [@"// #easing-preset default=\"bounce\"\n"
+                      stringByAppendingString:transitionSrc],
+                  &easingError) == MirageEasingCurveLinear &&
+                  easingError == MirageEasingDirectiveErrorNone,
+              @"does not read #easing-preset as #easing");
 
     // `// #slots`: a group of controls declared once and instanced at runtime.
     MirageSlotsDirectiveError slotsError = MirageSlotsDirectiveErrorNone;

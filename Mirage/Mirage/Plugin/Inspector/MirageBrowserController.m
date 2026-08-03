@@ -70,10 +70,18 @@ static const CGFloat kPanelWidth = 300.0;
       return nil;
     MirageBrowserView *content =
         [[MirageBrowserView alloc] initWithFrame:NSZeroRect];
+    // Applying a template is the end of the browser's turn: the user's next
+    // move is on the preview, so the keyboard goes back to the popover with it,
+    // ending any search-field edit on the way. The compare shortcuts no longer
+    // depend on this (they take a panel-keyed process too), but the caret does:
+    // leaving it in Search would swallow the very next letter typed.
     content.onSelectEntry = ^(MirageCatalogEntry *e) {
       __strong typeof(weak) inner = weak;
+      if (!inner)
+        return;
       if (inner.onSelectEntry)
         inner.onSelectEntry(e);
+      [inner->_panelController returnKeyFocusToPopover];
     };
     content.onPublishEntry = ^(MirageCatalogEntry *e) {
       __strong typeof(weak) inner = weak;

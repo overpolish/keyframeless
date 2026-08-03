@@ -66,6 +66,12 @@ NS_ASSUME_NONNULL_BEGIN
   CFTimeInterval _openPopoverShownAt;
   __weak NSView *_openContentView;
   __weak KKMiniViewerView *_openContentMiniViewer;
+  // Last play state the inspector pushed down. The push is EDGE-triggered (the
+  // poller only calls through when playing flips), so a mini-viewer built while
+  // the clip is already rolling would never hear about it and would draw its
+  // whole handle overlay over the moving preview. Remembered here and seeded
+  // into every mini as it is presented.
+  BOOL _openPopoverLivePlaying;
   void (^_openContentOnClose)(void);
   // The anchor view + edge the open popover was shown against. A new show
   // reuses the live window (swap in place) ONLY when it targets the SAME
@@ -194,11 +200,6 @@ NS_ASSUME_NONNULL_BEGIN
 // Single-owner plugins seed every available lane into `_timeline`, so this is
 // the full `_availableLanes` for them.
 - (NSArray<KKLane *> *)_ownerScopedAvailableLanes;
-/// The owner a layer-navigable dropdown should open on, resolved against
-/// `lanes`: the host's LIVE selection (`constantsLaneFilter`) when it supplies
-/// one, else our stored `activeLayerKey`. nil = no owner resolved (every
-/// single-owner plugin), which leaves the nav on its first layer.
-- (nullable NSString *)_hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes;
 - (nullable KKLane *)_templateForLabel:(NSString *)label;
 - (BOOL)_isAnimatableLabel:(NSString *)label;
 - (void)_refresh;
@@ -234,6 +235,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// KKTimelineLanesView+Popovers.m.
 @interface KKTimelineLanesView (PopoversInternal)
 - (void)_showManagePopoverFromView:(NSView *)anchorView;
+/// The owner a layer-navigable dropdown should open on, resolved against
+/// `lanes`: the host's LIVE selection (`constantsLaneFilter`) when it supplies
+/// one, else our stored `activeLayerKey`. nil = no owner resolved (every
+/// single-owner plugin), which leaves the nav on its first layer.
+- (nullable NSString *)_hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes;
 /// The owner-scoped, mode-gated lane set the Animated dropdown shows; re-pulled
 /// on refresh so a companion-panel layer switch re-scopes the open dropdown.
 - (NSArray<KKLane *> *)_manageVisibleLanes;

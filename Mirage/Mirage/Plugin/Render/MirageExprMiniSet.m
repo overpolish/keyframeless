@@ -204,15 +204,40 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
   return KKMiniHandleStylePoint;
 }
 
+// The bound lane as the mini sees it: the inspector timeline's lane for the
+// block's key, else the directive's template lane. Mirrors the viewer's
+// -_exprLaneForBlock: so both surfaces gate on the same lane.
+- (KKLane *)_laneForRuntime:(MirageOSCBlockRuntime *)b {
+  KKMiniViewerRenderer *r = _renderer;
+  for (KKLane *l in r.timeline.lanes)
+    if ([l.key isEqualToString:b.laneKey])
+      return l;
+  return b.templateLane;
+}
+
 // A handle is drawn / hit-tested this frame when its lane is constant here
-// (matching the ring set) and its checklist element is visible (or Opt-reveal
-// is peeking it). The element key is the block NAME; the lane is `binds`.
+// (matching the ring set), its checklist element is visible (or Opt-reveal is
+// peeking it), AND the lane itself is visible at the fraction being previewed.
+// The element key is the block NAME; the lane is `binds`.
+//
+// That last test is the one the viewer applies in -_exprVisible: an ANIMATED
+// lane shows its control only ON a keypose (plus the flat lead-in / lead-out),
+// so playing the clip retires the handle between keyposes. Without it a ring or
+// box outlived every sibling - the position handles hide through KKPointOSCSet's
+// own keyed-at-fraction gate and the ring kept drawing over the moving preview.
+// A constant lane is visible at every fraction, so the constants popover is
+// untouched, and a live drag stays visible the same way the viewer's does.
 - (BOOL)_activeRuntime:(MirageOSCBlockRuntime *)b forContentRect:(CGRect)cr {
   KKMiniViewerRenderer *r = _renderer;
-  return r && !CGRectIsEmpty(cr) && b.elementKey.length &&
-         ![r.suppressedHandleLabels containsObject:b.elementKey] &&
-         [r isConstantLabel:b.laneKey] &&
-         [r labelVisibleOrRevealing:b.elementKey];
+  if (!r || CGRectIsEmpty(cr) || !b.elementKey.length ||
+      [r.suppressedHandleLabels containsObject:b.elementKey] ||
+      ![r isConstantLabel:b.laneKey] ||
+      ![r labelVisibleOrRevealing:b.elementKey])
+    return NO;
+  if ([_activeName isEqualToString:b.elementKey])
+    return YES;
+  return KKLaneVisibleAtFraction([self _laneForRuntime:b], r.editFraction,
+                                 KKProcessFrameDurationSeconds());
 }
 
 // The handle's overlay centre for the current lane value: bound -> forward

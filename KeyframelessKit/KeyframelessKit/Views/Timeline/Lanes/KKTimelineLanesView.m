@@ -872,12 +872,22 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     lane.codeSaveNamePlaceholder = tmpl.codeSaveNamePlaceholder;
     lane.codeHidesTitle = tmpl.codeHidesTitle;
     [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
-    lane.enabled = NO; // constant until the dropdown makes it animatable
-    [lane
-        insertKeypose:[KKKeyPose
-                          keyposeAtTime:0.0
-                                 values:[self
-                                            _defaultValuesForLabel:tmpl.key]]];
+    // A template whose default MOVES - more than one keypose - is declaring a
+    // CURVE, not a constant, and Mirage's `// #progress` identity ramp is the
+    // whole reason the lane exists. Minting the usual single keypose from the
+    // template's first value flattens that curve to its start (0 for the ramp),
+    // so the shader reads 0 on every frame and never advances. Keep the whole
+    // template curve and start animatable, which is what a moving default is.
+    if (tmpl.keyposes.count > 1) {
+      lane.enabled = YES;
+      lane.keyposes = [[NSArray alloc] initWithArray:tmpl.keyposes
+                                           copyItems:YES];
+    } else {
+      lane.enabled = NO; // constant until the dropdown makes it animatable
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:[self _defaultValuesForLabel:
+                                                             tmpl.key]]];
+    }
     [lanes addObject:lane];
   }
   // Display order: the user's drag-to-reorder list if set, else the plugin's

@@ -130,4 +130,19 @@ typedef NSArray<NSString *> *_Nonnull (^MirageSlotInstancesBlock)(
 
 @end
 
+/// Does `model` declare `label` as a `// #progress` uniform? Both render paths
+/// (the FCP render and the mini preview) answer a missing Progress lane with
+/// the clip fraction rather than the prop's parsed default of 0, and this is
+/// the question they ask - the parsed directive, not a name convention.
+static inline BOOL MirageProgressLabel(MirageShaderModel *model,
+                                       NSString *label) {
+  if (!model || !label.length)
+    return NO;
+  const MirageScalarProp *sp = model.scalarProps;
+  for (int i = 0; i < model.scalarCount; i++)
+    if (sp[i].isProgress && [label isEqualToString:@(sp[i].name)])
+      return YES;
+  return NO;
+}
+
 NS_ASSUME_NONNULL_END

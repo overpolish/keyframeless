@@ -13,13 +13,20 @@
 #import <Foundation/Foundation.h>
 
 #import "KKGLSLTranspiler.h"
+#import "MirageTemplateType.h"
 #import "Plugin.h"
 
 @implementation MiragePlugin
 @end
 
 NSString *KKFormatGLSL(NSString *source) { return source; }
-BOOL KKLooksLikeTransitionShader(NSString *source) { return NO; }
+// Not a stub in spirit: the real one is this line (KKGLSLShims.m), and the
+// transition lanes - the coverage pill, the Easing menu - only exist for a
+// source it answers YES for.
+BOOL KKLooksLikeTransitionShader(NSString *source) {
+  return MirageTemplateTypeForSource(source, NULL) ==
+         MirageTemplateTypeTransition;
+}
 KKGLSLTranspileResult *KKTranspileGLSL(NSString *source) { return nil; }
 KKGLSLTranspileResult *KKTranspileGLSLBuffer(NSString *source) { return nil; }
 MirageMotionBlurMode MirageMotionBlurModeForSource(NSString *source) {

@@ -21,6 +21,7 @@
 //   MirageScalarOSC.h           ... their on-screen controls
 //   MirageScalarParse.h         ... reading them out of the source
 //   MirageFrameOffsets.h        // #frames - the neighbour-frame offsets
+//   MirageEasingDirective.h     // #easing - a transition's starting curve
 //   MirageDirectiveValidation.h whole-source checks (duplicates, bad OSC opt-ins)
 //
 // Not for Metal (uses libm); each header guards itself just in case.
@@ -29,6 +30,7 @@
 #import "MirageColorProps.h"
 #import "MirageDirectiveCommon.h"
 #import "MirageDirectiveValidation.h"
+#import "MirageEasingDirective.h"
 #import "MirageFrameOffsets.h"
 #import "MirageScalarOSC.h"
 #import "MirageScalarParse.h"

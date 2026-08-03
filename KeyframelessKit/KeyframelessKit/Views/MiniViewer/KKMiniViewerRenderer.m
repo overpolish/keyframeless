@@ -11,13 +11,14 @@
 #import "KKOSCVisibilityModel.h"
 #import "KKResizeCursor.h"
 #import <KeyframelessKit/KKLinkBus.h>
-#import <KeyframelessKit/KKMetalDeviceCache.h>
-#import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKLocalized.h>
+#import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
+#import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKTimeline.h>
-#import <KeyframelessKit/KKWatermark.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
+#import <KeyframelessKit/KKWatermark.h>
 
 // Map a KKMiniViewerCropEditor handle index (0-7: TL, TC, TR, RC, BR, BC, BL,
 // LC) to a resize-cursor kind. Mirrors the crop box's corner/edge layout.
@@ -66,6 +67,12 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *_liveValues;
   double _liveFraction;
   BOOL _hasLiveFraction;
+  // Diagnostic only: the last (label, fractions) an override was REFUSED for,
+  // so a refusal that repeats every frame of a drag is logged once rather than
+  // sixty times a second.
+  NSString *_liveRefusedLabel;
+  double _liveRefusedAt;
+  double _liveRefusedWanted;
   BOOL _pointGrabbed;
   BOOL _rotationGrabbed;
   // Rotation drag state (set by the default rotation hooks; mirrored on the
@@ -535,6 +542,22 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     NSArray<NSNumber *> *live = _liveValues[label];
     if (live.count > 0 && fabs(self.editFraction - _liveFraction) < 1e-4)
       return live;
+    // An in-flight value that the fraction gate then refuses is a live preview
+    // the user is watching not happen: the picture stays on the committed
+    // timeline for the whole gesture and the edit appears in one step on
+    // mouse-up. Logged (once per distinct refusal) rather than silently
+    // dropped, because the two fractions name who disagreed - the pusher or the
+    // encode pass that moved editFraction under it.
+    if (live.count > 0 && (![_liveRefusedLabel isEqualToString:label] ||
+                           fabs(_liveRefusedAt - self.editFraction) > 1e-4 ||
+                           fabs(_liveRefusedWanted - _liveFraction) > 1e-4)) {
+      _liveRefusedLabel = [label copy];
+      _liveRefusedAt = self.editFraction;
+      _liveRefusedWanted = _liveFraction;
+      KKLogWarn(@"[MiniViewer] live override for \"%@\" refused: pushed at "
+                @"fraction %.6f, rendering at %.6f",
+                label, _liveFraction, self.editFraction);
+    }
   }
   for (KKLane *lane in self.timeline.lanes) {
     if (![lane.key isEqualToString:label])
@@ -803,16 +826,17 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // Rebuilt only when those change - the preview redraws at 60fps, so allocating
 // per frame would churn badly at high sample counts.
 - (NSArray<id<MTLTexture>> *)_motionBlurSampleTexturesCount:(NSInteger)n
-                                                       like:(id<MTLTexture>)dest {
+                                                       like:(id<MTLTexture>)
+                                                                dest {
   if (_mbSampleTextures.count == (NSUInteger)n && _mbSampleW == dest.width &&
       _mbSampleH == dest.height && _mbSampleFormat == dest.pixelFormat)
     return _mbSampleTextures;
 
-  MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:dest.pixelFormat
-                                   width:dest.width
-                                  height:dest.height
-                               mipmapped:NO];
+  MTLTextureDescriptor *td =
+      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:dest.pixelFormat
+                                                         width:dest.width
+                                                        height:dest.height
+                                                     mipmapped:NO];
   td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   td.storageMode = MTLStorageModePrivate;
   NSMutableArray<id<MTLTexture>> *out = [NSMutableArray arrayWithCapacity:n];
@@ -834,9 +858,10 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                          commandBuffer:(id<MTLCommandBuffer>)cb {
   NSInteger n = [self _motionBlurSampleCount];
   NSArray<id<MTLTexture>> *samples = [self _motionBlurSampleTexturesCount:n
-                                                                    like:dest];
+                                                                     like:dest];
   id<MTLRenderPipelineState> acc = [self _motionBlurAccumulatePipelineFor:dest];
-  if (samples.count != (NSUInteger)n || !acc) // fall back rather than draw nothing
+  if (samples.count != (NSUInteger)n ||
+      !acc) // fall back rather than draw nothing
     return [self encodeEffectFromSource:source into:dest commandBuffer:cb];
 
   // Match the render's sample distribution exactly (see
@@ -852,9 +877,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     // Assign the ivar, not the property: subclasses may react to the setter,
     // and this is a transient value restored before anything else observes it.
     _editFraction = MAX(0.0, MIN(1.0, base - shutterFrac * t));
-    ok = [self encodeEffectFromSource:source
-                                 into:samples[i]
-                        commandBuffer:cb];
+    ok = [self encodeEffectFromSource:source into:samples[i] commandBuffer:cb];
   }
   _previewMotionBlurSampling = NO;
   _editFraction = base;
@@ -867,8 +890,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
   rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
 
-  id<MTLRenderCommandEncoder> enc =
-      [cb renderCommandEncoderWithDescriptor:rpd];
+  id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
   float dw = (float)dest.width, dh = (float)dest.height;
   [enc setViewport:(MTLViewport){0, 0, dw, dh, -1.0, 1.0}];
   KKVertex2D verts[] = {
@@ -881,13 +903,17 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   [enc setVertexBytes:verts
                length:sizeof(verts)
               atIndex:KKVertexInputIndex_Vertices];
-  [enc setVertexBytes:&vp length:sizeof(vp) atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setVertexBytes:&vp
+               length:sizeof(vp)
+              atIndex:KKVertexInputIndex_ViewportSize];
   [enc setRenderPipelineState:acc];
   for (NSUInteger i = 0; i < samples.count; i++)
     [enc setFragmentTexture:samples[i] atIndex:i];
   int sc = (int)n;
   [enc setFragmentBytes:&sc length:sizeof(sc) atIndex:0];
-  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+          vertexStart:0
+          vertexCount:4];
   [enc endEncoding];
   return YES;
 }
@@ -899,7 +925,10 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
       buildAndRegisterPipelineStateForPluginID:@"KKMiniViewerMotionBlur"
                                     registryID:dest.device.registryID
                                    pixelFormat:dest.pixelFormat
-                                      bundleID:[NSBundle bundleForClass:[KKMiniViewerRenderer class]]
+                                      bundleID:[NSBundle
+                                                   bundleForClass:
+                                                       [KKMiniViewerRenderer
+                                                           class]]
                                                    .bundleIdentifier
                                   vertexShader:@"KKVertexShader"
                                 fragmentShader:@"KKMotionBlurAccumulateFragment"

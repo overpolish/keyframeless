@@ -5,7 +5,9 @@
 
 #import "KKRadialOSCSet_Protected.h"
 
-#import <KeyframelessKit/KKTimeline.h> // KKLane / KKTimeline (aspectLinked)
+#import <KeyframelessKit/KKPluginHost.h> // KKProcessFrameDurationSeconds
+#import <KeyframelessKit/KKTimeline.h>   // KKLane / KKTimeline (aspectLinked)
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneVisibleAtFraction
 #import <math.h>
 
 @implementation KKRadialOSCSet {
@@ -49,10 +51,23 @@
 }
 
 - (BOOL)isActiveLabel:(NSString *)label forContentRect:(CGRect)cr {
-  return !CGRectIsEmpty(cr) && label.length &&
-         ![_renderer.suppressedHandleLabels containsObject:label] &&
-         [_renderer isConstantLabel:label] &&
-         [_renderer labelVisibleOrRevealing:label];
+  if (CGRectIsEmpty(cr) || !label.length ||
+      [_renderer.suppressedHandleLabels containsObject:label] ||
+      ![_renderer labelVisibleOrRevealing:label])
+    return NO;
+  // Constant-or-on-keypose, the same editFraction sweep every other handle set
+  // applies (KKPointOSCSet's arc, MirageExprMiniSet's rings). This replaces a
+  // stricter constant-only test that made a radial handle vanish for good the
+  // moment its lane animated - now it behaves like its siblings: constants
+  // always, animated lanes on their keyposes, hidden in between.
+  KKLane *lane = nil;
+  for (KKLane *l in _renderer.timeline.lanes)
+    if ([l.key isEqualToString:label]) {
+      lane = l;
+      break;
+    }
+  return KKLaneVisibleAtFraction(lane, _renderer.editFraction,
+                                 KKProcessFrameDurationSeconds());
 }
 
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label {

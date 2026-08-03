@@ -14,8 +14,8 @@
   BOOL _toolbarDragging;
   BOOL _toolDrawing;
   // The compare divider drag. Deliberately NOT routed through `_dragging`: that
-  // path opens the host's undo group around the delegate's value writes, and the
-  // divider writes no value at all - it is view state.
+  // path opens the host's undo group around the delegate's value writes, and
+  // the divider writes no value at all - it is view state.
   BOOL _compareDragging;
   NSTrackingArea *_optTrackingArea;
   BOOL _optReveal;
@@ -77,6 +77,16 @@
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   NSPoint p = [self convertPoint:pt fromView:self.superview];
+  // Live playback draws NO on-screen controls (-drawRect: here and the whole
+  // overlay span in -drawInMTKView:), so nothing this overlay owns may be
+  // grabbed either - otherwise the pointer catches handles, the toolbar and the
+  // compare divider that are not on screen. This is the ONE place a pointer
+  // resolves to a mini control, so declining the point here disables every
+  // set's hit-test at once. Falling through to the canvas keeps the surface
+  // behaving like empty preview: click-drag pan, scroll/pinch zoom,
+  // double-click reset and the background pick all live on KKMiniViewerView.
+  if (c.livePlaybackActive)
+    return nil;
   // The toolbar (chrome) sits on top: claim its hits before the handles so the
   // click doesn't fall through to a layer drag / pan.
   if ([d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
@@ -187,10 +197,10 @@
 
 - (void)mouseDown:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
-  // A press means any earlier divider drag is over, even if its mouseUp was lost
-  // to another window (the cross-popover case the handle drag installs monitors
-  // for). Nothing is left open by a dropped divider drag, so clearing the flag
-  // is the whole recovery.
+  // A press means any earlier divider drag is over, even if its mouseUp was
+  // lost to another window (the cross-popover case the handle drag installs
+  // monitors for). Nothing is left open by a dropped divider drag, so clearing
+  // the flag is the whole recovery.
   _compareDragging = NO;
   // Free-drawing tool (pen): route every press here (the delegate's controller
   // does its own double-click detection). The toolbar (chrome) still wins; no
@@ -268,8 +278,8 @@
       return;
     }
   }
-  // Compare divider. Checked AFTER asking the delegate whether it wants the same
-  // point, so the divider loses every tie: with a narrow grab band and the
+  // Compare divider. Checked AFTER asking the delegate whether it wants the
+  // same point, so the divider loses every tie: with a narrow grab band and the
   // delegate given first refusal, a point OSC parked at frame centre stays
   // grabbable with the split on - the same nearest-within-reach arbitration the
   // colour pucks use, with the divider's reach deliberately the smaller one.
@@ -279,8 +289,8 @@
   {
     NSPoint dp = [self convertPoint:e.locationInWindow fromView:nil];
     BOOL delegateWants =
-        [d respondsToSelector:@selector(miniViewer:handleHitAtPoint:
-                                                  contentRect:)] &&
+        [d respondsToSelector:@selector(
+                                  miniViewer:handleHitAtPoint:contentRect:)] &&
         [d miniViewer:c
             handleHitAtPoint:dp
                  contentRect:[c contentRectInViewPoints]];
@@ -439,6 +449,41 @@
   if (c.onHandleDragEnd)
     c.onHandleDragEnd();
   [self setNeedsDisplay:YES];
+}
+
+// Space pressed mid-drag. The drag is FINISHED where it stands rather than
+// reverted: the handle has been writing its value live the whole time, so the
+// user has already seen (and heard the render of) the value they are on, and
+// there is no restore-original path in this surface to revert to. Finishing
+// keeps onHandleDragBegin/End balanced - the same reason -mouseDown: ends a
+// stale drag - so the plugin's undo group closes and the move lands as ONE undo
+// entry. The alternative, letting the drag continue against invisible handles,
+// is exactly the bug this gate exists to stop.
+- (void)endInteractionForLivePlayback {
+  if (_compareDragging) {
+    _compareDragging = NO;
+    [self _removeDragMonitors];
+  }
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if (_toolDrawing) {
+    _toolDrawing = NO;
+    if (self.window &&
+        [d respondsToSelector:@selector(miniViewer:toolUpAtPoint:contentRect:)])
+      [d miniViewer:c
+          toolUpAtPoint:[self
+                            convertPoint:[self.window convertPointFromScreen:
+                                                          NSEvent.mouseLocation]
+                                fromView:nil]
+            contentRect:[c contentRectInViewPoints]];
+  }
+  if (_toolbarDragging) {
+    _toolbarDragging = NO;
+    if ([d respondsToSelector:@selector(miniViewerToolbarMouseUp:)])
+      [d miniViewerToolbarMouseUp:c];
+  }
+  [self _setOptReveal:NO];
+  [self _endActiveHandleDragReason:@"live playback started"];
 }
 
 // Feed a drag tick from a SCREEN-space location: a monitored event belongs to
@@ -604,8 +649,16 @@
 }
 
 - (void)mouseMoved:(NSEvent *)e {
-  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
   KKMiniViewerView *c = self.canvas;
+  // Tracking-area moves are delivered to the owner whether or not -hitTest:
+  // claimed the point, so the playback gate is repeated here: no resize/move
+  // cursor over an invisible handle, and no Opt-peek reveal of hidden ones.
+  if (c.livePlaybackActive) {
+    [self _setOptReveal:NO];
+    [[NSCursor arrowCursor] set];
+    return;
+  }
+  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   // Drawing tool active: feed the cursor (rubber-band + snap ghost) + redraw,
   // but still let the toolbar own the cursor when hovering it (below).
@@ -651,7 +704,9 @@
 }
 
 - (void)flagsChanged:(NSEvent *)e {
-  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
+  [self _setOptReveal:self.canvas.livePlaybackActive
+                          ? NO
+                          : (e.modifierFlags & NSEventModifierFlagOption) != 0];
 }
 
 - (void)mouseExited:(NSEvent *)e {

@@ -10711,6 +10711,174 @@
         }
       }
     },
+    "Use exactly one `#easing` directive in the Image shader": {
+      "comment": "Mirage duplicate easing directive error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwende genau eine `#easing`-Direktive im Image-Shader"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa exactamente una directiva `#easing` en el shader Image"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "N’utilisez qu’une seule directive `#easing` dans le shader Image"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image シェーダーでは `#easing` ディレクティブをちょうど 1 つ使用してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image 셰이더에는 `#easing` 지시문을 정확히 하나만 사용하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Image 着色器中只能使用一条 `#easing` 指令"
+          }
+        }
+      }
+    },
+    "`#easing` needs default=\"ease-in-out\", the curve its Easing menu starts on": {
+      "comment": "Mirage easing directive missing-default error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing` benötigt default=\"ease-in-out\" – die Kurve, mit der sein Easing-Menü startet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing` necesita default=\"ease-in-out\", la curva con la que empieza su menú Suavizado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing` exige default=\"ease-in-out\", la courbe sur laquelle démarre son menu Lissage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing` には default=\"ease-in-out\" が必要です。イージングメニューが最初に選ぶカーブを指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing`에는 default=\"ease-in-out\"이 필요합니다. 이징 메뉴가 시작할 커브를 지정하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing` 需要 default=\"ease-in-out\"，即其缓动菜单的起始曲线"
+          }
+        }
+      }
+    },
+    "`#easing default=` must be linear, ease-in, ease-out, ease-in-out, elastic, or bounce": {
+      "comment": "Mirage invalid easing curve name error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing default=` muss linear, ease-in, ease-out, ease-in-out, elastic oder bounce sein"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing default=` debe ser linear, ease-in, ease-out, ease-in-out, elastic o bounce"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing default=` doit être linear, ease-in, ease-out, ease-in-out, elastic ou bounce"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing default=` は linear、ease-in、ease-out、ease-in-out、elastic、bounce のいずれかにしてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing default=`은 linear, ease-in, ease-out, ease-in-out, elastic, bounce 중 하나여야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#easing default=` 必须为 linear、ease-in、ease-out、ease-in-out、elastic 或 bounce"
+          }
+        }
+      }
+    },
+    "Which curve a transition's Easing menu starts on: linear, ease-in, ease-out, ease-in-out, elastic, or bounce.": {
+      "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit welcher Kurve das Easing-Menü einer Transition startet: linear, ease-in, ease-out, ease-in-out, elastic oder bounce."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con qué curva empieza el menú Suavizado de una transición: linear, ease-in, ease-out, ease-in-out, elastic o bounce."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La courbe sur laquelle démarre le menu Lissage d’une transition : linear, ease-in, ease-out, ease-in-out, elastic ou bounce."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トランジションのイージングメニューが最初に選ぶカーブ: linear、ease-in、ease-out、ease-in-out、elastic、bounce。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "트랜지션의 이징 메뉴가 시작할 커브: linear, ease-in, ease-out, ease-in-out, elastic, bounce."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过渡的缓动菜单从哪条曲线开始：linear、ease-in、ease-out、ease-in-out、elastic 或 bounce。"
+          }
+        }
+      }
+    },
     "Use exactly one `#frames` directive in the Image shader": {
       "comment": "Mirage duplicate frames directive error.",
       "extractionState": "manual",

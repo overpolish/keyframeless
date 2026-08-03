@@ -64,6 +64,14 @@ static NSString *const kSlotlessSource =
     @"uniform vec4 uTint;\n"
     @"void mainImage(out vec4 o, in vec2 c) { o = uTint * uAmount; }\n";
 
+// The `// #progress` opt-in. Its lane is the one template default in the whole
+// codebase that MOVES, so it is the one the seeding path must not flatten.
+static NSString *const kProgressSource =
+    @"// #template transition\n"
+    @"// #progress label=\"Progress\"\n"
+    @"uniform float uProgress;\n"
+    @"void mainImage(out vec4 o, in vec2 c) { o = vec4(uProgress); }\n";
+
 static NSString *const kSlotsSource =
     @"// #template generator\n"
     @"// #slots name=\"Colours\" max=4 min=1 default=2\n"
@@ -144,6 +152,81 @@ int main(void) {
   @autoreleasepool {
     // --- (a) a slotless template, unracked --------------------------------
     KKAssertLegacyIdentity(kSlotlessSource, @"slotless legacy");
+
+    // --- (a2) the `#progress` lane IS a ramp -------------------------------
+    //
+    // A Progress lane that collapses to its first keypose reads 0 on every
+    // frame, which is a transition frozen at its from-state. The ramp, its
+    // linear first interval (KKInterval defaults to EaseInOut) and its 0->100
+    // endpoints are the contract the directive documents.
+    {
+      NSArray<KKLane *> *progressLanes = MirageBuildAvailableLanesForRack(
+          KKTimelineWithCode(kMirageRackSentinelEntryID, kProgressSource, nil),
+          nil, nil, nil);
+      KKLane *progress = KKLaneWithKey(progressLanes, @"uProgress");
+      KKRequire(progress != nil, @"the #progress directive builds a lane");
+      KKRequire(progress.keyposes.count == 2,
+                @"the #progress lane defaults to a two-keypose ramp");
+      KKRequire(
+          progress.keyposes.firstObject.time == 0.0 &&
+              progress.keyposes.firstObject.values.firstObject.doubleValue ==
+                  0.0,
+          @"the #progress ramp starts at 0% on the first frame");
+      KKRequire(
+          progress.keyposes.lastObject.time == 1.0 &&
+              progress.keyposes.lastObject.values.firstObject.doubleValue ==
+                  100.0,
+          @"the #progress ramp reaches 100% on the last frame");
+      KKRequire(progress.keyposes.firstObject.outgoing.curve ==
+                    KKIntervalCurveLinear,
+                @"the #progress ramp is linear, matching iProgress");
+    }
+
+    // --- (a3) every transition gets the Easing lane ------------------------
+    //
+    // The lane is core to `#template transition`, the way the Transition /
+    // In / Out pill is: no directive earns it, and no template has to spend
+    // code on it. What a template CAN say is where the menu starts.
+    {
+      NSArray<KKLane *> *lanes = MirageBuildAvailableLanesForRack(
+          KKTimelineWithCode(kMirageRackSentinelEntryID, kProgressSource, nil),
+          nil, nil, nil);
+      KKLane *easing = KKLaneWithKey(lanes, @"Easing");
+      KKRequire(easing != nil, @"a transition gets an Easing lane");
+      KKRequire(!easing.animatable,
+                @"Easing is a choice for the whole item, like Transition Mode");
+      KKRequire(easing.choiceLabels.count == (NSUInteger)KKEasingCurveCount,
+                @"the menu offers exactly the engine's curves");
+      KKRequire(
+          [easing.choiceLabels.firstObject
+              isEqualToString:KKEasingCurveDisplayName(KKEasingCurveLinear)],
+          @"the curves are the engine's own, under its own names");
+      KKRequire(
+          easing.keyposes.count == 1 &&
+              easing.keyposes.firstObject.values.firstObject.doubleValue ==
+                  (double)KKEasingCurveLinear,
+          @"a transition that says nothing starts on Linear");
+      for (double t = 0.0; t <= 1.0; t += 0.05)
+        KKRequire(KKApplyEasing(t, KKEasingCurveLinear, 0.5, 0.5) == t,
+                  @"Linear is the identity - today's transitions are byte "
+                  @"identical");
+
+      NSString *easedSource = [@"// #easing default=\"ease-in-out\"\n"
+          stringByAppendingString:kProgressSource];
+      NSArray<KKLane *> *easedLanes = MirageBuildAvailableLanesForRack(
+          KKTimelineWithCode(kMirageRackSentinelEntryID, easedSource, nil), nil,
+          nil, nil);
+      KKLane *eased = KKLaneWithKey(easedLanes, @"Easing");
+      KKRequire(eased.keyposes.firstObject.values.firstObject.doubleValue ==
+                    (double)KKEasingCurveEaseInOut,
+                @"#easing default= moves where the menu starts");
+
+      NSArray<KKLane *> *generatorLanes = MirageBuildAvailableLanesForRack(
+          KKTimelineWithCode(kMirageRackSentinelEntryID, kSlotlessSource, nil),
+          nil, nil, nil);
+      KKRequire(KKLaneWithKey(generatorLanes, @"Easing") == nil,
+                @"only a transition has a sweep to pace");
+    }
 
     // --- (b) a `#slots` template with registered instances, unracked ------
     //

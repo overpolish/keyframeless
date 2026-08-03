@@ -63,6 +63,14 @@ NS_ASSUME_NONNULL_BEGIN
          popoverWindow:(nullable NSWindow *)popoverWindow
     popoverContentView:(nullable NSView *)contentView;
 
+/// Hand the keyboard back to the popover this panel rides beside.
+///
+/// Call it when an action STARTED in the panel is finished with (a template
+/// applied, a row committed): the popover owns the keyboard shortcuts, and a
+/// panel that took key for a text field would otherwise keep it long after the
+/// text field mattered. A no-op when the panel isn't the key window.
+- (void)returnKeyFocusToPopover;
+
 /// Tear the panel down (popover closed, or the host is going away).
 - (void)hide;
 

@@ -9,7 +9,7 @@ A Custom shader can expose its own **inspector controls** and **on-screen contro
 
 - **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu, pill, or multi-select checklist), `#angle` (a dial), `#color` (a colour well), `#gradient` (a colour ramp), `#multi` (2-4 numbers), `#random` (a dice field).
 - **Spatial controls:** `#point` (a draggable position handle). Add `osc` to a value control for an on-screen ring, box, or rotation ring that edits the same lane.
-- **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep; `#frames` delivers the source clip at other frames.
+- **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` hands the user a transition's sweep curve (the sweep itself is the built-in `iProgress`, no directive needed); `#frames` delivers the source clip at other frames; `#easing` picks which curve a transition's shared Easing menu starts on.
 - **Grading:** `#color-surface` opts the shader into the inspector's Color panel - a scope you can drag - and `surface=` maps a control onto its puck.
 - **Repeatable:** `#slots` ... `#slots-end` wraps a group of controls the user adds and removes copies of, numbered with `{n}`.
 - **Template type:** every Image shader requires exactly one `#template generator|filter|layout|transition|color-transform` directive.
@@ -26,7 +26,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 **Rules that always hold:**
 
 - The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, `transition`, or `color-transform`. This drives browser classification and runtime input behavior.
-- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The whole-shader directives (`#speed` / `#seed` / `#grain` / `#template` / `#alpha` / `#motionblur` / `#frames` / `#color-surface` / `#slots` / `#slots-end`) are the exception: they annotate nothing and stand on their own line.
+- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The whole-shader directives (`#speed` / `#seed` / `#grain` / `#template` / `#alpha` / `#motionblur` / `#frames` / `#easing` / `#color-surface` / `#slots` / `#slots-end`) are the exception: they annotate nothing and stand on their own line.
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
@@ -133,7 +133,7 @@ Values are compared after rounding, matching choice indices and integer controls
 | `#gradient`      | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count                                      |
 | `#float`         | `float n;`         | slider                                           | the raw value                                                                                        |
 | `#percent`       | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                                                |
-| `#progress`      | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** - transition progress; see below                                                            |
+| `#progress`      | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** - OPT-IN reshapeable sweep; the sweep itself is the built-in `iProgress`, see below         |
 | `#int`           | `float n;`         | integer slider                                   | `int`                                                                                                |
 | `#random`        | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                                                |
 | `#angle`         | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)                                                               |
@@ -148,6 +148,7 @@ Values are compared after rounding, matching choice indices and integer controls
 | `#template`      | _(none)_           | no separate control                              | declares `generator`, `filter`, `layout`, or `transition`; transition adds the shared coverage pills |
 | `#color-surface` | _(none)_           | the Color panel (a draggable scope)              | nothing directly - controls opt in with `surface=`                                                   |
 | `#frames`        | _(none)_           | no separate control                              | the source clip at other frames: `iNeighborAt(i, uv)`, `iNeighborCount`, `iNeighborOffset(i)`        |
+| `#easing`        | _(none)_           | no separate control                              | which curve a transition's shared Easing menu starts on                                              |
 | `#slots`         | _(none)_           | repeats the controls it wraps, per instance      | each uniform inside becomes `[max]`, plus an injected `u<Name>Count`                                 |
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
@@ -258,9 +259,9 @@ void mainImage(out vec4 O, in vec2 fc) {
 
 Without it, that shader can't work: the corner instance samples `iChannel0`, gets `a = 1`, and covers the clip below with clamped edge pixels smeared out from the box.
 
-### `#progress` and `iProgress` (transitions)
+### `iProgress` (transitions) and the optional `#progress` lane
 
-Every shader gets a built-in **`iProgress`**: the clip fraction, `0` at the effect's first frame and `1` at its last, rising linearly. In a Motion transition template that window IS the transition, so `iProgress` is the GL Transitions `progress` with nothing to declare:
+**`iProgress` is how a transition reads its sweep.** It is built in, always available, needs no declaration, and advances by itself over the item: the clip fraction, `0` at the effect's first frame and `1` at its last, paced by the user's Easing choice (Linear by default, which is the identity). In a Motion transition template that window IS the transition, so `iProgress` is the GL Transitions `progress`:
 
 ```glsl
 void mainImage(out vec4 O, in vec2 fc)
@@ -272,16 +273,37 @@ void mainImage(out vec4 O, in vec2 fc)
 
 `mixTransitionColors` is injected, not declared. See **Injected helpers** below.
 
-`// #progress` gives the user **control over the curve**:
+Write a transition against `iProgress` unless you have a reason not to. A transition's own SIGNATURE curve - a whip's cubic ratio, a card flip's snap - belongs baked into the shader, applied to `iProgress`, because that curve is the effect's look. A plain ease is not: the user has a menu for that.
+
+#### The Easing lane
+
+Every `// #template transition` gets a non-animatable **Easing** menu alongside the Transition / In / Out pill, with no code at all. Its curves are the timing engine's own - the same set the timeline's segment editor offers:
+
+**Linear** (the identity), **Ease In**, **Ease Out**, **Ease In/Out**, **Elastic**, **Bounce**.
+
+The chosen curve is applied HOST-SIDE, to the clip fraction, before it becomes `iProgress`. The shader sees only the eased value, so a baked signature curve composes on top of the user's choice rather than fighting it. `iTime` is never eased: Speed and Seed pace the shader's motion, Easing paces the cut, and every curve still lands exactly on `1.0` at the edit.
+
+A template that has always looked eased says so, and stops baking it:
+
+```glsl
+// #template transition
+// #easing default="ease-in-out"
+```
+
+`default=` takes `linear`, `ease-in`, `ease-out`, `ease-in-out`, `elastic` or `bounce` (separators and case are ignored, so `Ease In/Out` as the menu spells it also works). It moves only where the menu STARTS - the user still picks any curve. Declare nothing and the menu starts on Linear, which renders exactly the raw clip fraction. Only one `#easing` line per Image shader, and an unknown curve name is an error rather than a silent fallback.
+
+`// #progress` is a separate, **opt-in** feature: it adds a user-reshapeable Progress lane on the timing engine.
 
 ```glsl
 // #progress label="Progress"
 uniform float uProgress;
 ```
 
-Unlike every other directive, its lane defaults to a **ramp** rather than a constant: 0% at the start, 100% at the end, linear. So a `#progress` lane left untouched evaluates to exactly the same thing as `iProgress`, and declaring it never changes what the shader does. What it adds is the timing engine - the user can ease it, move the keyposes, or reshape it entirely, which is something the upstream GL Transitions spec (linear only) can't express.
+Unlike every other directive, its lane defaults to a **ramp** rather than a constant: 0% at the start, 100% at the end, linear. Left untouched it evaluates to exactly what `iProgress` does, so declaring it changes nothing on its own. What it adds is the lane - the user can ease it, move the keyposes, or reshape it entirely, which is something the upstream GL Transitions spec (linear only) can't express.
 
-Use `iProgress` when the shader should always run linearly; use `#progress` when the transition's pacing is worth exposing. Note the uniform receives **0..1** even though the inspector shows 0-100%, matching `#percent`.
+The two reshapers COMPOSE, in a stated order: **Easing paces the sweep, the lane shapes it.** The eased fraction is the clock, and the Progress lane is read at the moment that clock has reached - `lane(ease(t))`. That is what keeps the directive's contract true: an untouched Progress lane still evaluates to exactly `iProgress`, whichever curve the Easing menu is on.
+
+So: `iProgress` is the default and the fallback; declare `#progress` only when handing the user the pacing curve is a feature of that particular transition. Declaring it is not a substitute for shaping the sweep yourself. Note the uniform receives **0..1** even though the inspector shows 0-100%, matching `#percent`.
 
 ### `#template` and shader behavior
 
@@ -299,6 +321,8 @@ Every Image shader declares what it is:
 - **Transition** binds the outgoing clip to `iChannel0` and incoming clip to `iChannel1`.
 - **In** binds transparent black to `iChannel0`, allowing the incoming clip to appear over the timeline beneath it.
 - **Out** binds transparent black to `iChannel1`, allowing the outgoing clip to disappear into the timeline beneath it.
+
+  It also gets the shared **Easing** menu, which paces `iProgress` (see above). `// #easing default="..."` picks where that menu starts.
 
 - **color-transform** converts a declared camera or display encoding into a practical output space. The shipped **Color Transform** is standalone and shader-backed, so its transformed pixels flow normally into effects stacked after it. A `color-transform` shader consumes and produces the host's LINEAR values on a float destination: the ordinary Shadertoy gamma round-trip is skipped on both the source and the output so log curves and wide-gamut linear values survive. Both of its menus therefore name a real space rather than offering an "unknown" entry, because a transform cannot start from an undeclared origin. An ordinary colour-managed SDR clip arrives as `Linear Rec.709`, which is the default on both sides and an exact identity. To bypass the transform, set Mix to 0.
 

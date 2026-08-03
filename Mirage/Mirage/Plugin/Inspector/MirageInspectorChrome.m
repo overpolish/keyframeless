@@ -141,17 +141,15 @@ static BOOL MirageRespondsAsEditor(NSResponder *responder) {
          ((NSText *)responder).isEditable;
 }
 
-// The key window is asked first and taken as the answer when there is one. A
-// popover in the ViewBridge process routinely leaves an editable text view as
-// some other window's first responder long after that window stopped receiving
-// keys, so scanning every window unconditionally would disable the shortcuts
-// for the rest of the session.
+// The key window is the whole answer. Typing goes to the first responder of the
+// window that holds the keyboard and nowhere else, so a text object in any
+// other window is not editing however much it looks it - and a popover in the
+// ViewBridge process routinely leaves an editable text view as some other
+// window's first responder long after that window stopped receiving keys.
+// Scanning those windows (which is what the no-key-window case used to do) read
+// a browser panel's search field as an edit in progress and disabled the
+// compare shortcuts for the rest of the session.
 BOOL MirageTextEditingInProgress(void) {
   NSWindow *key = NSApp.keyWindow;
-  if (key)
-    return MirageRespondsAsEditor(key.firstResponder);
-  for (NSWindow *window in NSApp.windows)
-    if (window.isVisible && MirageRespondsAsEditor(window.firstResponder))
-      return YES;
-  return NO;
+  return key ? MirageRespondsAsEditor(key.firstResponder) : NO;
 }

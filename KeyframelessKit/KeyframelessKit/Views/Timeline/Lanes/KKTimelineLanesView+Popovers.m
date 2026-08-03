@@ -443,6 +443,11 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   _openPopoverAnchorView = anchor;
   KKFindMiniViewer(content).grabsKeyFocusOnClick =
       self.miniGrabsKeyFocusOnClick;
+  // Seed the play state. -setOpenPopoverLivePlaying: only fires on a FLIP, so a
+  // popover opened (or re-anchored, which rebuilds its content) mid-playback
+  // would otherwise sit at NO for the whole run and paint every handle over the
+  // moving preview.
+  _openContentMiniViewer.livePlaybackActive = _openPopoverLivePlaying;
 
   if (swapInPlace) {
     // Never close+reopen for a same-anchor switch - the swap keeps the window
@@ -1263,6 +1268,10 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 }
 
 - (void)setOpenPopoverLivePlaying:(BOOL)playing {
+  // Remembered even with no popover open: this is the only place the inspector
+  // tells us, and it tells us once per flip, so a popover presented later reads
+  // it from here (see the seed in -_showPopoverWithContent:).
+  _openPopoverLivePlaying = playing;
   KKMiniViewerView *mini = _openContentMiniViewer;
   if (!mini)
     return;

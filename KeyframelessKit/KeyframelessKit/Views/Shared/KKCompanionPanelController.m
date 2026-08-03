@@ -23,8 +23,7 @@ static const NSTimeInterval kFadeDuration = 0.28;
 static const CGFloat kSlideDistance = 12.0;
 
 // Borderless panels can't become key by default, which blocks text editing
-// (inline rename). `becomesKeyOnlyIfNeeded` keeps button clicks from stealing
-// focus while still letting a text field become key when edited.
+// (inline rename, search).
 @interface _KKCompanionPanel : NSPanel
 @end
 @implementation _KKCompanionPanel
@@ -97,9 +96,15 @@ static const CGFloat kSlideDistance = 12.0;
                           NSWindowStyleMaskNonactivatingPanel
                   backing:NSBackingStoreBuffered
                     defer:YES];
-  // Take key so a text field (inline rename) can capture keyboard.
-  // (Nonactivating means it does so WITHOUT activating our XPC process /
-  // deactivating FCP.)
+  // Key on a click, as before. Withholding it was an attempt to keep the
+  // popover's shortcut monitors alive (Mirage's B / S / M compare keys) and it
+  // works the wrong way round: those monitors are LOCAL, so they need SOME
+  // window of this process to hold the keyboard in order to consume the letter
+  // at all - a panel that refuses key can leave the process with no key window
+  // and the letter goes to Final Cut, which has its own bindings for all three.
+  // A panel holding key is fine; the shortcut handlers don't care WHICH of our
+  // windows is key, only that a text object isn't editing. Nonactivating means
+  // taking key still doesn't activate our XPC process / deactivate FCP.
   p.becomesKeyOnlyIfNeeded = NO;
   p.hasShadow = YES;
   p.releasedWhenClosed = NO;
@@ -154,6 +159,16 @@ static const CGFloat kSlideDistance = 12.0;
     [fx addSubview:content];
     p.contentView = fx;
   }
+
+  // What DID cost the shortcuts is the free first responder AppKit hands out:
+  // a window whose initialFirstResponder is nil picks the first view in its key
+  // loop the first time it becomes key - here the browser's search field - so
+  // merely clicking a template card put a caret in Search, and every bare
+  // letter after it read as typing rather than as a compare shortcut. Point it
+  // at the content view, which does not accept first responder, and the panel
+  // comes up with the keyboard unclaimed: a field is only ever editing because
+  // the user clicked into it.
+  p.initialFirstResponder = p.contentView;
 
   _panel = p;
   return _panel;
@@ -345,6 +360,22 @@ static const CGFloat kSlideDistance = 12.0;
       dispatch_get_main_queue(), ^{
         [weak _alignPanelToPopover];
       });
+}
+
+// The popover is a nonactivating panel too, so keying it costs FCP nothing -
+// the same makeKeyWindow the mini-viewer overlay uses to reclaim the keyboard
+// after a click. Also ends any field editing here first, or the field editor
+// would still be first responder in a window that no longer has the keyboard.
+//
+// Run whenever the popover ISN'T key, not just when the panel is: the panel
+// having declined key is exactly the case where the keyboard can have left the
+// process entirely, and that is the case worth repairing.
+- (void)returnKeyFocusToPopover {
+  NSWindow *popover = _parentWindow;
+  if (!popover || popover.isKeyWindow)
+    return;
+  [_panel makeFirstResponder:nil];
+  [popover makeKeyWindow];
 }
 
 - (void)hide {

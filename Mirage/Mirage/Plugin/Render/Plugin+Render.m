@@ -292,11 +292,12 @@ KKGLSLUniforms MirageBuildUniforms(const MiragePluginState *base,
                                    float encodeSRGB) {
   float iTime = base->common.time * base->common.speed +
                 fmodf(base->common.seed, 10000.0f);
-  // iProgress is the raw clip fraction, deliberately NOT scaled by Speed/Seed
-  // the way iTime is - a transition's progress has to reach exactly 1.0 at the
-  // cut regardless of the motion-rate params. chanRes[0] = the source clip
-  // resolution (iChannelResolution[0], filled from the bound texture at draw
-  // time). Shared layout with the mini via MirageMakeUniforms.
+  // iProgress is the clip fraction paced by the transition's Easing lane (see
+  // MirageEvalStateAtFrac), deliberately NOT scaled by Speed/Seed the way iTime
+  // is - a transition's progress has to reach exactly 1.0 at the cut regardless
+  // of the motion-rate params, and every easing curve maps 1 to 1. chanRes[0] =
+  // the source clip resolution (iChannelResolution[0], filled from the bound
+  // texture at draw time). Shared layout with the mini via MirageMakeUniforms.
   KKGLSLUniforms uniforms = MirageMakeUniforms(
       (float)mediaW, (float)mediaH, iTime, base->common.grain,
       base->common.grainSize, base->common.progress, encodeSRGB,

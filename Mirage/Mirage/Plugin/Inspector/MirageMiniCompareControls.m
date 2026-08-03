@@ -5,6 +5,7 @@
 
 #import "MirageMiniCompareControls.h"
 
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -344,6 +345,12 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 // a click in the preview makes the popover key, and from then on Final Cut
 // delivers the letter here first. See KKMiniViewerView's own note on why a
 // GLOBAL monitor can only watch a key go past on its way to the host.
+//
+// Any window of ours will do - the browser or Color panel beside the popover
+// counts, since a keyDown reaches a local monitor whichever of our windows is
+// key (its `window` is the ViewBridge host window in every case, which is why
+// nothing here gates on it). The keyboard being in the PROCESS is the whole
+// requirement; the gates below are about the user's intent, not the window.
 //
 // Installed with the row and dropped with it, so a letter typed anywhere in
 // Final Cut with no preview open is nobody's business but Final Cut's. This is

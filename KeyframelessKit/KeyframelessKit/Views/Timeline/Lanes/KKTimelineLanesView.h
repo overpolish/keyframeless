@@ -72,14 +72,6 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// time (driven by the host's layer-list selection). No-op if no keypose
 /// popover is open.
 - (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey;
-/// The owners the OPEN keypose popover can edit: the layerKeys carrying a
-/// keypose at its time. Empty when no keypose popover is open, and when the
-/// lanes declare no owner at all (single-owner plugins - nothing to gate).
-///
-/// A host disables everything outside this set in its own owner switcher, so an
-/// owner with nothing at this time can't be selected into an empty editor -
-/// Canvas grays those rows in its layer list, Mirage its rack boxes.
-- (NSSet<NSString *> *)openKeyposePopoverLayerKeys;
 /// Host's selected layer (multi-owner), so a freshly-opened keypose popover
 /// scopes its params to that layer (nil => the first animated layer).
 @property(nonatomic, copy, nullable) NSString *activeLayerKey;
@@ -425,6 +417,15 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// checklist and the parameter-order list - open on the same entry the Animated
 /// dropdown does, off the one resolution rather than a second guess at it.
 - (nullable NSString *)hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes;
+
+/// The owners the OPEN keypose popover can edit: the layerKeys carrying a
+/// keypose at its time. Empty when no keypose popover is open, and when the
+/// lanes declare no owner at all (single-owner plugins - nothing to gate).
+///
+/// A host disables everything outside this set in its own owner switcher, so an
+/// owner with nothing at this time can't be selected into an empty editor -
+/// Canvas grays those rows in its layer list, Mirage its rack boxes.
+- (NSSet<NSString *> *)openKeyposePopoverLayerKeys;
 
 /// Present arbitrary `content` in a companion-capable popover (same keep-alive
 /// outside-click handling as the value popovers) and post the open/close

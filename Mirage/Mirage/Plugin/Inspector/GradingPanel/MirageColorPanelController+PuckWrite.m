@@ -527,8 +527,8 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
                             [self _axesForPuck:puckName
                                      responses:responses
                                       drivable:drivable]);
-  double distance = MIN(1.0, hypot(position.x, position.y));
-  double bearing = atan2(position.y, position.x) * 180.0 / M_PI;
+  double distance = MirageSurfaceDistance(position.x, position.y);
+  double bearing = MirageSurfaceBearingDegrees(position.x, position.y);
   NSMutableArray<KKLane *> *lanes = [timeline.lanes mutableCopy];
   // Every lane this tick writes, for the preview. A puck moves the whole set of
   // controls its handle is mapped to, so the picture only tracks the drag if

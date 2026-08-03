@@ -209,8 +209,19 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   BOOL livePlayback = self.canvas.livePlaybackActive;
   double previewFraction =
       livePlayback ? self.editFraction : self.playheadFraction;
+  // The transition's Easing lane, applied exactly as the FCP render applies it
+  // (MirageEvalStateAtFrac): iProgress is the EASED fraction, iTime is not.
+  // The lane exists only for a `#template transition`, and Linear is the
+  // identity, so every other shader previews on the raw fraction it always
+  // did.
+  NSArray<NSNumber *> *easingV = [self valuesForLabel:@"Easing"];
+  KKEasingCurve easingCurve =
+      easingV.count ? (KKEasingCurve)MAX(0, MIN(KKEasingCurveCount - 1,
+                                                lround(easingV[0].doubleValue)))
+                    : KKEasingCurveLinear;
+  double easedFraction = KKApplyEasing(previewFraction, easingCurve, 0.5, 0.5);
   KKGLSLUniforms base =
-      MirageMakeUniforms(W, H, iTime, grain, grainSize, (float)previewFraction,
+      MirageMakeUniforms(W, H, iTime, grain, grainSize, (float)easedFraction,
                          (float)encodeSRGB, (simd_float4){W, H, 1.0f, 0.0f});
   // `// #motionblur native`: the shader does its own blur, so hand it the same
   // shutter the viewer does or the preview shows a different image (a trail
@@ -228,11 +239,40 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   // MirageEvalStateAtFrac does. For the sentinel every key passes through
   // unchanged, so a project that has never been racked reads the lanes it
   // always did. The shared built-ins above (Speed / Seed / Grain / Grain Size /
-  // Transition Mode) stay bare on purpose: they drive the common uniform block,
-  // which the whole chain shares.
+  // Transition Mode / Easing) stay bare on purpose: they drive the common
+  // uniform block, which the whole chain shares.
   NSString *owner = MirageRackEntryIDOrSentinel(entryID);
+  MirageShaderModel *poolModel = [MirageShaderModel modelForSource:image];
+  KKTimeline *progressTimeline = self.timeline;
+  double progressDurSec = self.clipDurationSeconds;
+  double progressTimelineSec =
+      self.clipTimelineStartSec >= 0.0
+          ? self.clipTimelineStartSec + previewFraction * progressDurSec
+          : 0.0;
   NSArray<NSNumber *> * (^values)(NSString *) =
       ^NSArray<NSNumber *> *(NSString *label) {
+    // A `// #progress` lane is read on the EASED clock, the way the FCP render
+    // reads it (MirageEvalStateAtFrac), so the preview composes the two
+    // reshapers in the same order the output does. It can't go through
+    // -valuesForLabel:, which always evaluates at the preview's own fraction,
+    // so it evaluates the lane directly - the same kit resolver, one fraction
+    // along.
+    if (MirageProgressLabel(poolModel, label)) {
+      NSString *key = MirageRackLaneKey(owner, label);
+      for (KKLane *lane in progressTimeline.lanes)
+        if ([lane.key isEqualToString:key]) {
+          NSArray<NSNumber *> *resolved = KKLinkResolvedLaneValue(
+              lane, easedFraction, progressTimelineSec, progressDurSec);
+          if (resolved.count)
+            return resolved;
+          break;
+        }
+      // Same identity-ramp fallback the FCP render applies: a `// #progress`
+      // uniform with no lane in the blob yet reads the preview's own sweep, so
+      // the mini shows what the render will instead of the prop's parsed
+      // default of 0.
+      return @[ @(easedFraction * 100.0) ];
+    }
     return [self valuesForLabel:MirageRackLaneKey(owner, label)];
   };
   // The same registry order the FCP render packs by, so the preview shows the
@@ -245,7 +285,6 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
     return KKTimelineSlotInstanceIDs(
         slotTimeline, MirageRackScopedSlotGroupName(owner, groupName));
   };
-  MirageShaderModel *poolModel = [MirageShaderModel modelForSource:image];
   int colorPoolN = [poolModel fillColorPool:colorPool
                              valuesForLabel:values
                               slotInstances:slotInstances];

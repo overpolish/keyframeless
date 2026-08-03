@@ -9,7 +9,8 @@
 // paths can't silently drift. Every field is identical between the paths except
 // the two the callers pass in:
 //   - `progress`   : main = MiragePluginState.common.progress; mini = playhead
-//                    fraction (matches the frame the feed publishes).
+//                    fraction (matches the frame the feed publishes). Both are
+//                    the fraction AFTER the transition's Easing lane.
 //   - `chan0Res`   : main = the source clip resolution {W,H,1,0}; mini = the
 //                    256x256 preview convention. (If the mini's is ever found to
 //                    be a bug, it changes at the ONE mini call site.)

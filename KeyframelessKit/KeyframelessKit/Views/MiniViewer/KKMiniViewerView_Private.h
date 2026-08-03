@@ -48,6 +48,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// canvas (so pan/zoom/double-click-reset still work).
 @interface _KKMiniViewerOverlay : NSView
 @property(nonatomic, weak) KKMiniViewerView *canvas;
+/// Live playback just started: finish any in-flight handle / divider drag as if
+/// the mouse had come up, so the controls the user can no longer see stop
+/// following the pointer and the plugin's drag undo group closes balanced.
+- (void)endInteractionForLivePlayback;
 @end
 
 // One filmstrip slot: a resolved IOSurface from the feed's `slots[]` array,

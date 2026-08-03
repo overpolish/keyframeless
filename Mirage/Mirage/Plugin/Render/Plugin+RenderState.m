@@ -14,6 +14,7 @@
 #import "Plugin+Render_Internal.h"
 #import <KeyframelessKit/KKLog.h>
 
+#import <KeyframelessKit/KKEasing.h> // the transition Easing lane's curves
 #import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 
@@ -81,13 +82,30 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
       MirageLaneValuesAtFraction(timeline, @"Grain", frac, timelineSec, durSec);
   NSArray<NSNumber *> *grainSizeV = MirageLaneValuesAtFraction(
       timeline, @"Grain Size", frac, timelineSec, durSec);
+  // The transition's Easing lane, applied HERE: the sweep the shader sees is
+  // the eased fraction, so a template needs no code of its own to be
+  // ease-able. The lane only exists for a `#template transition` (absent = the
+  // Linear identity), and the curve comes from the timing engine
+  // (KKApplyEasing at its 0.5/0.5 defaults - the same shape the timeline's own
+  // segments produce), so Mirage invents no curve of its own.
+  //
+  // Only iProgress is reshaped, never iTime: Speed/Seed pace the shader's
+  // motion, easing paces the CUT, and a transition still has to land exactly
+  // on 1.0 at the edit whichever curve is chosen (every curve here maps 1->1).
+  NSArray<NSNumber *> *easingV = MirageLaneValuesAtFraction(
+      timeline, @"Easing", frac, timelineSec, durSec);
+  KKEasingCurve easingCurve =
+      easingV.count ? (KKEasingCurve)MAX(0, MIN(KKEasingCurveCount - 1,
+                                                lround(easingV[0].doubleValue)))
+                    : KKEasingCurveLinear;
+  double easedFrac = KKApplyEasing(frac, easingCurve, 0.5, 0.5);
   // Only the shared params survive (Speed / Seed / Grain / Grain Size + time).
   // The user shader source drives everything else and rides in the blob tail.
   MirageCommonUniforms common = MirageCommonDefault();
   common.speed = speed;
   common.seed = seed;
   common.time = timeSec;
-  common.progress = (float)frac;
+  common.progress = (float)easedFrac;
   // No lane = the shader never opted into `// #grain`, so no grain at all.
   common.grain = grainV.count ? grainV[0].floatValue / 100.0f : 0.0f;
   common.grainSize =
@@ -136,6 +154,7 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   // it off. Returning nothing falls through to the prop's own default in
   // MirageScalarPoolValue, which is the off the author declared.
   NSSet<NSString *> *panelOwned = MirageSurfacePreviewOwnedKeys(shaderSrc);
+  MirageShaderModel *model = [MirageShaderModel modelForSource:shaderSrc];
   NSArray<NSNumber *> * (^values)(NSString *) =
       ^NSArray<NSNumber *> *(NSString *label) {
     if (label.length && [panelOwned containsObject:label])
@@ -144,8 +163,24 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
     // where that becomes the entry's real lane key. The panel-owned test above
     // stays on the bare label: it is a question about the source, not about
     // which entry is running it.
-    return MirageLaneValuesAtFraction(
-        timeline, MirageRackLaneKey(entryID, label), frac, timelineSec, durSec);
+    // A `// #progress` lane runs on the EASED clock, not the raw one: the
+    // directive's contract is that an untouched Progress lane matches the
+    // built-in iProgress, and iProgress is now the eased sweep. Reading its
+    // identity ramp at `easedFrac` keeps that exactly true, and gives the two
+    // reshapers a composition that says what it does - easing PACES the sweep,
+    // the lane SHAPES it, so the author's curve is read at the moment the
+    // user's choice says the sweep has got to.
+    double laneFrac = MirageProgressLabel(model, label) ? easedFrac : frac;
+    NSArray<NSNumber *> *v =
+        MirageLaneValuesAtFraction(timeline, MirageRackLaneKey(entryID, label),
+                                   laneFrac, timelineSec, durSec);
+    // Its parsed default is 0 (progress takes no `default=`), so falling
+    // through to MirageScalarPoolValue would pin the shader at its from-state
+    // on every frame while the lane is still unseeded. The lane, once seeded,
+    // carries the ramp and answers first.
+    if (!v.count && MirageProgressLabel(model, label))
+      return @[ @(easedFrac * 100.0) ];
+    return v;
   };
   // A `// #slots` group's instances, in the order the registry (not the lane
   // list) puts them: that order IS which array element each instance packs
@@ -156,7 +191,6 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
     return KKTimelineSlotInstanceIDs(
         timeline, MirageRackScopedSlotGroupName(entryID, groupName));
   };
-  MirageShaderModel *model = [MirageShaderModel modelForSource:shaderSrc];
   int poolN = [model fillColorPool:outState->colorPool
                     valuesForLabel:values
                      slotInstances:slotInstances];

@@ -38,49 +38,44 @@
 /// the puck goes up, so it is `max` that bounds the downward puck and `min` the
 /// upward one. Reading the limit off the deflection instead let an inverted control
 /// aim past its own range and pin before the rim.
-static inline double MirageSurfaceLimitDistance(MirageSurfaceResponse r,
-                                                double base, double travel) {
-  if (!r.hasLimits)
-    return 0.0;
-  return travel >= 0.0 ? fmax(0.0, r.maxValue - base)
-                       : fmax(0.0, base - r.minValue);
+static inline double MirageSurfaceLimitDistance(MirageSurfaceResponse r, double base, double travel) {
+    if (!r.hasLimits)
+        return 0.0;
+    return travel >= 0.0 ? fmax(0.0, r.maxValue - base) : fmax(0.0, base - r.minValue);
 }
 
 /// The control's offset from `base` for a deflection `u` in -1..1.
-static inline double MirageSurfaceCurveDelta(MirageSurfaceResponse r, double base,
-                                             double u, double magnitude) {
-  double mag = fabs(magnitude);
-  double limit =
-      MirageSurfaceLimitDistance(r, base, magnitude < 0.0 ? -u : u);
-  // No declared range, or a range tighter than the author's own magnitude: stay
-  // linear rather than producing a curve that doubles back.
-  if (limit <= mag)
-    return u * magnitude;
-  double sign = magnitude < 0.0 ? -1.0 : 1.0;
-  return sign * (u * mag + (limit - mag) * u * u * u);
+static inline double MirageSurfaceCurveDelta(MirageSurfaceResponse r, double base, double u, double magnitude) {
+    double mag = fabs(magnitude);
+    double limit = MirageSurfaceLimitDistance(r, base, magnitude < 0.0 ? -u : u);
+    // No declared range, or a range tighter than the author's own magnitude: stay
+    // linear rather than producing a curve that doubles back.
+    if (limit <= mag)
+        return u * magnitude;
+    double sign = magnitude < 0.0 ? -1.0 : 1.0;
+    return sign * (u * mag + (limit - mag) * u * u * u);
 }
 
 /// The deflection that produced `delta`. Bisected rather than solved in closed form:
 /// the cubic is monotonic over -1..1 so bisection always converges, and it stays
 /// correct if the curve is ever reshaped.
-static inline double MirageSurfaceCurveDeflection(MirageSurfaceResponse r,
-                                                  double base, double delta,
+static inline double MirageSurfaceCurveDeflection(MirageSurfaceResponse r, double base, double delta,
                                                   double magnitude) {
-  double mag = fabs(magnitude);
-  if (mag < 1e-12)
-    return 0.0;
-  double sign = magnitude < 0.0 ? -1.0 : 1.0;
-  double target = delta * sign; // work in the response's own direction
-  double lo = target >= 0.0 ? 0.0 : -1.0, hi = target >= 0.0 ? 1.0 : 0.0;
-  for (int i = 0; i < 28; i++) {
-    double mid = (lo + hi) * 0.5;
-    double at = sign * MirageSurfaceCurveDelta(r, base, mid, magnitude);
-    if (at < target)
-      lo = mid;
-    else
-      hi = mid;
-  }
-  return (lo + hi) * 0.5;
+    double mag = fabs(magnitude);
+    if (mag < 1e-12)
+        return 0.0;
+    double sign = magnitude < 0.0 ? -1.0 : 1.0;
+    double target = delta * sign; // work in the response's own direction
+    double lo = target >= 0.0 ? 0.0 : -1.0, hi = target >= 0.0 ? 1.0 : 0.0;
+    for (int i = 0; i < 28; i++) {
+        double mid = (lo + hi) * 0.5;
+        double at = sign * MirageSurfaceCurveDelta(r, base, mid, magnitude);
+        if (at < target)
+            lo = mid;
+        else
+            hi = mid;
+    }
+    return (lo + hi) * 0.5;
 }
 
 // --- The disc and the controls' own axes ---------------------------------
@@ -127,29 +122,28 @@ static inline double MirageSurfaceCurveDeflection(MirageSurfaceResponse r,
 enum { kMirageSurfaceMaxAxes = 32 };
 
 typedef struct {
-  double x[kMirageSurfaceMaxAxes];
-  double y[kMirageSurfaceMaxAxes];
-  int count;
+    double x[kMirageSurfaceMaxAxes];
+    double y[kMirageSurfaceMaxAxes];
+    int count;
 } MirageSurfaceAxisSet;
 
 /// Add a control's `x:`/`y:` response as a direction. A control that does not
 /// respond, and one whose direction the set already holds in either sign, are both
 /// dropped.
-static inline void MirageSurfaceAxisSetAdd(MirageSurfaceAxisSet *set, double rx,
-                                           double ry) {
-  if (!set || set->count >= kMirageSurfaceMaxAxes)
-    return;
-  double length = hypot(rx, ry);
-  if (length < 1e-12)
-    return;
-  double ux = rx / length, uy = ry / length;
-  for (int i = 0; i < set->count; i++) {
-    if (fabs(ux * set->x[i] + uy * set->y[i]) > 1.0 - 1e-12)
-      return;
-  }
-  set->x[set->count] = ux;
-  set->y[set->count] = uy;
-  set->count++;
+static inline void MirageSurfaceAxisSetAdd(MirageSurfaceAxisSet *set, double rx, double ry) {
+    if (!set || set->count >= kMirageSurfaceMaxAxes)
+        return;
+    double length = hypot(rx, ry);
+    if (length < 1e-12)
+        return;
+    double ux = rx / length, uy = ry / length;
+    for (int i = 0; i < set->count; i++) {
+        if (fabs(ux * set->x[i] + uy * set->y[i]) > 1.0 - 1e-12)
+            return;
+    }
+    set->x[set->count] = ux;
+    set->y[set->count] = uy;
+    set->count++;
 }
 
 /// The stretch factor for the direction `(x, y)` points in.
@@ -158,89 +152,94 @@ static inline void MirageSurfaceAxisSetAdd(MirageSurfaceAxisSet *set, double rx,
 /// perpendicular to it, where every projection is zero anyway, so the largest
 /// projection is floored. The floor is part of the function of direction, so it
 /// applies identically to the squeeze and the pair still inverts exactly.
-static inline double MirageSurfaceAxisStretch(MirageSurfaceAxisSet axes, double x,
-                                              double y) {
-  double length = hypot(x, y);
-  if (axes.count <= 0 || length < 1e-12)
-    return 1.0; // no axes to stretch toward, or no direction to stretch along
-  double ux = x / length, uy = y / length;
-  double biggest = 0.0;
-  for (int i = 0; i < axes.count; i++)
-    biggest = fmax(biggest, fabs(ux * axes.x[i] + uy * axes.y[i]));
-  return 1.0 / fmax(biggest, 1e-3);
+static inline double MirageSurfaceAxisStretch(MirageSurfaceAxisSet axes, double x, double y) {
+    double length = hypot(x, y);
+    if (axes.count <= 0 || length < 1e-12)
+        return 1.0; // no axes to stretch toward, or no direction to stretch along
+    double ux = x / length, uy = y / length;
+    double biggest = 0.0;
+    for (int i = 0; i < axes.count; i++)
+        biggest = fmax(biggest, fabs(ux * axes.x[i] + uy * axes.y[i]));
+    return 1.0 / fmax(biggest, 1e-3);
 }
 
 /// Stretch a point in the unit disc into the puck's control basis, in place, so the
 /// control most aligned with it reaches exactly full deflection at the rim.
-static inline void MirageSurfaceDiscToAxes(double *x, double *y,
-                                           MirageSurfaceAxisSet axes) {
-  if (!x || !y)
-    return;
-  double scale = MirageSurfaceAxisStretch(axes, *x, *y);
-  *x *= scale;
-  *y *= scale;
+static inline void MirageSurfaceDiscToAxes(double *x, double *y, MirageSurfaceAxisSet axes) {
+    if (!x || !y)
+        return;
+    double scale = MirageSurfaceAxisStretch(axes, *x, *y);
+    *x *= scale;
+    *y *= scale;
 }
 
 /// The exact inverse: squeeze a point in the control basis back into the disc. The
 /// stretch depends only on DIRECTION, which a positive scale leaves alone, so the
 /// two compose to the identity - which is what stops the puck creeping every time
 /// the derive feeds a position back into the display.
-static inline void MirageSurfaceAxesToDisc(double *x, double *y,
-                                           MirageSurfaceAxisSet axes) {
-  if (!x || !y)
-    return;
-  double scale = MirageSurfaceAxisStretch(axes, *x, *y);
-  if (scale > 1e-12) {
-    *x /= scale;
-    *y /= scale;
-  }
+static inline void MirageSurfaceAxesToDisc(double *x, double *y, MirageSurfaceAxisSet axes) {
+    if (!x || !y)
+        return;
+    double scale = MirageSurfaceAxisStretch(axes, *x, *y);
+    if (scale > 1e-12) {
+        *x /= scale;
+        *y /= scale;
+    }
 }
+
+/// The puck's bearing, in DEGREES, which is the unit every angular reading on this
+/// surface is in - the parsed `a:` magnitude, `MirageSurfaceAngleDelta`, the hue a
+/// colour control is rotated to, and the fit that reads them all back. atan2 answers
+/// in radians, so this conversion is the one boundary between the two, and it is
+/// named so the apply cannot do it in one place and the derive in another.
+static inline double MirageSurfaceBearingDegrees(double x, double y) { return atan2(y, x) * 180.0 / M_PI; }
+
+/// How far out the puck is, 0 at the centre and 1 at the rim. Clamped rather than
+/// scaled: a cursor dragged past the rim means full deflection, and the position the
+/// circle DRAWS is clamped the same way, so the two agree at the edge.
+static inline double MirageSurfaceDistance(double x, double y) { return fmin(1.0, hypot(x, y)); }
 
 /// The value offset a bearing implies for an angular control. Proportional: the
 /// magnitude is reached at half a turn, so `a:+180` maps the puck's bearing onto the
 /// control one-for-one in degrees.
-static inline double MirageSurfaceAngleDelta(MirageSurfaceResponse r,
-                                            double bearingDegrees) {
-  return r.a * (bearingDegrees / 180.0);
+static inline double MirageSurfaceAngleDelta(MirageSurfaceResponse r, double bearingDegrees) {
+    return r.a * (bearingDegrees / 180.0);
 }
 
 /// The bearing an angular control's offset implies, in degrees. Wrapped to
 /// -180..180 because a bearing is a direction, not an accumulated rotation.
-static inline double MirageSurfaceAngleForDelta(MirageSurfaceResponse r,
-                                                double delta) {
-  if (fabs(r.a) < 1e-12)
-    return 0.0;
-  double bearing = 180.0 * delta / r.a;
-  return fmod(bearing + 540.0, 360.0) - 180.0;
+static inline double MirageSurfaceAngleForDelta(MirageSurfaceResponse r, double delta) {
+    if (fabs(r.a) < 1e-12)
+        return 0.0;
+    double bearing = 180.0 * delta / r.a;
+    return fmod(bearing + 540.0, 360.0) - 180.0;
 }
 
 /// Accumulator for deriving a polar puck. Radius is averaged and bearing is
 /// averaged CIRCULARLY - as unit vectors - since a mean of 170 and -170 degrees is
 /// 180, not zero.
 typedef struct {
-  double radiusSum;
-  int radiusCount;
-  double angleX;
-  double angleY;
-  int angleCount;
+    double radiusSum;
+    int radiusCount;
+    double angleX;
+    double angleY;
+    int angleCount;
 } MirageSurfacePolarFit;
 
-static inline void MirageSurfacePolarAddRadius(MirageSurfacePolarFit *f,
-                                               double deflection) {
-  if (!f)
-    return;
-  f->radiusSum += deflection;
-  f->radiusCount++;
+static inline void MirageSurfacePolarAddRadius(MirageSurfacePolarFit *f, double deflection) {
+    if (!f)
+        return;
+    f->radiusSum += deflection;
+    f->radiusCount++;
 }
 
-static inline void MirageSurfacePolarAddAngle(MirageSurfacePolarFit *f,
-                                              double bearingDegrees) {
-  if (!f)
-    return;
-  double rad = bearingDegrees * M_PI / 180.0;
-  f->angleX += cos(rad);
-  f->angleY += sin(rad);
-  f->angleCount++;
+static inline void MirageSurfacePolarAddAngle(MirageSurfacePolarFit *f, double bearingDegrees) {
+    if (!f)
+        return;
+    double rad = bearingDegrees * M_PI / 180.0;
+    f->angleX += cos(rad);
+    f->angleY += sin(rad);
+    f->angleCount++;
 }
 
 /// Resolve the accumulated observations into a puck position.
@@ -250,33 +249,32 @@ static inline void MirageSurfacePolarAddAngle(MirageSurfacePolarFit *f,
 /// the puck goes to the rim where its bearing is legible, and with a radius but no
 /// angular control it lies along the +x axis. Neither invents a value the controls
 /// do not hold - both put the puck where the one real observation can be read.
-static inline BOOL MirageSurfacePolarResolve(MirageSurfacePolarFit f, double *outX,
-                                            double *outY) {
-  if (outX)
-    *outX = 0.0;
-  if (outY)
-    *outY = 0.0;
-  if (!f.radiusCount && !f.angleCount)
-    return NO;
-  double radius = f.radiusCount ? f.radiusSum / (double)f.radiusCount : 1.0;
-  if (radius < 0.0)
-    radius = 0.0;
-  double bearing = 0.0;
-  if (f.angleCount && hypot(f.angleX, f.angleY) > 1e-12)
-    bearing = atan2(f.angleY, f.angleX);
-  if (outX)
-    *outX = radius * cos(bearing);
-  if (outY)
-    *outY = radius * sin(bearing);
-  return YES;
+static inline BOOL MirageSurfacePolarResolve(MirageSurfacePolarFit f, double *outX, double *outY) {
+    if (outX)
+        *outX = 0.0;
+    if (outY)
+        *outY = 0.0;
+    if (!f.radiusCount && !f.angleCount)
+        return NO;
+    double radius = f.radiusCount ? f.radiusSum / (double)f.radiusCount : 1.0;
+    if (radius < 0.0)
+        radius = 0.0;
+    double bearing = 0.0;
+    if (f.angleCount && hypot(f.angleX, f.angleY) > 1e-12)
+        bearing = atan2(f.angleY, f.angleX);
+    if (outX)
+        *outX = radius * cos(bearing);
+    if (outY)
+        *outY = radius * sin(bearing);
+    return YES;
 }
 
 /// One control's contribution to the derive: its response plus how far it
 /// currently sits from its base (`default=`) value.
 typedef struct {
-  double rx;
-  double ry;
-  double delta;
+    double rx;
+    double ry;
+    double delta;
 } MirageSurfaceSample;
 
 /// Derive the puck position that best explains where the controls currently sit.
@@ -290,48 +288,46 @@ typedef struct {
 /// Returns NO when nothing can be derived. An axis no control responds to is
 /// mathematically unconstrained rather than zero, so it reports 0 and the caller
 /// should present a single slider instead of a circle with a dead direction.
-static inline BOOL MirageSurfaceDerivePuck(const MirageSurfaceSample *samples,
-                                           int count, double *outX,
-                                           double *outY) {
-  if (outX)
-    *outX = 0.0;
-  if (outY)
-    *outY = 0.0;
-  if (!samples || count <= 0)
-    return NO;
-  double sxx = 0.0, sxy = 0.0, syy = 0.0, sxb = 0.0, syb = 0.0;
-  BOOL any = NO;
-  for (int i = 0; i < count; i++) {
-    double rx = samples[i].rx, ry = samples[i].ry;
-    double mag = hypot(rx, ry);
-    if (mag < 1e-12)
-      continue; // a control that doesn't respond says nothing about the puck
-    double w = 1.0 / mag;
-    double ax = rx * w, ay = ry * w, b = samples[i].delta * w;
-    sxx += ax * ax;
-    sxy += ax * ay;
-    syy += ay * ay;
-    sxb += ax * b;
-    syb += ay * b;
-    any = YES;
-  }
-  if (!any)
-    return NO;
-  // Solve the 2x2 normal equations, falling back to a single axis when the other
-  // carries no response at all (every control mapped to one direction).
-  double det = sxx * syy - sxy * sxy;
-  if (fabs(det) > 1e-12) {
+static inline BOOL MirageSurfaceDerivePuck(const MirageSurfaceSample *samples, int count, double *outX, double *outY) {
     if (outX)
-      *outX = (sxb * syy - syb * sxy) / det;
+        *outX = 0.0;
     if (outY)
-      *outY = (syb * sxx - sxb * sxy) / det;
+        *outY = 0.0;
+    if (!samples || count <= 0)
+        return NO;
+    double sxx = 0.0, sxy = 0.0, syy = 0.0, sxb = 0.0, syb = 0.0;
+    BOOL any = NO;
+    for (int i = 0; i < count; i++) {
+        double rx = samples[i].rx, ry = samples[i].ry;
+        double mag = hypot(rx, ry);
+        if (mag < 1e-12)
+            continue; // a control that doesn't respond says nothing about the puck
+        double w = 1.0 / mag;
+        double ax = rx * w, ay = ry * w, b = samples[i].delta * w;
+        sxx += ax * ax;
+        sxy += ax * ay;
+        syy += ay * ay;
+        sxb += ax * b;
+        syb += ay * b;
+        any = YES;
+    }
+    if (!any)
+        return NO;
+    // Solve the 2x2 normal equations, falling back to a single axis when the other
+    // carries no response at all (every control mapped to one direction).
+    double det = sxx * syy - sxy * sxy;
+    if (fabs(det) > 1e-12) {
+        if (outX)
+            *outX = (sxb * syy - syb * sxy) / det;
+        if (outY)
+            *outY = (syb * sxx - sxb * sxy) / det;
+        return YES;
+    }
+    if (sxx > 1e-12 && outX)
+        *outX = sxb / sxx;
+    if (syy > 1e-12 && outY)
+        *outY = syb / syy;
     return YES;
-  }
-  if (sxx > 1e-12 && outX)
-    *outX = sxb / sxx;
-  if (syy > 1e-12 && outY)
-    *outY = syb / syy;
-  return YES;
 }
 
 #endif
