@@ -72,21 +72,20 @@ static inline NSString *MirageCategoryNormalize(NSString *_Nullable raw) {
 
 /// Whether a shader belongs under `filterID` in the browser.
 ///
-/// Membership is not just its declared type. A `filter` that declares a colour
-/// surface (`// #color-surface`) IS a colour tool, it exists to grade, so it
-/// belongs beside Color Transform when someone narrows the browser to colour
-/// work. A filter without one does not: a CRT or a blur processes the clip but
-/// has nothing to do with colour, and burying the colour tools among them is
-/// what makes the filter category useless for finding them.
+/// Membership is not just its declared type. `gradingTool` is a semantic
+/// capability published in the remote manifest and derived from source for
+/// local entries. Today any `// #color-surface` opts a filter in; keeping the
+/// filter contract semantic lets future grading tools opt in without pretending
+/// they all use that particular UI. A CRT or blur does not opt in.
 ///
 /// One-directional on purpose: a colour-transform template does not show up
 /// under `filter`, because its type is the more specific answer.
 static inline BOOL MirageCategoryMatchesFilter(NSString *_Nullable category,
-                                               BOOL hasColorSurface,
+                                               BOOL gradingTool,
                                                NSString *filterID) {
   if ([MirageCategoryNormalize(category) isEqualToString:filterID])
     return YES;
-  return hasColorSurface &&
+  return gradingTool &&
          [filterID isEqualToString:kMirageCategoryColorTransform];
 }
 

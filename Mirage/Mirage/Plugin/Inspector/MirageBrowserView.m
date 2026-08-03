@@ -373,16 +373,14 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
                     [[MirageLocalCatalog shared] favoritesFingerprint]];
   [sig appendFormat:@"local=%@\n", fingerprint];
   for (_MirageBrowserItem *r in _community)
-    [sig appendFormat:@"c=%@|%ld|%@|%@|%@\n", r.entryID ?: @"",
+    [sig appendFormat:@"c=%@|%ld|%@|%@|%@|%d\n", r.entryID ?: @"",
                       (long)r.communityEntry.version, r.name ?: @"",
-                      r.author ?: @"", r.category ?: @""];
+                      r.author ?: @"", r.category ?: @"", (int)r.grading];
   return sig;
 }
 
-// Does this entry's Image shader declare `// #color-surface`? nil entry (a
-// remote card whose source has not been downloaded) is NO rather than unknown:
-// it still filters by its published category, and gains the surface once
-// installed.
+// Does this local entry's Image shader declare `// #color-surface`? Remote
+// cards use the source-derived flag published in the generated manifest.
 - (BOOL)_declaresColorSurface:(MirageCatalogEntry *_Nullable)entry {
   if (!entry)
     return NO;
@@ -397,6 +395,11 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
   return declares;
 }
 
+- (BOOL)_isGradingTool:(MirageCatalogEntry *_Nullable)entry {
+  return [entry.category isEqualToString:kMirageCategoryColorTransform] ||
+         [self _declaresColorSurface:entry];
+}
+
 - (BOOL)_matches:(_MirageBrowserItem *)it {
   if (_favoritesOnly && ![[MirageLocalCatalog shared] isFavorite:it.entryID])
     return NO;
@@ -405,7 +408,7 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
   if (_categoryFilter.count) {
     BOOL any = NO;
     for (NSString *filterID in _categoryFilter)
-      if (MirageCategoryMatchesFilter(it.category, it.colorSurface, filterID)) {
+      if (MirageCategoryMatchesFilter(it.category, it.grading, filterID)) {
         any = YES;
         break;
       }
@@ -479,7 +482,7 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
     it.name = e.name;
     it.author = e.author;
     it.category = e.category;
-    it.colorSurface = [self _declaresColorSurface:e];
+    it.grading = [self _isGradingTool:e];
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
     if ([self _matches:it])
@@ -495,10 +498,9 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
     // An installed copy is the authority (it may be a newer publish than the
     // last fetch); otherwise the remote's.
     it.category = inst ? inst.category : r.category;
-    // Only an installed copy carries its source. A remote-only card still
-    // filters by its published category, and picks the surface up once
-    // installed.
-    it.colorSurface = [self _declaresColorSurface:inst];
+    // Installed source is authoritative. Before download, the generated
+    // manifest publishes this source-derived capability for the remote card.
+    it.grading = inst ? [self _isGradingTool:inst] : r.grading;
     it.communityEntry = r.communityEntry;
     if (inst) {
       it.kind = _MirageItemInstalled;
@@ -525,7 +527,7 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
     it.name = inst.name;
     it.author = inst.author;
     it.category = inst.category;
-    it.colorSurface = [self _declaresColorSurface:inst];
+    it.grading = [self _isGradingTool:inst];
     it.thumbnail = inst.thumbnail;
     it.localEntry = inst;
     if ([self _matches:it])
@@ -540,7 +542,7 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
     it.name = e.name;
     it.author = e.author;
     it.category = e.category;
-    it.colorSurface = [self _declaresColorSurface:e];
+    it.grading = [self _isGradingTool:e];
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
     if ([self _matches:it])
@@ -660,6 +662,7 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
                                 // (Swift) side.
                                 it.category = MirageCategoryNormalize(
                                     e.metadata[@"category"]);
+                                it.grading = [e.metadata[@"grading"] boolValue];
                                 it.communityEntry = e;
                                 [items addObject:it];
                                 [s _loadCommunityThumbnail:e];
