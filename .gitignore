@@ -27,3 +27,5 @@ CLAUDE.md
 .cache
 # Vendored transpiler build artifacts (run ThirdParty/build-transpiler.sh)
 ThirdParty/build/
+
+.wrangler

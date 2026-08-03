@@ -104,10 +104,29 @@ Paste the 65 bytes into `kKKLicensePublicKey` (KKLicense.m) and `publicKeyX963` 
 
 ## Deploying
 
+For routine Payhip secret updates, put the values in
+`Server/license-worker/.dev.vars`:
+
+```dotenv
+PAYHIP_SECRET_MIRAGE=
+PAYHIP_SECRET_CANVAS=
+PAYHIP_SECRET_STENO=
 ```
-wrangler secret put LICENSE_PRIVATE_KEY_PKCS8
-wrangler secret put PAYHIP_SECRET_MIRAGE
-wrangler secret put PAYHIP_SECRET_CANVAS
-wrangler secret put PAYHIP_SECRET_STENO
-wrangler deploy
+
+`.dev.vars` is gitignored and must never be committed. From the repository
+root, upload all three secrets in one request:
+
+```
+wrangler secret bulk Server/license-worker/.dev.vars --config Server/license-worker/wrangler.jsonc
+```
+
+Do not include `LICENSE_PRIVATE_KEY_PKCS8` in routine secret updates. Replacing
+it invalidates every issued activation unless the value is the same private key.
+
+For the initial deployment, set the signing key interactively and deploy the
+Worker:
+
+```
+wrangler secret put LICENSE_PRIVATE_KEY_PKCS8 --config Server/license-worker/wrangler.jsonc
+wrangler deploy --config Server/license-worker/wrangler.jsonc
 ```
