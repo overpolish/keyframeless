@@ -422,6 +422,9 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
     (BOOL visible);
 - (void)setRightPanelVisible:(BOOL)visible;
 - (void)setRightPanelToggleVisible:(BOOL)visible;
+@property(nonatomic, copy, nullable) void (^onCompactModeChanged)(BOOL compact);
+- (void)setCompactMode:(BOOL)compact;
+- (NSSize)naturalHostedContentSize;
 
 /// Enable/disable the popover header's prev/next KP buttons (only meaningful
 /// when `onNavigate` was passed at init). The lanes view calls this on open

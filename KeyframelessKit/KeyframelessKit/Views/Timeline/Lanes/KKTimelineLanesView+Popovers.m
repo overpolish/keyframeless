@@ -462,6 +462,9 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                        if (s.editorRightPanelToggleAvailable &&
                                            [ch isEqualToString:@"g"])
                                          return nil;
+                                       if (s->_openEditorIsStaticFamily &&
+                                           [ch isEqualToString:@"v"])
+                                         return nil;
                                        return event;
                                      }
 
@@ -561,6 +564,20 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                                  !s.editorRightPanelVisible];
                                        return nil;
                                      }
+                                     if (s->_openEditorIsStaticFamily &&
+                                         [ch isEqualToString:@"v"] &&
+                                         !(mods &
+                                           (NSEventModifierFlagCommand |
+                                            NSEventModifierFlagControl |
+                                            NSEventModifierFlagOption |
+                                            NSEventModifierFlagShift |
+                                            NSEventModifierFlagFunction)) &&
+                                         !fieldEditing) {
+                                       if (!event.isARepeat)
+                                         [s _setEditorCompactMode:
+                                                 !s->_editorCompactMode];
+                                       return nil;
+                                     }
                                      if (event.keyCode == 53) { // Escape
                                        if (fieldEditing)
                                          return event;
@@ -624,10 +641,12 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
         BOOL sidebarKey = [ch isEqualToString:@"l"];
         BOOL rightPanelKey =
             s.editorRightPanelToggleAvailable && [ch isEqualToString:@"g"];
-        if (!peekKey && !sidebarKey && !rightPanelKey)
+        BOOL compactKey =
+            s->_openEditorIsStaticFamily && [ch isEqualToString:@"v"];
+        if (!peekKey && !sidebarKey && !rightPanelKey && !compactKey)
           return NO;
         if (event.type == NSEventTypeKeyUp) {
-          if (sidebarKey || rightPanelKey)
+          if (sidebarKey || rightPanelKey || compactKey)
             return YES;
           if (!s->_compositionPeekKeyHeld)
             return NO;
@@ -650,6 +669,8 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
             [s _setEditorSidebarVisible:!s.editorSidebarVisible];
           else if (rightPanelKey)
             [s _setEditorRightPanelVisible:!s.editorRightPanelVisible];
+          else if (compactKey)
+            [s _setEditorCompactMode:!s->_editorCompactMode];
           else
             [s _setCompositionPeekHeld:YES keyboard:YES];
         }

@@ -353,6 +353,11 @@
     __strong typeof(weakClose) s = weakClose;
     [s _setEditorRightPanelVisible:visible];
   };
+  [staticView setCompactMode:_editorCompactMode];
+  staticView.onCompactModeChanged = ^(BOOL compact) {
+    __strong typeof(weakClose) s = weakClose;
+    [s _setEditorCompactMode:compact];
+  };
 
   // Per-keypose smooth toggle (spatialCurvable lanes): discrete write routed
   // to whichever graph owns the open keypose. Advanced keys by fraction, Basic
@@ -568,6 +573,8 @@
                               s.onStaticValuesPopoverClosed();
                           }];
   staticView.popover = nil;
+  if (_editorCompactMode)
+    [self _setEditorCompactMode:YES];
 
   // Companion-panel signal: a plugin (e.g. Canvas's layer list) observes this
   // to show a panel beside the popover (scoped to this lanes view via

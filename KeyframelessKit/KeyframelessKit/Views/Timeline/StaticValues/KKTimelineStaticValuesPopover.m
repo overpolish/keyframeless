@@ -153,6 +153,7 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
       editsKeypose && onModeChanged != nil && _descriptorPath.length > 0;
   if (wantPill) {
     [self _installRenderModePill:renderMode onModeChanged:onModeChanged];
+    _renderModePill.hidden = _compactMode;
   } else if (_renderModePill) {
     [_renderModePill removeFromSuperview];
     _renderModePill = nil;
@@ -167,9 +168,11 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
   CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
   // Close + composition peek are preserved from init; nav + header follow.
   NSLayoutXAxisAnchor *bandLead =
-      _rightPanelButton ? _rightPanelButton.trailingAnchor
-                        : (_sidebarButton ? _sidebarButton.trailingAnchor
-                                          : self.leadingAnchor);
+      _compactButton
+          ? _compactButton.trailingAnchor
+          : (_rightPanelButton ? _rightPanelButton.trailingAnchor
+                               : (_sidebarButton ? _sidebarButton.trailingAnchor
+                                                 : self.leadingAnchor));
   CGFloat bandLeadInset = _sidebarButton ? KKSpacingMD : KKPaddingMD;
   if (editsKeypose && onNavigate && !_navPrevButton) {
     _navPrevButton = [self _makeNavButton:@"chevron.left"
@@ -379,8 +382,9 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
 }
 
 - (NSSize)minimumHostedContentSize {
-  return _descriptorPath.length > 0 ? NSMakeSize(320.0, 240.0)
-                                    : NSMakeSize(240.0, 160.0);
+  if (_compactMode)
+    return NSMakeSize(375.0, 175.0);
+  return NSMakeSize(375.0, _descriptorPath.length > 0 ? 240.0 : 160.0);
 }
 
 // Current intrinsic height of the visible parameter stack. Hidden category /
@@ -446,6 +450,20 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
     CGFloat betweenH =
         _accessoryTopConstraint.constant + _accessoryHeight + categoryH;
     CGFloat sharedH = MAX(0.0, size.height - topH - betweenH);
+    if (_compactMode) {
+      // With the mini viewer hidden, the rows viewport owns all remaining
+      // space. A code page must therefore stretch its editor through that
+      // viewport; retaining the expanded-mode 150pt cap leaves a dead region
+      // below the editor and creates an unnecessary second scrolling area.
+      if (visibleCodeRow) {
+        CGFloat otherRowsH = MAX(0.0, rowsH - codeBaseHeight);
+        [visibleCodeRow setEditorRowHeight:MAX(100.0, sharedH - otherRowsH)];
+      }
+      _miniViewerHeightConstraint.constant = 0.0;
+      [self setNeedsLayout:YES];
+      [self layoutSubtreeIfNeeded];
+      return;
+    }
     // The viewer is the primary editor surface. Ordinary parameter pages may
     // use at most 40% of the shared height (viewer gets at least 60%). A code
     // page deliberately starts 50/50 so viewer and editor grow equally until
@@ -531,6 +549,59 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
   _rightPanelLeadingConstraint.constant = visible ? KKPaddingSM : 0.0;
   _rightPanelWidthConstraint.constant =
       visible ? [_KKStaticValuesPopoverView _renderModePillHeaderHeight] : 0.0;
+}
+
+- (NSButton *)_makeCompactButton {
+  NSString *label = KKLoc(@"Use compact editor",
+                          @"Accessibility label for hiding the mini viewer in "
+                           "the constants/keypose editor.");
+  NSImage *image =
+      [NSImage imageWithSystemSymbolName:@"rectangle.compress.vertical"
+                accessibilityDescription:label];
+  NSButton *button = [NSButton buttonWithImage:image ?: [NSImage new]
+                                        target:self
+                                        action:@selector(_compactClicked:)];
+  button.translatesAutoresizingMaskIntoConstraints = NO;
+  button.bordered = NO;
+  button.bezelStyle = NSBezelStyleShadowlessSquare;
+  button.imageScaling = NSImageScaleProportionallyDown;
+  button.accessibilityLabel = label;
+  button.toolTip = KKLoc(@"Hide or show the mini viewer. (V)",
+                         @"Tooltip for the compact editor toggle.");
+  [button.cell sendActionOn:NSEventMaskLeftMouseDown];
+  return button;
+}
+
+- (void)_compactClicked:(id)sender {
+  BOOL compact = !_compactMode;
+  if (self.onCompactModeChanged)
+    self.onCompactModeChanged(compact);
+  else
+    [self setCompactMode:compact];
+}
+
+- (void)setCompactMode:(BOOL)compact {
+  _compactMode = compact;
+  _compactButton.state =
+      compact ? NSControlStateValueOn : NSControlStateValueOff;
+  _compactButton.contentTintColor = compact ? NSColor.accentMatchingHost : nil;
+  _miniViewerScroll.hidden = compact;
+  _renderModePill.hidden = compact;
+  if (_miniViewerHeightConstraint)
+    _miniViewerHeightConstraint.constant = compact ? 0.0 : 1.0;
+  // In compact mode the zero-height viewer already begins one standard gap
+  // below the title bar. Do not add the viewer-to-accessory gap a second time.
+  if (_accessoryTopConstraint)
+    _accessoryTopConstraint.constant =
+        compact ? 0.0
+                : (_accessoryHost.subviews.count
+                       ? _accessoryTopInset - [self _accessoryInstalledTopDrop]
+                       : _accessoryTopInset);
+  [self applyHostedContentSize:_hostedContentSize];
+}
+
+- (NSSize)naturalHostedContentSize {
+  return [self _naturalContentSize];
 }
 
 - (void)_closeButtonClicked:(id)sender {
@@ -703,11 +774,15 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
     _sidebarButton = [self _makeSidebarButton];
     if (showsRightPanelToggle)
       _rightPanelButton = [self _makeRightPanelButton];
+    if (descriptorPath.length > 0)
+      _compactButton = [self _makeCompactButton];
     [self addSubview:_closeButton];
     [self addSubview:_compositionPeekButton];
     [self addSubview:_sidebarButton];
     if (_rightPanelButton)
       [self addSubview:_rightPanelButton];
+    if (_compactButton)
+      [self addSubview:_compactButton];
     [NSLayoutConstraint activateConstraints:@[
       [_closeButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                                  constant:KKPaddingMD],
@@ -744,7 +819,20 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
         [_rightPanelButton.heightAnchor constraintEqualToConstant:bandH],
       ]];
     }
-    bandLead = (_rightPanelButton ?: _sidebarButton).trailingAnchor;
+    if (_compactButton) {
+      NSView *beforeCompact = _rightPanelButton ?: _sidebarButton;
+      [NSLayoutConstraint activateConstraints:@[
+        [_compactButton.leadingAnchor
+            constraintEqualToAnchor:beforeCompact.trailingAnchor
+                           constant:KKPaddingSM],
+        [_compactButton.centerYAnchor
+            constraintEqualToAnchor:_sidebarButton.centerYAnchor],
+        [_compactButton.widthAnchor constraintEqualToConstant:bandH],
+        [_compactButton.heightAnchor constraintEqualToConstant:bandH],
+      ]];
+    }
+    bandLead = (_compactButton ?: _rightPanelButton ?: _sidebarButton)
+                   .trailingAnchor;
     bandLeadInset = KKSpacingMD;
   }
 
@@ -852,6 +940,7 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
     sv.verticalScrollElasticity = NSScrollElasticityNone;
     sv.documentView = _miniViewer;
     [self addSubview:sv];
+    _miniViewerScroll = sv;
     NSClipView *clip = sv.contentView;
     CGFloat initialCanvasWidth = W - 2.0 * KKPaddingMD;
     _miniViewerHeightConstraint = [sv.heightAnchor
@@ -1162,6 +1251,14 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
                                     reserveHeader:_hasHeader
                                  selectedCategory:_selectedCategory
                                     valuesByLabel:_currentValuesByLabel];
+  if (_compactMode && _descriptorPath.length > 0) {
+    h -= [_KKStaticValuesPopoverView
+             _canvasHeightForAspect:_clipAspect
+                              width:[_KKStaticValuesPopoverView
+                                        _popoverWidthForDescriptor:
+                                            _descriptorPath]] +
+         KKPaddingMD;
+  }
   // The class-level height calc assumes every expression editor is COLLAPSED
   // (it has no instance state); add the extra height for each visible EXPANDED
   // one.

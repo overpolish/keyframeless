@@ -104,6 +104,8 @@ NS_ASSUME_NONNULL_BEGIN
   // restore a hidden sidebar without rebuilding or reopening the editor.
   BOOL _editorSidebarVisible;
   BOOL _editorRightPanelVisible;
+  BOOL _editorCompactMode;
+  NSSize _editorExpandedSizeBeforeCompact;
   NSString *_openEditorSidebarKind;
   double _openEditorSidebarFraction;
   BOOL _openEditorSidebarIsBoundary;
@@ -250,6 +252,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_cancelCompositionPeek;
 - (void)_setEditorSidebarVisible:(BOOL)visible;
 - (void)_setEditorRightPanelVisible:(BOOL)visible;
+- (void)_setEditorCompactMode:(BOOL)compact;
 @end
 
 /// Lane add/remove/animatable mutations. Declared in a named category so the

@@ -49,6 +49,7 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   // them.
   KKPaddedScrollView *_rowsScroll;
   KKMiniViewerView *_miniViewer;
+  NSScrollView *_miniViewerScroll;
   // Transparent full-width drag strip behind the header's controls. Buttons
   // keep their own clicks; decorative and empty header space moves the panel.
   KKPanelDragHandleView *_panelDragHandle;
@@ -159,11 +160,13 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   KKPopoverPeekButton *_compositionPeekButton;
   KKPopoverSidebarButton *_sidebarButton;
   KKPopoverSidebarButton *_rightPanelButton;
+  NSButton *_compactButton;
   NSLayoutConstraint *_rightPanelLeadingConstraint;
   NSLayoutConstraint *_rightPanelWidthConstraint;
   void (^_onNavigate)(NSInteger);
   KKPopoverHeaderView *_header;
   BOOL _hasHeader;
+  BOOL _compactMode;
   // Stored so the in-place row rebuild (add/remove/navigate) can re-derive
   // rows without the popover reopening: provider feeds reset defaults,
   // message/onAnimate drive the "Animate" (addable) rows.

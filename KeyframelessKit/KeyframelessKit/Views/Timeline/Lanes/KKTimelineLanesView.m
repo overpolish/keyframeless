@@ -1449,6 +1449,37 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     self.onEditorRightPanelVisibilityChanged(visible);
 }
 
+- (void)_setEditorCompactMode:(BOOL)compact {
+  _editorCompactMode = compact;
+  if (!_openEditorPanel || !_openEditorIsStaticFamily || !_openStaticView)
+    return;
+
+  NSSize current = _openEditorPanel.frame.size;
+  if (compact && (_editorExpandedSizeBeforeCompact.width <= 0.0 ||
+                  _editorExpandedSizeBeforeCompact.height <= 0.0))
+    _editorExpandedSizeBeforeCompact = current;
+
+  [_openStaticView setCompactMode:compact];
+  _openEditorPanel.minSize = [_openStaticView minimumHostedContentSize];
+
+  NSSize target;
+  if (compact) {
+    target = [_openStaticView naturalHostedContentSize];
+    target.width = current.width;
+  } else if (_editorExpandedSizeBeforeCompact.width > 0.0 &&
+             _editorExpandedSizeBeforeCompact.height > 0.0) {
+    target = _editorExpandedSizeBeforeCompact;
+    _editorExpandedSizeBeforeCompact = NSZeroSize;
+  } else {
+    target = [_openStaticView naturalHostedContentSize];
+    target.width = current.width;
+  }
+  target.width = MAX(target.width, _openEditorPanel.minSize.width);
+  target.height = MAX(target.height, _openEditorPanel.minSize.height);
+  [_openEditorPanel setContentSizeKeepingTopEdge:target];
+  [_openStaticView applyHostedContentSize:_openEditorPanel.frame.size];
+}
+
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {
   _renderMode = mode;
 }
