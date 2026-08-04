@@ -31,6 +31,10 @@ static const CGFloat kPanelWidth = 300.0;
            selector:@selector(_popoverDidClose:)
                name:KKStaticValuesPopoverDidCloseNotification
              object:lanesView];
+    [nc addObserver:self
+           selector:@selector(_sidebarVisibilityChanged:)
+               name:KKStaticValuesSidebarVisibilityDidChangeNotification
+             object:lanesView];
   }
   return self;
 }
@@ -117,6 +121,11 @@ static const CGFloat kPanelWidth = 300.0;
 }
 
 - (void)_popoverDidOpen:(NSNotification *)note {
+  NSNumber *sidebarVisible = note.userInfo[@"sidebarVisible"];
+  if (sidebarVisible && !sidebarVisible.boolValue) {
+    [_panelController hide];
+    return;
+  }
   // The browser rides the two popovers where a shader is being worked on:
   // constants (the code editor / controls) and keypose. Both, because the user
   // switches template from either - and because a constants <-> keypose switch
@@ -165,6 +174,14 @@ static const CGFloat kPanelWidth = 300.0;
                                   popoverWindow:popoverWindow
                              popoverContentView:contentView];
   KKLogDebug(@"[Panel] browser attach kind=%@ -> shown", kind);
+}
+
+- (void)_sidebarVisibilityChanged:(NSNotification *)note {
+  if (![note.userInfo[@"visible"] boolValue]) {
+    [_panelController hide];
+    return;
+  }
+  [self _popoverDidOpen:note];
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {

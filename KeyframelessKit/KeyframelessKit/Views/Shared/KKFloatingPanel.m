@@ -22,36 +22,18 @@ static const CGFloat kCornerRadius = 9.0;
 // can't strand it.
 static const CGFloat kMinVisibleWidth = 90.0;
 static const CGFloat kMinVisibleHeight = 44.0;
+static const CGFloat kResizeEdgeHitSize = 7.0;
+static const CGFloat kResizeCornerHitSize = 16.0;
 
-@implementation KKPanelDragHandleView {
-  NSTrackingArea *_cursorArea;
-}
+typedef NS_OPTIONS(NSUInteger, KKResizeEdges) {
+  KKResizeEdgeNone = 0,
+  KKResizeEdgeLeft = 1 << 0,
+  KKResizeEdgeRight = 1 << 1,
+  KKResizeEdgeBottom = 1 << 2,
+  KKResizeEdgeTop = 1 << 3,
+};
 
-- (void)updateTrackingAreas {
-  [super updateTrackingAreas];
-  if (_cursorArea)
-    [self removeTrackingArea:_cursorArea];
-  _cursorArea = [[NSTrackingArea alloc]
-      initWithRect:self.bounds
-           options:NSTrackingMouseEnteredAndExited | NSTrackingCursorUpdate |
-                   NSTrackingActiveAlways
-             owner:self
-          userInfo:nil];
-  [self addTrackingArea:_cursorArea];
-}
-
-- (void)cursorUpdate:(NSEvent *)event {
-  [NSCursor.openHandCursor set];
-}
-
-- (void)mouseEntered:(NSEvent *)event {
-  [NSCursor.openHandCursor set];
-}
-
-- (void)mouseExited:(NSEvent *)event {
-  [NSCursor.arrowCursor set];
-}
-
+@implementation KKPanelDragHandleView
 @end
 
 @implementation KKFloatingPanel {
@@ -62,11 +44,19 @@ static const CGFloat kMinVisibleHeight = 44.0;
   NSPoint _grabOffset;
   id _dragLocalMonitor;
   id _dragGlobalMonitor;
+  BOOL _resizing;
+  KKResizeEdges _resizeEdges;
+  NSRect _resizeStartFrame;
+  id _resizeLocalMonitor;
+  id _resizeGlobalMonitor;
+  NSTrackingArea *_pointerTrackingArea;
+  __weak NSView *_pointerTrackingView;
   BOOL _screenClampScheduled;
 }
 
 @synthesize allowsKeyWindow = _allowsKeyWindow;
 @synthesize userMovable = _userMovable;
+@synthesize userResizable = _userResizable;
 @synthesize keepsEntireFrameVisible = _keepsEntireFrameVisible;
 
 - (instancetype)initWithContentSize:(NSSize)size
@@ -89,7 +79,12 @@ static const CGFloat kMinVisibleHeight = 44.0;
     self.opaque = NO;
     self.animationBehavior = NSWindowAnimationBehaviorNone;
     self.movableByWindowBackground = NO; // dragging is handled here, see below
+    // The resize/drag cursor is geometry-dependent, so it must be recomputed
+    // while moving inside one large tracking area (not only on enter/exit).
+    // This is also what prevents a resize cursor sticking over the panel body.
+    self.acceptsMouseMovedEvents = YES;
     _userMovable = YES;
+    _userResizable = NO;
   }
   return self;
 }
@@ -97,6 +92,8 @@ static const CGFloat kMinVisibleHeight = 44.0;
 - (void)dealloc {
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [self _removeDragMonitors];
+  [self _removeResizeMonitors];
+  [self _removePointerTrackingArea];
 }
 
 // Control-only panels are never key by default, deliberately.
@@ -160,6 +157,7 @@ static const CGFloat kMinVisibleHeight = 44.0;
   if (_keepsEntireFrameVisible)
     frame = [self _fullyVisibleFrame:frame];
   [self setFrame:frame display:self.isVisible];
+  [self _updatePointerTrackingArea];
 }
 
 - (void)_scheduleFullFrameClamp:(NSNotification *)note {
@@ -246,6 +244,7 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
         [NSColor.inspectorBackground colorWithAlphaComponent:0.5].CGColor;
     glass.contentView = content;
     self.contentView = glass;
+    [self _updatePointerTrackingArea];
     return;
   }
   NSVisualEffectView *fx = [[NSVisualEffectView alloc]
@@ -261,6 +260,27 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
   content.frame = fx.bounds;
   [fx addSubview:content];
   self.contentView = fx;
+  [self _updatePointerTrackingArea];
+}
+
+- (void)setUserResizable:(BOOL)userResizable {
+  _userResizable = userResizable;
+  if (!userResizable) {
+    [self _endResize];
+    [self _updatePointerTrackingArea];
+  } else {
+    [self _updatePointerTrackingArea];
+  }
+}
+
+- (void)setUserMovable:(BOOL)userMovable {
+  _userMovable = userMovable;
+  [self _updatePointerTrackingArea];
+}
+
+- (void)setDragHandleView:(NSView *)dragHandleView {
+  _dragHandleView = dragHandleView;
+  [self _updatePointerTrackingArea];
 }
 
 - (NSPoint)_rememberedOrigin:(BOOL *)outFound {
@@ -281,6 +301,30 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
 - (void)_rememberOrigin:(NSPoint)origin {
   KKScopedDefaultWrite(@[ @(origin.x), @(origin.y) ], _positionKey,
                        kPositionScope);
+}
+
+- (NSSize)_rememberedSize:(BOOL *)outFound {
+  if (outFound)
+    *outFound = NO;
+  NSString *key = [_positionKey stringByAppendingString:@".size"];
+  id stored = KKScopedDefaultRead(key, kPositionScope);
+  if (![stored isKindOfClass:[NSArray class]] || [stored count] != 2)
+    return NSZeroSize;
+  NSArray *pair = stored;
+  if (![pair[0] respondsToSelector:@selector(doubleValue)] ||
+      ![pair[1] respondsToSelector:@selector(doubleValue)])
+    return NSZeroSize;
+  NSSize size = NSMakeSize([pair[0] doubleValue], [pair[1] doubleValue]);
+  if (size.width <= 0.0 || size.height <= 0.0)
+    return NSZeroSize;
+  if (outFound)
+    *outFound = YES;
+  return size;
+}
+
+- (void)_rememberSize:(NSSize)size {
+  NSString *key = [_positionKey stringByAppendingString:@".size"];
+  KKScopedDefaultWrite(@[ @(size.width), @(size.height) ], key, kPositionScope);
 }
 
 // A frame is restorable only if enough of it lands on a screen that is still
@@ -323,6 +367,16 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
   BOOL found = NO;
   NSPoint remembered = [self _rememberedOrigin:&found];
   NSRect frame = self.frame;
+  if (_userResizable) {
+    BOOL sizeFound = NO;
+    NSSize rememberedSize = [self _rememberedSize:&sizeFound];
+    if (sizeFound) {
+      frame.size.width = MAX(rememberedSize.width, self.minSize.width);
+      frame.size.height = MAX(rememberedSize.height, self.minSize.height);
+    }
+    frame.size.width = MAX(frame.size.width, self.minSize.width);
+    frame.size.height = MAX(frame.size.height, self.minSize.height);
+  }
   frame.origin = remembered;
   if (!found || ![self _frameIsReachable:frame]) {
     if (found)
@@ -338,12 +392,15 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
   if (self.parentWindow != parent)
     [parent addChildWindow:self ordered:NSWindowAbove];
   [self _installScreenSafetyObserversForParent:parent];
+  [self _updatePointerTrackingArea];
   KKPopoverAddKeepAliveWindow(self);
 }
 
 - (void)hidePanel {
   _dragging = NO;
   [self _removeDragMonitors];
+  [self _endResize];
+  [self _removePointerTrackingArea];
   KKPopoverRemoveKeepAliveWindow(self);
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [self.parentWindow removeChildWindow:self];
@@ -372,14 +429,23 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
 // drag handle would otherwise leave only the few points above and below it
 // grabbable, which is what a "hairline" drag region means.
 static BOOL KKViewWantsItsOwnClicks(NSView *view) {
-  if ([view isKindOfClass:[NSTextField class]]) {
-    NSTextField *field = (NSTextField *)view;
-    return field.isEditable || field.isSelectable;
+  for (NSView *candidate = view; candidate; candidate = candidate.superview) {
+    if ([candidate isKindOfClass:[NSTextField class]]) {
+      NSTextField *field = (NSTextField *)candidate;
+      if (field.isEditable || field.isSelectable)
+        return YES;
+      // A label is an NSControl too, but a decorative title must remain part
+      // of the draggable header. Do not let the generic NSControl check below
+      // turn it back into an interactive hit.
+      continue;
+    }
+    if ([candidate isKindOfClass:[NSControl class]] ||
+        [candidate isKindOfClass:[NSTextView class]] ||
+        [candidate isKindOfClass:[NSTableView class]] ||
+        [candidate isKindOfClass:[NSScrollView class]])
+      return YES;
   }
-  return [view isKindOfClass:[NSControl class]] ||
-         [view isKindOfClass:[NSTextView class]] ||
-         [view isKindOfClass:[NSTableView class]] ||
-         [view isKindOfClass:[NSScrollView class]];
+  return NO;
 }
 
 - (BOOL)_shouldStartDragForEvent:(NSEvent *)event {
@@ -396,9 +462,15 @@ static BOOL KKViewWantsItsOwnClicks(NSView *view) {
     return NO;
   if (KKViewWantsItsOwnClicks(hit))
     return NO;
-  if (self.dragHandleView)
-    return hit == self.dragHandleView ||
-           [hit isDescendantOf:self.dragHandleView];
+  if (self.dragHandleView) {
+    // Use the handle's GEOMETRY rather than requiring the deepest hit view to
+    // descend from it. Editor headers place a transparent drag strip behind
+    // sibling buttons and labels; the buttons keep their clicks via the gate
+    // above, while every decorative/empty point across the strip can drag.
+    NSPoint inHandle = [self.dragHandleView convertPoint:event.locationInWindow
+                                                fromView:nil];
+    return NSPointInRect(inHandle, self.dragHandleView.bounds);
+  }
   // No explicit handle: drag from anything that doesn't want the click itself.
   return YES;
 }
@@ -428,6 +500,253 @@ static NSPoint KKCursorScreenPoint(NSEvent *event) {
   return event.window
              ? [event.window convertPointToScreen:event.locationInWindow]
              : event.locationInWindow;
+}
+
+- (KKResizeEdges)_resizeEdgesAtPoint:(NSPoint)p {
+  if (!_userResizable || !self.contentView)
+    return KKResizeEdgeNone;
+  NSRect b = self.contentView.bounds;
+  // ActiveAlways tracking can deliver this panel mouse-moves after the pointer
+  // has crossed into a neighbouring child window. Negative x/y used to satisfy
+  // the one-sided "near left/bottom" checks below, so the editor reasserted a
+  // resize cursor over Shader Templates or grading after those panels had
+  // correctly selected the arrow.
+  if (!NSPointInRect(p, b))
+    return KKResizeEdgeNone;
+  BOOL nearLeft = p.x <= NSMinX(b) + kResizeEdgeHitSize;
+  BOOL nearRight = p.x >= NSMaxX(b) - kResizeEdgeHitSize;
+  BOOL nearBottom = p.y <= NSMinY(b) + kResizeEdgeHitSize;
+  BOOL nearTop = p.y >= NSMaxY(b) - kResizeEdgeHitSize;
+  // Corners get a larger target without turning the whole adjacent edge into
+  // a diagonal resize zone.
+  if (p.x <= NSMinX(b) + kResizeCornerHitSize) {
+    if (p.y <= NSMinY(b) + kResizeCornerHitSize)
+      return KKResizeEdgeLeft | KKResizeEdgeBottom;
+    if (p.y >= NSMaxY(b) - kResizeCornerHitSize)
+      return KKResizeEdgeLeft | KKResizeEdgeTop;
+  }
+  if (p.x >= NSMaxX(b) - kResizeCornerHitSize) {
+    if (p.y <= NSMinY(b) + kResizeCornerHitSize)
+      return KKResizeEdgeRight | KKResizeEdgeBottom;
+    if (p.y >= NSMaxY(b) - kResizeCornerHitSize)
+      return KKResizeEdgeRight | KKResizeEdgeTop;
+  }
+  KKResizeEdges edges = KKResizeEdgeNone;
+  if (nearLeft)
+    edges |= KKResizeEdgeLeft;
+  else if (nearRight)
+    edges |= KKResizeEdgeRight;
+  if (nearBottom)
+    edges |= KKResizeEdgeBottom;
+  else if (nearTop)
+    edges |= KKResizeEdgeTop;
+  return edges;
+}
+
+- (void)_removePointerTrackingArea {
+  if (_pointerTrackingArea && _pointerTrackingView)
+    [_pointerTrackingView removeTrackingArea:_pointerTrackingArea];
+  _pointerTrackingArea = nil;
+  _pointerTrackingView = nil;
+}
+
+- (void)_updatePointerTrackingArea {
+  [self _removePointerTrackingArea];
+  NSView *content = self.contentView;
+  if (!content || (!_userResizable && !(_userMovable && _dragHandleView)))
+    return;
+  _pointerTrackingArea = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
+                   NSTrackingCursorUpdate | NSTrackingActiveAlways |
+                   NSTrackingInVisibleRect
+             owner:self
+          userInfo:nil];
+  [content addTrackingArea:_pointerTrackingArea];
+  _pointerTrackingView = content;
+}
+
+static NSCursor *KKCursorForResizeEdges(KKResizeEdges edges) {
+  NSCursorFrameResizePosition position;
+  switch (edges) {
+  case KKResizeEdgeLeft:
+    position = NSCursorFrameResizePositionLeft;
+    break;
+  case KKResizeEdgeRight:
+    position = NSCursorFrameResizePositionRight;
+    break;
+  case KKResizeEdgeTop:
+    position = NSCursorFrameResizePositionTop;
+    break;
+  case KKResizeEdgeBottom:
+    position = NSCursorFrameResizePositionBottom;
+    break;
+  case KKResizeEdgeLeft | KKResizeEdgeTop:
+    position = NSCursorFrameResizePositionTopLeft;
+    break;
+  case KKResizeEdgeRight | KKResizeEdgeTop:
+    position = NSCursorFrameResizePositionTopRight;
+    break;
+  case KKResizeEdgeLeft | KKResizeEdgeBottom:
+    position = NSCursorFrameResizePositionBottomLeft;
+    break;
+  default:
+    position = NSCursorFrameResizePositionBottomRight;
+    break;
+  }
+  return
+      [NSCursor frameResizeCursorFromPosition:position
+                                 inDirections:NSCursorFrameResizeDirectionsAll];
+}
+
+- (void)_updateCursorForEvent:(NSEvent *)event {
+  // ActiveAlways tracking can deliver a cursor update while a sibling
+  // companion window (templates, grading, layers) is actually under the
+  // pointer. Its locationInWindow belongs to that OTHER window; interpreting
+  // it in this panel's coordinates randomly lands on a left/right edge and
+  // flashes a horizontal resize cursor over the companion.
+  if (event.window != self) {
+    [NSCursor.arrowCursor set];
+    return;
+  }
+  NSView *content = self.contentView;
+  if (!content) {
+    [NSCursor.arrowCursor set];
+    return;
+  }
+  NSPoint p = [content convertPoint:event.locationInWindow fromView:nil];
+  KKResizeEdges edges = [self _resizeEdgesAtPoint:p];
+  if (edges != KKResizeEdgeNone) {
+    [KKCursorForResizeEdges(edges) set];
+    return;
+  }
+  NSView *hit = [content hitTest:p];
+  if (_userMovable && _dragHandleView && hit && !KKViewWantsItsOwnClicks(hit)) {
+    NSPoint hp = [_dragHandleView convertPoint:event.locationInWindow
+                                      fromView:nil];
+    if (NSPointInRect(hp, _dragHandleView.bounds)) {
+      [NSCursor.openHandCursor set];
+      return;
+    }
+  }
+  [NSCursor.arrowCursor set];
+}
+
+- (void)cursorUpdate:(NSEvent *)event {
+  [self _updateCursorForEvent:event];
+}
+- (void)mouseEntered:(NSEvent *)event {
+  [self _updateCursorForEvent:event];
+}
+- (void)mouseMoved:(NSEvent *)event {
+  [self _updateCursorForEvent:event];
+}
+- (void)mouseExited:(NSEvent *)event {
+  [NSCursor.arrowCursor set];
+}
+
+- (KKResizeEdges)_resizeEdgesForEvent:(NSEvent *)event {
+  if (!self.contentView)
+    return KKResizeEdgeNone;
+  NSPoint p = [self.contentView convertPoint:event.locationInWindow
+                                    fromView:nil];
+  return [self _resizeEdgesAtPoint:p];
+}
+
+- (void)_resizeTickAtScreenPoint:(NSPoint)screenPoint {
+  if (!_resizing)
+    return;
+  CGFloat left = NSMinX(_resizeStartFrame);
+  CGFloat right = NSMaxX(_resizeStartFrame);
+  CGFloat bottom = NSMinY(_resizeStartFrame);
+  CGFloat top = NSMaxY(_resizeStartFrame);
+  if (_resizeEdges & KKResizeEdgeLeft)
+    left = screenPoint.x;
+  if (_resizeEdges & KKResizeEdgeRight)
+    right = screenPoint.x;
+  if (_resizeEdges & KKResizeEdgeBottom)
+    bottom = screenPoint.y;
+  if (_resizeEdges & KKResizeEdgeTop)
+    top = screenPoint.y;
+  NSScreen *screen = [self _bestScreenForFrame:_resizeStartFrame];
+  NSRect visible =
+      screen ? screen.visibleFrame : NSScreen.mainScreen.visibleFrame;
+  CGFloat minW = MAX(self.minSize.width, kMinVisibleWidth);
+  CGFloat minH = MAX(self.minSize.height, kMinVisibleHeight);
+  left = MAX(left, NSMinX(visible));
+  right = MIN(right, NSMaxX(visible));
+  bottom = MAX(bottom, NSMinY(visible));
+  top = MIN(top, NSMaxY(visible));
+  if (right - left < minW) {
+    if (_resizeEdges & KKResizeEdgeLeft)
+      left = right - minW;
+    else
+      right = left + minW;
+  }
+  if (top - bottom < minH) {
+    if (_resizeEdges & KKResizeEdgeBottom)
+      bottom = top - minH;
+    else
+      top = bottom + minH;
+  }
+  NSRect frame = NSMakeRect(left, bottom, right - left, top - bottom);
+  if (_keepsEntireFrameVisible)
+    frame = [self _fullyVisibleFrame:frame];
+  [self setFrame:frame display:YES];
+  if (self.onUserResized)
+    self.onUserResized(frame.size);
+}
+
+- (void)_endResize {
+  if (!_resizing) {
+    [self _removeResizeMonitors];
+    return;
+  }
+  _resizing = NO;
+  _resizeEdges = KKResizeEdgeNone;
+  [self _removeResizeMonitors];
+  [self _rememberOrigin:self.frame.origin];
+  [self _rememberSize:self.frame.size];
+  if (self.onUserResized)
+    self.onUserResized(self.frame.size);
+}
+
+- (void)_installResizeMonitors {
+  __weak KKFloatingPanel *weak = self;
+  NSEventMask mask = NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;
+  _resizeGlobalMonitor = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:mask
+                                    handler:^(NSEvent *event) {
+                                      if (event.type == NSEventTypeLeftMouseUp)
+                                        [weak _endResize];
+                                      else
+                                        [weak _resizeTickAtScreenPoint:
+                                                  KKCursorScreenPoint(event)];
+                                    }];
+  _resizeLocalMonitor = [NSEvent
+      addLocalMonitorForEventsMatchingMask:mask
+                                   handler:^NSEvent *(NSEvent *event) {
+                                     __strong KKFloatingPanel *panel = weak;
+                                     if (!panel)
+                                       return event;
+                                     if (event.type == NSEventTypeLeftMouseUp)
+                                       [panel _endResize];
+                                     else
+                                       [panel _resizeTickAtScreenPoint:
+                                                  KKCursorScreenPoint(event)];
+                                     return nil;
+                                   }];
+}
+
+- (void)_removeResizeMonitors {
+  if (_resizeGlobalMonitor) {
+    [NSEvent removeMonitor:_resizeGlobalMonitor];
+    _resizeGlobalMonitor = nil;
+  }
+  if (_resizeLocalMonitor) {
+    [NSEvent removeMonitor:_resizeLocalMonitor];
+    _resizeLocalMonitor = nil;
+  }
 }
 
 - (void)_dragTickAtScreenPoint:(NSPoint)screenPoint {
@@ -493,6 +812,17 @@ static NSPoint KKCursorScreenPoint(NSEvent *event) {
 }
 
 - (void)sendEvent:(NSEvent *)event {
+  KKResizeEdges resizeEdges = event.type == NSEventTypeLeftMouseDown
+                                  ? [self _resizeEdgesForEvent:event]
+                                  : KKResizeEdgeNone;
+  if (resizeEdges != KKResizeEdgeNone) {
+    [self _endResize];
+    _resizeEdges = resizeEdges;
+    _resizeStartFrame = self.frame;
+    _resizing = YES;
+    [self _installResizeMonitors];
+    return;
+  }
   if (event.type == NSEventTypeLeftMouseDown &&
       [self _shouldStartDragForEvent:event]) {
     // The mouseDown DOES reach this window (forwarded by the kit's click

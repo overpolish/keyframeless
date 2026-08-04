@@ -9,12 +9,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// A KKFloatingPanel drag strip that shows the open-hand grab cursor while the
-/// pointer is over it.
-///
-/// The cursor comes from a tracking area rather than -addCursorRect:cursor:,
-/// which AppKit only services for the key window - a non-activating panel
-/// beside a popover frequently isn't one, and the cursor simply never changed.
+/// A transparent KKFloatingPanel drag strip. The panel owns cursor tracking so
+/// it can distinguish empty strip space from buttons layered above the strip.
 @interface KKPanelDragHandleView : NSView
 @end
 
@@ -74,6 +70,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// enabled; companion surfaces keep their existing draggable behaviour.
 @property(nonatomic) BOOL userMovable;
 
+/// Enable normal window-style resizing from every edge and corner, driven by
+/// the same cross-window event monitors as panel dragging. `minSize` supplies
+/// the content floor and the active screen supplies the maximum. The final
+/// frame is kept reachable and remembered.
+@property(nonatomic) BOOL userResizable;
+
 /// Clamp the whole panel inside one screen's visible frame on show, resize and
 /// drag. Defaults to NO so existing companions retain their current placement
 /// semantics. Primary editors enable it so no control can be stranded beyond
@@ -89,14 +91,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// the panel drags by any part of its background that does not handle the click
 /// itself. Set to a header strip for a panel whose body is interactive.
 ///
-/// Use KKPanelDragHandleView for the strip to get the grab cursor: a drag
-/// region with no background of its own is invisible, so the cursor is the only
-/// thing telling the user it is there.
+/// Use KKPanelDragHandleView for a transparent strip; KKFloatingPanel shows the
+/// grab cursor only over its non-interactive space.
 @property(nonatomic, weak, nullable) NSView *dragHandleView;
 
 /// Called after a user drag settles, for a host that wants to react (e.g. save
 /// nothing else, or re-align a pointer). The origin is already persisted.
 @property(nonatomic, copy, nullable) void (^onUserMoved)(NSPoint origin);
+
+/// Fired continuously during a user resize so hosted content can reflow its
+/// width-dependent layout, then once more at mouse-up with the settled size.
+@property(nonatomic, copy, nullable) void (^onUserResized)(NSSize size);
 
 @end
 

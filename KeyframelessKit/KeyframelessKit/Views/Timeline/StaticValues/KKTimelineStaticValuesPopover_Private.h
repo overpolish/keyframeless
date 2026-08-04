@@ -19,6 +19,8 @@
 @class KKPillToggleRowView;
 @class KKPopoverHeaderView;
 @class KKPopoverPeekButton;
+@class KKPopoverSidebarButton;
+@class KKPanelDragHandleView;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -47,11 +49,12 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   // them.
   KKPaddedScrollView *_rowsScroll;
   KKMiniViewerView *_miniViewer;
-  // Header-band 3-segment pill (sm/md/lg) that sets the global mini-viewer
-  // size; the mini-viewer's height constraint is updated in place so the
-  // preview grows/shrinks without reopening the popover. Both nil with no
-  // mini-viewer.
-  KKPillToggleRowView *_sizePill;
+  // Transparent full-width drag strip behind the header's controls. Buttons
+  // keep their own clicks; decorative and empty header space moves the panel.
+  KKPanelDragHandleView *_panelDragHandle;
+  // The preview viewport fills the panel width. Its renderer preserves the
+  // media aspect internally and the empty viewport remains usable for pan /
+  // zoom, just like Final Cut's viewer.
   NSLayoutConstraint *_miniViewerHeightConstraint;
   KKPillToggleRowView *_renderModePill; // guide anchor; nil when no pill shown
   // Host-supplied strip between the mini-viewer band and the category nav /
@@ -141,6 +144,7 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   NSLayoutConstraint *_stackTopConstraint;
   NSString *_descriptorPath;
   CGFloat _clipAspect;
+  NSSize _hostedContentSize;
   void (^_onHandleValue)(NSString *, NSArray<NSNumber *> *);
   void (^_onSmoothToggled)(NSString *, BOOL);
   void (^_onLinkToggled)(NSString *, BOOL);
@@ -153,6 +157,10 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   NSButton *_navNextButton;
   NSButton *_closeButton;
   KKPopoverPeekButton *_compositionPeekButton;
+  KKPopoverSidebarButton *_sidebarButton;
+  KKPopoverSidebarButton *_rightPanelButton;
+  NSLayoutConstraint *_rightPanelLeadingConstraint;
+  NSLayoutConstraint *_rightPanelWidthConstraint;
   void (^_onNavigate)(NSInteger);
   KKPopoverHeaderView *_header;
   BOOL _hasHeader;

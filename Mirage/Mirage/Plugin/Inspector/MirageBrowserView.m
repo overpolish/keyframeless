@@ -64,6 +64,31 @@ static const CGFloat kHeaderH = 22.0;
   /// source, so it only has to survive as long as the parse above does: the
   /// whole cache is dropped with it whenever the catalogue moves.
   NSMutableDictionary<NSString *, NSNumber *> *_colorSurfaceByID;
+  NSTrackingArea *_arrowCursorArea;
+}
+
+- (void)resetCursorRects {
+  [super resetCursorRects];
+  // The browser is a separate window from the resizable editor. Claim its
+  // ordinary cursor locally so an editor-edge cursor cannot carry into it.
+  [self addCursorRect:self.bounds cursor:NSCursor.arrowCursor];
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (_arrowCursorArea)
+    [self removeTrackingArea:_arrowCursorArea];
+  _arrowCursorArea = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways |
+                   NSTrackingInVisibleRect
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:_arrowCursorArea];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  [NSCursor.arrowCursor set];
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {

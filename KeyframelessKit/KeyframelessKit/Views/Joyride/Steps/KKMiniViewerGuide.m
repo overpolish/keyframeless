@@ -11,11 +11,11 @@
 #import <KeyframelessKit/KKJoyrideTrigger.h>
 #import <KeyframelessKit/KKMiniViewerGuideScroll.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingGuide.h>
-#import <KeyframelessKit/KKTimeline.h>
 
 // Spotlight the keypose at this index (a middle one, so the boundary popover
 // opens with frames on both sides in the filmstrip).
@@ -32,7 +32,8 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniViewerView *c) {
 
 + (KKTimeline *)seedTimelineForConfig:(KKTimingGuideConfig *)config {
   KKTimeline *tl = [KKTimeline timeline];
-  KKLane *primary = [KKLane laneWithKey:config.primaryLabel label:config.primaryLabel];
+  KKLane *primary = [KKLane laneWithKey:config.primaryLabel
+                                  label:config.primaryLabel];
   primary.enabled = YES; // animatable, so the Advanced sequencer shows keyposes
   primary.valueType = (KKLaneValueType)config.primaryValueType;
   // Mirror the real lane's aspect-link so OSC drags during the guide follow the
@@ -63,14 +64,10 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniViewerView *c) {
 
   const NSInteger ixOpen = 0, ixIntro = 1, ixDrag = 2, ixZoom = 3, ixReset = 4,
                   ixFilmstrip = 5, ixFilmstripZoom = 6, ixNavigate = 7,
-                  ixOnion = 8, ixOnionExplain = 9, ixSize = 10, ixDone = 11;
+                  ixOnion = 8, ixOnionExplain = 9, ixDone = 10;
   (void)ixIntro;
   (void)ixOnionExplain;
   (void)ixDone;
-
-  // Large segment of the size pill (sm/md/lg = 0/1/2); the guide resets the
-  // size to sm at start, so this step teaches growing it to the largest.
-  const NSInteger kSizeLargeIndex = 2;
 
   NSRect (^canvasRect)(void) = ^NSRect {
     return KKMiniViewerCanvasScreenRect(weakBinder.latestMiniViewer);
@@ -171,15 +168,6 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniViewerView *c) {
                        @"Mini-viewer guide: onion-skin red/blue meaning."));
   sOnionExplain.showsNext = YES;
 
-  KKJoyrideStep *sSize = [KKJoyrideStep
-      stepWithMessage:KKLoc(@"Tap <accent>Large</accent> for a bigger preview.",
-                            @"Mini-viewer guide: enlarge the preview.")
-           targetView:nil];
-  sSize.targetScreenRect = ^NSRect {
-    __strong KKTimelineLanesView *l = weakLanes;
-    return l ? [l guideSizePillScreenRectForIndex:kSizeLargeIndex] : NSZeroRect;
-  };
-
   KKJoyrideStep *sDone =
       canvasStep(KKLoc(@"Use the <accent>mini viewer</accent> to edit a "
                        @"keypose at its point in time, without scrubbing "
@@ -220,14 +208,9 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniViewerView *c) {
         atIndex:ixOnion
       advanceOn:[KKJoyrideTrigger renderModeChanged:KKMiniViewerRenderModeOnion]
       dismissOn:nil];
-  [binder bindStep:sSize
-           atIndex:ixSize
-         advanceOn:[KKJoyrideTrigger miniViewerSizeChanged:kSizeLargeIndex]
-         dismissOn:nil];
-
   return @[
     sOpen, sIntro, sDrag, sZoom, sReset, sFilmstrip, sFilmstripZoom, sNavigate,
-    sOnion, sOnionExplain, sSize, sDone
+    sOnion, sOnionExplain, sDone
   ];
 }
 

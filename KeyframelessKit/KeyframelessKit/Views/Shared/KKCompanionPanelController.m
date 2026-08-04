@@ -159,7 +159,6 @@ static const CGFloat kSlideDistance = 12.0;
     [fx addSubview:content];
     p.contentView = fx;
   }
-
   // What DID cost the shortcuts is the free first responder AppKit hands out:
   // a window whose initialFirstResponder is nil picks the first view in its key
   // loop the first time it becomes key - here the browser's search field - so

@@ -22,6 +22,12 @@ While an editor is open, the preview also follows playback. Play back or scrub t
 
 The mini-viewer only receives the current clip. To check the whole composition, hold the layered-rectangles button beside Close, or hold P. The editor panel disappears while held so Final Cut's own viewer is visible, then returns to the same keypose, constant, curve, or modulation when released. Editor panels stay open while you work elsewhere in Final Cut; close them with their Close button or Esc.
 
+Drag empty space or the decorative title in an editor's title bar to put it where you want. Curve and modulation remember one position, while Constants and keypose remember another. The Constants/keypose panel can be resized from any edge or corner. The viewer fills its whole canvas and takes priority over parameter rows, which scroll when they need more room. A code editor grows alongside the viewer up to 150pt, then further growth belongs to the viewer. Its size and both panel positions are remembered.
+
+The sidebar button beside composition peek, or the L key, hides and shows the plugin's main companion browser: templates in Mirage and layers in Canvas. It is shown by default.
+
+Mirage has a second, right-sidebar button for the grading panel. Use it or press G to hide and restore grading without closing the editor. This button is plugin opt-in, so Canvas does not show it.
+
 The OSC handles also work inside the main FCP viewer, not just the mini-viewer, so once you're comfortable you can drag the same controls on the full-size canvas.
 
 The preview renders in the clip's own image space - it shows the effect applied to the clip's media, but not the clip's own Video-inspector Transform/Crop/Distort or the project-canvas letterbox, since Final Cut applies those after the effect. See the clip-space-and-wrapping topic for why, and when to wrap in a compound or adjustment clip so the preview matches the viewer.

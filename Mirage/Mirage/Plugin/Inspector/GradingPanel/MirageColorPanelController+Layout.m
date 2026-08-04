@@ -77,6 +77,37 @@ static CGFloat MiragePanelHeightForRingCount(NSUInteger count,
 /// adding a second floating panel later cannot inherit this one's position.
 static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
 
+@interface MirageColorPanelBodyView : NSView {
+  NSTrackingArea *_arrowCursorArea;
+}
+@end
+
+@implementation MirageColorPanelBodyView
+
+- (void)resetCursorRects {
+  [super resetCursorRects];
+  [self addCursorRect:self.bounds cursor:NSCursor.arrowCursor];
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (_arrowCursorArea)
+    [self removeTrackingArea:_arrowCursorArea];
+  _arrowCursorArea = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways |
+                   NSTrackingInVisibleRect
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:_arrowCursorArea];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  [NSCursor.arrowCursor set];
+}
+
+@end
+
 @implementation MirageColorPanelController (Layout)
 
 /// How many circles the panel is currently showing: what the source declares,
@@ -268,8 +299,8 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
       initWithContentSize:NSMakeSize(kPanelWidth, panelHeight)
               positionKey:kPositionKey];
 
-  NSView *body =
-      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, kPanelWidth, panelHeight)];
+  NSView *body = [[MirageColorPanelBodyView alloc]
+      initWithFrame:NSMakeRect(0, 0, kPanelWidth, panelHeight)];
   body.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
   _body = body;
 

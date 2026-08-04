@@ -206,6 +206,19 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
         };
     _colorPanelController = [[MirageColorPanelController alloc]
         initWithLanesView:self.basicLanesView];
+    // Mirage opts into the shared right-panel header control; Canvas and other
+    // plugins leave this capability off, so no dead button appears for them.
+    self.basicLanesView.editorRightPanelToggleSupported = YES;
+    self.basicLanesView.editorRightPanelToggleAvailable = NO;
+    _colorPanelController.onSurfaceAvailabilityChanged = ^(BOOL available) {
+      __strong typeof(weak) s = weak;
+      s.basicLanesView.editorRightPanelToggleAvailable = available;
+    };
+    self.basicLanesView.onEditorRightPanelVisibilityChanged = ^(BOOL visible) {
+      __strong typeof(weak) s = weak;
+      if (s)
+        s->_colorPanelController.userVisible = visible;
+    };
     // The puck writes real controls, so it persists through the same chain as
     // any other edit, and brackets its drag so the burst collapses to one undo
     // entry.
@@ -778,6 +791,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // entry it is pointed at, so pointing it must come first or a swap between
   // two grading templates would rebuild against the outgoing one.
   _colorPanelController.selectedRackEntryID = selectedEntry;
+  self.basicLanesView.editorRightPanelToggleAvailable = wantsSurface;
   _colorPanelController.surfaceEnabled = wantsSurface;
   [_colorPanelController timelineDidChange];
   // A recompile can add or drop `preview=selection` under an open popover, and

@@ -539,7 +539,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   return NSMakeSize(NSViewNoIntrinsicMetric, h);
 }
 
-// A popover resize (sm/md/lg) changes the content width without rebuilding
+// A manual panel resize changes the content width without rebuilding
 // rows, so the host calls this to re-derive a wrapping pill row's block width +
 // height for the new width. No-op for a non-wrapping row.
 - (void)updateContentWidth:(CGFloat)contentWidth {

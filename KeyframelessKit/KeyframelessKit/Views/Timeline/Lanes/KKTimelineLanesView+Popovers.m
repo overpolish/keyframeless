@@ -421,6 +421,9 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   _openEditorContentView = nil;
   _openEditorMiniViewer = nil;
   _openEditorPanel = nil;
+  _openEditorSidebarKind = nil;
+  _openEditorSidebarFraction = 0.0;
+  _openEditorSidebarIsBoundary = NO;
   _editorHostPID = 0;
   [panel hidePanel];
 
@@ -454,6 +457,11 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                                            keyboard:YES];
                                          return nil;
                                        }
+                                       if ([ch isEqualToString:@"l"])
+                                         return nil;
+                                       if (s.editorRightPanelToggleAvailable &&
+                                           [ch isEqualToString:@"g"])
+                                         return nil;
                                        return event;
                                      }
 
@@ -526,6 +534,33 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                                            keyboard:YES];
                                        return nil;
                                      }
+                                     if ([ch isEqualToString:@"l"] &&
+                                         !(mods &
+                                           (NSEventModifierFlagCommand |
+                                            NSEventModifierFlagControl |
+                                            NSEventModifierFlagOption |
+                                            NSEventModifierFlagShift |
+                                            NSEventModifierFlagFunction)) &&
+                                         !fieldEditing) {
+                                       if (!event.isARepeat)
+                                         [s _setEditorSidebarVisible:
+                                                 !s.editorSidebarVisible];
+                                       return nil;
+                                     }
+                                     if (s.editorRightPanelToggleAvailable &&
+                                         [ch isEqualToString:@"g"] &&
+                                         !(mods &
+                                           (NSEventModifierFlagCommand |
+                                            NSEventModifierFlagControl |
+                                            NSEventModifierFlagOption |
+                                            NSEventModifierFlagShift |
+                                            NSEventModifierFlagFunction)) &&
+                                         !fieldEditing) {
+                                       if (!event.isARepeat)
+                                         [s _setEditorRightPanelVisible:
+                                                 !s.editorRightPanelVisible];
+                                       return nil;
+                                     }
                                      if (event.keyCode == 53) { // Escape
                                        if (fieldEditing)
                                          return event;
@@ -585,9 +620,15 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
         if (s->_editorHostPID == 0 || front != s->_editorHostPID)
           return NO;
         NSString *ch = event.charactersIgnoringModifiers.lowercaseString;
-        if (![ch isEqualToString:@"p"])
+        BOOL peekKey = [ch isEqualToString:@"p"];
+        BOOL sidebarKey = [ch isEqualToString:@"l"];
+        BOOL rightPanelKey =
+            s.editorRightPanelToggleAvailable && [ch isEqualToString:@"g"];
+        if (!peekKey && !sidebarKey && !rightPanelKey)
           return NO;
         if (event.type == NSEventTypeKeyUp) {
+          if (sidebarKey || rightPanelKey)
+            return YES;
           if (!s->_compositionPeekKeyHeld)
             return NO;
           [s _setCompositionPeekHeld:NO keyboard:YES];
@@ -604,8 +645,14 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
             [NSApp.keyWindow.firstResponder isKindOfClass:[NSText class]];
         if (fieldEditing)
           return NO;
-        if (!event.isARepeat)
-          [s _setCompositionPeekHeld:YES keyboard:YES];
+        if (!event.isARepeat) {
+          if (sidebarKey)
+            [s _setEditorSidebarVisible:!s.editorSidebarVisible];
+          else if (rightPanelKey)
+            [s _setEditorRightPanelVisible:!s.editorRightPanelVisible];
+          else
+            [s _setCompositionPeekHeld:YES keyboard:YES];
+        }
         return YES;
       });
 }
@@ -613,6 +660,13 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
 - (void)_setOpenEditorContentSize:(NSSize)size {
   if (!_openEditorPanel || size.width <= 0.0 || size.height <= 0.0)
     return;
+  if (_openEditorIsStaticFamily && _openEditorPanel.userResizable &&
+      [_openEditorContentView
+          isKindOfClass:[_KKStaticValuesPopoverView class]]) {
+    [(_KKStaticValuesPopoverView *)_openEditorContentView
+        applyHostedContentSize:_openEditorPanel.frame.size];
+    return;
+  }
   [_openEditorPanel setContentSizeKeepingTopEdge:size];
 }
 
@@ -646,7 +700,6 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
     panel = [[KKFloatingPanel alloc] initWithContentSize:size
                                              positionKey:positionKey];
     panel.allowsKeyWindow = YES;
-    panel.userMovable = NO; // Phase 2 adds the explicit drag affordance.
     panel.keepsEntireFrameVisible = YES;
     panel.becomesKeyOnlyIfNeeded = NO;
     if (staticFamily)
@@ -654,9 +707,24 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
     else
       _segmentEditorPanel = panel;
   }
+  panel.userMovable = YES;
+  panel.userResizable = staticFamily;
+  panel.onUserResized = nil;
+  panel.dragHandleView = nil;
   [panel makeFirstResponder:nil];
   [panel setContentSizeKeepingTopEdge:size];
   [panel setPanelContentView:content];
+  if (staticFamily &&
+      [content isKindOfClass:[_KKStaticValuesPopoverView class]]) {
+    _KKStaticValuesPopoverView *staticView =
+        (_KKStaticValuesPopoverView *)content;
+    panel.minSize = [staticView minimumHostedContentSize];
+    panel.dragHandleView = staticView.panelDragHandleView;
+    __weak _KKStaticValuesPopoverView *weakStatic = staticView;
+    panel.onUserResized = ^(NSSize resized) {
+      [weakStatic applyHostedContentSize:resized];
+    };
+  }
   panel.initialFirstResponder = panel.contentView;
   panel.appearance = anchor.window.appearance;
 
@@ -674,6 +742,10 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   NSRect card = [anchor.window
       convertRectToScreen:[anchor convertRect:anchor.bounds toView:nil]];
   [panel showBesideCard:card ofWindow:anchor.window];
+  if (staticFamily &&
+      [content isKindOfClass:[_KKStaticValuesPopoverView class]])
+    [(_KKStaticValuesPopoverView *)content
+        applyHostedContentSize:panel.frame.size];
   // Match NSPopover: the editor becomes this XPC process's key window so its
   // bare-key shortcuts and field editor work immediately. The panel's
   // Nonactivating style means Final Cut itself remains the active app.

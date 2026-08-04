@@ -134,7 +134,6 @@
     lanes.onGapPopoverWillOpen = nil;
     lanes.onGapPopoverCurveChanged = nil;
     lanes.onGuideRenderModeChanged = nil;
-    lanes.onGuideMiniViewerSizeChanged = nil;
     lanes.onGuideFilmstripCellActivated = nil;
     lanes.onGuideDynamicToggled = nil;
     lanes.onGuideLaneFilterToggled = nil;
@@ -274,8 +273,8 @@
       return;
     s->_latestStaticValues[label] = [values copy];
     // A discrete choice-pill selection (no drag-end) lands here only - fire the
-    // choice trigger with the selected index so a step can advance on it. Only a
-    // step bound to this label+index matches, so slider ticks are harmless.
+    // choice trigger with the selected index so a step can advance on it. Only
+    // a step bound to this label+index matches, so slider ticks are harmless.
     if (values.count)
       [s _fireType:KKJoyrideTriggerTypeStaticChoiceSelected
             intArg:(NSInteger)llround(values.firstObject.doubleValue)
@@ -328,16 +327,6 @@
       return;
     [s _fireType:KKJoyrideTriggerTypeRenderModeChanged
           intArg:(NSInteger)mode
-         intArg2:0
-           label:nil];
-  };
-
-  lanes.onGuideMiniViewerSizeChanged = ^(NSInteger sizeIndex) {
-    __strong typeof(weak) s = weak;
-    if (!s)
-      return;
-    [s _fireType:KKJoyrideTriggerTypeMiniViewerSizeChanged
-          intArg:sizeIndex
          intArg2:0
            label:nil];
   };
@@ -660,7 +649,6 @@
   case KKJoyrideTriggerTypeDiamondTapped:
   case KKJoyrideTriggerTypeGapTapped:
   case KKJoyrideTriggerTypeRenderModeChanged:
-  case KKJoyrideTriggerTypeMiniViewerSizeChanged:
   case KKJoyrideTriggerTypeDynamicToggled:
   case KKJoyrideTriggerTypeMiniViewerViewTransformChanged:
     if (t.intArg >= 0 && t.intArg != intArg)

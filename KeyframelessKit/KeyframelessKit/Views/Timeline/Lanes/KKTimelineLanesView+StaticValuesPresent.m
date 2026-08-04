@@ -266,21 +266,22 @@
     // class this presenter exists to prevent.
   } else {
     staticView = [[_KKStaticValuesPopoverView alloc]
-          initWithLanes:cfg.lanes
-         descriptorPath:self.miniViewerDescriptorPath
-             clipAspect:self.miniViewerClipAspect
-            headerTitle:cfg.headerTitle
-           headerDetail:cfg.headerDetail
-             headerIcon:cfg.headerIcon
-         canvasDelegate:self.miniViewerDelegate
-             renderMode:cfg.renderMode
-          onModeChanged:cfg.onModeChanged
-             onNavigate:cfg.onNavigate
-          onHandleValue:onHandleValue
-            onDragBegin:onDragBeginBlock
-              onDragEnd:onDragEndBlock
-           editsKeypose:cfg.isBoundary
-        initialCategory:cfg.initialCategory];
+                initWithLanes:cfg.lanes
+               descriptorPath:self.miniViewerDescriptorPath
+                   clipAspect:self.miniViewerClipAspect
+                  headerTitle:cfg.headerTitle
+                 headerDetail:cfg.headerDetail
+                   headerIcon:cfg.headerIcon
+               canvasDelegate:self.miniViewerDelegate
+                   renderMode:cfg.renderMode
+                onModeChanged:cfg.onModeChanged
+                   onNavigate:cfg.onNavigate
+                onHandleValue:onHandleValue
+                  onDragBegin:onDragBeginBlock
+                    onDragEnd:onDragEndBlock
+                 editsKeypose:cfg.isBoundary
+        showsRightPanelToggle:self.editorRightPanelToggleSupported
+              initialCategory:cfg.initialCategory];
     // Host strip (Mirage's shader rack) between the mini-viewer and the rows.
     // Fresh popover only: an in-place mode switch keeps the one it has, so the
     // strip doesn't blink - and the host isn't asked to rebuild it.
@@ -293,6 +294,9 @@
   }
   _openStaticView = staticView;
   _openStaticIsBoundary = cfg.isBoundary;
+  _openEditorSidebarKind = cfg.isBoundary ? @"keypose" : @"constants";
+  _openEditorSidebarIsBoundary = cfg.isBoundary;
+  _openEditorSidebarFraction = cfg.fraction;
   weakStaticContent = staticView;
 
   // Scope the expression reference picker to this clip's project: read the
@@ -329,10 +333,6 @@
     if (cfg.onDragEnd)
       cfg.onDragEnd();
   };
-  __weak typeof(self) weakSize = self;
-  staticView.onSizeChanged = ^(NSInteger sizeIndex) {
-    [weakSize _miniViewerSizeDidChange:sizeIndex];
-  };
   __weak typeof(self) weakClose = self;
   staticView.onCloseTapped = ^{
     __strong typeof(weakClose) s = weakClose;
@@ -341,6 +341,17 @@
   staticView.onCompositionPeekChanged = ^(BOOL held) {
     __strong typeof(weakClose) s = weakClose;
     [s _setCompositionPeekHeld:held keyboard:NO];
+  };
+  [staticView setSidebarVisible:self.editorSidebarVisible];
+  staticView.onSidebarVisibilityChanged = ^(BOOL visible) {
+    __strong typeof(weakClose) s = weakClose;
+    [s _setEditorSidebarVisible:visible];
+  };
+  [staticView setRightPanelVisible:self.editorRightPanelVisible];
+  [staticView setRightPanelToggleVisible:self.editorRightPanelToggleAvailable];
+  staticView.onRightPanelVisibilityChanged = ^(BOOL visible) {
+    __strong typeof(weakClose) s = weakClose;
+    [s _setEditorRightPanelVisible:visible];
   };
 
   // Per-keypose smooth toggle (spatialCurvable lanes): discrete write routed

@@ -59,21 +59,6 @@
   return [sv guideRenderModePillScreenRectForMode:mode];
 }
 
-- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index {
-  _KKStaticValuesPopoverView *sv = _openStaticView;
-  if (!sv || !_openStaticIsBoundary)
-    return NSZeroRect;
-  return [sv guideSizePillScreenRectForIndex:index];
-}
-
-- (NSInteger)guideMiniViewerSizeIndex {
-  return [_KKStaticValuesPopoverView popoverSizeIndex];
-}
-
-- (void)guideSetMiniViewerSizeIndex:(NSInteger)sizeIndex {
-  [_KKStaticValuesPopoverView setPopoverSizeIndex:sizeIndex];
-}
-
 - (void (^)(NSView *, KKSegmentEditView *))onGapPopoverWillOpen {
   return _onGapPopoverWillOpen;
 }

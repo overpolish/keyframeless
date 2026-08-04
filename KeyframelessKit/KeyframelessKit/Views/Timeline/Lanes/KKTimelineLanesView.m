@@ -11,6 +11,7 @@
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerRenderer.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineAdvancedView.h"
 #import "KKTimelineBasicView.h"
@@ -177,6 +178,8 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     _availableLanes = [availableLanes copy];
     _timeline = [self _timelineSeededFrom:timeline];
     _miniViewerClipAspect = 16.0 / 9.0;
+    _editorSidebarVisible = YES;
+    _editorRightPanelVisible = YES;
     [self _buildUI];
     [self _refresh];
   }
@@ -1406,6 +1409,44 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   _compositionPeekSuspendedFrameClamp = NO;
   _compositionPeekWindow = nil;
   _compositionPeekSavedFrame = NSZeroRect;
+}
+
+- (BOOL)editorSidebarVisible {
+  return _editorSidebarVisible;
+}
+
+- (void)_setEditorSidebarVisible:(BOOL)visible {
+  if (_editorSidebarVisible == visible)
+    return;
+  _editorSidebarVisible = visible;
+  if (_openStaticView)
+    [_openStaticView setSidebarVisible:visible];
+  if (!_openEditorPanel || !_openEditorSidebarKind.length)
+    return;
+  KKPostStaticValuesSidebarVisibility(
+      _openEditorPanel, _openEditorContentView, self, _openEditorSidebarKind,
+      _openEditorSidebarIsBoundary, _openEditorSidebarFraction, visible);
+}
+
+- (BOOL)editorRightPanelVisible {
+  return _editorRightPanelVisible;
+}
+
+- (void)setEditorRightPanelToggleAvailable:(BOOL)available {
+  if (_editorRightPanelToggleAvailable == available)
+    return;
+  _editorRightPanelToggleAvailable = available;
+  [_openStaticView setRightPanelToggleVisible:available];
+}
+
+- (void)_setEditorRightPanelVisible:(BOOL)visible {
+  if (_editorRightPanelVisible == visible)
+    return;
+  _editorRightPanelVisible = visible;
+  if (_openStaticView)
+    [_openStaticView setRightPanelVisible:visible];
+  if (self.onEditorRightPanelVisibilityChanged)
+    self.onEditorRightPanelVisibilityChanged(visible);
 }
 
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {

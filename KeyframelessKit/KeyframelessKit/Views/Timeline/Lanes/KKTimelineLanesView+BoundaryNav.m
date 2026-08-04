@@ -365,14 +365,6 @@
   }
 }
 
-- (void)_miniViewerSizeDidChange:(NSInteger)sizeIndex {
-  // Guide-only observation hook (the popover already persisted the global pref
-  // and resized itself). Lets the mini-viewer guide's "make the preview bigger"
-  // step advance when the user picks the large size.
-  if (self.onGuideMiniViewerSizeChanged)
-    self.onGuideMiniViewerSizeChanged(sizeIndex);
-}
-
 // Scrub or playback with a keypose popover open: the playhead renders rightly
 // take over the mini viewer while the timeline is moving - the user asked to
 // see it move. But those renders consume the boundary request, so once the

@@ -11,7 +11,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h> // KKWriteCustomParamString
 #import <KeyframelessKit/KKLog.h>
-#import <KeyframelessKit/KKPlugin.h>   // KKPerformUndoable
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimeline.h>
 #import <QuartzCore/QuartzCore.h>
@@ -43,6 +43,10 @@ static const CGFloat kPanelWidth = 200.0;
     [nc addObserver:self
            selector:@selector(_popoverDidNavigate:)
                name:KKStaticValuesPopoverDidNavigateNotification
+             object:lanesView];
+    [nc addObserver:self
+           selector:@selector(_sidebarVisibilityChanged:)
+               name:KKStaticValuesSidebarVisibilityDidChangeNotification
              object:lanesView];
   }
   return self;
@@ -244,6 +248,11 @@ static const CGFloat kPanelWidth = 200.0;
 }
 
 - (void)_popoverDidOpen:(NSNotification *)note {
+  NSNumber *sidebarVisible = note.userInfo[@"sidebarVisible"];
+  if (sidebarVisible && !sidebarVisible.boolValue) {
+    [_panelController hide];
+    return;
+  }
   NSWindow *popoverWindow = note.userInfo[@"window"];
   if (![popoverWindow isKindOfClass:[NSWindow class]])
     return;
@@ -314,6 +323,15 @@ static const CGFloat kPanelWidth = 200.0;
                                  popoverWindow:popoverWindow
                             popoverContentView:contentView];
   });
+}
+
+- (void)_sidebarVisibilityChanged:(NSNotification *)note {
+  if (![note.userInfo[@"visible"] boolValue]) {
+    _openGeneration++;
+    [_panelController hide];
+    return;
+  }
+  [self _popoverDidOpen:note];
 }
 
 // NO when a popover is open AND `layerID` is non-selectable in it (e.g. a new

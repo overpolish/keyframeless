@@ -4,6 +4,7 @@
  */
 
 #import "KKCodeEditorView.h"
+#import "KKFloatingPanel.h"
 #import "KKGLSLSyntax.h" // KKExprCatalog for the function reference menu
 #import "KKLaneCategoryNav.h"
 #import "KKLinkBus.h"
@@ -58,14 +59,6 @@ BOOL KKLaneHasExpressionEditor(KKLane *lane) {
 // and the floor below which we never clamp.
 static const CGFloat kKKStaticPopoverScreenMargin = 48.0;
 static const CGFloat kKKStaticPopoverMinHeight = 160.0;
-
-// Global user preference (not per-clip): the mini-viewer size (0 = sm/default,
-// 1 = md, 2 = lg) is a viewing aid, so it persists across sessions and clips
-// like a UI setting, never in the timeline blob. Read by the width class method
-// so every height calculation that derives from the width follows
-// automatically.
-static NSString *const kKKStaticPopoverSizeDefaultsKey =
-    @"KKStaticPopoverMiniViewerSize";
 
 @implementation _KKStaticValuesPopoverView
 
@@ -173,10 +166,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
   CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
   // Close + composition peek are preserved from init; nav + header follow.
-  NSLayoutXAxisAnchor *bandLead = _compositionPeekButton
-                                      ? _compositionPeekButton.trailingAnchor
-                                      : self.leadingAnchor;
-  CGFloat bandLeadInset = _compositionPeekButton ? KKSpacingMD : KKPaddingMD;
+  NSLayoutXAxisAnchor *bandLead =
+      _rightPanelButton ? _rightPanelButton.trailingAnchor
+                        : (_sidebarButton ? _sidebarButton.trailingAnchor
+                                          : self.leadingAnchor);
+  CGFloat bandLeadInset = _sidebarButton ? KKSpacingMD : KKPaddingMD;
   if (editsKeypose && onNavigate && !_navPrevButton) {
     _navPrevButton = [self _makeNavButton:@"chevron.left"
                                 direction:-1
@@ -278,39 +272,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   }
 }
 
-+ (NSInteger)_popoverSizeIndex {
-  NSInteger i = [[NSUserDefaults standardUserDefaults]
-      integerForKey:kKKStaticPopoverSizeDefaultsKey];
-  return i < 0 ? 0 : (i > 2 ? 2 : i);
-}
-
-+ (NSInteger)popoverSizeIndex {
-  return [self _popoverSizeIndex];
-}
-
-+ (void)setPopoverSizeIndex:(NSInteger)sizeIndex {
-  [[NSUserDefaults standardUserDefaults]
-      setInteger:(sizeIndex < 0 ? 0 : (sizeIndex > 2 ? 2 : sizeIndex))
-          forKey:kKKStaticPopoverSizeDefaultsKey];
-}
-
-- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index {
-  if (!_sizePill)
-    return NSZeroRect;
-  return [_sizePill guidePillScreenRectAtIndex:index];
-}
-
 + (CGFloat)_popoverWidthForDescriptor:(NSString *)descriptorPath {
-  if (descriptorPath.length == 0)
-    return kPopoverW; // constants-only (no mini-viewer): never resized
-  switch ([self _popoverSizeIndex]) {
-  case 1:
-    return kCanvasPopoverWMedium;
-  case 2:
-    return kCanvasPopoverWLarge;
-  default:
-    return kCanvasPopoverW; // sm
-  }
+  return descriptorPath.length > 0 ? kCanvasPopoverW : kPopoverW;
 }
 
 + (CGFloat)_canvasHeightForAspect:(CGFloat)aspect width:(CGFloat)w {
@@ -411,6 +374,103 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return YES;
 }
 
+- (NSView *)panelDragHandleView {
+  return _panelDragHandle;
+}
+
+- (NSSize)minimumHostedContentSize {
+  return _descriptorPath.length > 0 ? NSMakeSize(320.0, 240.0)
+                                    : NSMakeSize(240.0, 160.0);
+}
+
+// Current intrinsic height of the visible parameter stack. Hidden category /
+// conditional rows collapse completely. Reading the arranged views directly
+// also includes supplementary expression rows, which the lane model alone
+// cannot describe accurately after an expand/collapse.
+- (CGFloat)_visibleRowsNaturalHeight {
+  CGFloat height = 0.0;
+  for (NSView *view in _stack.arrangedSubviews) {
+    if (view.hidden)
+      continue;
+    CGFloat h = view.intrinsicContentSize.height;
+    if (h == NSViewNoIntrinsicMetric || h < 0.0)
+      h = view.fittingSize.height;
+    height += MAX(0.0, h);
+  }
+  return height;
+}
+
+// Reflow a freely-sized persistent panel. The viewport itself always fills
+// the available width; KKMiniViewerView aspect-fits the media inside it and
+// uses the remaining canvas for pan / zoom. Normal parameter pages hug their
+// real row height and donate spare room to the viewer. A code page does the
+// reverse: its editor expands to the bottom so only the editor's own text
+// scroller is active, rather than nesting it inside a second tall scroller.
+- (void)applyHostedContentSize:(NSSize)size {
+  if (size.width <= 0.0 || size.height <= 0.0)
+    return;
+  _hostedContentSize = size;
+  [self _applyMaxWidthCeiling];
+  CGFloat contentWidth = size.width;
+  _categoryPillBar.maxIntrinsicWidth =
+      MAX(1.0, contentWidth - 2.0 * KKPaddingMD);
+  for (NSString *label in _rowsByLabel)
+    [_rowsByLabel[label] updateContentWidth:contentWidth];
+
+  if (_miniViewerHeightConstraint) {
+    // Reset a previously stretched code row before measuring this pass.
+    _KKStaticValueRow *visibleCodeRow = nil;
+    CGFloat codeBaseHeight = 0.0;
+    for (KKLane *lane in _lanes) {
+      _KKStaticValueRow *row = _rowsByLabel[lane.key];
+      if (lane.valueType != KKLaneValueTypeCode || !row || row.hidden)
+        continue;
+      CGFloat base = [_KKStaticValueRow heightForLane:lane
+                                         contentWidth:contentWidth
+                                     labelColumnWidth:_labelColumnWidth];
+      [row setEditorRowHeight:base];
+      if (!visibleCodeRow) {
+        visibleCodeRow = row;
+        codeBaseHeight = base;
+      }
+    }
+
+    CGFloat rowsH = [self _visibleRowsNaturalHeight];
+    CGFloat topH =
+        _hasHeader
+            ? KKPaddingMD +
+                  [_KKStaticValuesPopoverView _renderModePillHeaderHeight] +
+                  KKPaddingMD
+            : KKPaddingMD;
+    CGFloat categoryH = _categoryPillBar ? kKKCategoryPillH + KKPaddingMD : 0.0;
+    CGFloat betweenH =
+        _accessoryTopConstraint.constant + _accessoryHeight + categoryH;
+    CGFloat sharedH = MAX(0.0, size.height - topH - betweenH);
+    // The viewer is the primary editor surface. Ordinary parameter pages may
+    // use at most 40% of the shared height (viewer gets at least 60%). A code
+    // page deliberately starts 50/50 so viewer and editor grow equally until
+    // the editor reaches its cap below.
+    CGFloat maxRowsViewportH = floor(sharedH * (visibleCodeRow ? 0.5 : 0.4));
+    if (visibleCodeRow) {
+      CGFloat otherRowsH = MAX(0.0, rowsH - codeBaseHeight);
+      // Viewer and code grow together until the editor reaches 150pt. From
+      // there every additional point belongs to the viewer. The 100pt floor is
+      // the last usable text area; below that the outer rows scroller is the
+      // fallback instead of crushing the editor chrome.
+      CGFloat codeH = MIN(150.0, MAX(100.0, maxRowsViewportH - otherRowsH));
+      [visibleCodeRow setEditorRowHeight:codeH];
+      rowsH = otherRowsH + codeH;
+    }
+    // When the panel is too short, the rows viewport shrinks and its outer
+    // scroller becomes the overflow fallback. Otherwise it exactly hugs the
+    // rows, leaving every spare point to the mini viewer.
+    CGFloat rowsViewportH = MIN(rowsH, MAX(0.0, maxRowsViewportH));
+    _miniViewerHeightConstraint.constant = MAX(1.0, sharedH - rowsViewportH);
+  }
+  [self setNeedsLayout:YES];
+  [self layoutSubtreeIfNeeded];
+}
+
 - (NSButton *)_makeCloseButton {
   NSImage *img = [NSImage imageWithSystemSymbolName:@"xmark"
                            accessibilityDescription:nil];
@@ -436,6 +496,41 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     if (self.onCompositionPeekChanged)
       self.onCompositionPeekChanged(held);
   });
+}
+
+- (KKPopoverSidebarButton *)_makeSidebarButton {
+  __weak typeof(self) weak = self;
+  return KKCreateSidebarVisibilityButton(YES, ^(BOOL visible) {
+    __strong typeof(weak) self = weak;
+    if (self.onSidebarVisibilityChanged)
+      self.onSidebarVisibilityChanged(visible);
+  });
+}
+
+- (void)setSidebarVisible:(BOOL)visible {
+  _sidebarButton.sidebarVisible = visible;
+}
+
+- (KKPopoverSidebarButton *)_makeRightPanelButton {
+  __weak typeof(self) weak = self;
+  return KKCreateRightPanelVisibilityButton(YES, ^(BOOL visible) {
+    __strong typeof(weak) self = weak;
+    if (self.onRightPanelVisibilityChanged)
+      self.onRightPanelVisibilityChanged(visible);
+  });
+}
+
+- (void)setRightPanelVisible:(BOOL)visible {
+  _rightPanelButton.sidebarVisible = visible;
+}
+
+- (void)setRightPanelToggleVisible:(BOOL)visible {
+  if (!_rightPanelButton)
+    return;
+  _rightPanelButton.hidden = !visible;
+  _rightPanelLeadingConstraint.constant = visible ? KKPaddingSM : 0.0;
+  _rightPanelWidthConstraint.constant =
+      visible ? [_KKStaticValuesPopoverView _renderModePillHeaderHeight] : 0.0;
 }
 
 - (void)_closeButtonClicked:(id)sender {
@@ -493,57 +588,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return pill;
 }
 
-// A grouped 3-segment radio pill (sm / md / lg) styled like the render-mode
-// pill beside it; the icons grade from compact to expanded.
-- (KKPillToggleRowView *)_makeSizePillSelected:(NSInteger)sel
-                                 onSizeChanged:(void (^)(NSInteger))cb {
-  NSImage * (^sym)(NSString *) = ^NSImage *(NSString *name) {
-    NSImage *img = [NSImage imageWithSystemSymbolName:name
-                             accessibilityDescription:nil];
-    return img ?: [[NSImage alloc] initWithSize:NSMakeSize(11, 11)];
-  };
-  KKPillToggleRowView *pill = [[KKPillToggleRowView alloc] initWithIcons:@[
-    sym(@"rectangle.arrowtriangle.2.inward"), sym(@"rectangle"),
-    sym(@"rectangle.arrowtriangle.2.outward")
-  ]];
-  pill.translatesAutoresizingMaskIntoConstraints = NO;
-  pill.grouped = YES;
-  pill.radioMode = YES;
-  NSMutableArray<NSNumber *> *states = [NSMutableArray array];
-  for (NSInteger i = 0; i < 3; i++)
-    [states addObject:@(i == sel)];
-  pill.states = states;
-  pill.onToggled = ^(NSInteger index, BOOL isOn) {
-    if (!isOn || !cb)
-      return;
-    cb(index);
-  };
-  return pill;
-}
-
-// Persist the global size preference, grow/shrink the mini-viewer height
-// constraint in place, then re-fit the popover (the width class method now
-// reports the selected size's width, so the height calc follows). The pill
-// repaints its own active segment.
-- (void)_setSizeIndex:(NSInteger)idx {
-  [[NSUserDefaults standardUserDefaults]
-      setInteger:idx
-          forKey:kKKStaticPopoverSizeDefaultsKey];
-  CGFloat W =
-      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath];
-  _miniViewerHeightConstraint.constant =
-      [_KKStaticValuesPopoverView _canvasHeightForAspect:_clipAspect width:W];
-  // Wrapping pill rows (markers) don't rebuild on resize, so re-derive their
-  // block width + row height for the new content width before refitting.
-  for (NSString *label in _rowsByLabel)
-    [_rowsByLabel[label] updateContentWidth:W];
-  [self _resizePopoverToSelectedCategory];
-  if (_onSizeChanged)
-    _onSizeChanged(idx);
-}
-
-// Build + constrain the render-mode pill (off/film/onion), sitting to the left
-// of the size pill (which is trailing-most when a mini-viewer is present).
+// Build + constrain the trailing render-mode pill (off/film/onion).
 // Shared by init and -reconfigureForEditsKeypose:...: a constants-born popover
 // has no pill until an in-place switch to keypose mode installs one. No-op if
 // already installed.
@@ -565,12 +610,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                                           onModeChanged:wrappedModeChanged];
   _renderModePill = pill;
   [self addSubview:pill];
-  NSLayoutXAxisAnchor *pillTrail =
-      _sizePill ? _sizePill.leadingAnchor : self.trailingAnchor;
-  CGFloat pillTrailInset = _sizePill ? -KKSpacingMD : -KKPaddingMD;
   [NSLayoutConstraint activateConstraints:@[
-    [pill.trailingAnchor constraintEqualToAnchor:pillTrail
-                                        constant:pillTrailInset],
+    [pill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                        constant:-KKPaddingMD],
     [pill.centerYAnchor constraintEqualToAnchor:self.topAnchor
                                        constant:bandCenterOffset],
     [pill.heightAnchor constraintEqualToConstant:bandH],
@@ -592,6 +634,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                   onDragBegin:(void (^)(void))onDragBegin
                     onDragEnd:(void (^)(void))onDragEnd
                  editsKeypose:(BOOL)editsKeypose
+        showsRightPanelToggle:(BOOL)showsRightPanelToggle
               initialCategory:(NSString *)initialCategory {
   BOOL showPill = (onModeChanged != nil && descriptorPath.length > 0);
   BOOL hasHeader = showPill || headerTitle.length > 0;
@@ -628,12 +671,27 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   CGFloat canvasTopInset = KKPaddingMD;
 
   // Header band (one row, shared): nav chevrons (leftmost, fixed position) →
-  // title; render-mode pill trailing. Everything shares the band's
-  // vertical centre.
+  // title; render-mode pill trailing. A transparent drag strip spans the whole
+  // band behind those controls, so decorative and empty space moves the panel.
   CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
   CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
   BOOL hasNav = (showPill && onNavigate != nil);
   BOOL hasBand = (showPill || headerTitle.length > 0);
+
+  if (hasBand) {
+    _panelDragHandle = [[KKPanelDragHandleView alloc] initWithFrame:NSZeroRect];
+    _panelDragHandle.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_panelDragHandle];
+    [NSLayoutConstraint activateConstraints:@[
+      [_panelDragHandle.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor],
+      [_panelDragHandle.trailingAnchor
+          constraintEqualToAnchor:self.trailingAnchor],
+      [_panelDragHandle.topAnchor constraintEqualToAnchor:self.topAnchor],
+      [_panelDragHandle.heightAnchor
+          constraintEqualToConstant:KKPaddingMD + bandH + KKPaddingMD],
+    ]];
+  }
 
   // Close then composition peek, leftmost in the band - always present (both
   // modes). Nav + header follow.
@@ -642,8 +700,14 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   if (hasBand) {
     _closeButton = [self _makeCloseButton];
     _compositionPeekButton = [self _makeCompositionPeekButton];
+    _sidebarButton = [self _makeSidebarButton];
+    if (showsRightPanelToggle)
+      _rightPanelButton = [self _makeRightPanelButton];
     [self addSubview:_closeButton];
     [self addSubview:_compositionPeekButton];
+    [self addSubview:_sidebarButton];
+    if (_rightPanelButton)
+      [self addSubview:_rightPanelButton];
     [NSLayoutConstraint activateConstraints:@[
       [_closeButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                                  constant:KKPaddingMD],
@@ -658,8 +722,29 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
           constraintEqualToAnchor:_closeButton.centerYAnchor],
       [_compositionPeekButton.widthAnchor constraintEqualToConstant:bandH],
       [_compositionPeekButton.heightAnchor constraintEqualToConstant:bandH],
+      [_sidebarButton.leadingAnchor
+          constraintEqualToAnchor:_compositionPeekButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [_sidebarButton.centerYAnchor
+          constraintEqualToAnchor:_compositionPeekButton.centerYAnchor],
+      [_sidebarButton.widthAnchor constraintEqualToConstant:bandH],
+      [_sidebarButton.heightAnchor constraintEqualToConstant:bandH],
     ]];
-    bandLead = _compositionPeekButton.trailingAnchor;
+    if (_rightPanelButton) {
+      _rightPanelLeadingConstraint = [_rightPanelButton.leadingAnchor
+          constraintEqualToAnchor:_sidebarButton.trailingAnchor
+                         constant:KKPaddingSM];
+      _rightPanelWidthConstraint =
+          [_rightPanelButton.widthAnchor constraintEqualToConstant:bandH];
+      [NSLayoutConstraint activateConstraints:@[
+        _rightPanelLeadingConstraint,
+        [_rightPanelButton.centerYAnchor
+            constraintEqualToAnchor:_sidebarButton.centerYAnchor],
+        _rightPanelWidthConstraint,
+        [_rightPanelButton.heightAnchor constraintEqualToConstant:bandH],
+      ]];
+    }
+    bandLead = (_rightPanelButton ?: _sidebarButton).trailingAnchor;
     bandLeadInset = KKSpacingMD;
   }
 
@@ -703,25 +788,6 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                                             constant:titleLeadInset],
       [_header.centerYAnchor constraintEqualToAnchor:self.topAnchor
                                             constant:bandCenterOffset],
-    ]];
-  }
-
-  // Size pill (sm/md/lg): trailing-most in the band whenever there's a
-  // mini-viewer, sitting beside the render-mode pill as a second grouped pill.
-  if (descriptorPath.length > 0) {
-    __weak typeof(self) weakSelfSize = self;
-    _sizePill = [self
-        _makeSizePillSelected:[_KKStaticValuesPopoverView _popoverSizeIndex]
-                onSizeChanged:^(NSInteger idx) {
-                  [weakSelfSize _setSizeIndex:idx];
-                }];
-    [self addSubview:_sizePill];
-    [NSLayoutConstraint activateConstraints:@[
-      [_sizePill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                               constant:-KKPaddingMD],
-      [_sizePill.centerYAnchor constraintEqualToAnchor:self.topAnchor
-                                              constant:bandCenterOffset],
-      [_sizePill.heightAnchor constraintEqualToConstant:bandH],
     ]];
   }
 
@@ -787,10 +853,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     sv.documentView = _miniViewer;
     [self addSubview:sv];
     NSClipView *clip = sv.contentView;
+    CGFloat initialCanvasWidth = W - 2.0 * KKPaddingMD;
     _miniViewerHeightConstraint = [sv.heightAnchor
-        constraintEqualToConstant:[_KKStaticValuesPopoverView
-                                      _canvasHeightForAspect:clipAspect
-                                                       width:W]];
+        constraintEqualToConstant:initialCanvasWidth /
+                                  (clipAspect > 0 ? clipAspect : 16.0 / 9.0)];
     [NSLayoutConstraint activateConstraints:@[
       [sv.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                        constant:KKPaddingMD],
@@ -885,18 +951,20 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // when its last constant lane is moved to animated, without reopening (no
 // mini-viewer blink).
 // Re-assert the popover's width ceiling - and the category bar's matching
-// intrinsic cap - for the CURRENT size class. Called from the nav rebuild (the
-// initial build, before the popover exists) and from every content-size apply,
-// so sm/md/lg moves the ceiling with it instead of pinning the popover to the
-// width it happened to be built at.
+// intrinsic cap - for the current hosted width. Called from the nav rebuild
+// (the initial build, before the panel exists) and from every hosted resize, so
+// the ceiling follows the panel instead of pinning the editor to its first
+// width.
 //
 // The ceiling exists because a single wide row - e.g. a 4-component lane whose
 // auto-sized component labels are long - otherwise propagates its required
 // width up through `row.width == stack.width` and NSPopover grows the whole
 // popover past its hardcoded size, leaving the centred pill bar over the edge.
 - (void)_applyMaxWidthCeiling {
-  CGFloat maxW =
-      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath];
+  CGFloat maxW = _hostedContentSize.width > 0.0
+                     ? _hostedContentSize.width
+                     : [_KKStaticValuesPopoverView
+                           _popoverWidthForDescriptor:_descriptorPath];
   if (!_maxWidthConstraint) {
     _maxWidthConstraint =
         [self.widthAnchor constraintLessThanOrEqualToConstant:maxW];
@@ -1109,9 +1177,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // which that calc counted as part of the mini-viewer band.
   if (_accessoryHeight > 0.0)
     h += _accessoryHeight - [self _accessoryInstalledTopDrop];
-  return NSMakeSize(
-      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
-      h);
+  return NSMakeSize(_hostedContentSize.width > 0.0
+                        ? _hostedContentSize.width
+                        : [_KKStaticValuesPopoverView
+                              _popoverWidthForDescriptor:_descriptorPath],
+                    h);
 }
 
 // Clamp a natural content height to what fits on `screen` (with a margin and a

@@ -132,8 +132,8 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 /// it the row's space would be left blank. Fires only on a real change.
 @property(nonatomic, copy, nullable) void (^onContentHeightChanged)(void);
 
-/// Buttons for the popover's title bar - [Reset][Make Default], sitting where
-/// the keypose / constants popovers put their size pill. They save this
+/// Buttons for the popover's title bar - [Reset][Make Default], at the trailing
+/// edge of the header. They save this
 /// segment's shape as the plugin's default for new segments, and put the
 /// segment back to it; both hide while the segment already matches the saved
 /// default. Built on first call, then cached.

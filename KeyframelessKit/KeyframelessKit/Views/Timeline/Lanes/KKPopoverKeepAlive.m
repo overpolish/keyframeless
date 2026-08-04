@@ -7,6 +7,7 @@
 
 #import "KKLocalized.h"
 #import "KKLog.h"
+#import "NSColor+KKColors.h"
 
 NSNotificationName const KKStaticValuesPopoverDidOpenNotification =
     @"KKStaticValuesPopoverDidOpenNotification";
@@ -14,6 +15,8 @@ NSNotificationName const KKStaticValuesPopoverDidCloseNotification =
     @"KKStaticValuesPopoverDidCloseNotification";
 NSNotificationName const KKStaticValuesPopoverDidNavigateNotification =
     @"KKStaticValuesPopoverDidNavigateNotification";
+NSNotificationName const KKStaticValuesSidebarVisibilityDidChangeNotification =
+    @"KKStaticValuesSidebarVisibilityDidChangeNotification";
 
 @interface _KKGlobalKeyCapture : NSObject
 - (instancetype)initWithHandler:(BOOL (^)(NSEvent *event))handler;
@@ -188,6 +191,66 @@ KKCreateCompositionPeekButton(void (^onHoldChanged)(BOOL held)) {
   return button;
 }
 
+@implementation KKPopoverSidebarButton
+
+- (void)setSidebarVisible:(BOOL)sidebarVisible {
+  _sidebarVisible = sidebarVisible;
+  self.state = sidebarVisible ? NSControlStateValueOn : NSControlStateValueOff;
+  // Off matches the adjacent close and peek buttons' normal AppKit tint. Only
+  // the selected state needs a deliberate host-accent colour.
+  self.contentTintColor = sidebarVisible ? [NSColor accentMatchingHost] : nil;
+}
+
+- (void)_sidebarClicked:(id)sender {
+  self.sidebarVisible = !self.sidebarVisible;
+  if (self.onVisibilityChanged)
+    self.onVisibilityChanged(self.sidebarVisible);
+}
+
+@end
+
+KKPopoverSidebarButton *
+KKCreateSidebarVisibilityButton(BOOL visible,
+                                void (^onVisibilityChanged)(BOOL visible)) {
+  KKPopoverSidebarButton *button = [KKPopoverSidebarButton buttonWithTitle:@""
+                                                                    target:nil
+                                                                    action:nil];
+  button.translatesAutoresizingMaskIntoConstraints = NO;
+  button.bordered = NO;
+  button.bezelStyle = NSBezelStyleShadowlessSquare;
+  button.imageScaling = NSImageScaleProportionallyDown;
+  NSString *label =
+      KKLoc(@"Show templates or layers",
+            @"Accessibility label for the editor sidebar toggle.");
+  button.image = [NSImage imageWithSystemSymbolName:@"sidebar.left"
+                           accessibilityDescription:label];
+  button.accessibilityLabel = label;
+  button.toolTip = KKLoc(@"Show or hide templates/layers. (L)",
+                         @"Tooltip for the editor sidebar toggle.");
+  button.target = button;
+  button.action = @selector(_sidebarClicked:);
+  [button.cell sendActionOn:NSEventMaskLeftMouseDown];
+  button.onVisibilityChanged = onVisibilityChanged;
+  button.sidebarVisible = visible;
+  return button;
+}
+
+KKPopoverSidebarButton *
+KKCreateRightPanelVisibilityButton(BOOL visible,
+                                   void (^onVisibilityChanged)(BOOL visible)) {
+  KKPopoverSidebarButton *button =
+      KKCreateSidebarVisibilityButton(visible, onVisibilityChanged);
+  NSString *label = KKLoc(@"Show grading panel",
+                          @"Accessibility label for a plugin's optional right "
+                           "editor panel toggle.");
+  button.image = [NSImage imageWithSystemSymbolName:@"sidebar.right"
+                           accessibilityDescription:label];
+  button.accessibilityLabel = label;
+  button.toolTip = KKLoc(@"Show or hide the grading panel. (G)",
+                         @"Tooltip for Mirage's grading-panel toggle.");
+  return button;
+}
+
 // Weak set of windows that count as "inside" for popover outside-click
 // dismissal. Registry + popover dismissal both run on the main thread, so no
 // locking is needed.
@@ -307,8 +370,39 @@ void KKPostStaticValuesEditorDidOpen(NSWindow *window, NSView *contentView,
   info[@"isBoundary"] = @(isBoundary);
   info[@"fraction"] = @(fraction);
   info[@"kind"] = kind ?: @"constants";
+  BOOL sidebarVisible = YES;
+  if ([sender respondsToSelector:NSSelectorFromString(@"editorSidebarVisible")])
+    sidebarVisible = [[sender valueForKey:@"editorSidebarVisible"] boolValue];
+  info[@"sidebarVisible"] = @(sidebarVisible);
   [NSNotificationCenter.defaultCenter
       postNotificationName:KKStaticValuesPopoverDidOpenNotification
+                    object:sender
+                  userInfo:info];
+}
+
+void KKPostStaticValuesSidebarVisibility(NSWindow *window, NSView *contentView,
+                                         id sender, NSString *kind,
+                                         BOOL isBoundary, double fraction,
+                                         BOOL visible) {
+  NSMutableDictionary *info = [NSMutableDictionary dictionary];
+  if (window)
+    info[@"window"] = window;
+  if (contentView) {
+    info[@"contentView"] = contentView;
+    NSWindow *liveWindow = contentView.window ?: window;
+    if (liveWindow) {
+      NSRect rect = [liveWindow
+          convertRectToScreen:[contentView convertRect:contentView.bounds
+                                                toView:nil]];
+      info[@"contentRect"] = [NSValue valueWithRect:rect];
+    }
+  }
+  info[@"isBoundary"] = @(isBoundary);
+  info[@"fraction"] = @(fraction);
+  info[@"kind"] = kind ?: @"constants";
+  info[@"visible"] = @(visible);
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:KKStaticValuesSidebarVisibilityDidChangeNotification
                     object:sender
                   userInfo:info];
 }

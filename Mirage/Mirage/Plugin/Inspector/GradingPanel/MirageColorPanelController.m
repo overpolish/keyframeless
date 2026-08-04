@@ -44,6 +44,7 @@ static const double kRingMaxStop = 5.0;
   if ((self = [super init])) {
     _lanesView = lanesView;
     _wellRowMask = -1;
+    _userVisible = YES;
     NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
     [nc addObserver:self
            selector:@selector(_popoverDidOpen:)
@@ -137,6 +138,8 @@ static const double kRingMaxStop = 5.0;
   if (_surfaceEnabled == surfaceEnabled)
     return;
   _surfaceEnabled = surfaceEnabled;
+  if (self.onSurfaceAvailabilityChanged)
+    self.onSurfaceAvailabilityChanged(surfaceEnabled);
   // A recompile that adds or drops the directive must take effect NOW. The
   // directive is normally typed with the code popover already open, so waiting
   // for the next popover-open notification meant closing and reopening to see
@@ -147,6 +150,19 @@ static const double kRingMaxStop = 5.0;
     [self _endPuckDragReason:@"panel hidden"];
     [self _stopSampling];
     [_panel hidePanel];
+  }
+}
+
+- (void)setUserVisible:(BOOL)userVisible {
+  if (_userVisible == userVisible)
+    return;
+  _userVisible = userVisible;
+  if (!userVisible) {
+    [self _endPuckDragReason:@"panel toggled off"];
+    [self _stopSampling];
+    [_panel hidePanel];
+  } else {
+    [self _showIfPopoverOpen];
   }
 }
 
@@ -241,7 +257,7 @@ static const double kRingMaxStop = 5.0;
 // popover that never appears stops the chain instead of polling forever.
 - (void)_showIfPopoverOpenAttempt:(NSInteger)attempt {
   static const NSInteger kMaxAttempts = 100; // ~10s at kShowRetryDelay
-  if (!self.surfaceEnabled)
+  if (!self.surfaceEnabled || !self.userVisible)
     return;
   // The window may not exist yet (cold boot), in which case the popover's
   // content view is what eventually acquires one.
@@ -408,6 +424,8 @@ static const double kRingMaxStop = 5.0;
   // Resolve rather than trust the pushed flag: this is the path that runs
   // before -applyTimeline: ever has.
   _surfaceEnabled = [self _resolveSurfaceEnabledFromLanes];
+  if (self.onSurfaceAvailabilityChanged)
+    self.onSurfaceAvailabilityChanged(_surfaceEnabled);
   KKLogDebug(@"[Panel] color attach kind=%@ -> %@", kind,
              _surfaceEnabled ? @"shown"
                              : @"skipped(shader declares no #color-surface)");

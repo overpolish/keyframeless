@@ -31,6 +31,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// it demonstrably has not, which is why the panel used to miss the first
 /// popover after launch.
 @property(nonatomic) BOOL surfaceEnabled;
+/// Fired whenever the selected shader gains or loses a usable grading panel.
+@property(nonatomic, copy, nullable) void (^onSurfaceAvailabilityChanged)
+    (BOOL available);
+
+/// User-facing right-panel toggle. Independent of shader capability: off hides
+/// the panel even for a grading shader; on immediately restores it when the
+/// current shader and editor support it. Defaults to YES.
+@property(nonatomic, getter=isUserVisible) BOOL userVisible;
 
 /// Which shader in the rack the panel is talking about: the entry the strip has
 /// selected. Everything the panel derives - the rings, the pucks, the picks,

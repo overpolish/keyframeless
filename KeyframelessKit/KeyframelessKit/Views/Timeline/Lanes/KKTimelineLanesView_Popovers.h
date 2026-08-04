@@ -99,6 +99,14 @@ NS_ASSUME_NONNULL_BEGIN
   __weak NSWindow *_compositionPeekWindow;
   NSRect _compositionPeekSavedFrame;
   BOOL _compositionPeekSuspendedFrameClamp;
+  // Primary companion browser visibility (Mirage templates / Canvas layers),
+  // shared across editor opens. The current attachment metadata lets the L key
+  // restore a hidden sidebar without rebuilding or reopening the editor.
+  BOOL _editorSidebarVisible;
+  BOOL _editorRightPanelVisible;
+  NSString *_openEditorSidebarKind;
+  double _openEditorSidebarFraction;
+  BOOL _openEditorSidebarIsBoundary;
   void (^_openContentOnClose)(void);
   // The anchor view + edge the open popover was shown against. A new show
   // reuses the live window (swap in place) ONLY when it targets the SAME
@@ -240,6 +248,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// curve/modulation header and constants/keypose header.
 - (void)_setCompositionPeekHeld:(BOOL)held keyboard:(BOOL)keyboard;
 - (void)_cancelCompositionPeek;
+- (void)_setEditorSidebarVisible:(BOOL)visible;
+- (void)_setEditorRightPanelVisible:(BOOL)visible;
 @end
 
 /// Lane add/remove/animatable mutations. Declared in a named category so the
@@ -451,7 +461,6 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 - (void)_refreshBoundaryPopoverNavEnabled;
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction;
 - (void)_renderModeDidChange:(KKMiniViewerRenderMode)mode;
-- (void)_miniViewerSizeDidChange:(NSInteger)sizeIndex;
 /// In-place re-bind for an already-open boundary popover. Used by the
 /// onion-skin filmstrip when the user clicks an inactive cell - the popover
 /// stays open (no close/reopen blink), the value rows re-display the new

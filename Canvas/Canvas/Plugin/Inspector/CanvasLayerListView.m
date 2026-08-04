@@ -24,6 +24,7 @@
 
 // Build-time helpers (implemented in the primary @implementation below).
 @interface CanvasLayerListView ()
+@property(nonatomic, strong) NSTrackingArea *arrowCursorArea;
 - (NSTextField *)_buildTitleLabel;
 - (void)_buildAutoSelectRow;
 - (void)_buildScrollWell;
@@ -35,6 +36,28 @@
 @end
 
 @implementation CanvasLayerListView
+
+- (void)resetCursorRects {
+  [super resetCursorRects];
+  [self addCursorRect:self.bounds cursor:NSCursor.arrowCursor];
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (self.arrowCursorArea)
+    [self removeTrackingArea:self.arrowCursorArea];
+  self.arrowCursorArea = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways |
+                   NSTrackingInVisibleRect
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:self.arrowCursorArea];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  [NSCursor.arrowCursor set];
+}
 
 - (instancetype)initWithFrame:(NSRect)frame {
   if ((self = [super initWithFrame:frame])) {

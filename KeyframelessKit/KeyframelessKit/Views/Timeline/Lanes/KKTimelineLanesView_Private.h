@@ -21,15 +21,9 @@ static const CGFloat kCheckSize = 12.0;
 static const CGFloat kCheckRadius = 3.0;
 static const CGFloat kSearchH = 28.0;
 static const CGFloat kPopoverW = 180.0;
-// Static-values popover width when it hosts the mini-viewer, so the preview is
-// legible before in-canvas zoom exists. Three sizes (sm/md/lg) the user toggles
-// via a global preference: a wider popover scales the mini-viewer up
-// aspect-correct (height = width/aspect) while the parameter rows keep their
-// heights and just fill the extra width. `kCanvasPopoverW` is sm (the default,
-// unchanged original width).
-static const CGFloat kCanvasPopoverW = 540.0;       // sm (default)
-static const CGFloat kCanvasPopoverWMedium = 760.0; // md
-static const CGFloat kCanvasPopoverWLarge = 980.0;  // lg
+// Initial static-editor width when it hosts the mini-viewer. The panel is
+// freely resizable after opening; this is only its first-run/default size.
+static const CGFloat kCanvasPopoverW = 540.0;
 static const NSInteger kMaxSummaryLabels = 2;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -240,7 +234,7 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
             contentWidth:(CGFloat)contentWidth
         labelColumnWidth:(CGFloat)labelColumnWidth;
 /// Re-derive a wrapping pill row's block width + height for a new popover
-/// content width (the size pill resizes without rebuilding rows). No-op
+/// content width (manual panel resizing does not rebuild rows). No-op
 /// otherwise.
 - (void)updateContentWidth:(CGFloat)contentWidth;
 
@@ -305,6 +299,13 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// editors resize and close through these window-agnostic callbacks.
 @property(nonatomic, copy, nullable) void (^onRequestContentSize)(NSSize size);
 @property(nonatomic, copy, nullable) void (^onRequestClose)(void);
+/// Transparent header strip used by the persistent panel's drag machinery.
+@property(nonatomic, readonly, nullable) NSView *panelDragHandleView;
+/// Reflow width-dependent rows and the aspect-correct mini viewer after the
+/// persistent panel is manually resized or restores its remembered size.
+- (void)applyHostedContentSize:(NSSize)size;
+/// Smallest useful panel size for this content kind.
+- (NSSize)minimumHostedContentSize;
 /// The FCP document (project) id of the clip being edited, so the expression
 /// reference picker only lists OTHER clips in the SAME project. Empty / nil =
 /// unknown, which leaves the picker library-wide (legacy behaviour).
@@ -336,6 +337,7 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
                   onDragBegin:(nullable void (^)(void))onDragBegin
                     onDragEnd:(nullable void (^)(void))onDragEnd
                  editsKeypose:(BOOL)editsKeypose
+        showsRightPanelToggle:(BOOL)showsRightPanelToggle
               initialCategory:(nullable NSString *)initialCategory;
 
 /// Fired when the user picks a category pill (constants popover uses it to
@@ -402,11 +404,6 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// mini-viewer guide to spotlight the mode the user should tap.
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode;
 
-/// Fired when the user picks a size pill segment (0 = sm, 1 = md, 2 = lg). The
-/// popover has already persisted the global preference and resized itself; the
-/// host uses this only to advance the mini-viewer guide's size step.
-@property(nonatomic, copy, nullable) void (^onSizeChanged)(NSInteger sizeIndex);
-
 /// Fired when the header's close (X) button is tapped. The host closes the
 /// popover. The button sits leftmost in the header band, before the keypose
 /// nav.
@@ -417,16 +414,14 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// closing it, preserving the exact editor session.
 @property(nonatomic, copy, nullable) void (^onCompositionPeekChanged)(BOOL held)
     ;
-
-/// Guide-only: screen rect of the size pill's segment `index` (0/1/2), or
-/// NSZeroRect if there's no mini-viewer (so no size pill).
-- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index;
-
-/// The global mini-viewer size preference (0 = sm/default, 1 = md, 2 = lg).
-/// Exposed so a guide can reset it to the default for the run and restore the
-/// user's value afterwards.
-+ (NSInteger)popoverSizeIndex;
-+ (void)setPopoverSizeIndex:(NSInteger)sizeIndex;
+/// Fired when the primary template/layer sidebar toggle changes.
+@property(nonatomic, copy, nullable) void (^onSidebarVisibilityChanged)
+    (BOOL visible);
+- (void)setSidebarVisible:(BOOL)visible;
+@property(nonatomic, copy, nullable) void (^onRightPanelVisibilityChanged)
+    (BOOL visible);
+- (void)setRightPanelVisible:(BOOL)visible;
+- (void)setRightPanelToggleVisible:(BOOL)visible;
 
 /// Enable/disable the popover header's prev/next KP buttons (only meaningful
 /// when `onNavigate` was passed at init). The lanes view calls this on open

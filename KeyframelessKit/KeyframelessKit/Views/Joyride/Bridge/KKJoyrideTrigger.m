@@ -132,12 +132,6 @@
   return t;
 }
 
-+ (instancetype)miniViewerSizeChanged:(NSInteger)sizeIndex {
-  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeMiniViewerSizeChanged];
-  t->_intArg = sizeIndex;
-  return t;
-}
-
 + (instancetype)filmstripCellActivated {
   return [self _t:KKJoyrideTriggerTypeFilmstripCellActivated];
 }

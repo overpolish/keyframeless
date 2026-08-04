@@ -36,6 +36,14 @@ extern NSNotificationName const KKStaticValuesPopoverDidCloseNotification;
 /// (`-openKeyposePopoverLayerKeys`).
 extern NSNotificationName const KKStaticValuesPopoverDidNavigateNotification;
 
+/// Posted when the editor header's sidebar button changes whether the plugin's
+/// primary companion browser should be shown. Mirage's template browser and
+/// Canvas's layer list observe this; grading and other companion surfaces do
+/// not. `userInfo[@"visible"]` is the requested state and the remaining keys
+/// match DidOpen so a newly-shown sidebar can attach immediately.
+extern NSNotificationName const
+    KKStaticValuesSidebarVisibilityDidChangeNotification;
+
 /// Register / unregister a window whose clicks must NOT dismiss an open kit
 /// popover - e.g. a companion side panel shown beside it. The popover's
 /// outside-click dismissal treats points inside a registered window as
@@ -53,7 +61,7 @@ BOOL KKPopoverPointInKeepAliveWindow(NSPoint screenPoint);
 /// pass it to `KKRemoveGlobalKeyCapture` when finished. Returns nil when macOS
 /// does not permit an active event tap.
 FOUNDATION_EXPORT
-    id _Nullable KKInstallGlobalKeyCapture(BOOL (^handler)(NSEvent *event));
+id _Nullable KKInstallGlobalKeyCapture(BOOL (^handler)(NSEvent *event));
 FOUNDATION_EXPORT void KKRemoveGlobalKeyCapture(id _Nullable token);
 
 /// Header button used by primary editors to momentarily reveal Final Cut's
@@ -68,6 +76,24 @@ FOUNDATION_EXPORT void KKRemoveGlobalKeyCapture(id _Nullable token);
 /// accessibility label and P-key tooltip.
 FOUNDATION_EXPORT KKPopoverPeekButton *
 KKCreateCompositionPeekButton(void (^onHoldChanged)(BOOL held));
+
+/// Header toggle beside composition peek. It controls the plugin's primary
+/// template/layer sidebar and displays the L-key shortcut in its tooltip.
+@interface KKPopoverSidebarButton : NSButton
+@property(nonatomic, getter=isSidebarVisible) BOOL sidebarVisible;
+@property(nonatomic, copy, nullable) void (^onVisibilityChanged)(BOOL visible);
+@end
+
+FOUNDATION_EXPORT KKPopoverSidebarButton *
+KKCreateSidebarVisibilityButton(BOOL visible,
+                                void (^onVisibilityChanged)(BOOL visible));
+
+/// Opt-in mirror for a plugin-owned right companion panel (Mirage grading).
+/// Uses the same toggle behaviour/style; plugins without a right panel do not
+/// add this button.
+FOUNDATION_EXPORT KKPopoverSidebarButton *
+KKCreateRightPanelVisibilityButton(BOOL visible,
+                                   void (^onVisibilityChanged)(BOOL visible));
 
 /// Post `KKStaticValuesPopoverDidOpenNotification` for `popover` with the
 /// standard companion-panel userInfo - `window`, `contentView`, and the visible
@@ -87,6 +113,13 @@ void KKPostStaticValuesPopoverDidOpen(NSPopover *popover, id sender,
 void KKPostStaticValuesEditorDidOpen(NSWindow *window, NSView *contentView,
                                      id sender, NSString *kind, BOOL isBoundary,
                                      double fraction);
+
+/// Post the dedicated primary-sidebar visibility signal with enough live panel
+/// geometry for a browser/list to attach again when toggled on.
+void KKPostStaticValuesSidebarVisibility(NSWindow *window, NSView *contentView,
+                                         id sender, NSString *kind,
+                                         BOOL isBoundary, double fraction,
+                                         BOOL visible);
 
 /// Post `KKStaticValuesPopoverDidNavigateNotification` for an in-place move of
 /// the open popover to a new `fraction`. `sender` is the presenting view.

@@ -303,6 +303,19 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
     (void);
 @property(nonatomic) CGFloat staticValuesAccessoryHeight;
 
+/// Current state of the primary template/layer companion sidebar. Defaults to
+/// YES and is shared by every editor opened from this lanes view.
+@property(nonatomic, readonly) BOOL editorSidebarVisible;
+
+/// Opt-in right companion panel control. `Supported` is the plugin capability;
+/// `Available` is whether the selected filter/template actually has that
+/// panel. The button is shown only when both are YES.
+@property(nonatomic) BOOL editorRightPanelToggleSupported;
+@property(nonatomic) BOOL editorRightPanelToggleAvailable;
+@property(nonatomic, readonly) BOOL editorRightPanelVisible;
+@property(nonatomic, copy, nullable) void (^onEditorRightPanelVisibilityChanged)
+    (BOOL visible);
+
 /// Optional scope for the CONSTANTS editor only: return NO for a lane the
 /// constants popover should not list. The graphs, the Animated dropdown and
 /// every write path are untouched - the timeline still holds every lane under
@@ -321,11 +334,6 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// cell. The mini-viewer guide wires these via the lanes binder.
 @property(nonatomic, copy, nullable) void (^onGuideRenderModeChanged)
     (KKMiniViewerRenderMode mode);
-/// Fires when the boundary popover's size pill switches the mini-viewer size
-/// (`sizeIndex` 0 = sm, 1 = md, 2 = lg). The mini-viewer guide wires this to
-/// advance its "make the preview bigger" step.
-@property(nonatomic, copy, nullable) void (^onGuideMiniViewerSizeChanged)
-    (NSInteger sizeIndex);
 @property(nonatomic, copy, nullable) void (^onGuideFilmstripCellActivated)
     (double fraction);
 /// Fires when the constant popover's category-nav pill switches category

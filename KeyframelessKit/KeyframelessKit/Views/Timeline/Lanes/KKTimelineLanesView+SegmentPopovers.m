@@ -26,6 +26,8 @@
 - (void)_resizeOpenSegmentPopoverToEditor:(KKSegmentEditView *)edit;
 - (NSButton *)_makePopoverCloseButton;
 - (KKPopoverPeekButton *)_makePopoverPeekButton;
+- (KKPopoverSidebarButton *)_makePopoverSidebarButton;
+- (KKPopoverSidebarButton *)_makePopoverRightPanelButton;
 - (void)_wireSegmentEditor:(KKSegmentEditView *)edit
            onParticipation:(void (^)(NSInteger, BOOL))onParticipation
                onDragBegin:(void (^)(void))onDragBegin
@@ -198,16 +200,29 @@
       KKPaddingMD + headerH + KKSpacingSM + editH + extrasH + bottomPad;
   NSView *container =
       [[NSView alloc] initWithFrame:NSMakeRect(0, 0, w, totalH)];
+  KKPanelDragHandleView *dragHandle =
+      [[KKPanelDragHandleView alloc] initWithFrame:NSZeroRect];
+  dragHandle.translatesAutoresizingMaskIntoConstraints = NO;
+  [container addSubview:dragHandle];
   // Close button top-left, before the header - same affordance as the keypose /
   // constants popover so a fixed-position companion is easy to dismiss (the
   // default close-on-focus-loss still applies).
   NSButton *closeButton = [self _makePopoverCloseButton];
   KKPopoverPeekButton *peekButton = [self _makePopoverPeekButton];
+  KKPopoverSidebarButton *sidebarButton = [self _makePopoverSidebarButton];
+  KKPopoverSidebarButton *rightPanelButton =
+      self.editorRightPanelToggleSupported &&
+              self.editorRightPanelToggleAvailable
+          ? [self _makePopoverRightPanelButton]
+          : nil;
   [container addSubview:closeButton];
   [container addSubview:peekButton];
+  [container addSubview:sidebarButton];
+  if (rightPanelButton)
+    [container addSubview:rightPanelButton];
   [container addSubview:header];
-  // Trailing end of the title row, where the keypose / constants popovers put
-  // their size pill: the segment's own [Reset][Make Default] actions.
+  // Trailing end of the title row: the segment's own [Reset][Make Default]
+  // actions.
   // The editor can shrink itself (the Frequency row collapses on a curve that
   // has none) - resize the open popover to match, same path a layer re-scope
   // takes.
@@ -225,6 +240,12 @@
   _openSegEditHeightConstraint =
       [edit.heightAnchor constraintEqualToConstant:editH];
   [NSLayoutConstraint activateConstraints:@[
+    [dragHandle.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+    [dragHandle.trailingAnchor
+        constraintEqualToAnchor:container.trailingAnchor],
+    [dragHandle.topAnchor constraintEqualToAnchor:container.topAnchor],
+    [dragHandle.heightAnchor
+        constraintEqualToConstant:KKPaddingMD + headerH + KKSpacingSM],
     [closeButton.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
                                               constant:KKPaddingMD],
     [closeButton.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
@@ -237,8 +258,13 @@
         constraintEqualToAnchor:closeButton.centerYAnchor],
     [peekButton.widthAnchor constraintEqualToConstant:22.0],
     [peekButton.heightAnchor constraintEqualToConstant:22.0],
-    [header.leadingAnchor constraintEqualToAnchor:peekButton.trailingAnchor
-                                         constant:KKSpacingMD],
+    [sidebarButton.leadingAnchor
+        constraintEqualToAnchor:peekButton.trailingAnchor
+                       constant:KKPaddingSM],
+    [sidebarButton.centerYAnchor
+        constraintEqualToAnchor:peekButton.centerYAnchor],
+    [sidebarButton.widthAnchor constraintEqualToConstant:22.0],
+    [sidebarButton.heightAnchor constraintEqualToConstant:22.0],
     [header.topAnchor constraintEqualToAnchor:container.topAnchor
                                      constant:KKPaddingMD],
     [header.trailingAnchor
@@ -256,6 +282,21 @@
     (_openSegContainerHeightConstraint =
          [container.heightAnchor constraintEqualToConstant:totalH]),
   ]];
+  NSLayoutXAxisAnchor *headerLead = sidebarButton.trailingAnchor;
+  if (rightPanelButton) {
+    [NSLayoutConstraint activateConstraints:@[
+      [rightPanelButton.leadingAnchor
+          constraintEqualToAnchor:sidebarButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [rightPanelButton.centerYAnchor
+          constraintEqualToAnchor:sidebarButton.centerYAnchor],
+      [rightPanelButton.widthAnchor constraintEqualToConstant:22.0],
+      [rightPanelButton.heightAnchor constraintEqualToConstant:22.0],
+    ]];
+    headerLead = rightPanelButton.trailingAnchor;
+  }
+  [header.leadingAnchor constraintEqualToAnchor:headerLead constant:KKSpacingMD]
+      .active = YES;
   NSView *prev = edit;
   for (NSView *extra in extras) {
     extra.translatesAutoresizingMaskIntoConstraints = NO;
@@ -306,12 +347,17 @@
                                     KKStaticValuesPopoverDidCloseNotification
                                               object:s];
                           }];
+  panel.dragHandleView = dragHandle;
   // Signal the open so a multi-layer host (Canvas) can attach its layer-list
   // companion beside the "Applies to" checklist (Basic only - Advanced's
   // popover is opened on one lane that already lives on a single layer).
-  if (postApplies)
+  if (postApplies) {
+    _openEditorSidebarKind = @"appliesTo";
+    _openEditorSidebarIsBoundary = NO;
+    _openEditorSidebarFraction = 0.0;
     KKPostStaticValuesEditorDidOpen(panel, container, self, @"appliesTo", NO,
                                     0.0);
+  }
 }
 
 - (void)_presentGapPopoverFromAnchor:(NSView *)anchor
@@ -620,6 +666,22 @@
   return KKCreateCompositionPeekButton(^(BOOL held) {
     [weak _setCompositionPeekHeld:held keyboard:NO];
   });
+}
+
+- (KKPopoverSidebarButton *)_makePopoverSidebarButton {
+  __weak typeof(self) weak = self;
+  return KKCreateSidebarVisibilityButton(
+      self.editorSidebarVisible, ^(BOOL visible) {
+        [weak _setEditorSidebarVisible:visible];
+      });
+}
+
+- (KKPopoverSidebarButton *)_makePopoverRightPanelButton {
+  __weak typeof(self) weak = self;
+  return KKCreateRightPanelVisibilityButton(
+      self.editorRightPanelVisible, ^(BOOL visible) {
+        [weak _setEditorRightPanelVisible:visible];
+      });
 }
 
 - (void)_segmentCloseButtonClicked:(id)sender {

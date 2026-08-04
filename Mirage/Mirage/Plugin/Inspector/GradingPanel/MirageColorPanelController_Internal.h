@@ -61,6 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
   /// The declared rings, in declaration order: index 0 is the circle on top.
   NSArray<NSNumber *> *_ringKinds;
   __weak KKTimelineLanesView *_lanesView;
+  BOOL _userVisible;
   /// One circle per surface the grammar allows, built once and shown as the
   /// source asks. Built up front rather than on demand because a recompile can
   /// add a ring under an open panel, and rebuilding the hierarchy there would
