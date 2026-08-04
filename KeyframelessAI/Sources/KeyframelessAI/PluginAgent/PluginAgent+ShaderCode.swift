@@ -22,7 +22,7 @@ extension AIPluginAgent {
 		let editing = !currentShaderSource.trimmingCharacters(
 			in: .whitespacesAndNewlines
 		).isEmpty
-		let docs = await shaderAuthoringDocs()
+		let docs = await shaderAuthoringDocs(for: prompt)
 
 		let rules = """
 			You write GLSL shaders for \(productContext), a Shadertoy-style effect \
@@ -116,14 +116,19 @@ extension AIPluginAgent {
 		return extractShaderCode(obj["source"] as? String ?? "")
 	}
 
-	/// The full text of the shader-authoring reference topics (the custom-shader
-	/// language guide + the `// #` directives guide) the host registered, so the
-	/// model writes correct conventions. Empty if the host registered no docs.
+	/// Shader-authoring reference registered by the host. Local models retrieve the
+	/// handful of heading-sized sections relevant to this request; sending the full
+	/// directives manual alone costs ~20k prompt tokens before generation starts.
+	/// Cloud models retain the complete reference.
 	@MainActor
-	private static func shaderAuthoringDocs() async -> String {
+	private static func shaderAuthoringDocs(for prompt: String) async -> String {
 		let wanted: Set<String> = ["custom-shader", "directives"]
-		let entries = await AIKnowledgeRegistry.shared.allEntries()
-			.filter { wanted.contains($0.topic.id) }
+		let entries =
+			AIKeyState.shared.activeProvider == .local
+			? await AIKnowledgeRegistry.shared.relevantEntries(
+				to: prompt, limit: 4, topicIDs: wanted)
+			: await AIKnowledgeRegistry.shared.allEntries()
+				.filter { wanted.contains($0.topic.id) }
 		guard !entries.isEmpty else { return "" }
 		var out = "SHADER REFERENCE (follow these conventions exactly):\n"
 		for e in entries.sorted(by: { $0.topic.id < $1.topic.id }) {

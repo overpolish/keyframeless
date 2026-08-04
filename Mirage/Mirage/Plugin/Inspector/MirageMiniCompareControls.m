@@ -465,6 +465,16 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   [self _setCompareBypass:NO];
 }
 
+// The editor content and its mini are deliberately retained across parts of
+// the close/order-out sequence, so object existence is not proof that the
+// viewer UI is still open. The window is the authority. Do not test the mini's
+// hidden-ancestor state here: compact mode intentionally hides the mini while
+// leaving this panel open so these same shortcuts can drive the main viewer.
+- (BOOL)_editorSurfaceIsVisible {
+  NSWindow *window = _popoverContentView.window;
+  return _popoverContentView != nil && window != nil && window.isVisible;
+}
+
 // One bare letter each: B holds the bypass the way the button does, S flips the
 // split, M flips the shader's selection switch.
 //
@@ -487,7 +497,7 @@ static const CGFloat kEdgeInset = KKPaddingSM;
     [self _releaseKeyBypass];
     return YES;
   }
-  if (!_chip || _chip.hidden || !_mini)
+  if (![self _editorSurfaceIsVisible] || !_chip || _chip.hidden || !_mini)
     return NO;
   NSEventModifierFlags mods =
       event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;

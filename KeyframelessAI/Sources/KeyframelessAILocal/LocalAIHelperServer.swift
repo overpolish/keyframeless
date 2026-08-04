@@ -460,6 +460,7 @@ public enum LocalAIHelperServer {
 					let stream = await runner.completeStreaming(
 						modelID: req.modelID, system: req.system, user: req.user)
 					for try await chunk in stream {
+						guard !chunk.isEmpty else { continue }
 						if !send(HelperResponse(result: nil, error: nil, chunk: chunk)) { break }
 					}
 					if writeOK.value {

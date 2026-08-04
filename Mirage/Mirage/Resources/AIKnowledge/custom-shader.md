@@ -1,6 +1,6 @@
 ---
 id: custom-shader
-summary: Writing and editing custom Shadertoy-style shaders in Mirage
+summary: Building custom plugins, effects and reusable shader templates in Mirage
 ---
 
 # The Custom shader
@@ -11,6 +11,12 @@ Mirage is a blank shader canvas: paste a Shadertoy "Image" shader (or write your
 - Your entry point is Shadertoy's `void mainImage(out vec4 fragColor, in vec2 fragCoord)`, and the built-in inputs (`iTime`, `iChannel0`, `iResolution`, ...) all work.
 - Every Image shader declares its browser/runtime type with exactly one `// #template generator`, `filter`, `layout`, `transition`, or `color-transform` line.
 - Add your own sliders, colours, and on-screen handles by annotating uniforms with `// #` directives (see the directives help).
+
+## Can I make a custom plugin in Mirage?
+
+**Yes.** In the practical sense, Mirage is a plugin builder inside Final Cut Pro. A custom GLSL shader can become a filter, generator, transition, layout or colour tool, with its own sliders, menus, colours, gradients and on-screen controls. It runs inside Mirage rather than compiling as a separate FxPlug bundle, but to an editor it behaves like a custom effect they can reuse.
+
+Write or paste the shader in the Mirage editor (or ask the built-in AI to make it), expose controls with `// #` directives, then save it to the template browser. A saved template can be categorised, given a thumbnail and used again on other clips. Its card also has **Publish**, which prepares it for the community template library so other Mirage users can download it.
 
 ## Built-in inputs (no declaration needed)
 

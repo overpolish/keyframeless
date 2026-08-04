@@ -244,6 +244,12 @@ extension AIPluginAgent {
 			or <...> style symbols; the answer is shown as plain text. If the docs \
 			don't cover the question, say so briefly.
 
+			Answer the capability the user means, not only their exact terminology. \
+			Map everyday words such as "plugin", "preset" or "animation" to the \
+			closest documented product feature. Do not answer "no" merely because \
+			the product uses a different technical name; lead with the practical \
+			answer, then briefly clarify the distinction when it matters.
+
 			This is NOT a conversation and you have NO memory of anything before \
 			this message - each request is standalone and answered fresh. Never \
 			reference an earlier question or answer, never imply continuity ("as I \

@@ -239,12 +239,16 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
     NSGlassEffectView *glass =
         [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
     glass.cornerRadius = kCornerRadius;
-    // An opaque inspector-matched fill under the glass, so the panel reads like
-    // the popovers beside it rather than see-through. The glass still clips to
-    // the corner radius, keeping the rounded shape and its shadow.
+    // An inspector-matched fill under the glass, so the panel reads like the
+    // popovers beside it rather than see-through. NSGlassEffectView rounds its
+    // own material but does not reliably clip contentView's backing layer; the
+    // half-opaque fill otherwise leaves a faint square outside the glass at
+    // each corner. Clip the content independently to the exact same radius.
     content.wantsLayer = YES;
     content.layer.backgroundColor =
         [NSColor.inspectorBackground colorWithAlphaComponent:0.5].CGColor;
+    content.layer.cornerRadius = kCornerRadius;
+    content.layer.masksToBounds = YES;
     glass.contentView = content;
     self.contentView = glass;
     [self _updatePointerTrackingArea];

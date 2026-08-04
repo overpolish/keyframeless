@@ -119,10 +119,18 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 							break
 						}
 						if resp.done == true { break }
-						if let chunk = resp.chunk { continuation.yield(chunk) }
+						if let chunk = resp.chunk, !chunk.isEmpty { continuation.yield(chunk) }
 					}
 					continuation.finish()
 				} catch {
+					if let helperError = error as? HelperError, case .timedOut = helperError {
+						// The data connection timing out does not itself cancel MLX. Tell
+						// the helper to stop over its independent control connection so a
+						// dead answer cannot keep using the GPU after the UI unblocks.
+						_ = try? self.controlExchange("cancel")
+						clientLog.notice(
+							"client: streaming helper timed out; cancelled active jobs")
+					}
 					// A dead socket leaves the connection unusable; drop it so the next
 					// call reconnects/respawns.
 					self.teardown()
@@ -189,15 +197,17 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		do {
 			return try roundtrip(req)
 		} catch let e as HelperError where isTransport(e) {
-			teardown()
 			// A timed-out (hung) helper won't recover by retrying into the same
 			// stall - surface the error now so the inspector unblocks. Dropping the
 			// connection lets the NEXT prompt reconnect (and respawn a fresh helper
 			// if this one has gone away).
 			if case .timedOut = e {
-				clientLog.notice("client: helper timed out; dropped connection")
+				_ = try? controlExchange("cancel")
+				teardown()
+				clientLog.notice("client: helper timed out; cancelled jobs and dropped connection")
 				throw e
 			}
+			teardown()
 			clientLog.notice(
 				"client: transport lost (\(e.localizedDescription, privacy: .public)); reconnecting"
 			)

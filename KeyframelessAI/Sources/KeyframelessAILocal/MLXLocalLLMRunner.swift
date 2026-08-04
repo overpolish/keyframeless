@@ -185,21 +185,41 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 					guard let model = LocalModelCatalog.model(id: modelID) else {
 						throw RunnerError.unknownModel(modelID)
 					}
+					localLog.notice(
+						"stream start model=\(modelID, privacy: .public) promptChars=\(system.count + user.count, privacy: .public)"
+					)
+					let loadStart = Date()
 					let container = try await loadContainer(model: model)
+					localLog.notice("stream load done in \(Self.ms(loadStart), privacy: .public)ms")
 					// Keep the pipeline's label (e.g. "Answering") showing; the
 					// answer also streams into the card, so progress is visible.
+					// This path is exclusively the 1-3 sentence help answer. A hard
+					// cap prevents a missed stop token from turning it into minutes of
+					// unnecessary decode; shader generation uses `complete` instead.
 					let params = GenerateParameters(
-						maxTokens: 4096, temperature: 0.7, topP: 0.8, topK: 20)
+						maxTokens: 256, temperature: 0.7, topP: 0.8, topK: 20)
 					let session = ChatSession(
 						container, instructions: system, generateParameters: params,
 						additionalContext: ["enable_thinking": false])
+					let generationStart = Date()
+					var chunks = 0
 					try await withError {
 						for try await chunk in session.streamResponse(
 							to: user, images: [], videos: [])
 						{
+							guard !chunk.isEmpty else { continue }
+							if chunks == 0 {
+								localLog.notice(
+									"stream first text in \(Self.ms(generationStart), privacy: .public)ms"
+								)
+							}
+							chunks += 1
 							continuation.yield(chunk)
 						}
 					}
+					localLog.notice(
+						"stream done in \(Self.ms(generationStart), privacy: .public)ms chunks=\(chunks, privacy: .public)"
+					)
 					continuation.finish()
 				} catch {
 					continuation.finish(throwing: error)

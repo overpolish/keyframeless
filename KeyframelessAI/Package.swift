@@ -60,5 +60,10 @@ let package = Package(
 			dependencies: ["KeyframelessAILocal"],
 			path: "Sources/kk-ai-helper"
 		),
+		.testTarget(
+			name: "KeyframelessAITests",
+			dependencies: ["KeyframelessAI"],
+			path: "Tests/KeyframelessAITests"
+		),
 	]
 )
