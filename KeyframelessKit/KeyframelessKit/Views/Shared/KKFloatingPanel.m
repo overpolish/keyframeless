@@ -150,8 +150,11 @@ typedef NS_OPTIONS(NSUInteger, KKResizeEdges) {
 }
 
 - (void)setContentSizeKeepingTopEdge:(NSSize)size {
+  [self setContentSize:size keepingTopEdgeAt:NSMaxY(self.frame)];
+}
+
+- (void)setContentSize:(NSSize)size keepingTopEdgeAt:(CGFloat)top {
   NSRect frame = self.frame;
-  CGFloat top = NSMaxY(frame);
   frame.size = size;
   frame.origin.y = top - size.height;
   if (_keepsEntireFrameVisible)
@@ -839,6 +842,26 @@ static NSCursor *KKCursorForResizeEdges(KKResizeEdges edges) {
     [self _installDragMonitors];
   }
   [super sendEvent:event];
+}
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+  NSEventModifierFlags mods =
+      event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+  BOOL commandZ =
+      [event.charactersIgnoringModifiers.lowercaseString
+          isEqualToString:@"z"] &&
+      (mods & NSEventModifierFlagCommand) != 0 &&
+      !(mods & (NSEventModifierFlagControl | NSEventModifierFlagOption |
+                NSEventModifierFlagFunction));
+  if (commandZ) {
+    BOOL redo = (mods & NSEventModifierFlagShift) != 0;
+    void (^command)(void) = redo ? self.onRedoRequested : self.onUndoRequested;
+    if (command) {
+      command();
+      return YES;
+    }
+  }
+  return [super performKeyEquivalent:event];
 }
 
 @end

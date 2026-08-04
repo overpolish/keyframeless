@@ -18,6 +18,9 @@ static NSString *const kMirageCodeLaneLabel = @"Mirage";
 /// Posted on the main queue when the OSC handle's screen position updates;
 /// the plugin returns this as its help-guide refresh notification.
 extern NSNotificationName const kMirageOSCPositionNotification;
+/// Session-only compare state changed from either the mini-viewer or main OSC.
+/// Carries no parameter write; observers redraw their own viewer chrome.
+extern NSNotificationName const kMirageCompareStateDidChangeNotification;
 
 @class KKOSCGuideBridge;
 /// The shared OSC-guide engine for this XPC process - the generic affine /

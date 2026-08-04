@@ -18,11 +18,16 @@ NS_ASSUME_NONNULL_BEGIN
 // YES when a control forced a non-arrow cursor last hover; reset at the top of
 // the next hit-test so moving off a handle restores the arrow.
 @property(nonatomic) BOOL pointCursorSet;
+@property(nonatomic) BOOL compareBeforeMouseHeld;
+@property(nonatomic) BOOL compareDividerDragging;
 
 // The [0,1] object rect's canvas corners, feeding the guide bridge's
 // zoom-invariant screen<->canvas map. Implemented in OSC.m.
 - (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
                bottomLeft:(CGPoint *)outBottomLeft;
+- (nullable NSString *)_currentShaderSource;
+- (void)_invalidateCompareRender;
+- (void)_setCompareDividerFromX:(double)x;
 
 // Position-handle mouse routing (dynamic `#point osc` controllers). Return YES
 // when a controller claimed the event. Implemented in OSC.m.

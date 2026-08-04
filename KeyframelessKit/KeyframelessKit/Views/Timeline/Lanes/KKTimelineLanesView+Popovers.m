@@ -12,7 +12,6 @@
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKPopoverKeepAlive.h"
-#import "KKRemoteWindowKeyHandlerView.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
@@ -494,31 +493,21 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                      // where KKRemoteWindowKeyHandlerView sent
                                      // Space / Cmd-Z to FCP. A standalone panel
                                      // owns its events, so bridge those
-                                     // commands explicitly. Focused text/code
-                                     // editors keep their normal typing and
-                                     // local undo.
-                                     KKRemoteWindowKeyHandlerView *hostKeys =
-                                         nil;
-                                     Class hostKeyClass =
-                                         [KKRemoteWindowKeyHandlerView class];
-                                     for (NSView *v = s; v; v = v.superview)
-                                       if ([v isKindOfClass:hostKeyClass]) {
-                                         hostKeys =
-                                             (KKRemoteWindowKeyHandlerView *)v;
-                                         break;
-                                       }
+                                     // commands explicitly. The panel edits
+                                     // plugin state, including its code lane,
+                                     // so undo/redo always belongs to Final
+                                     // Cut rather than a panel-local text undo
+                                     // manager.
                                      if (!fieldEditing &&
                                          [event.charactersIgnoringModifiers
                                              isEqualToString:@" "] &&
-                                         !cmd && hostKeys.onTogglePlayback) {
-                                       hostKeys.onTogglePlayback();
+                                         !cmd && s.onTogglePlayback) {
+                                       s.onTogglePlayback();
                                        return nil;
                                      }
-                                     if (!fieldEditing && cmd &&
-                                         [ch isEqualToString:@"z"]) {
+                                     if (cmd && [ch isEqualToString:@"z"]) {
                                        void (^command)(void) =
-                                           shift ? hostKeys.onRedo
-                                                 : hostKeys.onUndo;
+                                           shift ? s.onRedo : s.onUndo;
                                        if (command) {
                                          command();
                                          return nil;
@@ -623,59 +612,72 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                         [s _setCompositionPeekHeld:NO
                                                           keyboard:YES];
                                     }];
-  // Once focus returns to Final Cut, a normal global monitor can only observe
-  // P and Final Cut would still act on it. The consuming capture preserves the
-  // same ownership the local monitor has while our panel is key: P belongs to
-  // the visible editor, including both halves of its hold gesture.
-  _editorGlobalShortcutCapture =
-      KKInstallGlobalKeyCapture(^BOOL(NSEvent *event) {
-        __strong typeof(weak) s = weak;
-        if (!s || ![s _editorPanelIsVisible] || s->_openContentPopover.isShown)
-          return NO;
-        pid_t front =
-            NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
-        if (s->_editorHostPID == 0 || front != s->_editorHostPID)
-          return NO;
-        NSString *ch = event.charactersIgnoringModifiers.lowercaseString;
-        BOOL peekKey = [ch isEqualToString:@"p"];
-        BOOL sidebarKey = [ch isEqualToString:@"l"];
-        BOOL rightPanelKey =
-            s.editorRightPanelToggleAvailable && [ch isEqualToString:@"g"];
-        BOOL compactKey =
-            s->_openEditorIsStaticFamily && [ch isEqualToString:@"v"];
-        if (!peekKey && !sidebarKey && !rightPanelKey && !compactKey)
-          return NO;
-        if (event.type == NSEventTypeKeyUp) {
-          if (sidebarKey || rightPanelKey || compactKey)
-            return YES;
-          if (!s->_compositionPeekKeyHeld)
-            return NO;
-          [s _setCompositionPeekHeld:NO keyboard:YES];
-          return YES;
-        }
-        NSEventModifierFlags mods =
-            event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
-        if (mods & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
-                    NSEventModifierFlagOption | NSEventModifierFlagShift |
-                    NSEventModifierFlagFunction))
-          return NO;
-        BOOL fieldEditing =
-            [s->_openEditorPanel.firstResponder isKindOfClass:[NSText class]] ||
-            [NSApp.keyWindow.firstResponder isKindOfClass:[NSText class]];
-        if (fieldEditing)
-          return NO;
-        if (!event.isARepeat) {
-          if (sidebarKey)
-            [s _setEditorSidebarVisible:!s.editorSidebarVisible];
-          else if (rightPanelKey)
-            [s _setEditorRightPanelVisible:!s.editorRightPanelVisible];
-          else if (compactKey)
-            [s _setEditorCompactMode:!s->_editorCompactMode];
-          else
-            [s _setCompositionPeekHeld:YES keyboard:YES];
-        }
+  // A normal global monitor can only observe these events. The consuming event
+  // tap gives the visible editor reliable shortcuts across the ViewBridge / FCP
+  // boundary. Cmd-Z also comes through here: AppKit never delivers it to the
+  // panel-local monitor on this host.
+  _editorGlobalShortcutCapture = KKInstallGlobalKeyCapture(^BOOL(
+      NSEvent *event) {
+    __strong typeof(weak) s = weak;
+    NSString *ch = event.charactersIgnoringModifiers.lowercaseString;
+    NSEventModifierFlags mods =
+        event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+    BOOL commandZ =
+        (event.keyCode == 6 || [ch isEqualToString:@"z"]) &&
+        (mods & NSEventModifierFlagCommand) != 0 &&
+        !(mods & (NSEventModifierFlagControl | NSEventModifierFlagOption |
+                  NSEventModifierFlagFunction));
+    pid_t front =
+        NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+    if (!s || ![s _editorPanelIsVisible] || s->_openContentPopover.isShown)
+      return NO;
+    if (s->_editorHostPID == 0 || front != s->_editorHostPID)
+      return NO;
+    BOOL peekKey = [ch isEqualToString:@"p"];
+    BOOL sidebarKey = [ch isEqualToString:@"l"];
+    BOOL rightPanelKey =
+        s.editorRightPanelToggleAvailable && [ch isEqualToString:@"g"];
+    BOOL compactKey = s->_openEditorIsStaticFamily && [ch isEqualToString:@"v"];
+    if (!commandZ && !peekKey && !sidebarKey && !rightPanelKey && !compactKey)
+      return NO;
+    if (event.type == NSEventTypeKeyUp) {
+      if (commandZ)
         return YES;
-      });
+      if (sidebarKey || rightPanelKey || compactKey)
+        return YES;
+      if (!s->_compositionPeekKeyHeld)
+        return NO;
+      [s _setCompositionPeekHeld:NO keyboard:YES];
+      return YES;
+    }
+    if (commandZ) {
+      BOOL redo = (mods & NSEventModifierFlagShift) != 0;
+      void (^command)(void) = redo ? s.onRedo : s.onUndo;
+      if (!event.isARepeat && command)
+        command();
+      return command != nil;
+    }
+    if (mods & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
+                NSEventModifierFlagOption | NSEventModifierFlagShift |
+                NSEventModifierFlagFunction))
+      return NO;
+    BOOL fieldEditing =
+        [s->_openEditorPanel.firstResponder isKindOfClass:[NSText class]] ||
+        [NSApp.keyWindow.firstResponder isKindOfClass:[NSText class]];
+    if (fieldEditing)
+      return NO;
+    if (!event.isARepeat) {
+      if (sidebarKey)
+        [s _setEditorSidebarVisible:!s.editorSidebarVisible];
+      else if (rightPanelKey)
+        [s _setEditorRightPanelVisible:!s.editorRightPanelVisible];
+      else if (compactKey)
+        [s _setEditorCompactMode:!s->_editorCompactMode];
+      else
+        [s _setCompositionPeekHeld:YES keyboard:YES];
+    }
+    return YES;
+  });
 }
 
 - (void)_setOpenEditorContentSize:(NSSize)size {
@@ -731,6 +733,8 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   panel.userMovable = YES;
   panel.userResizable = staticFamily;
   panel.onUserResized = nil;
+  panel.onUndoRequested = self.onUndo;
+  panel.onRedoRequested = self.onRedo;
   panel.dragHandleView = nil;
   [panel makeFirstResponder:nil];
   [panel setContentSizeKeepingTopEdge:size];

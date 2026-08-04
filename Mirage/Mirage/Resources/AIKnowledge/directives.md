@@ -793,7 +793,7 @@ Scoping is by `puck=`, which a `pick=` control may declare on its own without a 
 
 ### Preview-owned controls: `preview=`
 
-Two markers hand a control to the inspector's preview. A marked control is **session state, not a parameter**: it gets **no inspector row**, it is never keyframed, and nothing about it is written to the project. The shader declares the uniform so the inspector has something to drive; it is driven straight into the mini viewer and nowhere else.
+Two markers hand a control to Mirage's preview chrome. A marked control is **session state, not a parameter**: it gets **no inspector row**, it is never keyframed, and nothing about it is written to the project. The shader declares the uniform so the preview has something to drive.
 
 ```glsl
 // #bool label="Show Selection" group={"Finish", "switch.2"} default=false preview=selection
@@ -803,7 +803,7 @@ uniform bool uShowSelection;
 uniform int uPreviewKey;
 ```
 
-`preview=selection` names the switch that shows the shader's **selection** - the matte a qualifier keys - instead of the graded result. It appears as a third icon on the preview itself, beside Before and Split, with the shortcut **M**, because tuning a key means flicking it constantly. That row belongs to the mini viewer every template has, so the switch works in a plain filter with no `#color-surface` at all - a denoise, where before/after and the noise view are the whole job.
+`preview=selection` names the switch that shows the shader's **selection** - the matte a qualifier keys - instead of the graded result. It appears as a third icon beside Before and Split, with the shortcut **M**, because tuning a key means flicking it constantly. The same small toolbar appears at the top-left of the mini viewer and Final Cut's main viewer, so the controls stay available in compact editor mode too. It works in a plain filter with no `#color-surface` at all - a denoise, where before/after and the noise view are the whole job.
 
 `preview=active-key` names the control that says **which** key that matte is about: `0` for all of them, `n` for the nth instance of the repeatable group. You never touch it - the Color panel feeds it the handle you last touched, so the matte follows the puck you are holding. Declare it outside the `#slots` block; its `options=` exist to give the numbering meaning, not as a menu anyone sees.
 

@@ -72,7 +72,15 @@
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
     if ([lane.key isEqualToString:self.laneLabel])
       return lane;
-  return nil;
+  // Before the first interaction the lane may not be materialised in the
+  // timeline yet. Its authored template is still the real value: most
+  // positions default to the absolute centre (0.5,0.5), but an offset-valued
+  // position such as Frame deliberately defaults to (0,0) and maps that
+  // through laneToObjectWarp onto the crop centre. Falling back to the old
+  // hard-coded centre made that warp add centre twice, so the initial handle
+  // appeared at the top-right and snapped into place only after the first
+  // write created the lane.
+  return self.templateLane;
 }
 
 - (BOOL)_positionVisibleAtFraction:(double)frac {

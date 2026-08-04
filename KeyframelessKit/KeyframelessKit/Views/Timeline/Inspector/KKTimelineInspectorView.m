@@ -328,6 +328,18 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     if (weak.onDragEnd)
       weak.onDragEnd();
   };
+  _basicView.onUndo = ^{
+    if (weak.onUndo)
+      weak.onUndo();
+  };
+  _basicView.onRedo = ^{
+    if (weak.onRedo)
+      weak.onRedo();
+  };
+  _basicView.onTogglePlayback = ^{
+    if (weak.onTogglePlayback)
+      weak.onTogglePlayback();
+  };
   _basicView.onScrub = ^(double frac) {
     KKTimelineInspectorView *strong = weak;
     if (!strong)
@@ -832,6 +844,8 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   copy.onDragEnd = _onDragEnd;
   copy.onScrub = _onScrub;
   copy.onTogglePlayback = _onTogglePlayback;
+  copy.onUndo = _onUndo;
+  copy.onRedo = _onRedo;
   copy.onBoundaryPreviewNeedsRender = _onBoundaryPreviewNeedsRender;
   _detachedView = copy;
   // Bidirectional Advanced selection mirror - selection lives per-view, not

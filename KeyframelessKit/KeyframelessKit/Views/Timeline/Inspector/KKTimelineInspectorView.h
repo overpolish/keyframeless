@@ -183,6 +183,9 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// Spacebar pressed while inspector has key focus (host swallows it
 /// otherwise). The plugin runs `kFxCommand_TogglePlayback`.
 @property(nonatomic, copy, nullable) void (^onTogglePlayback)(void);
+/// Undo/redo requested while a persistent editor panel owns key focus.
+@property(nonatomic, copy, nullable) void (^onUndo)(void);
+@property(nonatomic, copy, nullable) void (^onRedo)(void);
 /// A boundary-value popover just opened; the render side needs to resolve
 /// the requested frame. The plugin owns the FxCommandAPI call.
 @property(nonatomic, copy, nullable) void (^onBoundaryPreviewNeedsRender)(void);

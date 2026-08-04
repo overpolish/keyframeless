@@ -12,6 +12,7 @@
 #import "KKLocalized.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKPopoverKeepAlive.h"
+#import "KKScopedDefaults.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineAdvancedView.h"
 #import "KKTimelineBasicView.h"
@@ -21,6 +22,19 @@
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKLog.h>
+
+static NSString *const kEditorLayoutScope = @"ui";
+static NSString *const kEditorSidebarVisibleKey =
+    @"timeline.editor.sidebarVisible";
+static NSString *const kEditorRightPanelVisibleKey =
+    @"timeline.editor.rightPanelVisible";
+static NSString *const kEditorCompactModeKey = @"timeline.editor.compactMode";
+
+static BOOL KKEditorStoredBool(NSString *key, BOOL fallback) {
+  id stored = KKScopedDefaultRead(key, kEditorLayoutScope);
+  return [stored respondsToSelector:@selector(boolValue)] ? [stored boolValue]
+                                                          : fallback;
+}
 
 // Basic and Advanced graphs request the SAME shared popover presenters
 // (`_presentGapPopoverFromAnchor:` /
@@ -178,8 +192,10 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     _availableLanes = [availableLanes copy];
     _timeline = [self _timelineSeededFrom:timeline];
     _miniViewerClipAspect = 16.0 / 9.0;
-    _editorSidebarVisible = YES;
-    _editorRightPanelVisible = YES;
+    _editorSidebarVisible = KKEditorStoredBool(kEditorSidebarVisibleKey, YES);
+    _editorRightPanelVisible =
+        KKEditorStoredBool(kEditorRightPanelVisibleKey, YES);
+    _editorCompactMode = KKEditorStoredBool(kEditorCompactModeKey, NO);
     [self _buildUI];
     [self _refresh];
   }
@@ -1419,6 +1435,8 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   if (_editorSidebarVisible == visible)
     return;
   _editorSidebarVisible = visible;
+  KKScopedDefaultWrite(@(visible), kEditorSidebarVisibleKey,
+                       kEditorLayoutScope);
   if (_openStaticView)
     [_openStaticView setSidebarVisible:visible];
   if (!_openEditorPanel || !_openEditorSidebarKind.length)
@@ -1443,6 +1461,8 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   if (_editorRightPanelVisible == visible)
     return;
   _editorRightPanelVisible = visible;
+  KKScopedDefaultWrite(@(visible), kEditorRightPanelVisibleKey,
+                       kEditorLayoutScope);
   if (_openStaticView)
     [_openStaticView setRightPanelVisible:visible];
   if (self.onEditorRightPanelVisibilityChanged)
@@ -1450,11 +1470,15 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
 }
 
 - (void)_setEditorCompactMode:(BOOL)compact {
+  BOOL changed = _editorCompactMode != compact;
   _editorCompactMode = compact;
+  if (changed)
+    KKScopedDefaultWrite(@(compact), kEditorCompactModeKey, kEditorLayoutScope);
   if (!_openEditorPanel || !_openEditorIsStaticFamily || !_openStaticView)
     return;
 
   NSSize current = _openEditorPanel.frame.size;
+  CGFloat anchoredTop = NSMaxY(_openEditorPanel.frame);
   if (compact && (_editorExpandedSizeBeforeCompact.width <= 0.0 ||
                   _editorExpandedSizeBeforeCompact.height <= 0.0))
     _editorExpandedSizeBeforeCompact = current;
@@ -1476,8 +1500,12 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   }
   target.width = MAX(target.width, _openEditorPanel.minSize.width);
   target.height = MAX(target.height, _openEditorPanel.minSize.height);
-  [_openEditorPanel setContentSizeKeepingTopEdge:target];
+  [_openEditorPanel setContentSize:target keepingTopEdgeAt:anchoredTop];
   [_openStaticView applyHostedContentSize:_openEditorPanel.frame.size];
+  // Reflowing the hosted hierarchy must not become the next toggle's anchor.
+  // Reassert the edge captured before the compact/expanded layout changed.
+  [_openEditorPanel setContentSize:_openEditorPanel.frame.size
+                  keepingTopEdgeAt:anchoredTop];
 }
 
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {

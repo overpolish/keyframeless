@@ -168,6 +168,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// moves the host playhead to that clip fraction.
 @property(nonatomic, copy, nullable) void (^onScrub)(double frac);
 
+/// Host undo/redo commands used while a persistent editor panel owns key
+/// focus. These target the NLE's plugin-state history, not a local text view.
+@property(nonatomic, copy, nullable) void (^onUndo)(void);
+@property(nonatomic, copy, nullable) void (^onRedo)(void);
+@property(nonatomic, copy, nullable) void (^onTogglePlayback)(void);
+
 /// Fired when the Basic graph zoom/pan changes (YES = zoomed in, not fit).
 @property(nonatomic, copy, nullable) void (^onZoomChanged)(BOOL zoomed);
 

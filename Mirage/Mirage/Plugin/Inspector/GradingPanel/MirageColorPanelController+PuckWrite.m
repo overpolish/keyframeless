@@ -639,29 +639,16 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
     return;
   KKTimeline *updated = [timeline copy];
   updated.lanes = lanes;
-  // PREVIEW ONLY, per tick - the write waits for the mouse-up.
-  //
-  // The same bargain the constants sliders already strike, and for the same
-  // reason: a tick's write is the whole timeline as JSON plus a render nudge,
-  // through the host, on the main thread, and the picture the grade is judged
-  // by is rendered in THIS process from these very numbers. Paying for the
-  // round trip 60 times a second only bought a main viewer nobody is looking at
-  // while the puck is under the cursor.
-  //
-  // Safe to defer because the apply is ABSOLUTE: every tick recomputes each
-  // control from `_dragStartValues` and this position, never from the previous
-  // tick's result, so the last tick's timeline says everything all of them
-  // together would have. The base it recomputes from is stable for the same
-  // reason - with no write per tick, nothing echoes back into the lanes view
-  // mid-gesture, so `currentTimeline` stays the drag's starting point.
-  //
-  // The scope follows the preview for free: the sampler measures the preview's
-  // own processed texture on its command buffer's completion handler, already
-  // coalesced to kMinSampleInterval, so a fast drag cannot queue up a readback
-  // per tick.
-  _pendingPuckCommit = updated;
+  // The mini keeps its zero-latency override, while the same absolute timeline
+  // is persisted on every tick so FCP's main viewer also follows the wheel.
+  // `onDragBegin/End` already wraps the burst in one undo group, matching the
+  // constants sliders. This became necessary once compact mode made the main
+  // composition the primary preview during grading.
+  _pendingPuckCommit = nil;
   _liveDragValues = live;
   [self _pushLivePreviewValues:live];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(updated);
   [self _refreshReadout];
 }
 

@@ -22,11 +22,13 @@ While an editor is open, the preview also follows playback. Play back or scrub t
 
 The mini-viewer only receives the current clip. To check the whole composition, hold the layered-rectangles button beside Close, or hold P. The editor panel disappears while held so Final Cut's own viewer is visible, then returns to the same keypose, constant, curve, or modulation when released. Editor panels stay open while you work elsewhere in Final Cut; close them with their Close button or Esc.
 
-For longer edits against the full composition, press V or use the compact-editor button. Constants and Keypose stay open with their parameters available, but the mini-viewer is removed so the panel can sit under Final Cut's main viewer. Press V again to restore the mini-viewer and its previous expanded size.
+For longer edits against the full composition, press V or use the compact-editor button. Constants and Keypose stay open with their parameters available, but the mini-viewer is removed so the panel can sit under Final Cut's main viewer. Parameter drags update Final Cut's composition viewer live in both full and compact modes. Press V again to restore the mini-viewer and its previous expanded size.
+
+Mirage mirrors its small Before, Split and Show Selection toolbar in the top-left of Final Cut's main viewer. The buttons and B/S/M shortcuts share state with the mini-viewer, so compact mode does not remove the comparison tools.
 
 Drag empty space or the decorative title in an editor's title bar to put it where you want. Curve and modulation remember one position, while Constants and keypose remember another. The Constants/keypose panel can be resized from any edge or corner. The viewer fills its whole canvas and takes priority over parameter rows, which scroll when they need more room. A code editor grows alongside the viewer up to 150pt, then further growth belongs to the viewer. Its size and both panel positions are remembered.
 
-The sidebar button beside composition peek, or the L key, hides and shows the plugin's main companion browser: templates in Mirage and layers in Canvas. It is shown by default.
+The sidebar button beside composition peek, or the L key, hides and shows the plugin's main companion browser: templates in Mirage and layers in Canvas. It is shown by default. Compact mode and both sidebar visibility choices are remembered after Final Cut restarts.
 
 Mirage has a second, right-sidebar button for the grading panel. Use it or press G to hide and restore grading without closing the editor. This button is plugin opt-in, so Canvas does not show it.
 

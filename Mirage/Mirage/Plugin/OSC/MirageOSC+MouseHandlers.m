@@ -39,6 +39,36 @@
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  if (activePart == 9099) {
+    *forceUpdate = YES;
+    return;
+  }
+  if (activePart == 9004) {
+    self.compareDividerDragging = YES;
+    [self _setCompareDividerFromX:positionX];
+    *forceUpdate = YES;
+    return;
+  }
+  if (activePart >= 9001 && activePart <= 9003) {
+    KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+    if (activePart == 9001) {
+      state.mirageCompareBypassing = YES;
+      self.compareBeforeMouseHeld = YES;
+    } else if (activePart == 9002) {
+      state.mirageCompareSplitEnabled = !state.mirageCompareSplitEnabled;
+    } else {
+      state.mirageCompareSelectionEnabled =
+          !state.mirageCompareSelectionEnabled;
+    }
+    // All three modes now come from the effect render. The hidden nonce makes
+    // Final Cut invalidate its cached frame instead of redrawing only the OSC.
+    [self _invalidateCompareRender];
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:kMirageCompareStateDidChangeNotification
+                      object:nil];
+    *forceUpdate = YES;
+    return;
+  }
   // Option-click an OSC element to hide just it. Arm FIRST (before super), or
   // the base arms the interaction as a normal drag and this becomes a cached
   // no-op - so the toggle never fires and visibility never persists.
@@ -75,6 +105,11 @@
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (self.compareDividerDragging) {
+    [self _setCompareDividerFromX:positionX];
+    *forceUpdate = YES;
+    return;
+  }
   if ([self oscMouseDraggedAtX:positionX
                              y:positionY
                      modifiers:modifiers
@@ -95,6 +130,26 @@
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  if (self.compareBeforeMouseHeld) {
+    self.compareBeforeMouseHeld = NO;
+    KKInstanceStateForAPI(self.apiManager).mirageCompareBypassing = NO;
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:kMirageCompareStateDidChangeNotification
+                      object:nil];
+    [self _invalidateCompareRender];
+    *forceUpdate = YES;
+    return;
+  }
+  if (self.compareDividerDragging) {
+    self.compareDividerDragging = NO;
+    [self _setCompareDividerFromX:positionX];
+    id<FxOnScreenControlAPI_v4> api =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [api setCursor:[NSCursor arrowCursor]];
+    self.pointCursorSet = NO;
+    *forceUpdate = YES;
+    return;
+  }
   [self oscMouseUp];
   if (MirageSharedOSCGuideBridge().guideStep == 2 && self.isDragging) {
     MirageSharedOSCGuideBridge().guideStep = 3;

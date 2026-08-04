@@ -176,10 +176,15 @@
         __strong typeof(weak) s = weak;
         suppressBoundaryRedrive();
         if (dragging) {
-          // Live preview only - no FxPlug write. Stash for drag-end commit.
+          // Keep the in-process mini renderer responsive and also send every
+          // tick through the normal host write + render-nudge path so Final
+          // Cut's composition viewer follows in both expanded and compact
+          // modes. The surrounding drag session groups the whole burst into
+          // one undo action.
           pushLive(label, values);
-          pendingLabel = label;
-          pendingValues = values;
+          commit(label, values);
+          pendingLabel = nil;
+          pendingValues = nil;
         } else {
           // Discrete edit (text field, no drag) - commit immediately.
           commit(label, values);

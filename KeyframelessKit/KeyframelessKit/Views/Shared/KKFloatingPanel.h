@@ -86,6 +86,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// policy. Editor content changes height frequently as categories and modes
 /// change, and growing downward is much less disruptive than moving the title.
 - (void)setContentSizeKeepingTopEdge:(NSSize)size;
+/// Resize against an already-captured top edge. Useful when changing the
+/// hosted layout itself can synchronously perturb the panel frame.
+- (void)setContentSize:(NSSize)size keepingTopEdgeAt:(CGFloat)top;
 
 /// The view dragging is initiated from. Defaults to the whole content view, so
 /// the panel drags by any part of its background that does not handle the click
@@ -102,6 +105,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fired continuously during a user resize so hosted content can reflow its
 /// width-dependent layout, then once more at mouse-up with the settled size.
 @property(nonatomic, copy, nullable) void (^onUserResized)(NSSize size);
+
+/// Host command routing for key equivalents AppKit would otherwise resolve
+/// against this remote panel's empty undo manager.
+@property(nonatomic, copy, nullable) void (^onUndoRequested)(void);
+@property(nonatomic, copy, nullable) void (^onRedoRequested)(void);
 
 @end
 

@@ -16,6 +16,7 @@
   self = [super init];
   if (self) {
     _oscMasterVisible = YES;
+    _mirageCompareSplitFraction = 0.5;
   }
   return self;
 }

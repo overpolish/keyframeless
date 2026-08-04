@@ -150,9 +150,8 @@ NS_ASSUME_NONNULL_BEGIN
   BOOL _samplePending;
   /// When the previous puck-drag tick started, so the log reports the rate the
   /// gesture is actually managing rather than only the cost of one write.
-  /// The timeline the LAST tick of the open drag computed, held until the drag
-  /// ends and it becomes the gesture's one write. Nil when nothing has moved,
-  /// so a drag that never left the spot commits nothing at all.
+  /// Legacy deferred-commit slot, normally nil now that wheel ticks update the
+  /// main FCP viewer live. Kept for the balanced drag-end cleanup path.
   KKTimeline *_pendingPuckCommit;
   /// What that same tick would have committed, keyed by lane. Read by
   /// -_valuesForLane: so the readout, the derive and the preview are all

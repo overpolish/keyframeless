@@ -9,9 +9,9 @@
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/NSColor+KKColors.h>
 
-static NSString *const kToolbarPipelineID =
-    @"com.keyframeless.kit.Toolbar";
+static NSString *const kToolbarPipelineID = @"com.keyframeless.kit.Toolbar";
 
 static const CGFloat kIconSize = 28.0;
 static const CGFloat kButtonSize = 48.0;
@@ -24,6 +24,10 @@ static const CGFloat kCornerRadius = 12.0;
 static const CGFloat kHighlightCorner = 8.0;
 static const CGFloat kSeparatorWidth = 13.0; // slot width for a divider
 static const CGFloat kSeparatorLineW = 2.0;  // the drawn line thickness
+static const CGFloat kCompactButtonSize = 18.0;
+static const CGFloat kCompactSpacing = 9.0;
+static const CGFloat kCompactPadX = 8.0;
+static const CGFloat kCompactPadY = 2.0;
 
 // The toolbar (and tooltip) background fill - kept in one place so the tooltip
 // bubble matches the bar exactly.
@@ -31,10 +35,12 @@ static NSColor *toolbarBackgroundColor(void) {
   return [NSColor colorWithRed:0.08 green:0.08 blue:0.08 alpha:0.92];
 }
 
-static CGFloat itemWidth(KKToolbarItem *item, CGFloat scale) {
+static CGFloat itemWidth(KKToolbarItem *item, CGFloat scale, BOOL compact) {
   if (item.isSeparator)
     return kSeparatorWidth * scale;
-  return (item.customWidth > 0 ? item.customWidth : kButtonSize) * scale;
+  return (item.customWidth > 0 ? item.customWidth
+                               : (compact ? kCompactButtonSize : kButtonSize)) *
+         scale;
 }
 
 @implementation KKToolbarItem
@@ -62,9 +68,9 @@ static const CGFloat kLabelFontSize = 15.0;
 static const CGFloat kLabelHeight = 16.0;
 static const CGFloat kIconShiftY = 8.0;
 static const CGFloat kTooltipFontSize = 15.0;
-static const CGFloat kTooltipPadX = 10.0;   // horizontal text inset
-static const CGFloat kTooltipPadY = 6.0;    // vertical text inset
-static const CGFloat kTooltipGap = 8.0;     // gap above the toolbar top edge
+static const CGFloat kTooltipPadX = 10.0; // horizontal text inset
+static const CGFloat kTooltipPadY = 6.0;  // vertical text inset
+static const CGFloat kTooltipGap = 8.0;   // gap above the toolbar top edge
 static const CGFloat kTooltipCorner = 7.0;
 
 @implementation KKToolbar {
@@ -72,6 +78,7 @@ static const CGFloat kTooltipCorner = 7.0;
   NSArray<KKToolbarItem *> *_items;
   NSMutableArray *_iconTextures;
   NSMutableArray<NSString *> *_cachedNames;
+  NSMutableArray<NSString *> *_cachedIconStyles;
   NSMutableArray *_labelTextures;
   NSMutableArray<NSValue *> *_buttonCenters;
   NSMutableArray<NSValue *> *_buttonRects;
@@ -97,6 +104,7 @@ static const CGFloat kTooltipCorner = 7.0;
     _activeTag = items.firstObject.tag;
     _iconTextures = [NSMutableArray arrayWithCapacity:items.count];
     _cachedNames = [NSMutableArray arrayWithCapacity:items.count];
+    _cachedIconStyles = [NSMutableArray arrayWithCapacity:items.count];
     _labelTextures = [NSMutableArray arrayWithCapacity:items.count];
     _bottomMargin = kToolbarMargin;
     _rightMargin = -1;
@@ -105,6 +113,7 @@ static const CGFloat kTooltipCorner = 7.0;
     for (NSUInteger i = 0; i < items.count; i++) {
       [_iconTextures addObject:[NSNull null]];
       [_cachedNames addObject:@""];
+      [_cachedIconStyles addObject:@""];
       [_labelTextures addObject:[NSNull null]];
       [_buttonCenters addObject:[NSValue valueWithPoint:NSZeroPoint]];
       [_buttonRects addObject:[NSValue valueWithRect:NSZeroRect]];
@@ -217,9 +226,13 @@ static id<MTLTexture> renderTooltip(id<MTLDevice> device, NSString *text) {
 
 - (id<MTLTexture>)textureForIcon:(NSString *)name
                           device:(id<MTLDevice>)device
-                           index:(NSUInteger)idx {
+                           index:(NSUInteger)idx
+                          active:(BOOL)active {
+  NSString *style =
+      [NSString stringWithFormat:@"%d:%d", _compactIconCapsuleStyle, active];
   if (idx < _iconTextures.count && _iconTextures[idx] != (id)[NSNull null] &&
-      [_cachedNames[idx] isEqualToString:name])
+      [_cachedNames[idx] isEqualToString:name] &&
+      [_cachedIconStyles[idx] isEqualToString:style])
     return _iconTextures[idx];
 
   NSImage *symbol = [NSImage imageWithSystemSymbolName:name
@@ -228,8 +241,14 @@ static id<MTLTexture> renderTooltip(id<MTLDevice> device, NSString *text) {
     return nil;
 
   KKToolbarItem *item = idx < _items.count ? _items[idx] : nil;
-  CGFloat pointSize = item.iconPointSize > 0 ? item.iconPointSize : kIconSize;
-  NSColor *tint = item.iconColor ?: [NSColor colorWithWhite:0.85 alpha:1.0];
+  CGFloat pointSize = item.iconPointSize > 0
+                          ? item.iconPointSize
+                          : (_compactIconCapsuleStyle ? 13.0 : kIconSize);
+  NSColor *tint = item.iconColor
+                      ?: (_compactIconCapsuleStyle
+                              ? (active ? NSColor.accentMatchingHost
+                                        : NSColor.secondaryLabelColor)
+                              : [NSColor colorWithWhite:0.85 alpha:1.0]);
   NSImageSymbolConfiguration *config = [NSImageSymbolConfiguration
       configurationWithPointSize:pointSize
                           weight:NSFontWeightMedium];
@@ -240,8 +259,9 @@ static id<MTLTexture> renderTooltip(id<MTLDevice> device, NSString *text) {
                   [config configurationByApplyingConfiguration:colorCfg]];
 
   NSSize imageSize = styled.size;
-  NSInteger canvasW = (NSInteger)kButtonSize;
-  NSInteger canvasH = (NSInteger)kButtonSize;
+  NSInteger canvasW =
+      (NSInteger)(_compactIconCapsuleStyle ? kCompactButtonSize : kButtonSize);
+  NSInteger canvasH = canvasW;
   NSInteger pixelW = (NSInteger)(canvasW * kScale);
   NSInteger pixelH = (NSInteger)(canvasH * kScale);
 
@@ -287,6 +307,7 @@ static id<MTLTexture> renderTooltip(id<MTLDevice> device, NSString *text) {
   CGContextRelease(ctx);
   _iconTextures[idx] = texture;
   _cachedNames[idx] = [name copy];
+  _cachedIconStyles[idx] = style;
   return texture;
 }
 
@@ -360,9 +381,9 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
   // The mini-viewer's Metal pass is fully Y-mirrored vs the FxPlug surface this
   // bar was authored for: glyph content samples upside-down AND the vertical
   // geometry (bar position, icon-over-label layout) inverts. So mirror BOTH -
-  // negate the vertical position (mirror about the viewport centre) and swap the
-  // V texcoord (keep each glyph upright). (Symmetric OSC glyphs never revealed
-  // this; the asymmetric toolbar does.)
+  // negate the vertical position (mirror about the viewport centre) and swap
+  // the V texcoord (keep each glyph upright). (Symmetric OSC glyphs never
+  // revealed this; the asymmetric toolbar does.)
   float cy = flipY ? -(float)metalCenter.y : (float)metalCenter.y;
   float l = metalCenter.x - halfW;
   float r = metalCenter.x + halfW;
@@ -403,7 +424,8 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
       buildAndRegisterPipelineStateForPluginID:kToolbarPipelineID
                                     registryID:registryID
                                    pixelFormat:pixelFormat
-                                      bundleID:@"com.keyframeless.KeyframelessKit"
+                                      bundleID:
+                                          @"com.keyframeless.KeyframelessKit"
                                   vertexShader:@"KKVertexShader"
                                 fragmentShader:@"KKLabelFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
@@ -431,7 +453,11 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
 
   id<MTLRenderCommandEncoder> encoder =
       [cmdBuf renderCommandEncoderWithDescriptor:rpd];
-  [self drawInEncoder:encoder device:device pipeline:ps viewportWidth:ioW height:ioH];
+  [self drawInEncoder:encoder
+               device:device
+             pipeline:ps
+        viewportWidth:ioW
+               height:ioH];
   [encoder endEncoding];
   [cmdBuf commit];
   [cmdBuf waitUntilScheduled];
@@ -442,13 +468,18 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
 // _buttonCenters + _buttonRects (the hit-test reads the latter between draws).
 - (void)_layoutForViewportWidth:(float)ioW height:(float)ioH {
   CGFloat sc = _uiScale > 0 ? _uiScale : 1.0;
+  BOOL compact = _compactIconCapsuleStyle;
   NSInteger itemCount = (NSInteger)_items.count;
   CGFloat totalButtonsW = 0;
   for (NSInteger i = 0; i < itemCount; i++)
-    totalButtonsW += itemWidth(_items[i], sc);
-  totalButtonsW += (itemCount - 1) * kButtonSpacing * sc;
-  CGFloat toolbarW = totalButtonsW + kToolbarPadding * 2 * sc;
-  CGFloat toolbarH = kButtonHeight * sc + kToolbarPadding * 2 * sc;
+    totalButtonsW += itemWidth(_items[i], sc, compact);
+  totalButtonsW +=
+      (itemCount - 1) * (compact ? kCompactSpacing : kButtonSpacing) * sc;
+  CGFloat toolbarW =
+      totalButtonsW + (compact ? kCompactPadX : kToolbarPadding) * 2 * sc;
+  CGFloat toolbarH = ((compact ? kCompactButtonSize : kButtonHeight) +
+                      (compact ? kCompactPadY : kToolbarPadding) * 2) *
+                     sc;
   CGFloat toolbarX, toolbarY;
   if (_usesAnchorCenter) {
     // Free position: clamp the centre so the whole frame stays on-screen.
@@ -466,22 +497,24 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
 
   CGFloat curX = toolbarX - totalButtonsW / 2.0;
   for (NSInteger i = 0; i < itemCount; i++) {
-    CGFloat iw = itemWidth(_items[i], sc);
-    CGFloat ih = (_items[i].customHeight > 0 ? _items[i].customHeight
-                                             : kButtonHeight) *
+    CGFloat iw = itemWidth(_items[i], sc, compact);
+    CGFloat ih = (_items[i].customHeight > 0
+                      ? _items[i].customHeight
+                      : (compact ? kCompactButtonSize : kButtonHeight)) *
                  sc;
     CGFloat bx = curX + iw / 2.0;
     CGFloat by = toolbarY + _items[i].iconYOffset * sc;
     _buttonCenters[i] = [NSValue valueWithPoint:NSMakePoint(bx, by)];
     _buttonRects[i] = [NSValue
         valueWithRect:NSMakeRect(bx - iw / 2.0, by - ih / 2.0, iw, ih)];
-    curX += iw + kButtonSpacing * sc;
+    curX += iw + (compact ? kCompactSpacing : kButtonSpacing) * sc;
   }
 }
 
-// Shared content draw into a render encoder that's already in a pass. The caller
-// supplies a KKVertexShader/KKLabelFragment pipeline matching the target's pixel
-// format. Used by both the FxPlug path above and the mini-viewer's Metal pass.
+// Shared content draw into a render encoder that's already in a pass. The
+// caller supplies a KKVertexShader/KKLabelFragment pipeline matching the
+// target's pixel format. Used by both the FxPlug path above and the
+// mini-viewer's Metal pass.
 - (void)drawInEncoder:(id<MTLRenderCommandEncoder>)encoder
                device:(id<MTLDevice>)device
              pipeline:(id<MTLRenderPipelineState>)ps
@@ -512,8 +545,11 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
   // which also covers a uiScale change).
   if (!_bgTexture || _cachedToolbarW != toolbarW ||
       _cachedToolbarH != toolbarH) {
-    _bgTexture = renderRoundedRect(device, toolbarW, toolbarH, kCornerRadius * sc,
-                                   toolbarBackgroundColor());
+    _bgTexture = renderRoundedRect(
+        device, toolbarW, toolbarH,
+        (_compactIconCapsuleStyle ? toolbarH * 0.5 : kCornerRadius * sc),
+        _compactIconCapsuleStyle ? [NSColor colorWithWhite:0.0 alpha:0.55]
+                                 : toolbarBackgroundColor());
     _highlightTexture = renderRoundedRect(
         device, kButtonSize * sc, kButtonHeight * sc, kHighlightCorner * sc,
         [NSColor colorWithRed:0.28 green:0.28 blue:0.28 alpha:0.95]);
@@ -538,28 +574,32 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
       continue;
     CGPoint center = _buttonCenters[i].pointValue;
     CGPoint sMetal = {center.x - ioW / 2.0f, ioH / 2.0f - center.y};
-    drawTexturedQuadFlip(encoder, _separatorTexture, sMetal,
-                         kSeparatorLineW * sc / 2.0f, kButtonHeight * 0.25f * sc,
-                         viewportSize, fl, flipAxisY);
+    drawTexturedQuadFlip(
+        encoder, _separatorTexture, sMetal, kSeparatorLineW * sc / 2.0f,
+        kButtonHeight * 0.25f * sc, viewportSize, fl, flipAxisY);
   }
 
-  // Highlight behind active items
-  for (NSInteger i = 0; i < itemCount; i++) {
-    if (_items[i].isSeparator)
-      continue;
-    if (_items[i].tag == _activeTag ||
-        (_secondaryActiveTag != 0 && _items[i].tag == _secondaryActiveTag) ||
-        (_tertiaryActiveTag != 0 && _items[i].tag == _tertiaryActiveTag) ||
-        (_activeTags && [_activeTags containsObject:@(_items[i].tag)])) {
-      CGFloat iw =
-          (_items[i].customWidth > 0 ? _items[i].customWidth : kButtonSize) * sc;
-      CGFloat ih =
-          (_items[i].customHeight > 0 ? _items[i].customHeight : kButtonHeight) *
-          sc;
-      CGPoint center = _buttonCenters[i].pointValue;
-      CGPoint hlMetal = {center.x - ioW / 2.0f, ioH / 2.0f - center.y};
-      drawTexturedQuadFlip(encoder, _highlightTexture, hlMetal, iw / 2.0f,
-                           ih / 2.0f, viewportSize, fl, flipAxisY);
+  // Highlight behind active items. The compact Mirage chip indicates state by
+  // tinting the icon itself, exactly like its AppKit mini-viewer counterpart.
+  if (!_compactIconCapsuleStyle) {
+    for (NSInteger i = 0; i < itemCount; i++) {
+      if (_items[i].isSeparator)
+        continue;
+      if (_items[i].tag == _activeTag ||
+          (_secondaryActiveTag != 0 && _items[i].tag == _secondaryActiveTag) ||
+          (_tertiaryActiveTag != 0 && _items[i].tag == _tertiaryActiveTag) ||
+          (_activeTags && [_activeTags containsObject:@(_items[i].tag)])) {
+        CGFloat iw =
+            (_items[i].customWidth > 0 ? _items[i].customWidth : kButtonSize) *
+            sc;
+        CGFloat ih = (_items[i].customHeight > 0 ? _items[i].customHeight
+                                                 : kButtonHeight) *
+                     sc;
+        CGPoint center = _buttonCenters[i].pointValue;
+        CGPoint hlMetal = {center.x - ioW / 2.0f, ioH / 2.0f - center.y};
+        drawTexturedQuadFlip(encoder, _highlightTexture, hlMetal, iw / 2.0f,
+                             ih / 2.0f, viewportSize, fl, flipAxisY);
+      }
     }
   }
 
@@ -567,16 +607,28 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
   for (NSUInteger i = 0; i < (NSUInteger)itemCount; i++) {
     if (_items[i].isSeparator)
       continue;
+    BOOL active =
+        _items[i].tag == _activeTag ||
+        (_secondaryActiveTag != 0 && _items[i].tag == _secondaryActiveTag) ||
+        (_tertiaryActiveTag != 0 && _items[i].tag == _tertiaryActiveTag) ||
+        (_activeTags && [_activeTags containsObject:@(_items[i].tag)]);
     id<MTLTexture> iconTex = [self textureForIcon:_items[i].iconName
                                            device:device
-                                            index:i];
+                                            index:i
+                                           active:active];
     if (!iconTex)
       continue;
 
     CGFloat iw =
-        (_items[i].customWidth > 0 ? _items[i].customWidth : kButtonSize) * sc;
+        (_items[i].customWidth > 0
+             ? _items[i].customWidth
+             : (_compactIconCapsuleStyle ? kCompactButtonSize : kButtonSize)) *
+        sc;
     CGFloat ih =
-        (_items[i].customHeight > 0 ? _items[i].customHeight : kButtonSize) * sc;
+        (_items[i].customHeight > 0
+             ? _items[i].customHeight
+             : (_compactIconCapsuleStyle ? kCompactButtonSize : kButtonSize)) *
+        sc;
     CGPoint center = _buttonCenters[i].pointValue;
     BOOL hasLabel = _items[i].shortcutLabel.length > 0;
     CGFloat iconY = hasLabel ? center.y + kIconShiftY * sc : center.y;
@@ -597,13 +649,13 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
       continue;
 
     CGPoint center = _buttonCenters[i].pointValue;
-    CGFloat labelY =
-        center.y - kButtonHeight * sc / 2.0 + kLabelHeight * sc / 2.0 + 2.0 * sc;
+    CGFloat labelY = center.y - kButtonHeight * sc / 2.0 +
+                     kLabelHeight * sc / 2.0 + 2.0 * sc;
     CGPoint metalPos = {center.x - ioW / 2.0f, ioH / 2.0f - labelY};
     float halfW = labelTex.width / (2.0f * kScale) * sc;
     float halfH = labelTex.height / (2.0f * kScale) * sc;
-    drawTexturedQuadFlip(encoder, labelTex, metalPos, halfW, halfH, viewportSize,
-                         fl, flipAxisY);
+    drawTexturedQuadFlip(encoder, labelTex, metalPos, halfW, halfH,
+                         viewportSize, fl, flipAxisY);
   }
 
   // Hover tooltip: a localized bubble centred above the hovered button (clamped
@@ -613,7 +665,8 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
       if (_items[i].isSeparator || _items[i].tag != _hoveredTag ||
           !_items[i].tooltip.length)
         continue;
-      if (![_tooltipText isEqualToString:_items[i].tooltip] || !_tooltipTexture) {
+      if (![_tooltipText isEqualToString:_items[i].tooltip] ||
+          !_tooltipTexture) {
         _tooltipTexture = renderTooltip(device, _items[i].tooltip);
         _tooltipText = [_items[i].tooltip copy];
       }
@@ -624,7 +677,8 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
       CGPoint center = _buttonCenters[i].pointValue;
       CGFloat tipX = fmax(halfW, fmin(ioW - halfW, center.x)); // on-screen X
       // Prefer above the bar; flip below if it would clip the top edge, and
-      // clamp so it stays fully on-screen either way (ioSurface coords, Y-down).
+      // clamp so it stays fully on-screen either way (ioSurface coords,
+      // Y-down).
       CGFloat barTop = _toolbarFrame.origin.y;
       CGFloat barBottom = _toolbarFrame.origin.y + _toolbarFrame.size.height;
       CGFloat tipY = barTop - kTooltipGap - halfH;

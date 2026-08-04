@@ -12,6 +12,7 @@
 #import "MirageMiniViewerRenderer.h"    // per-instance descriptor path
 #import "MirageRenderUniforms.h"        // MirageMakeUniforms (shared with mini)
 #import "MirageStateBlob.h"
+#import "MirageSurfaceResponse.h"
 #import "Plugin+Render_Internal.h"
 
 #import <KeyframelessKit/KKLicense.h>
@@ -30,6 +31,22 @@
 NSString *const kMiragePassthroughSource =
     @"void mainImage(out vec4 O, in vec2 fc){ O = "
     @"texture(iChannel0, fc / iResolution.xy); }";
+
+static void MirageApplySelectionPreview(MirageShaderModel *model,
+                                        NSString *source,
+                                        MiragePluginState *state) {
+  NSString *key = MirageSurfaceSelectionToggleForSource(source);
+  if (!key.length || !model || !state)
+    return;
+  const MirageScalarProp *props = model.scalarProps;
+  for (int i = 0; i < model.scalarCount; i++)
+    if ([key isEqualToString:@(props[i].name)] && props[i].isBool &&
+        props[i].poolOffset >= 0 &&
+        props[i].poolOffset < state->colorPoolCount) {
+      state->colorPool[props[i].poolOffset].x = 1.0f;
+      return;
+    }
+}
 
 // Every `// #frames` offset any ENABLED entry declares, deduped, in entry then
 // declaration order. One entry - the pre-rack case - is exactly that entry's
@@ -814,6 +831,11 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
                                    pluginState:pluginState
                                         atTime:renderTime
                                          error:outError];
+  if (ok)
+    [self _applyViewerCompareToDestination:destinationImage
+                              sourceImages:sourceImages
+                               pluginState:pluginState
+                                renderTime:renderTime];
   // Unconditional: a render that reports failure still leaves pixels in the
   // destination surface, and "make the shader fail" must not be a way to get a
   // clean frame out of the trial.
@@ -822,6 +844,124 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   CFTimeInterval elapsed = CACurrentMediaTime() - t0;
   [self _trackChainRenderCost:elapsed pluginState:pluginState];
   return ok;
+}
+
+// Before/split must replace pixels in the effect output, not alpha-blend a raw
+// frame over the already-composited viewer. The latter looks right only while
+// the shader preserves the source's alpha footprint: a layout such as Frame or
+// Cards leaves its generated/glow pixels visible wherever the raw source is
+// transparent. Copying here writes transparent pixels too, before Final Cut
+// composites the effect over the timeline below it.
+- (BOOL)_applyViewerCompareToDestination:(FxImageTile *)destinationImage
+                            sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                             pluginState:(NSData *)pluginState
+                              renderTime:(CMTime)renderTime {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  BOOL before = state.mirageCompareBypassing;
+  BOOL split = state.mirageCompareSplitEnabled && !before;
+  if ((!before && !split) || !destinationImage.ioSurface)
+    return YES;
+
+  NSString *imageSource = MirageStateBlobReadSections(pluginState)[@"Image"];
+  FxImageTile *sourceTile =
+      KKLooksLikeTransitionShader(imageSource)
+          ? KKImageTileForParameterID(sourceImages, kParamFromImage)
+          : nil;
+  sourceTile = sourceTile ?: MirageCurrentFrameTile(sourceImages, renderTime);
+  if (!sourceTile.ioSurface)
+    return NO;
+
+  KKMetalDeviceCache *cache = KKMetalDeviceCache.sharedCache;
+  uint64_t registryID = destinationImage.deviceRegistryID;
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
+  id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:registryID
+                                                    pixelFormat:pixelFormat];
+  id<MTLTexture> destination = [destinationImage metalTextureForDevice:device];
+  id<MTLTexture> source = [sourceTile metalTextureForDevice:device];
+  id<MTLRenderPipelineState> pipeline = [cache
+      buildAndRegisterPipelineStateForPluginID:
+          @"com.keyframeless.Mirage.viewer-compare-copy"
+                                    registryID:registryID
+                                   pixelFormat:pixelFormat
+                                      bundleID:
+                                          @"com.keyframeless.KeyframelessKit"
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKTexturePassthroughFragment"
+                                     blendMode:KKBlendModeNone];
+  if (!device || !queue || !destination || !source || !pipeline) {
+    if (queue)
+      [cache returnCommandQueueToCache:queue];
+    return NO;
+  }
+
+  const float width = (float)destination.width;
+  const float height = (float)destination.height;
+  FxRect tile = destinationImage.tilePixelBounds;
+  FxRect image = destinationImage.imagePixelBounds;
+  float imageW = (float)(image.right - image.left);
+  float imageH = (float)(image.top - image.bottom);
+  if (imageW <= 0.0f)
+    imageW = 1.0f;
+  if (imageH <= 0.0f)
+    imageH = 1.0f;
+  float uvL = (float)(tile.left - image.left) / imageW;
+  float uvR = (float)(tile.right - image.left) / imageW;
+  float uvT = (float)(image.top - tile.top) / imageH;
+  float uvB = (float)(image.top - tile.bottom) / imageH;
+  KKVertex2D vertices[4] = {
+      {{width / 2.0f, -height / 2.0f}, {uvR, uvB}},
+      {{-width / 2.0f, -height / 2.0f}, {uvL, uvB}},
+      {{width / 2.0f, height / 2.0f}, {uvR, uvT}},
+      {{-width / 2.0f, height / 2.0f}, {uvL, uvT}},
+  };
+  simd_uint2 viewport = {(unsigned)destination.width,
+                         (unsigned)destination.height};
+
+  NSInteger splitLocalX = 0;
+  if (split) {
+    double seam = image.left +
+                  MAX(0.0, MIN(1.0, state.mirageCompareSplitFraction)) * imageW;
+    splitLocalX = (NSInteger)floor(seam - tile.left);
+    splitLocalX = MAX(0, MIN((NSInteger)destination.width, splitLocalX));
+    if (splitLocalX >= (NSInteger)destination.width) {
+      [cache returnCommandQueueToCache:queue];
+      return YES;
+    }
+  }
+
+  MTLRenderPassDescriptor *rpd = MTLRenderPassDescriptor.renderPassDescriptor;
+  rpd.colorAttachments[0].texture = destination;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  id<MTLCommandBuffer> cb = queue.commandBuffer;
+  id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
+  [enc setViewport:(MTLViewport){0, 0, width, height, -1.0, 1.0}];
+  if (split) {
+    // The fraction is in full-image space; intersect its right half with this
+    // destination tile so partial/tiled renders keep the seam in one place.
+    [enc setScissorRect:(MTLScissorRect){(NSUInteger)splitLocalX, 0,
+                                         destination.width -
+                                             (NSUInteger)splitLocalX,
+                                         destination.height}];
+  }
+  [enc setRenderPipelineState:pipeline];
+  [enc setVertexBytes:vertices
+               length:sizeof(vertices)
+              atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&viewport
+               length:sizeof(viewport)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setFragmentTexture:source atIndex:KKTextureIndex_InputImage];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+          vertexStart:0
+          vertexCount:4];
+  [enc endEncoding];
+  [cb commit];
+  [cb waitUntilCompleted];
+  [cache returnCommandQueueToCache:queue];
+  return YES;
 }
 
 // SHADER RACK, measured cost. An eight-shader chain can run with no lag at all,
@@ -1021,6 +1161,8 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   // values.
   const float pixelScale = MirageRenderScale(sourceImages);
   MirageShaderModel *pxModel = [MirageShaderModel modelForSource:imageSrc];
+  if (KKInstanceStateForAPI(self.apiManager).mirageCompareSelectionEnabled)
+    MirageApplySelectionPreview(pxModel, imageSrc, &base);
   MirageScalePixelProps(pxModel, base.colorPool, base.colorPoolCount,
                         pixelScale);
 
@@ -1055,6 +1197,9 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
     if (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled && n > 1) {
       MiragePluginState *states = malloc(sizeof(MiragePluginState) * (size_t)n);
       BOOL readOK = MirageStateBlobReadStates(pluginState, states, n);
+      if (readOK)
+        for (NSInteger si = 0; si < n; si++)
+          MirageApplySelectionPreview(pxModel, imageSrc, &states[si]);
       if (readOK)
         for (NSInteger si = 0; si < n; si++)
           MirageScalePixelProps(pxModel, states[si].colorPool,
@@ -1103,6 +1248,8 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   if (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled && n > 1) {
     mpStates = malloc(sizeof(MiragePluginState) * (size_t)n);
     if (MirageStateBlobReadStates(pluginState, mpStates, n)) {
+      for (NSInteger si = 0; si < n; si++)
+        MirageApplySelectionPreview(pxModel, imageSrc, &mpStates[si]);
       for (NSInteger si = 0; si < n; si++)
         MirageScalePixelProps(pxModel, mpStates[si].colorPool,
                               mpStates[si].colorPoolCount, pixelScale);

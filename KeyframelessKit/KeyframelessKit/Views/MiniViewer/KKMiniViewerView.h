@@ -549,10 +549,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// pixels re-renders from `sourceTexture` instead.
 @property(nonatomic, readonly, nullable) id<MTLTexture> processedTexture;
 
-/// Where the image is actually drawn inside this view, in view points, honouring
-/// aspect, zoom and pan. Public so a host can map a click in the preview to a
-/// position in the frame - the Grading surface's grey picker needs exactly that.
-/// Bottom-left origin, like the view and like the processed texture.
+/// Where the image is actually drawn inside this view, in view points,
+/// honouring aspect, zoom and pan. Public so a host can map a click in the
+/// preview to a position in the frame - the Grading surface's grey picker needs
+/// exactly that. Bottom-left origin, like the view and like the processed
+/// texture.
 - (CGRect)contentRectInViewPoints;
 
 /// The active slot's RAW input frame (this clip's real footage, as delivered
@@ -589,8 +590,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) CGFloat compareSplitFraction;
 
 /// Hold-to-bypass: while YES the whole preview draws `sourceTexture`, restoring
-/// on release. Independent of the split - a host drives it from a press-and-hold
-/// button. Ignored while `compareAvailable` is NO.
+/// on release. Independent of the split - a host drives it from a
+/// press-and-hold button. Ignored while `compareAvailable` is NO.
 @property(nonatomic) BOOL compareBypassing;
 
 /// Fired on the main thread when `compareAvailable`, `compareSplitEnabled` or
@@ -598,22 +599,28 @@ NS_ASSUME_NONNULL_BEGIN
 /// see: the feed resolves its first frame well after the UI is built, so a
 /// control gated on it would stay hidden forever without this.
 @property(nonatomic, copy, nullable) void (^onCompareStateChanged)(void);
+/// Fires only when the user drags the compare divider. Kept separate from
+/// `onCompareStateChanged`, whose availability/toggle callbacks may be caused
+/// by applying state from another viewer and must not echo it back.
+@property(nonatomic, copy, nullable) void (^onCompareSplitFractionChanged)
+    (CGFloat fraction);
 
 /// Fired when `sourceMediaSize` first resolves (or changes) - lets a host
 /// re-render any pixel-scaled UI that depends on it.
 @property(nonatomic, copy, nullable) void (^onSourceResolved)(void);
 
-/// Fired on the main thread after a frame's effect render has actually COMPLETED
-/// on the GPU, so `processedTexture` holds finished pixels.
+/// Fired on the main thread after a frame's effect render has actually
+/// COMPLETED on the GPU, so `processedTexture` holds finished pixels.
 ///
-/// For a consumer that measures the rendered frame (the Grading surfaces' scopes)
-/// rather than displays it. Polling on a timer is the wrong tool: an NSTimer in
-/// the default run-loop mode does not fire while the mouse is down, so a scope
-/// driven that way freezes for the whole of a parameter drag and only catches up
-/// on mouse-up - which is exactly when the user has stopped needing it.
+/// For a consumer that measures the rendered frame (the Grading surfaces'
+/// scopes) rather than displays it. Polling on a timer is the wrong tool: an
+/// NSTimer in the default run-loop mode does not fire while the mouse is down,
+/// so a scope driven that way freezes for the whole of a parameter drag and
+/// only catches up on mouse-up - which is exactly when the user has stopped
+/// needing it.
 ///
-/// Called once per rendered frame while the view is drawing, so a handler must be
-/// cheap or throttle itself.
+/// Called once per rendered frame while the view is drawing, so a handler must
+/// be cheap or throttle itself.
 @property(nonatomic, copy, nullable) void (^onProcessedFrameReady)(void);
 
 /// Which kind of view-transform gesture the user performed - lets a guide

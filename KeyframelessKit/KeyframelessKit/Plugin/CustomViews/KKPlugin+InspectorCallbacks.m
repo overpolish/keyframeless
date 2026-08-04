@@ -426,6 +426,23 @@
     }];
   };
 
+  void (^performHistoryCommand)(FxCommand) = ^(FxCommand command) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    [strong kkInActionScope:^{
+      id<FxCommandAPI_v2> cmd =
+          [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+      [cmd performCommand:command error:nil];
+    }];
+  };
+  view.onUndo = ^{
+    performHistoryCommand(kFxCommand_Undo);
+  };
+  view.onRedo = ^{
+    performHistoryCommand(kFxCommand_Redo);
+  };
+
   view.onToggleDetached = ^{
     __strong typeof(weak) strong = weak;
     __strong KKTimelineInspectorView *insp = weakView;

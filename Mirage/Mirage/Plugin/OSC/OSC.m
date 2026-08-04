@@ -5,17 +5,23 @@
 
 #import "OSC.h"
 #import "Constants.h"
-#import "MirageDirectives.h"      // MirageShaderModel (osc directives)
-#import "MirageOSCBlock.h"        // // @osc custom-handling blocks
+#import "MirageDirectives.h" // MirageShaderModel (osc directives)
+#import "MirageLocalized.h"
+#import "MirageMiniViewerRenderer.h" // per-instance source feed path
+#import "MirageOSCBlock.h"           // // @osc custom-handling blocks
 #import "MirageOSCBlockRuntime.h" // compiled block: eval / invert (shared w/ mini)
 #import "MirageOSCSnapshot.h"     // KKProcessTimelineSnapshot via the kit
 #import "MirageRack.h"            // selected entry -> lane / element key scope
+#import "MirageSurfaceResponse.h" // preview=selection availability
 #import "OSC_Internal.h"
 #import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKLinkExpr.h>
 #import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKMiniViewerFeed.h>
+#import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKSnapEngine.h>
+#import <KeyframelessKit/KKToolbar.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
 // The three glyph handles (KKArcOSC / KKPointOSC / KKSquarePointOSC) are
@@ -47,6 +53,13 @@ static const NSInteger kMirageExprPartBase = 5000;
 // two consecutive parts: handle/anchor (even) and motion-path tangent (odd).
 static const NSInteger kMirageOSCPartBase = 1000;
 
+// Viewer-chrome parts live above every shader-authored control part.
+static const NSInteger kMirageCompareBeforePart = 9001;
+static const NSInteger kMirageCompareSplitPart = 9002;
+static const NSInteger kMirageCompareSelectionPart = 9003;
+static const NSInteger kMirageCompareDividerPart = 9004;
+static const NSInteger kMirageCompareToolbarBodyPart = 9099;
+
 // The axis mask for a rotate block's `axes = x y z` subset (default Z).
 static KKRotationAxes MirageExprRotationAxes(NSString *axes) {
   KKRotationAxes m = 0;
@@ -69,6 +82,8 @@ static KKRotationAxes MirageExprRotationAxes(NSString *axes) {
 // the plugin returns this as its help-guide refresh notification.
 NSNotificationName const kMirageOSCPositionNotification =
     @"com.keyframeless.kk.oscGuidePosition";
+NSNotificationName const kMirageCompareStateDidChangeNotification =
+    @"com.keyframeless.mirage.compareStateChanged";
 
 // All OSC-guide affine / staleness / velocity-gate state now lives in the
 // generic KKOSCGuideBridge (KeyframelessKit). One process-lifetime instance
@@ -184,6 +199,10 @@ BOOL MirageGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   KKSnapEngine *_exprSnap;
   BOOL
       _exprSnapActive; // the current point drag snapped this tick (draw guides)
+  KKToolbar *_compareToolbar;
+  NSString *_compareToolbarSignature;
+  BOOL _compareBeforeMouseHeld;
+  BOOL _compareDividerDragging;
 }
 
 // Cmd during a centred-box drag = fine mode (cursor movement scaled down for
@@ -195,6 +214,203 @@ static const double kMirageExprBoxFineFactor = 0.2;
 static BOOL MirageExprBoxHandleIsCorner(NSInteger idx) { return idx < 4; }
 static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   return idx < 4 || idx == 5 || idx == 7;
+}
+
+- (nullable id<MTLTexture>)_compareSourceTextureForDestination:
+    (FxImageTile *)destinationImage {
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  id<MTLDevice> device =
+      [cache deviceWithRegistryID:destinationImage.deviceRegistryID];
+  NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
+  if (!device || !uuid.length)
+    return nil;
+  return KKMiniViewerFeedLoadPrimarySource(
+      MirageMiniViewerDescriptorPathForUUID(uuid), device);
+}
+
+- (void)_invalidateCompareRender {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!actionAPI || !setAPI)
+    return;
+  [actionAPI startAction:self];
+  KKWriteCustomParamString(setAPI, NSUUID.UUID.UUIDString, kParamRenderNudge);
+  [actionAPI endAction:self];
+}
+
+- (void)_drawCompareToolbarWithWidth:(NSInteger)width
+                              height:(NSInteger)height
+                    destinationImage:(FxImageTile *)destinationImage {
+  // The callback's width/height are logical host dimensions; toolbar layout
+  // and hit testing use the backing IOSurface dimensions.
+  width = (NSInteger)[destinationImage.ioSurface width];
+  height = (NSInteger)[destinationImage.ioSurface height];
+  BOOL hasSource =
+      [self _compareSourceTextureForDestination:destinationImage] != nil;
+  BOOL hasSelection =
+      MirageSurfaceSelectionToggleForSource([self _currentShaderSource])
+          .length > 0;
+  NSString *sig = [NSString stringWithFormat:@"%d:%d", hasSource, hasSelection];
+  if (![_compareToolbarSignature isEqualToString:sig]) {
+    _compareToolbarSignature = sig;
+    NSMutableArray<KKToolbarItem *> *items = [NSMutableArray array];
+    if (hasSource) {
+      KKToolbarItem *before =
+          [KKToolbarItem itemWithIcon:@"eye"
+                                  tag:kMirageCompareBeforePart
+                        shortcutLabel:nil];
+      before.tooltip = RLoc(@"Hold to see the frame without this effect.",
+                            @"Mirage viewer compare toolbar tooltip.");
+      [items addObject:before];
+      KKToolbarItem *split = [KKToolbarItem itemWithIcon:@"rectangle.split.2x1"
+                                                     tag:kMirageCompareSplitPart
+                                           shortcutLabel:nil];
+      split.tooltip = RLoc(@"Show the graded frame beside the original.",
+                           @"Mirage viewer compare toolbar tooltip.");
+      [items addObject:split];
+    }
+    if (hasSelection) {
+      KKToolbarItem *matte =
+          [KKToolbarItem itemWithIcon:@"circle.dashed"
+                                  tag:kMirageCompareSelectionPart
+                        shortcutLabel:nil];
+      matte.tooltip = RLoc(@"Show this shader's selection.",
+                           @"Mirage viewer compare toolbar tooltip.");
+      [items addObject:matte];
+    }
+    _compareToolbar =
+        items.count
+            ? [[KKToolbar alloc] initWithAPIManager:self.apiManager items:items]
+            : nil;
+    // Match the AppKit mini-viewer's 22pt chip at Retina density. Canvas's
+    // toolbar is intentionally much larger and includes a shortcut-label row;
+    // this is the same compact compare chrome on both Mirage surfaces.
+    _compareToolbar.compactIconCapsuleStyle = YES;
+    _compareToolbar.uiScale = 2.0;
+    _compareToolbar.usesAnchorCenter = YES;
+  }
+  if (!_compareToolbar)
+    return;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSMutableArray<NSNumber *> *active = [NSMutableArray array];
+  if (state.mirageCompareBypassing)
+    [active addObject:@(kMirageCompareBeforePart)];
+  if (state.mirageCompareSplitEnabled)
+    [active addObject:@(kMirageCompareSplitPart)];
+  if (state.mirageCompareSelectionEnabled)
+    [active addObject:@(kMirageCompareSelectionPart)];
+  _compareToolbar.activeTag = 0;
+  _compareToolbar.activeTags = active;
+  CGFloat n = _compareToolbar.items.count;
+  CGFloat toolbarW = (n * 18.0 + MAX(0.0, n - 1.0) * 9.0 + 16.0) * 2.0;
+  CGFloat toolbarH = 22.0 * 2.0;
+  CGFloat inset = 8.0 * 2.0;
+  // This chrome belongs to the WHOLE viewer surface, not the playback frame.
+  // KKToolbar's OSC y-axis puts its existing bottom bar near ioH, so mirror
+  // the original bottom-left placement to the top-left and change nothing else.
+  _compareToolbar.anchorCenter =
+      CGPointMake(inset + toolbarW * 0.5, height - inset - toolbarH * 0.5);
+  [_compareToolbar drawWithDestinationImage:destinationImage];
+}
+
+- (CGFloat)_compareDividerX {
+  CGPoint tr = CGPointZero, bl = CGPointZero;
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+    return -1.0;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  return floor(MIN(tr.x, bl.x) +
+               state.mirageCompareSplitFraction * fabs(tr.x - bl.x)) +
+         0.5;
+}
+
+- (BOOL)_compareDividerContainsX:(double)x y:(double)y {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state.mirageCompareSplitEnabled || state.mirageCompareBypassing)
+    return NO;
+  CGPoint tr = CGPointZero, bl = CGPointZero;
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+    return NO;
+  return y >= MIN(tr.y, bl.y) && y <= MAX(tr.y, bl.y) &&
+         fabs(x - [self _compareDividerX]) <= 10.0;
+}
+
+- (void)_setCompareDividerFromX:(double)x {
+  CGPoint tr = CGPointZero, bl = CGPointZero;
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+    return;
+  CGFloat minX = MIN(tr.x, bl.x), width = fabs(tr.x - bl.x);
+  if (width <= 1.0)
+    return;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  state.mirageCompareSplitFraction = MIN(0.98, MAX(0.02, (x - minX) / width));
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:kMirageCompareStateDidChangeNotification
+                    object:nil];
+  [self _invalidateCompareRender];
+}
+
+- (void)_drawCompareDividerInDestination:(FxImageTile *)destinationImage {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state.mirageCompareSplitEnabled || state.mirageCompareBypassing)
+    return;
+  CGPoint tr = CGPointZero, bl = CGPointZero;
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+    return;
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = destinationImage.deviceRegistryID;
+  MTLPixelFormat pf =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
+  id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:registryID
+                                                    pixelFormat:pf];
+  id<MTLRenderPipelineState> pipeline = [cache
+      buildAndRegisterPipelineStateForPluginID:
+          @"com.keyframeless.Mirage.compare-divider"
+                                    registryID:registryID
+                                   pixelFormat:pf
+                                      bundleID:
+                                          @"com.keyframeless.KeyframelessKit"
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKSolidColorFragment"
+                                     blendMode:KKBlendModeStraightAlpha];
+  id<MTLTexture> out = [destinationImage metalTextureForDevice:device];
+  if (!device || !queue || !pipeline || !out)
+    return;
+
+  float W = (float)out.width, H = (float)out.height;
+  float cx = (float)[self _compareDividerX] - W * 0.5f;
+  float B = H * 0.5f - (float)MAX(tr.y, bl.y);
+  float T = H * 0.5f - (float)MIN(tr.y, bl.y);
+  simd_uint2 viewport = {(unsigned)out.width, (unsigned)out.height};
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = out;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  id<MTLCommandBuffer> cb = [queue commandBuffer];
+  id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
+  [enc setRenderPipelineState:pipeline];
+  [enc setVertexBytes:&viewport
+               length:sizeof(viewport)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  void (^bar)(simd_float4, float) = ^(simd_float4 color, float halfPx) {
+    KKVertex2D q[4] = {{{cx - halfPx, T}, {0, 0}},
+                       {{cx - halfPx, B}, {0, 0}},
+                       {{cx + halfPx, T}, {0, 0}},
+                       {{cx + halfPx, B}, {0, 0}}};
+    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    [enc setVertexBytes:q length:sizeof(q) atIndex:KKVertexInputIndex_Vertices];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
+  };
+  bar((simd_float4){0.0f, 0.0f, 0.0f, 0.55f}, 1.5f);
+  bar((simd_float4){1.0f, 1.0f, 1.0f, 0.95f}, 0.5f);
+  [enc endEncoding];
+  [cb commit];
+  [cb waitUntilScheduled];
+  [cache returnCommandQueueToCache:queue];
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -1191,6 +1407,8 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
+  id<MTLTexture> compareSource =
+      [self _compareSourceTextureForDestination:destinationImage];
   [self _syncOSCControllers];
   double ringFrac = [self fractionAtTime:time];
 
@@ -1395,6 +1613,15 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
         handleCanvas.x, handleCanvas.y, trC.x, trC.y, blC.x, blC.y, NSMinX(hs),
         NSMinY(hs), NSWidth(hs), NSHeight(hs));
   }
+  // Like the mini viewer, the compare seam is final viewer chrome: draw it
+  // after shader-authored OSCs so a large control cannot erase it. Before
+  // bypass gates it off in `_drawCompareDivider...`, leaving one clean source
+  // frame while the eye is held.
+  if (compareSource)
+    [self _drawCompareDividerInDestination:destinationImage];
+  [self _drawCompareToolbarWithWidth:width
+                              height:height
+                    destinationImage:destinationImage];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -1403,14 +1630,36 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
                             atTime:(CMTime)time {
   *activePart = 0;
 
-  // Reset a cursor a control forced last hover; the hit branch re-sets it, so
-  // moving off a handle (incl. after an opt-click) restores the arrow.
+  // Clear whichever OSC forced a cursor on the previous hit tick before any
+  // early-return chrome branch. The branch that still owns this point sets its
+  // cursor again below. This also restores the arrow when a split is switched
+  // off while the pointer is still sitting where its divider used to be.
   if (self.pointCursorSet) {
     id<FxOnScreenControlAPI_v4> resetAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     [resetAPI setCursor:[NSCursor arrowCursor]];
     self.pointCursorSet = NO;
   }
+
+  if ([self _compareDividerContainsX:positionX y:positionY]) {
+    *activePart = kMirageCompareDividerPart;
+    id<FxOnScreenControlAPI_v4> api =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [api setCursor:[NSCursor resizeLeftRightCursor]];
+    self.pointCursorSet = YES;
+    return;
+  }
+
+  NSInteger toolbarHit = [_compareToolbar hitTestAtX:positionX y:positionY];
+  if (toolbarHit != 0) {
+    *activePart = toolbarHit > 0 ? toolbarHit : kMirageCompareToolbarBodyPart;
+    id<FxOnScreenControlAPI_v4> api =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [api setCursor:[NSCursor arrowCursor]];
+    _compareToolbar.hoveredTag = toolbarHit > 0 ? toolbarHit : 0;
+    return;
+  }
+  _compareToolbar.hoveredTag = 0;
 
   // Hit-test each position handle (tangent > arc > anchor-dot precedence lives
   // in the controller). First hit wins and sets the cursor.

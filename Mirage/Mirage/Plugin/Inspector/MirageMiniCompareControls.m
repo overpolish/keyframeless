@@ -12,6 +12,7 @@
 #import <KeyframelessKit/NSColor+KKColors.h>
 #import <QuartzCore/QuartzCore.h>
 
+#import "Constants.h"
 #import "MirageInspectorChrome.h"
 #import "MirageLocalized.h"
 #import "MirageSurfaceResponse.h" // MirageSurfaceSelectionToggleForSource
@@ -32,6 +33,7 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 
 @implementation MirageMiniCompareControls {
   __weak KKTimelineLanesView *_lanesView;
+  __weak id<PROAPIAccessing> _apiManager;
   __weak KKMiniViewerView *_mini;
   NSView *_popoverContentView;
   _MirageMiniChromeChip *_chip;
@@ -52,9 +54,11 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   BOOL _bypassHeldByKey;
 }
 
-- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView {
+- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView
+                       apiManager:(id<PROAPIAccessing>)apiManager {
   if ((self = [super init])) {
     _lanesView = lanesView;
+    _apiManager = apiManager;
     NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
     [nc addObserver:self
            selector:@selector(_popoverDidOpen:)
@@ -71,8 +75,28 @@ static const CGFloat kEdgeInset = KKPaddingSM;
            selector:@selector(_focusLeftApp:)
                name:NSApplicationDidResignActiveNotification
              object:nil];
+    [nc addObserver:self
+           selector:@selector(_sharedCompareStateChanged:)
+               name:kMirageCompareStateDidChangeNotification
+             object:nil];
   }
   return self;
+}
+
+- (void)_sharedCompareStateChanged:(NSNotification *)note {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(_apiManager);
+  if (_mini) {
+    _mini.compareBypassing = state.mirageCompareBypassing;
+    _mini.compareSplitEnabled = state.mirageCompareSplitEnabled;
+    _mini.compareSplitFraction = state.mirageCompareSplitFraction;
+    [_mini setNeedsDisplay:YES];
+  }
+  if (_showSelectionActive != state.mirageCompareSelectionEnabled) {
+    _showSelectionActive = state.mirageCompareSelectionEnabled;
+    if (self.onSelectionChanged)
+      self.onSelectionChanged(_showSelectionActive);
+  }
+  [self _refreshControls];
 }
 
 - (void)invalidate {
@@ -130,6 +154,7 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   [self _dropShortcutMonitor];
   KKMiniViewerView *mini = _mini;
   mini.onCompareStateChanged = nil;
+  mini.onCompareSplitFractionChanged = nil;
   mini.compareBypassing = NO;
   _mini = nil;
   [_chip removeFromSuperview];
@@ -152,6 +177,13 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   }
   [self _teardown];
   _mini = mini;
+  KKPluginInstanceState *shared = KKInstanceStateForAPI(_apiManager);
+  mini.compareBypassing = shared.mirageCompareBypassing;
+  mini.compareSplitEnabled = shared.mirageCompareSplitEnabled;
+  mini.compareSplitFraction = shared.mirageCompareSplitFraction;
+  _showSelectionActive = shared.mirageCompareSelectionEnabled;
+  if (_showSelectionActive && self.onSelectionChanged)
+    self.onSelectionChanged(YES);
 
   _MirageMiniChromeChip *chip =
       [[_MirageMiniChromeChip alloc] initWithFrame:NSZeroRect];
@@ -216,7 +248,20 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   // The feed's first frame lands well after the popover is built, so the
   // compare buttons only learn there IS an ungraded frame from this edge.
   mini.onCompareStateChanged = ^{
-    [weak _refreshControls];
+    __strong typeof(weak) self = weak;
+    [self _refreshControls];
+  };
+  mini.onCompareSplitFractionChanged = ^(CGFloat fraction) {
+    __strong typeof(weak) self = weak;
+    if (!self)
+      return;
+    KKInstanceStateForAPI(self->_apiManager).mirageCompareSplitFraction =
+        fraction;
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:kMirageCompareStateDidChangeNotification
+                      object:nil];
+    if (self->_lanesView.onBoundaryPreviewNeedsRender)
+      self->_lanesView.onBoundaryPreviewNeedsRender();
   };
   [self _refreshControls];
   [self _installShortcutMonitor];
@@ -294,16 +339,22 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 
 // Split the preview: processed left of the divider, untouched right of it.
 //
-// Handed straight to the mini viewer, which owns the state for the length of
-// the session and nothing longer. It is not a lane, not a parameter and not
-// part of the UI state blob on purpose - an honoured FxPlug write is one undo
-// entry, so a divider the user drags would bury the edit they actually want to
-// step back.
+// Drawn by the mini viewer, with the toggle mirrored into the per-instance
+// session state the main OSC reads. It is not a lane, not a parameter and not
+// part of the UI-state blob - an honoured FxPlug write is one undo entry, so a
+// compare toggle must never bury the edit the user actually wants to step back.
 - (void)_toggleCompareSplit:(id)sender {
   KKMiniViewerView *mini = _mini;
   if (!mini.compareAvailable)
     return;
   mini.compareSplitEnabled = !mini.compareSplitEnabled;
+  KKInstanceStateForAPI(_apiManager).mirageCompareSplitEnabled =
+      mini.compareSplitEnabled;
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:kMirageCompareStateDidChangeNotification
+                    object:nil];
+  if (_lanesView.onBoundaryPreviewNeedsRender)
+    _lanesView.onBoundaryPreviewNeedsRender();
   [self _refreshControls];
 }
 
@@ -312,6 +363,12 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   if (!mini.compareAvailable)
     return;
   mini.compareBypassing = held;
+  KKInstanceStateForAPI(_apiManager).mirageCompareBypassing = held;
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:kMirageCompareStateDidChangeNotification
+                    object:nil];
+  if (_lanesView.onBoundaryPreviewNeedsRender)
+    _lanesView.onBoundaryPreviewNeedsRender();
   [self _refreshControls];
 }
 
@@ -325,6 +382,13 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   if (![self _declaresSelectionToggle])
     return;
   _showSelectionActive = !_showSelectionActive;
+  KKInstanceStateForAPI(_apiManager).mirageCompareSelectionEnabled =
+      _showSelectionActive;
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:kMirageCompareStateDidChangeNotification
+                    object:nil];
+  if (_lanesView.onBoundaryPreviewNeedsRender)
+    _lanesView.onBoundaryPreviewNeedsRender();
   if (self.onSelectionChanged)
     self.onSelectionChanged(_showSelectionActive);
   // The preview is a PAUSED Metal view, so it holds its last frame until

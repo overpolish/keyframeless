@@ -69,6 +69,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// entry.
 @property(nonatomic, copy, nullable) NSString *selectedRackEntryID;
 
+/// Mirage's compare toolbar is viewer chrome, not project data. These flags
+/// let the inspector mini-viewer and the FxPlug OSC show one shared session
+/// state without writing a parameter (and therefore without adding undo
+/// entries). Other plugins leave them at their zero defaults.
+@property(nonatomic) BOOL mirageCompareBypassing;
+@property(nonatomic) BOOL mirageCompareSplitEnabled;
+@property(nonatomic) CGFloat mirageCompareSplitFraction;
+@property(nonatomic) BOOL mirageCompareSelectionEnabled;
+
 /// YES while the MEASURED cost of rendering a chained-shader plugin's whole
 /// chain (Mirage's rack) has stayed above the project's frame budget for long
 /// enough to be a sustained state rather than one cold frame. Written from the

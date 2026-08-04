@@ -615,10 +615,10 @@
 
 // SNAPPED to a whole device pixel, and the composite's seam is snapped the same
 // way from the same number. A divider at a fractional pixel puts the boundary
-// between the two halves mid-texel: the edge samples both images at once and the
-// seam bleeds and shimmers as it moves. Rounding the line without rounding the
-// seam would be worse still - the stroke would sit a half pixel off the join it
-// is supposed to mark.
+// between the two halves mid-texel: the edge samples both images at once and
+// the seam bleeds and shimmers as it moves. Rounding the line without rounding
+// the seam would be worse still - the stroke would sit a half pixel off the
+// join it is supposed to mark.
 - (CGFloat)_compareDividerXInViewPoints {
   if (![self _compareSplitActive] || self.livePlaybackActive)
     return -1.0;
@@ -645,6 +645,8 @@
   if (cr.size.width <= 0.5)
     return;
   self.compareSplitFraction = (point.x - CGRectGetMinX(cr)) / cr.size.width;
+  if (self.onCompareSplitFractionChanged)
+    self.onCompareSplitFractionChanged(self.compareSplitFraction);
 }
 
 - (void)_compareStateChanged {

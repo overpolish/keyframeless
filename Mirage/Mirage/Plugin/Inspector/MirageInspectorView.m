@@ -219,6 +219,8 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
       if (s)
         s->_colorPanelController.userVisible = visible;
     };
+    _colorPanelController.userVisible =
+        self.basicLanesView.editorRightPanelVisible;
     // The puck writes real controls, so it persists through the same chain as
     // any other edit, and brackets its drag so the burst collapses to one undo
     // entry.
@@ -243,8 +245,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     // what such a template (a denoise above all) is judged by. Its selection
     // switch is asserted through the panel's one preview-override push, so the
     // matte and the panel's active key can never contradict each other.
-    _compareControls = [[MirageMiniCompareControls alloc]
-        initWithLanesView:self.basicLanesView];
+    _compareControls =
+        [[MirageMiniCompareControls alloc] initWithLanesView:self.basicLanesView
+                                                  apiManager:apiManager];
     _compareControls.onSelectionChanged = ^(BOOL showing) {
       __strong typeof(weak) s = weak;
       if (s)

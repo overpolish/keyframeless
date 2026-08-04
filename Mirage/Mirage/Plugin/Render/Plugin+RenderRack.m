@@ -6,7 +6,9 @@
 #import "Constants.h"
 #import "MirageCustomShader.h"
 #import "MirageDirectives.h" // MirageCommonDefault + the #motionblur mode
+#import "MirageRack.h"
 #import "MirageStateBlob.h"
+#import "MirageSurfaceResponse.h"
 #import "Plugin+Render_Internal.h"
 
 #import <KeyframelessKit/KKLog.h>
@@ -32,6 +34,20 @@
 // steady playback exactly as it does through a single template.
 
 @implementation MiragePlugin (RenderRack)
+
+static void MirageApplyRackSelectionPreview(MirageShaderModel *model,
+                                            NSString *source,
+                                            MiragePluginState *state) {
+  NSString *key = MirageSurfaceSelectionToggleForSource(source);
+  const MirageScalarProp *props = model.scalarProps;
+  for (int i = 0; key.length && i < model.scalarCount; i++)
+    if ([key isEqualToString:@(props[i].name)] && props[i].isBool &&
+        props[i].poolOffset >= 0 &&
+        props[i].poolOffset < state->colorPoolCount) {
+      state->colorPool[props[i].poolOffset].x = 1.0f;
+      return;
+    }
+}
 
 // One entry's render. Everything the single-template path decides per frame -
 // pixel scale, who owns the blur, single pass vs buffer chain - decided here
@@ -75,6 +91,14 @@
 
   const float pixelScale = MirageRenderScale(sourceImages);
   MirageShaderModel *pxModel = [MirageShaderModel modelForSource:imageSrc];
+  KKPluginInstanceState *compareState = KKInstanceStateForAPI(self.apiManager);
+  NSString *selectedEntry =
+      MirageRackEntryIDOrSentinel(compareState.selectedRackEntryID);
+  NSString *thisEntry = MirageStateBlobEntryIDAtIndex(pluginState, index);
+  BOOL showSelection = compareState.mirageCompareSelectionEnabled &&
+                       [selectedEntry isEqualToString:thisEntry];
+  if (showSelection)
+    MirageApplyRackSelectionPreview(pxModel, imageSrc, &base);
   MirageScalePixelProps(pxModel, base.colorPool, base.colorPoolCount,
                         pixelScale);
 
@@ -113,6 +137,9 @@
       n > 1) {
     mpStates = malloc(sizeof(MiragePluginState) * (size_t)n);
     if (MirageStateBlobReadStatesAtIndex(pluginState, index, mpStates, n)) {
+      for (NSInteger si = 0; si < n; si++)
+        if (showSelection)
+          MirageApplyRackSelectionPreview(pxModel, imageSrc, &mpStates[si]);
       for (NSInteger si = 0; si < n; si++)
         MirageScalePixelProps(pxModel, mpStates[si].colorPool,
                               mpStates[si].colorPoolCount, pixelScale);

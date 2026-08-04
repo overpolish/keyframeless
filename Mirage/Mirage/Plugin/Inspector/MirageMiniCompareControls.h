@@ -6,12 +6,14 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Before, Split and Show Selection, as a small row of icons ON the mini
-/// viewer.
+/// Before, Split and Show Selection, as a small row of icons on the mini
+/// viewer. Mirage's main OSC mirrors the same row in Final Cut's viewer and
+/// both read the same per-instance session state.
 ///
 /// They belong to the PREVIEW, not to the Color panel that used to carry them.
 /// Every Mirage template has a mini viewer in its inspector and only a
@@ -19,13 +21,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// where before/after is the whole point - had no way to compare at all and its
 /// `preview=selection` marker was dead text.
 ///
-/// Nothing here writes: the two compare controls are the mini viewer's own
-/// session view state, and the selection switch is a live override pushed into
-/// the preview's renderer. No lane, no parameter, no undo entry, and Final
-/// Cut's viewer never shows the matte.
+/// Nothing here writes: the compare controls live in per-instance session
+/// state, and the selection switch is a live override pushed into whichever
+/// preview is being used. No lane, no parameter and no undo entry.
 @interface MirageMiniCompareControls : NSObject
 
-- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView;
+- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView
+                       apiManager:(id<PROAPIAccessing>)apiManager;
 
 /// Whether the shader's selection - its matte - is showing, for THIS popover
 /// session. The single source of truth for that switch: the Color panel reads
