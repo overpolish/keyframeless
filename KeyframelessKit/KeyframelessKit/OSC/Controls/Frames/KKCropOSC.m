@@ -13,6 +13,10 @@
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
+static inline double KKCropCanvasLimit(double value, BOOL allowsOutside) {
+  return allowsOutside ? value : CLAMP(value, 0.0, 1.0);
+}
+
 typedef struct {
   BOOL left;
   BOOL right;
@@ -258,10 +262,16 @@ static const CropPointConfig kCropConfigs[KKCropPointCount] = {
   double deltaX = objX - _dragStartObjX;
   double deltaY = objY - _dragStartObjY;
 
-  double newLeft = CLAMP(_dragStartCropLeft + deltaX, 0.0, 1.0);
-  double newRight = CLAMP(_dragStartCropRight - deltaX, 0.0, 1.0);
-  double newBottom = CLAMP(_dragStartCropBottom + deltaY, 0.0, 1.0);
-  double newTop = CLAMP(_dragStartCropTop - deltaY, 0.0, 1.0);
+  double newLeft = _dragStartCropLeft + deltaX;
+  double newRight = _dragStartCropRight - deltaX;
+  double newBottom = _dragStartCropBottom + deltaY;
+  double newTop = _dragStartCropTop - deltaY;
+  if (!self.allowsOutsideCanvas) {
+    newLeft = CLAMP(newLeft, 0.0, 1.0);
+    newRight = CLAMP(newRight, 0.0, 1.0);
+    newBottom = CLAMP(newBottom, 0.0, 1.0);
+    newTop = CLAMP(newTop, 0.0, 1.0);
+  }
 
   [self setCropLeft:newLeft
               right:newRight
@@ -300,24 +310,24 @@ static const CropPointConfig kCropConfigs[KKCropPointCount] = {
   BOOL shiftHeld = (flags & kCGEventFlagMaskShift) != 0;
 
   if (cfg.left)
-    cL = CLAMP(objX, 0.0, 1.0);
+    cL = KKCropCanvasLimit(objX, self.allowsOutsideCanvas);
   if (cfg.right)
-    cR = CLAMP(1.0 - objX, 0.0, 1.0);
+    cR = KKCropCanvasLimit(1.0 - objX, self.allowsOutsideCanvas);
   if (cfg.top)
-    cT = CLAMP(1.0 - objY, 0.0, 1.0);
+    cT = KKCropCanvasLimit(1.0 - objY, self.allowsOutsideCanvas);
   if (cfg.bottom)
-    cB = CLAMP(objY, 0.0, 1.0);
+    cB = KKCropCanvasLimit(objY, self.allowsOutsideCanvas);
 
   if (optHeld) {
     if (cfg.isEdge) {
       if (cfg.top)
-        cB = CLAMP(prevB + (cT - prevT), 0.0, 1.0);
+        cB = KKCropCanvasLimit(prevB + (cT - prevT), self.allowsOutsideCanvas);
       else if (cfg.bottom)
-        cT = CLAMP(prevT + (cB - prevB), 0.0, 1.0);
+        cT = KKCropCanvasLimit(prevT + (cB - prevB), self.allowsOutsideCanvas);
       if (cfg.left)
-        cR = CLAMP(prevR + (cL - prevL), 0.0, 1.0);
+        cR = KKCropCanvasLimit(prevR + (cL - prevL), self.allowsOutsideCanvas);
       else if (cfg.right)
-        cL = CLAMP(prevL + (cR - prevR), 0.0, 1.0);
+        cL = KKCropCanvasLimit(prevL + (cR - prevR), self.allowsOutsideCanvas);
     } else {
       double cx0, cy0, cx1, cy1;
       [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
@@ -340,9 +350,9 @@ static const CropPointConfig kCropConfigs[KKCropPointCount] = {
       double currentH = 1.0 - cT - cB;
       double diff = currentH - targetH;
       if (cfg.top)
-        cT = CLAMP(cT + diff, 0.0, 1.0);
+        cT = KKCropCanvasLimit(cT + diff, self.allowsOutsideCanvas);
       else
-        cB = CLAMP(cB + diff, 0.0, 1.0);
+        cB = KKCropCanvasLimit(cB + diff, self.allowsOutsideCanvas);
     }
   }
 
@@ -356,21 +366,21 @@ static const CropPointConfig kCropConfigs[KKCropPointCount] = {
       double currentH = 1.0 - cT - cB;
       double diff = currentH - targetH;
       if (cfg.top)
-        cT = CLAMP(cT + diff, 0.0, 1.0);
+        cT = KKCropCanvasLimit(cT + diff, self.allowsOutsideCanvas);
       else
-        cB = CLAMP(cB + diff, 0.0, 1.0);
+        cB = KKCropCanvasLimit(cB + diff, self.allowsOutsideCanvas);
     } else if (changesW) {
       double w = 1.0 - cL - cR;
       double targetH = w / _cropStartAspect;
       double diff = (1.0 - cT - cB) - targetH;
-      cT = CLAMP(cT + diff * 0.5, 0.0, 1.0);
-      cB = CLAMP(cB + diff * 0.5, 0.0, 1.0);
+      cT = KKCropCanvasLimit(cT + diff * 0.5, self.allowsOutsideCanvas);
+      cB = KKCropCanvasLimit(cB + diff * 0.5, self.allowsOutsideCanvas);
     } else {
       double h = 1.0 - cT - cB;
       double targetW = h * _cropStartAspect;
       double diff = (1.0 - cL - cR) - targetW;
-      cL = CLAMP(cL + diff * 0.5, 0.0, 1.0);
-      cR = CLAMP(cR + diff * 0.5, 0.0, 1.0);
+      cL = KKCropCanvasLimit(cL + diff * 0.5, self.allowsOutsideCanvas);
+      cR = KKCropCanvasLimit(cR + diff * 0.5, self.allowsOutsideCanvas);
     }
   }
 

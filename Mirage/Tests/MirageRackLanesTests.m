@@ -182,6 +182,47 @@ int main(void) {
                 @"the #progress ramp is linear, matching iProgress");
     }
 
+    // --- (a2b) Frame geometry + glow controls -----------------------------
+    {
+      NSString *frameSource = MirageFrameShaderSource();
+      NSArray<KKLane *> *frameLanes = MirageBuildAvailableLanesForRack(
+          KKTimelineWithCode(kMirageRackSentinelEntryID, frameSource, nil), nil,
+          nil, nil);
+      KKLane *opacity = KKLaneWithKey(frameLanes, @"uGlowOpacity");
+      KKRequire(opacity != nil && [opacity.categoryKey isEqualToString:@"Glow"],
+                @"Frame exposes Glow Opacity in the Glow group");
+      KKRequire(opacity.keyposes.firstObject.values.firstObject.doubleValue ==
+                    100.0,
+                @"Frame glow starts fully opaque");
+      KKRequire(KKLaneWithKey(frameLanes, @"uGlowFeather") == nil,
+                @"Frame glow softness comes only from its Gaussian size");
+      KKRequire(
+          [frameSource containsString:@"frameGlowCoverage(gb.a)"] &&
+              [frameSource containsString:@"outsideContent = 1.0 - cA"] &&
+              ![frameSource containsString:@"glowScale"],
+          @"Frame glow follows source alpha without aspect-ratio scaling");
+
+      MirageShaderModel *frameModel =
+          [MirageShaderModel modelForSource:frameSource];
+      const MirageOSCBlock *sizeOSC = [frameModel oscBlockForUniform:"uSize"];
+      KKRequire(sizeOSC != NULL && strcmp(sizeOSC->primitive, "ring") == 0,
+                @"Frame Size exposes a ring OSC");
+
+      KKLane *crop = KKLaneWithKey(frameLanes, @"uCrop");
+      KKRequire(crop.componentMin.count == 4 && crop.componentMax.count == 4,
+                @"Frame crop carries per-edge bounds");
+      KKRequire(crop.componentMin[0].doubleValue == 0.0 &&
+                    crop.componentMin[1].doubleValue == 0.0,
+                @"Frame crop width and height cannot invert");
+      KKRequire(crop.componentMax[0].doubleValue > 1000.0 &&
+                    crop.componentMax[1].doubleValue > 1000.0 &&
+                    crop.componentMin[2].doubleValue < -1000.0 &&
+                    crop.componentMax[2].doubleValue > 1000.0 &&
+                    crop.componentMin[3].doubleValue < -1000.0 &&
+                    crop.componentMax[3].doubleValue > 1000.0,
+                @"Frame crop can resize and move beyond every canvas side");
+    }
+
     // --- (a3) every transition gets the Easing lane ------------------------
     //
     // The lane is core to `#template transition`, the way the Transition /

@@ -391,6 +391,10 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
               ? _exprControllers[b.elementKey]
               : [[KKCropOSC alloc] initWithAPIManager:self.apiManager];
       crop.hitPadding = 6.0; // forgiving handle grab, like the scale box
+      // An authored box is layout geometry, not FCP's destructive Crop tool.
+      // The shader's directive bounds are authoritative, so it may leave the
+      // canvas on any side.
+      crop.allowsOutsideCanvas = YES;
       MirageOSCBlockRuntime *blk = b;
       crop.valuesProvider = ^NSArray<NSNumber *> *(CMTime t) {
         __strong MirageOSC *s = weakSelf;

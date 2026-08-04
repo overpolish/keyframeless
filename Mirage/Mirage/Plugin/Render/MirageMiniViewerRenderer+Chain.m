@@ -170,6 +170,7 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   NSString *image = sections[@"Image"];
   if (image.length == 0)
     image = kMiragePassthroughSource;
+  MirageShaderModel *poolModel = [MirageShaderModel modelForSource:image];
   NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
     return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
   };
@@ -189,9 +190,17 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   float speed =
       speedV.count ? speedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SPEED;
   float iTime = timeSec * speed + fmodf(seed, 10000.0f);
-  NSArray<NSNumber *> *grV = [self valuesForLabel:@"Grain"];
-  NSArray<NSNumber *> *grSzV = [self valuesForLabel:@"Grain Size"];
-  float grain = grV.count ? grV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
+  // Grain is opt-in. -defaultValuesForLabel: supplies the subtle 6% starting
+  // value for a shader that declares `#grain`, but asking for that bare label
+  // on every shader used to apply the fallback to templates that never
+  // declared it. The FCP renderer correctly treats no directive/lane as zero;
+  // gate the mini on the same source declaration.
+  MirageBuiltins builtins = poolModel.builtins;
+  NSArray<NSNumber *> *grV =
+      builtins.grain.present ? [self valuesForLabel:@"Grain"] : @[];
+  NSArray<NSNumber *> *grSzV =
+      builtins.grain.present ? [self valuesForLabel:@"Grain Size"] : @[];
+  float grain = grV.count ? grV[0].floatValue / 100.0f : 0.0f;
   float grainSize =
       grSzV.count ? grSzV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
 
@@ -242,7 +251,6 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   // Transition Mode / Easing) stay bare on purpose: they drive the common
   // uniform block, which the whole chain shares.
   NSString *owner = MirageRackEntryIDOrSentinel(entryID);
-  MirageShaderModel *poolModel = [MirageShaderModel modelForSource:image];
   KKTimeline *progressTimeline = self.timeline;
   double progressDurSec = self.clipDurationSeconds;
   double progressTimelineSec =

@@ -23,6 +23,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// mini-viewer's V-flipped display so a handle sits on the rendered crop.
 @interface KKMiniViewerCropEditor : NSObject
 
+/// Let an authored layout box move and resize beyond `contentRect`.
+@property(nonatomic) BOOL allowsOutsideCanvas;
+
 /// The crop box for `values` (`[w,h,x,y]`) within `contentRect`.
 - (CGRect)cropRectForValues:(NSArray<NSNumber *> *)values
                 contentRect:(CGRect)contentRect;
@@ -43,8 +46,8 @@ NS_ASSUME_NONNULL_BEGIN
                        values:(NSArray<NSNumber *> *)values
                   contentRect:(CGRect)contentRect;
 
-/// New clamped `[w,h,x,y]` for the active drag dragged to `p`. Nil if no
-/// active drag.
+/// New `[w,h,x,y]` for the active drag dragged to `p`. Constrained to the
+/// content rect unless `allowsOutsideCanvas` is enabled. Nil if no active drag.
 - (nullable NSArray<NSNumber *> *)valuesForDragToPoint:(CGPoint)p
                                            contentRect:(CGRect)contentRect;
 

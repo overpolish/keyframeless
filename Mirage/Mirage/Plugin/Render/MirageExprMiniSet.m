@@ -166,8 +166,10 @@ static BOOL MirageExprMiniIsGlyph(MirageOSCBlockRuntime *b) {
 }
 
 - (KKMiniViewerCropEditor *)_boxEditor {
-  if (!_cropEditor)
+  if (!_cropEditor) {
     _cropEditor = [KKMiniViewerCropEditor new];
+    _cropEditor.allowsOutsideCanvas = YES;
+  }
   return _cropEditor;
 }
 
@@ -223,10 +225,11 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
 // That last test is the one the viewer applies in -_exprVisible: an ANIMATED
 // lane shows its control only ON a keypose (plus the flat lead-in / lead-out),
 // so playing the clip retires the handle between keyposes. Without it a ring or
-// box outlived every sibling - the position handles hide through KKPointOSCSet's
-// own keyed-at-fraction gate and the ring kept drawing over the moving preview.
-// A constant lane is visible at every fraction, so the constants popover is
-// untouched, and a live drag stays visible the same way the viewer's does.
+// box outlived every sibling - the position handles hide through
+// KKPointOSCSet's own keyed-at-fraction gate and the ring kept drawing over the
+// moving preview. A constant lane is visible at every fraction, so the
+// constants popover is untouched, and a live drag stays visible the same way
+// the viewer's does.
 - (BOOL)_activeRuntime:(MirageOSCBlockRuntime *)b forContentRect:(CGRect)cr {
   KKMiniViewerRenderer *r = _renderer;
   if (!r || CGRectIsEmpty(cr) || !b.elementKey.length ||
