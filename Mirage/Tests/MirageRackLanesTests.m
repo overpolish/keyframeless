@@ -201,6 +201,24 @@ int main(void) {
               [frameSource containsString:@"outsideContent = 1.0 - cA"] &&
               ![frameSource containsString:@"glowScale"],
           @"Frame glow follows source alpha without aspect-ratio scaling");
+      NSString *frameBufferB = MirageFrameBufferBSource();
+      KKRequire(
+          [frameBufferB
+              containsString:@"float d = roundedSDF(p, halfSize, r);"] &&
+              ![frameBufferB
+                  containsString:@"roundedSDF(p, halfSize, r) - uBorderWidth"],
+          @"Frame glow does not duplicate pixels outside the cropped edge");
+      NSString *frameCommon = MirageFrameCommonSource();
+      KKRequire(
+          [frameCommon containsString:@"all(lessThan(sampleUV, vec2(1.0)))"] &&
+              [frameCommon containsString:@"safeUV = clamp(sampleUV"] &&
+              ![frameCommon containsString:@"texture(tex, uv + step * fi)"],
+          @"Frame blur cannot wrap the opposite render edge into the glow");
+      KKRequire(
+          [frameSource containsString:@"frameDilatedContentAlpha"] &&
+              [frameSource containsString:@"borderShape * (1.0 - cA)"] &&
+              ![frameSource containsString:@"float outer ="],
+          @"Frame border follows source alpha instead of the crop rectangle");
 
       MirageShaderModel *frameModel =
           [MirageShaderModel modelForSource:frameSource];

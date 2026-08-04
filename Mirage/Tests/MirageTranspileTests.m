@@ -5,6 +5,7 @@
 
 #import <Foundation/Foundation.h>
 
+#import "Constants.h"
 #import "KKGLSLTranspiler.h"
 
 // The real glslang + SPIRV-Cross transpile, run over hand-written cases and
@@ -27,6 +28,16 @@ static int gFailures = 0;
 
 static void KKExpectCompiles(NSString *label, NSString *src) {
   KKGLSLTranspileResult *r = KKTranspileGLSL(src);
+  if (r.errorLog.length || !r.msl.length) {
+    NSLog(@"FAIL: %@\n%@", label, r.errorLog ?: @"(no MSL produced)");
+    gFailures++;
+    return;
+  }
+  NSLog(@"ok: %@", label);
+}
+
+static void KKExpectBufferCompiles(NSString *label, NSString *src) {
+  KKGLSLTranspileResult *r = KKTranspileGLSLBuffer(src);
   if (r.errorLog.length || !r.msl.length) {
     NSLog(@"FAIL: %@\n%@", label, r.errorLog ?: @"(no MSL produced)");
     gFailures++;
@@ -124,6 +135,21 @@ static void KKRunTransitionLibraryTests(void) {
                    ownsMixOnly);
 }
 
+static void KKRunFrameTests(void) {
+  NSString *common = MirageFrameCommonSource();
+  KKExpectCompiles(@"Frame image pass",
+                   [common stringByAppendingString:MirageFrameShaderSource()]);
+  KKExpectBufferCompiles(
+      @"Frame Buffer B",
+      [common stringByAppendingString:MirageFrameBufferBSource()]);
+  KKExpectBufferCompiles(
+      @"Frame Buffer C",
+      [common stringByAppendingString:MirageFrameBufferCSource()]);
+  KKExpectBufferCompiles(
+      @"Frame Buffer D",
+      [common stringByAppendingString:MirageFrameBufferDSource()]);
+}
+
 static void KKRunInstalledTemplates(NSString *root) {
   NSFileManager *fm = NSFileManager.defaultManager;
   BOOL dir = NO;
@@ -183,6 +209,7 @@ int main(int argc, const char **argv) {
                            @"Library/Application Support/Keyframeless/Shaders"];
     KKRunGradingLibraryTests();
     KKRunTransitionLibraryTests();
+    KKRunFrameTests();
     KKRunInstalledTemplates(root);
     if (gFailures) {
       NSLog(@"FAILED: %d", gFailures);
