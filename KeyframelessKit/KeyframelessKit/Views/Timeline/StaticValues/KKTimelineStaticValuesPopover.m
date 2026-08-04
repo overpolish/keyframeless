@@ -17,6 +17,7 @@
 #import "KKPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
@@ -171,11 +172,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // -initWithLanes:; the mini-viewer sits below the band and is unaffected.
   CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
   CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
-  // The close button is always present (built in init, leftmost); nav + header
-  // follow it.
-  NSLayoutXAxisAnchor *bandLead =
-      _closeButton ? _closeButton.trailingAnchor : self.leadingAnchor;
-  CGFloat bandLeadInset = _closeButton ? KKSpacingMD : KKPaddingMD;
+  // Close + composition peek are preserved from init; nav + header follow.
+  NSLayoutXAxisAnchor *bandLead = _compositionPeekButton
+                                      ? _compositionPeekButton.trailingAnchor
+                                      : self.leadingAnchor;
+  CGFloat bandLeadInset = _compositionPeekButton ? KKSpacingMD : KKPaddingMD;
   if (editsKeypose && onNavigate && !_navPrevButton) {
     _navPrevButton = [self _makeNavButton:@"chevron.left"
                                 direction:-1
@@ -428,6 +429,15 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return b;
 }
 
+- (KKPopoverPeekButton *)_makeCompositionPeekButton {
+  __weak typeof(self) weak = self;
+  return KKCreateCompositionPeekButton(^(BOOL held) {
+    __strong typeof(weak) self = weak;
+    if (self.onCompositionPeekChanged)
+      self.onCompositionPeekChanged(held);
+  });
+}
+
 - (void)_closeButtonClicked:(id)sender {
   if (self.onCloseTapped)
     self.onCloseTapped();
@@ -625,14 +635,15 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   BOOL hasNav = (showPill && onNavigate != nil);
   BOOL hasBand = (showPill || headerTitle.length > 0);
 
-  // Close (X) button, leftmost in the band - always present (both modes) so the
-  // popover can be dismissed without relying on focus loss. Nav + header
-  // follow.
+  // Close then composition peek, leftmost in the band - always present (both
+  // modes). Nav + header follow.
   NSLayoutXAxisAnchor *bandLead = self.leadingAnchor;
   CGFloat bandLeadInset = KKPaddingMD;
   if (hasBand) {
     _closeButton = [self _makeCloseButton];
+    _compositionPeekButton = [self _makeCompositionPeekButton];
     [self addSubview:_closeButton];
+    [self addSubview:_compositionPeekButton];
     [NSLayoutConstraint activateConstraints:@[
       [_closeButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                                  constant:KKPaddingMD],
@@ -640,8 +651,15 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                                                  constant:bandCenterOffset],
       [_closeButton.widthAnchor constraintEqualToConstant:bandH],
       [_closeButton.heightAnchor constraintEqualToConstant:bandH],
+      [_compositionPeekButton.leadingAnchor
+          constraintEqualToAnchor:_closeButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [_compositionPeekButton.centerYAnchor
+          constraintEqualToAnchor:_closeButton.centerYAnchor],
+      [_compositionPeekButton.widthAnchor constraintEqualToConstant:bandH],
+      [_compositionPeekButton.heightAnchor constraintEqualToConstant:bandH],
     ]];
-    bandLead = _closeButton.trailingAnchor;
+    bandLead = _compositionPeekButton.trailingAnchor;
     bandLeadInset = KKSpacingMD;
   }
 
@@ -1112,13 +1130,17 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Before the popover check: the ceiling must track the size class even on
   // the paths that run while the popover is still being built.
   [self _applyMaxWidthCeiling];
-  if (!_popover)
+  if (!_popover && !_onRequestContentSize)
     return;
   CGSize s = [self _naturalContentSize];
-  s.height =
-      [self _clampHeight:s.height
-                toScreen:_popover.contentViewController.view.window.screen];
-  _popover.contentSize = s;
+  NSScreen *screen = self.window.screen;
+  if (!screen)
+    screen = _popover.contentViewController.view.window.screen;
+  s.height = [self _clampHeight:s.height toScreen:screen];
+  if (_onRequestContentSize)
+    _onRequestContentSize(s);
+  else
+    _popover.contentSize = s;
 }
 
 - (void)clampContentToScreenOfView:(NSView *)view {
@@ -1132,7 +1154,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // the shorter page, and so revealing/hiding a conditional lane re-fits. No-op
 // when there's no popover.
 - (void)_resizePopoverToSelectedCategory {
-  if (!_popover)
+  if (!_popover && !_onRequestContentSize)
     return;
   [self _applyContentSize];
 }
@@ -1815,9 +1837,13 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // scope that momentarily resolves to nothing (a just-appended entry whose
   // lanes have not been derived yet) would dismiss the popover the user is
   // building the chain in, with no way to reselect.
-  if (lanes.count == 0 && _popover && _accessoryHeight <= 0.0) {
-    [_popover close];
-  } else if (_popover) {
+  BOOL hosted = _popover || _onRequestContentSize;
+  if (lanes.count == 0 && hosted && _accessoryHeight <= 0.0) {
+    if (_onRequestClose)
+      _onRequestClose();
+    else
+      [_popover close];
+  } else if (hosted) {
     if (lanes.count == 0)
       KKLogDebug(@"[StaticValues] no constant rows, accessory installed - "
                  @"holding the popover open");

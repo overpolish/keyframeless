@@ -7,7 +7,7 @@ These mouse and keyboard shortcuts apply on the Advanced timeline canvas.
 
 ### Keyposes
 
-- Click a keypose to select it and open its value editor popover.
+- Click a keypose to select it and open its value editor panel.
 - Shift-click adds or removes a keypose from the multi-selection.
 - Option-click on a keypose deletes it (eraser).
 - Option-drag a keypose to duplicate it; the duplicate snaps to other keyposes on release.
@@ -49,14 +49,15 @@ Snapping: a small guide line appears when a dragged keypose comes within a few p
 
 - Spacebar plays or pauses FCP's playhead so you can scrub through your animation without leaving the inspector.
 - Cmd-Option-click anywhere on a lane (even on a pill) jumps the playhead to that moment for a quick preview, and Cmd-Option-drag scrubs continuously. It works the same in the linear and Dynamic views; in Dynamic the time lands where the cursor sits in that lane's warped layout.
-- Cmd-Z and Cmd-Shift-Z undo and redo any edit, including ones made inside popovers.
+- Cmd-Z and Cmd-Shift-Z undo and redo any edit, including ones made inside editor panels.
 
-### Inside popovers
+### Inside editor panels
 
 - Click and drag a number field to scrub its value (right/up increases, left/down decreases). Shift drags in larger steps, Option in finer ones; the pointer hides and holds its spot for the drag.
 - Return commits the number field you're typing in.
 - Tab moves to the next number field (Shift-Tab to the previous one), like a web form.
-- Esc closes the popover (the keypose, constants, curve, or modulation editor). If you are editing a number field or the property search box, Esc first cancels that edit and leaves the popover open, so a second Esc closes it.
-- Left and Right arrows step to the previous/next keypose when a keypose popover is open, so you can walk the animation without reaching for the mouse. This only applies when you're not editing a number field - inside a field the arrows move the text cursor as usual.
+- The keypose, constants, curve and modulation panels stay open while you work elsewhere in Final Cut. Close one with its Close button or Esc. If you are editing a number field or the property search box, Esc first cancels that edit and leaves the panel open, so a second Esc closes it.
+- Hold P, or hold the layered-rectangles button beside Close, to hide the editor and see Final Cut's full composition. Release it to return to the same editor and selection.
+- Left and Right arrows step to the previous/next keypose when a keypose panel is open, so you can walk the animation without reaching for the mouse. This only applies when you're not editing a number field - inside a field the arrows move the text cursor as usual.
 - Double-click the mini-viewer, or press Cmd-0 while the mini-viewer is open, to reset its zoom and pan back to aspect-fit (same as the Reset Zoom button in the inspector header). Scroll-wheel or pinch zooms in and out; two-finger drag pans.
 - Note on Cmd-0: because the inspector runs as a Final Cut Pro extension, the Cmd-0 key press also reaches Final Cut Pro itself. If you have assigned Cmd-0 to a command in Final Cut's keyboard customization (Final Cut Pro > Commands), that command will fire too. Final Cut has no default Cmd-0 shortcut, so by default there is nothing to clash with, but if you hit unexpected behaviour, check your custom command set or just use the Reset Zoom button or a double-click instead.

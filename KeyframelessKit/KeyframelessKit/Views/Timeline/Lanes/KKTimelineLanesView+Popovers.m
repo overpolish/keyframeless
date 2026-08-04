@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKFloatingPanel.h"
 #import "KKLaneCategoryNav.h" // KKLaneLayerKeysWithKeyposeNearFraction
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
@@ -11,6 +12,7 @@
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKPopoverKeepAlive.h"
+#import "KKRemoteWindowKeyHandlerView.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
@@ -377,6 +379,309 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   tick();
 }
 
+// Primary editor panels ------------------------------------------------------
+
+- (BOOL)_editorPanelIsVisible {
+  return _openEditorPanel && _openEditorPanel.isVisible;
+}
+
+- (void)_removeEditorKeyMonitors {
+  if (_editorKeyMonitor) {
+    [NSEvent removeMonitor:_editorKeyMonitor];
+    _editorKeyMonitor = nil;
+  }
+  if (_editorGlobalKeyDownMonitor) {
+    [NSEvent removeMonitor:_editorGlobalKeyDownMonitor];
+    _editorGlobalKeyDownMonitor = nil;
+  }
+  if (_editorGlobalKeyUpMonitor) {
+    [NSEvent removeMonitor:_editorGlobalKeyUpMonitor];
+    _editorGlobalKeyUpMonitor = nil;
+  }
+  if (_editorGlobalShortcutCapture) {
+    KKRemoveGlobalKeyCapture(_editorGlobalShortcutCapture);
+    _editorGlobalShortcutCapture = nil;
+  }
+}
+
+- (void)_closeEditorPanel {
+  KKFloatingPanel *panel = _openEditorPanel;
+  if (!panel)
+    return;
+  // Any temporary option picker belongs to this editing session; do not leave
+  // it floating after the primary panel closes.
+  if (_openContentPopover.isShown)
+    [_openContentPopover close];
+  [self _cancelCompositionPeek];
+  [self _removeEditorKeyMonitors];
+
+  void (^onClose)(void) = _openEditorOnClose;
+  NSView *closing = _openEditorContentView;
+  _openEditorOnClose = nil;
+  _openEditorContentView = nil;
+  _openEditorMiniViewer = nil;
+  _openEditorPanel = nil;
+  _editorHostPID = 0;
+  [panel hidePanel];
+
+  // Run mode cleanup after the panel is no longer interactive but before its
+  // content is released. Companion observers detach their own child panels in
+  // this callback, so no orphaned window remains above the hidden editor.
+  if (onClose)
+    onClose();
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if ([closing respondsToSelector:@selector(releaseMiniViewer)])
+      [(id)closing releaseMiniViewer];
+  });
+}
+
+- (void)_installEditorKeyMonitors {
+  [self _removeEditorKeyMonitors];
+  __weak typeof(self) weak = self;
+  _editorKeyMonitor = [NSEvent
+      addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskKeyUp
+                                   handler:^NSEvent *(NSEvent *event) {
+                                     __strong typeof(weak) s = weak;
+                                     if (!s || ![s _editorPanelIsVisible])
+                                       return event;
+                                     NSString *ch =
+                                         event.charactersIgnoringModifiers
+                                             .lowercaseString;
+                                     if (event.type == NSEventTypeKeyUp) {
+                                       if (s->_compositionPeekKeyHeld &&
+                                           [ch isEqualToString:@"p"]) {
+                                         [s _setCompositionPeekHeld:NO
+                                                           keyboard:YES];
+                                         return nil;
+                                       }
+                                       return event;
+                                     }
+
+                                     // A temporary option/structural popover
+                                     // above the persistent editor owns Esc and
+                                     // its own key handling until it closes.
+                                     if (s->_openContentPopover.isShown)
+                                       return event;
+
+                                     NSWindow *panel = s->_openEditorPanel;
+                                     BOOL fieldEditing =
+                                         [panel.firstResponder
+                                             isKindOfClass:[NSText class]] ||
+                                         [NSApp.keyWindow.firstResponder
+                                             isKindOfClass:[NSText class]];
+                                     NSEventModifierFlags mods =
+                                         event.modifierFlags &
+                                         NSEventModifierFlagDeviceIndependentFlagsMask;
+                                     BOOL cmd =
+                                         (mods & NSEventModifierFlagCommand) !=
+                                         0;
+                                     BOOL shift =
+                                         (mods & NSEventModifierFlagShift) != 0;
+
+                                     // NSPopover key events were forwarded by
+                                     // ViewBridge through the inspector root,
+                                     // where KKRemoteWindowKeyHandlerView sent
+                                     // Space / Cmd-Z to FCP. A standalone panel
+                                     // owns its events, so bridge those
+                                     // commands explicitly. Focused text/code
+                                     // editors keep their normal typing and
+                                     // local undo.
+                                     KKRemoteWindowKeyHandlerView *hostKeys =
+                                         nil;
+                                     Class hostKeyClass =
+                                         [KKRemoteWindowKeyHandlerView class];
+                                     for (NSView *v = s; v; v = v.superview)
+                                       if ([v isKindOfClass:hostKeyClass]) {
+                                         hostKeys =
+                                             (KKRemoteWindowKeyHandlerView *)v;
+                                         break;
+                                       }
+                                     if (!fieldEditing &&
+                                         [event.charactersIgnoringModifiers
+                                             isEqualToString:@" "] &&
+                                         !cmd && hostKeys.onTogglePlayback) {
+                                       hostKeys.onTogglePlayback();
+                                       return nil;
+                                     }
+                                     if (!fieldEditing && cmd &&
+                                         [ch isEqualToString:@"z"]) {
+                                       void (^command)(void) =
+                                           shift ? hostKeys.onRedo
+                                                 : hostKeys.onUndo;
+                                       if (command) {
+                                         command();
+                                         return nil;
+                                       }
+                                     }
+                                     if ([ch isEqualToString:@"p"] &&
+                                         !(mods &
+                                           (NSEventModifierFlagCommand |
+                                            NSEventModifierFlagControl |
+                                            NSEventModifierFlagOption |
+                                            NSEventModifierFlagShift |
+                                            NSEventModifierFlagFunction)) &&
+                                         !fieldEditing) {
+                                       if (!event.isARepeat)
+                                         [s _setCompositionPeekHeld:YES
+                                                           keyboard:YES];
+                                       return nil;
+                                     }
+                                     if (event.keyCode == 53) { // Escape
+                                       if (fieldEditing)
+                                         return event;
+                                       [s _closeEditorPanel];
+                                       return nil;
+                                     }
+                                     if (!s->_openStaticIsBoundary ||
+                                         fieldEditing)
+                                       return event;
+                                     if (event.keyCode != 123 &&
+                                         event.keyCode != 124)
+                                       return event;
+                                     [s _navigateBoundaryPopoverDirection:
+                                             (event.keyCode == 123 ? -1 : 1)];
+                                     return nil;
+                                   }];
+
+  // Focus can cross back into FCP while P is down. The matching release then
+  // arrives globally; always restore the parked editor panel.
+  _editorGlobalKeyDownMonitor = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+                                    handler:^(NSEvent *event) {
+                                      __strong typeof(weak) s = weak;
+                                      if (!s || event.keyCode != 53 ||
+                                          ![s _editorPanelIsVisible] ||
+                                          s->_openContentPopover.isShown)
+                                        return;
+                                      pid_t front = NSWorkspace.sharedWorkspace
+                                                        .frontmostApplication
+                                                        .processIdentifier;
+                                      if (s->_editorHostPID == 0 ||
+                                          front == s->_editorHostPID)
+                                        [s _closeEditorPanel];
+                                    }];
+  _editorGlobalKeyUpMonitor = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:NSEventMaskKeyUp
+                                    handler:^(NSEvent *event) {
+                                      __strong typeof(weak) s = weak;
+                                      if (s && s->_compositionPeekKeyHeld &&
+                                          [event.charactersIgnoringModifiers
+                                                  .lowercaseString
+                                              isEqualToString:@"p"])
+                                        [s _setCompositionPeekHeld:NO
+                                                          keyboard:YES];
+                                    }];
+  // Once focus returns to Final Cut, a normal global monitor can only observe
+  // P and Final Cut would still act on it. The consuming capture preserves the
+  // same ownership the local monitor has while our panel is key: P belongs to
+  // the visible editor, including both halves of its hold gesture.
+  _editorGlobalShortcutCapture =
+      KKInstallGlobalKeyCapture(^BOOL(NSEvent *event) {
+        __strong typeof(weak) s = weak;
+        if (!s || ![s _editorPanelIsVisible] || s->_openContentPopover.isShown)
+          return NO;
+        pid_t front =
+            NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+        if (s->_editorHostPID == 0 || front != s->_editorHostPID)
+          return NO;
+        NSString *ch = event.charactersIgnoringModifiers.lowercaseString;
+        if (![ch isEqualToString:@"p"])
+          return NO;
+        if (event.type == NSEventTypeKeyUp) {
+          if (!s->_compositionPeekKeyHeld)
+            return NO;
+          [s _setCompositionPeekHeld:NO keyboard:YES];
+          return YES;
+        }
+        NSEventModifierFlags mods =
+            event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+        if (mods & (NSEventModifierFlagCommand | NSEventModifierFlagControl |
+                    NSEventModifierFlagOption | NSEventModifierFlagShift |
+                    NSEventModifierFlagFunction))
+          return NO;
+        BOOL fieldEditing =
+            [s->_openEditorPanel.firstResponder isKindOfClass:[NSText class]] ||
+            [NSApp.keyWindow.firstResponder isKindOfClass:[NSText class]];
+        if (fieldEditing)
+          return NO;
+        if (!event.isARepeat)
+          [s _setCompositionPeekHeld:YES keyboard:YES];
+        return YES;
+      });
+}
+
+- (void)_setOpenEditorContentSize:(NSSize)size {
+  if (!_openEditorPanel || size.width <= 0.0 || size.height <= 0.0)
+    return;
+  [_openEditorPanel setContentSizeKeepingTopEdge:size];
+}
+
+- (KKFloatingPanel *)_showEditorPanelWithContent:(NSView *)content
+                                        fromView:(NSView *)anchor
+                                    staticFamily:(BOOL)staticFamily
+                                         onClose:(void (^)(void))onClose {
+  if (!content || !anchor.window)
+    return nil;
+
+  // A newly-opened primary editor replaces any temporary/structural popover.
+  // Close synchronously so the outgoing popover's observer sees its own live
+  // cleanup state before the panel session begins.
+  if (_openContentPopover.isShown)
+    [_openContentPopover close];
+  if ([self _editorPanelIsVisible])
+    [self _closeEditorPanel];
+
+  NSSize size = content.bounds.size;
+  if (size.width <= 0.0 || size.height <= 0.0)
+    size = content.fittingSize;
+  if (size.width <= 0.0 || size.height <= 0.0)
+    return nil;
+
+  KKFloatingPanel *panel =
+      staticFamily ? _staticEditorPanel : _segmentEditorPanel;
+  if (!panel) {
+    NSString *positionKey = staticFamily
+                                ? @"timeline.staticEditorPanel.origin"
+                                : @"timeline.segmentEditorPanel.origin";
+    panel = [[KKFloatingPanel alloc] initWithContentSize:size
+                                             positionKey:positionKey];
+    panel.allowsKeyWindow = YES;
+    panel.userMovable = NO; // Phase 2 adds the explicit drag affordance.
+    panel.keepsEntireFrameVisible = YES;
+    panel.becomesKeyOnlyIfNeeded = NO;
+    if (staticFamily)
+      _staticEditorPanel = panel;
+    else
+      _segmentEditorPanel = panel;
+  }
+  [panel makeFirstResponder:nil];
+  [panel setContentSizeKeepingTopEdge:size];
+  [panel setPanelContentView:content];
+  panel.initialFirstResponder = panel.contentView;
+  panel.appearance = anchor.window.appearance;
+
+  _openEditorPanel = panel;
+  _editorHostPID =
+      NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+  _openEditorIsStaticFamily = staticFamily;
+  _openEditorContentView = content;
+  _openEditorMiniViewer = KKFindMiniViewer(content);
+  _openEditorOnClose = [onClose copy];
+  KKFindMiniViewer(content).grabsKeyFocusOnClick =
+      self.miniGrabsKeyFocusOnClick;
+  _openEditorMiniViewer.livePlaybackActive = _openPopoverLivePlaying;
+
+  NSRect card = [anchor.window
+      convertRectToScreen:[anchor convertRect:anchor.bounds toView:nil]];
+  [panel showBesideCard:card ofWindow:anchor.window];
+  // Match NSPopover: the editor becomes this XPC process's key window so its
+  // bare-key shortcuts and field editor work immediately. The panel's
+  // Nonactivating style means Final Cut itself remains the active app.
+  [panel makeKeyWindow];
+  [self _installEditorKeyMonitors];
+  return panel;
+}
+
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                          preferredEdge:(NSRectEdge)preferredEdge
@@ -387,6 +692,14 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   // so the dismiss monitor below reads THIS popover's kind, not a later one's.
   BOOL optionType = _nextPopoverIsOptionType;
   _nextPopoverIsOptionType = NO;
+
+  // A structural companion (Animated, layer-scoped filter/OSC, etc.) posts the
+  // same open/close lifecycle used by template and colour side panels, so it
+  // replaces the primary editor just as it did in the one-popover model. A
+  // true option picker is temporary and can sit above the persistent editor;
+  // closing it must not tear down the editor session beneath it.
+  if (!optionType && [self _editorPanelIsVisible])
+    [self _closeEditorPanel];
 
   // Capture the size the content WANTS before it is pinned into the wrapper.
   // Once pinned, `content.bounds` tracks the wrapper - which AppKit lays out to
@@ -560,6 +873,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   __block id mouseLocalMon = nil;
   __block id mouseGlobalMon = nil;
   __block id keyMon = nil;
+  __block id keyGlobalUpMon = nil;
   __weak typeof(self) navWeakSelf = self;
 
   void (^removeMonitors)(void) = ^{
@@ -591,6 +905,10 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
       [NSEvent removeMonitor:keyMon];
       keyMon = nil;
     }
+    if (keyGlobalUpMon) {
+      [NSEvent removeMonitor:keyGlobalUpMon];
+      keyGlobalUpMon = nil;
+    }
   };
 
   __block id closeObs = [NSNotificationCenter.defaultCenter
@@ -606,6 +924,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                 void (^oc)(void) = s ? s->_openContentOnClose : nil;
                 NSView *closing = s ? s->_openContentView : nil;
                 if (s) {
+                  [s _cancelCompositionPeek];
                   s->_openContentOnClose = nil;
                   s->_openContentView = nil;
                   s->_openContentMiniViewer = nil;
@@ -819,17 +1138,30 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                                closeIfOutsidePopover();
                                              }];
 
-  // Key handling while a content popover is open: Esc closes it, and (boundary
-  // popover only) left/right arrows step to the prev/next keypose. Both are
-  // suppressed while a value field or the code editor is being edited (its
-  // field editor is first responder), so those keys reach the text instead.
+  // Key handling while a content popover is open: P momentarily reveals the
+  // composition behind companion editors, Esc closes, and (boundary popover
+  // only) left/right arrows step to the prev/next keypose. All starts are
+  // suppressed while a value field or code editor is active; a release is
+  // always honoured if its matching hold began here.
   keyMon = [NSEvent
-      addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+      addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskKeyUp
                                    handler:^NSEvent *(NSEvent *e) {
                                      __strong typeof(navWeakSelf) s =
                                          navWeakSelf;
                                      if (!s)
                                        return e;
+                                     NSString *ch =
+                                         e.charactersIgnoringModifiers
+                                             .lowercaseString;
+                                     if (e.type == NSEventTypeKeyUp) {
+                                       if (s->_compositionPeekKeyHeld &&
+                                           [ch isEqualToString:@"p"]) {
+                                         [s _setCompositionPeekHeld:NO
+                                                           keyboard:YES];
+                                         return nil;
+                                       }
+                                       return e;
+                                     }
                                      if (!s->_openContentPopover.isShown)
                                        return e;
                                      unsigned short kc = e.keyCode;
@@ -848,6 +1180,27 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                              isKindOfClass:[NSText class]] ||
                                          [NSApp.keyWindow.firstResponder
                                              isKindOfClass:[NSText class]];
+                                     // Bare P = press-and-hold composition
+                                     // peek. It is intentionally limited to
+                                     // the four companion editors; option
+                                     // pickers still pass P through to FCP.
+                                     NSEventModifierFlags mods =
+                                         e.modifierFlags &
+                                         NSEventModifierFlagDeviceIndependentFlagsMask;
+                                     if (!s->_openPopoverIsOptionType &&
+                                         [ch isEqualToString:@"p"] &&
+                                         !(mods &
+                                           (NSEventModifierFlagCommand |
+                                            NSEventModifierFlagControl |
+                                            NSEventModifierFlagOption |
+                                            NSEventModifierFlagShift |
+                                            NSEventModifierFlagFunction)) &&
+                                         !fieldEditing) {
+                                       if (!e.isARepeat)
+                                         [s _setCompositionPeekHeld:YES
+                                                           keyboard:YES];
+                                       return nil;
+                                     }
                                      // Esc closes the popover - unless a value
                                      // field / code editor is focused, where it
                                      // should cancel that edit instead.
@@ -871,6 +1224,22 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                              (kc == 123 ? -1 : 1)];
                                      return nil; // consume
                                    }];
+
+  // If focus leaves this process while P is down, its key-up is global rather
+  // than local. Restore the editor even though a global monitor cannot consume
+  // the event in the destination app.
+  keyGlobalUpMon = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:NSEventMaskKeyUp
+                                    handler:^(NSEvent *e) {
+                                      __strong typeof(navWeakSelf) s =
+                                          navWeakSelf;
+                                      if (s && s->_compositionPeekKeyHeld &&
+                                          [e.charactersIgnoringModifiers
+                                                  .lowercaseString
+                                              isEqualToString:@"p"])
+                                        [s _setCompositionPeekHeld:NO
+                                                          keyboard:YES];
+                                    }];
 
   _openContentPopover = popover;
   return popover;
@@ -1072,6 +1441,7 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   // interval - re-scoping to another layer's interval is undefined, so just
   // close it.
   if (_activeTab == 1) {
+    [self _closeEditorPanel];
     [_openContentPopover close];
     return;
   }
@@ -1128,6 +1498,15 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 }
 
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor {
+  // The Constants button is now a real toggle. A persistent panel no longer
+  // disappears on outside clicks, so tapping the active source again is the
+  // natural counterpart to Escape / the close button. A keypose panel still
+  // switches to Constants in place.
+  if ([self _editorPanelIsVisible] && _openEditorIsStaticFamily &&
+      _openStaticView && !_openStaticIsBoundary) {
+    [self _closeEditorPanel];
+    return;
+  }
   NSArray<KKLane *> *unopted = [self _unoptedLanes];
   if (unopted.count == 0)
     return;
@@ -1272,7 +1651,7 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   // tells us, and it tells us once per flip, so a popover presented later reads
   // it from here (see the seed in -_showPopoverWithContent:).
   _openPopoverLivePlaying = playing;
-  KKMiniViewerView *mini = _openContentMiniViewer;
+  KKMiniViewerView *mini = _openEditorMiniViewer ?: _openContentMiniViewer;
   if (!mini)
     return;
   // Only react to the play state flipping; per-frame redraws come from the feed

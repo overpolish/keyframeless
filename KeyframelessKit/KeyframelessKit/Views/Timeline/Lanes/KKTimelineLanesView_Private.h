@@ -300,6 +300,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 
 @interface _KKStaticValuesPopoverView : NSView
 @property(nonatomic, weak, nullable) NSPopover *popover;
+/// Persistent editor-panel host hooks. The legacy `popover` property remains
+/// for callers that still use an NSPopover, while primary constants/keypose
+/// editors resize and close through these window-agnostic callbacks.
+@property(nonatomic, copy, nullable) void (^onRequestContentSize)(NSSize size);
+@property(nonatomic, copy, nullable) void (^onRequestClose)(void);
 /// The FCP document (project) id of the clip being edited, so the expression
 /// reference picker only lists OTHER clips in the SAME project. Empty / nil =
 /// unknown, which leaves the picker library-wide (legacy behaviour).
@@ -406,6 +411,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// popover. The button sits leftmost in the header band, before the keypose
 /// nav.
 @property(nonatomic, copy, nullable) void (^onCloseTapped)(void);
+
+/// Fired for both halves of the header's press-and-hold composition peek.
+/// The owning lanes view hides/restores the live editor window without
+/// closing it, preserving the exact editor session.
+@property(nonatomic, copy, nullable) void (^onCompositionPeekChanged)(BOOL held)
+    ;
 
 /// Guide-only: screen rect of the size pill's segment `index` (0/1/2), or
 /// NSZeroRect if there's no mini-viewer (so no size pill).

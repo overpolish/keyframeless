@@ -3,7 +3,7 @@ id: mini-viewer
 summary: The mini-viewer preview with OSC, zoom, pan, filmstrip and onion skin
 ---
 
-The mini-viewer is the live preview inside the value-editor popover. It exists so you can frame and adjust your effect at any zoom level without fighting FCP's viewer constraints. Most parameters that have a spatial component (radius handle, box edges, position, gradient stops) expose draggable on-screen controls directly on the mini-viewer.
+The mini-viewer is the live preview inside the constants and keypose editor panel. It exists so you can frame and adjust your effect at any zoom level without fighting FCP's viewer constraints. Most parameters that have a spatial component (radius handle, box edges, position, gradient stops) expose draggable on-screen controls directly on the mini-viewer.
 
 Interactions:
 
@@ -19,6 +19,8 @@ The canvas also has two additional render modes, toggled from the header pill:
 - Onion skin overlays the surrounding keypose frames on top of the current one with red and blue tinting (previous in red, next in blue) so you can see how the motion progresses.
 
 While an editor is open, the preview also follows playback. Play back or scrub the timeline and the preview tracks the playhead - the footage and the effect move together - while its on-screen controls hide so you get a clean moving frame. When you stop it snaps back to the frame you're editing, controls and all. So you can watch the animation run without closing the editor to get back to Final Cut's viewer. (The footage only keeps advancing while Final Cut is actually rendering the clip; once it has cached the playback it may hold the last frame, the same as any effect preview.)
+
+The mini-viewer only receives the current clip. To check the whole composition, hold the layered-rectangles button beside Close, or hold P. The editor panel disappears while held so Final Cut's own viewer is visible, then returns to the same keypose, constant, curve, or modulation when released. Editor panels stay open while you work elsewhere in Final Cut; close them with their Close button or Esc.
 
 The OSC handles also work inside the main FCP viewer, not just the mini-viewer, so once you're comfortable you can drag the same controls on the full-size canvas.
 

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKFloatingPanel.h"
 #import "KKLinkBus.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerRenderer.h"
@@ -27,7 +28,8 @@
   // window kills its OSC drag (FCP stops forwarding the drag session to a
   // reopened popover). See -reconfigureForEditsKeypose: and the reconfigure
   // branch at the view-create site below.
-  BOOL popoverOpen = (_openContentPopover.isShown && _openStaticView != nil);
+  BOOL popoverOpen = ([self _editorPanelIsVisible] &&
+                      _openEditorIsStaticFamily && _openStaticView != nil);
 
   // Constants edits lane constants, not a specific keypose/gap, so clear any
   // active graph highlight. A keypose->constants reconfigure switches in place
@@ -334,7 +336,11 @@
   __weak typeof(self) weakClose = self;
   staticView.onCloseTapped = ^{
     __strong typeof(weakClose) s = weakClose;
-    [s->_openContentPopover close];
+    [s _closeEditorPanel];
+  };
+  staticView.onCompositionPeekChanged = ^(BOOL held) {
+    __strong typeof(weakClose) s = weakClose;
+    [s _setCompositionPeekHeld:held keyboard:NO];
   };
 
   // Per-keypose smooth toggle (spatialCurvable lanes): discrete write routed
@@ -493,66 +499,73 @@
   // screen this is a no-op (clamp == natural, no scroll).
   [staticView clampContentToScreenOfView:anchor];
 
-  // Anchor the popover beside the inspector's timeline area (whichever side has
-  // more screen space), NOT at the clicked marker/button. It's a companion that
-  // switches content in place, so it should sit in one consistent spot out of
-  // the work area instead of jumping around / covering the keyframes as you
-  // move between keyposes.
-  NSRectEdge sideEdge = [self _inspectorSidePreferredEdge];
+  // Let the content resize/close its window without knowing which AppKit
+  // presentation primitive hosts it. Constants/keypose now live in the shared
+  // persistent editor panel rather than an NSPopover.
+  staticView.onRequestContentSize = ^(NSSize size) {
+    __strong typeof(weak) s = weak;
+    [s _setOpenEditorContentSize:size];
+  };
+  staticView.onRequestClose = ^{
+    __strong typeof(weak) s = weak;
+    [s _closeEditorPanel];
+  };
 
-  NSPopover *popover = [self
-      _showPopoverWithContent:staticView
-                     fromView:self
-                preferredEdge:sideEdge
-                      onClose:^{
-                        __strong typeof(weak) s = weak;
-                        if (!s)
-                          return;
-                        [NSNotificationCenter.defaultCenter
-                            postNotificationName:
-                                KKStaticValuesPopoverDidCloseNotification
-                                          object:s];
-                        s->_openStaticView = nil;
-                        // Read the LIVE mode, not the fresh-create capture:
-                        // an in-place constants<->keypose switch changes it,
-                        // and closing after a switch must tear down the mode
-                        // the popover ENDED in (a constants-born popover
-                        // closed in keypose mode still needs the full keypose
-                        // exit, or the render keeps publishing stale boundary
-                        // slots).
-                        BOOL wasBoundary = s->_openStaticIsBoundary;
-                        s->_openStaticIsBoundary = NO;
-                        if (wasBoundary) {
-                          [s _exitKeyposeEditState];
-                        } else {
-                          // Constants popover previewed at the live playhead
-                          // (set in -showStaticValuesPopoverFromView:); restore
-                          // the t=0 default so a later non-popover draw isn't
-                          // pinned to a stale playhead fraction.
-                          id del = s.miniViewerDelegate;
-                          if ([del respondsToSelector:NSSelectorFromString(
-                                                          @"setEditFraction:")])
-                            [del setValue:@0 forKey:@"editFraction"];
-                        }
-                        // Dim the Constants button - the popover is gone (or
-                        // swapped to a gap/option). A keypose/constants switch
-                        // doesn't hit this (it's in-place); the present above
-                        // drives the button for that.
-                        if (s.onConstantsPopoverActiveChanged)
-                          s.onConstantsPopoverActiveChanged(NO);
-                        if (s.onStaticValuesPopoverClosed)
-                          s.onStaticValuesPopoverClosed();
-                      }];
-  staticView.popover = popover;
+  KKFloatingPanel *panel = [self
+      _showEditorPanelWithContent:staticView
+                         fromView:self
+                     staticFamily:YES
+                          onClose:^{
+                            __strong typeof(weak) s = weak;
+                            if (!s)
+                              return;
+                            [NSNotificationCenter.defaultCenter
+                                postNotificationName:
+                                    KKStaticValuesPopoverDidCloseNotification
+                                              object:s];
+                            s->_openStaticView = nil;
+                            // Read the LIVE mode, not the fresh-create capture:
+                            // an in-place constants<->keypose switch changes
+                            // it, and closing after a switch must tear down the
+                            // mode the popover ENDED in (a constants-born
+                            // popover closed in keypose mode still needs the
+                            // full keypose exit, or the render keeps publishing
+                            // stale boundary slots).
+                            BOOL wasBoundary = s->_openStaticIsBoundary;
+                            s->_openStaticIsBoundary = NO;
+                            if (wasBoundary) {
+                              [s _exitKeyposeEditState];
+                            } else {
+                              // Constants popover previewed at the live
+                              // playhead (set in
+                              // -showStaticValuesPopoverFromView:); restore the
+                              // t=0 default so a later non-popover draw isn't
+                              // pinned to a stale playhead fraction.
+                              id del = s.miniViewerDelegate;
+                              if ([del respondsToSelector:
+                                           NSSelectorFromString(
+                                               @"setEditFraction:")])
+                                [del setValue:@0 forKey:@"editFraction"];
+                            }
+                            // Dim the Constants button - the popover is gone
+                            // (or swapped to a gap/option). A keypose/constants
+                            // switch doesn't hit this (it's in-place); the
+                            // present above drives the button for that.
+                            if (s.onConstantsPopoverActiveChanged)
+                              s.onConstantsPopoverActiveChanged(NO);
+                            if (s.onStaticValuesPopoverClosed)
+                              s.onStaticValuesPopoverClosed();
+                          }];
+  staticView.popover = nil;
 
   // Companion-panel signal: a plugin (e.g. Canvas's layer list) observes this
   // to show a panel beside the popover (scoped to this lanes view via
   // `object`). A keypose (boundary) popover passes its `fraction` so the
   // companion can gray layers with no keypose there; a constants popover leaves
   // every layer selectable.
-  KKPostStaticValuesPopoverDidOpen(popover, self,
-                                   isBoundary ? @"keypose" : @"constants",
-                                   isBoundary, cfg.fraction);
+  KKPostStaticValuesEditorDidOpen(panel, staticView, self,
+                                  isBoundary ? @"keypose" : @"constants",
+                                  isBoundary, cfg.fraction);
 
   if (self.onStaticValuesPopoverWillOpen) {
     __weak _KKStaticValuesPopoverView *weakStatic = staticView;

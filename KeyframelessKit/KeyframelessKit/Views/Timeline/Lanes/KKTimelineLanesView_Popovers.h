@@ -14,6 +14,7 @@
 @class KKTimelineAdvancedView;
 @class KKLaneFilterBar;
 @class KKMiniViewerView;
+@class KKFloatingPanel;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -42,22 +43,40 @@ NS_ASSUME_NONNULL_BEGIN
 
   __weak _KKManagePopoverView *_openManageView;
   __weak NSPopover *_openManagePopover;
-  // The reused popover shown via _showPopoverWithContent: (gap/hold/boundary).
+  // The reused popover shown via _showPopoverWithContent: for temporary option
+  // pickers and structural companions (Animated/filter/OSC/etc.). Primary
+  // value/curve editors use the persistent panels below.
   // STRONG + reused across opens: a ViewBridge XPC remote-hosts each
   // NSPopover's backing window and FCP never releases it until inspector
   // teardown, so a NEW popover per open leaks its CA layer-hosting IOSurfaces
   // (~13 MB each) every time. Reusing one instance reuses its backing window
   // (and surfaces), bounding it. Closed (not destroyed) before a new one opens.
   NSPopover *_openContentPopover;
+  // The four primary editors (constants/keypose and curve/modulation) are
+  // persistent panels rather than dismiss-on-click NSPopovers. Two panel
+  // instances preserve the two very different family sizes and, in the next
+  // phase, their independent remembered origins. Only one is visible at once.
+  KKFloatingPanel *_staticEditorPanel;
+  KKFloatingPanel *_segmentEditorPanel;
+  __weak KKFloatingPanel *_openEditorPanel;
+  BOOL _openEditorIsStaticFamily;
+  __weak NSView *_openEditorContentView;
+  __weak KKMiniViewerView *_openEditorMiniViewer;
+  void (^_openEditorOnClose)(void);
+  id _editorKeyMonitor;
+  id _editorGlobalKeyDownMonitor;
+  id _editorGlobalKeyUpMonitor;
+  id _editorGlobalShortcutCapture;
+  pid_t _editorHostPID;
   // Transient one-shot: set just before -_showPopoverWithContent: to mark the
   // next popover as an "option picker" (OSC / filter / param-order / motion
-  // blur) rather than a companion editor. Option popovers dismiss on ANY
-  // outside click, including elsewhere in the inspector chrome/timeline;
-  // companion editors (keypose / constants / curve / modulation) keep the
-  // in-inspector-click keep-open behaviour. Consumed (reset) inside the show.
+  // blur) rather than a structural companion. Option popovers dismiss on ANY
+  // outside click, including elsewhere in the inspector chrome/timeline.
+  // Consumed (reset) inside the show.
   BOOL _nextPopoverIsOptionType;
   // Live state for the ONE persistent set of dismiss/scroll monitors installed
-  // on the first show. Every transition SWAPS content in place (never
+  // on the first temporary-popover show. Every transition SWAPS content in
+  // place (never
   // close+reopen - FCP stops forwarding mouseUp to a reused popover window once
   // it's been closed and reopened, killing the buttons inside), so the monitors
   // must read the CURRENT popover's state from here, not from a per-open
@@ -72,6 +91,14 @@ NS_ASSUME_NONNULL_BEGIN
   // whole handle overlay over the moving preview. Remembered here and seeded
   // into every mini as it is presented.
   BOOL _openPopoverLivePlaying;
+  // Momentary full-composition peek. The editor remains open and fully
+  // configured; only its window is parked off-screen until every hold
+  // source (header button / P key) releases.
+  BOOL _compositionPeekMouseHeld;
+  BOOL _compositionPeekKeyHeld;
+  __weak NSWindow *_compositionPeekWindow;
+  NSRect _compositionPeekSavedFrame;
+  BOOL _compositionPeekSuspendedFrameClamp;
   void (^_openContentOnClose)(void);
   // The anchor view + edge the open popover was shown against. A new show
   // reuses the live window (swap in place) ONLY when it targets the SAME
@@ -208,6 +235,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Keep an open constants preview at the live playhead. Keypose popovers are
 /// deliberately excluded so they can return to their edited keypose.
 - (void)_previewOpenConstantsAtFraction:(double)fraction;
+
+/// Mouse and keyboard halves of the composition-peek gesture. Shared by the
+/// curve/modulation header and constants/keypose header.
+- (void)_setCompositionPeekHeld:(BOOL)held keyboard:(BOOL)keyboard;
+- (void)_cancelCompositionPeek;
 @end
 
 /// Lane add/remove/animatable mutations. Declared in a named category so the
@@ -268,6 +300,17 @@ NS_ASSUME_NONNULL_BEGIN
                               fromView:(NSView *)anchor
                          preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose;
+
+/// Present one of the four persistent primary editors. `staticFamily` selects
+/// constants/keypose versus curve/modulation, giving each family its own panel
+/// identity and eventual remembered position.
+- (KKFloatingPanel *)_showEditorPanelWithContent:(NSView *)content
+                                        fromView:(NSView *)anchor
+                                    staticFamily:(BOOL)staticFamily
+                                         onClose:(void (^)(void))onClose;
+- (BOOL)_editorPanelIsVisible;
+- (void)_closeEditorPanel;
+- (void)_setOpenEditorContentSize:(NSSize)size;
 /// The screen edge (MinX / MaxX) of the inspector's timeline area that has more
 /// free screen space. Companion popovers (static values, gap/hold) anchor there
 /// via `fromView:self` so they sit in one consistent spot beside the work area

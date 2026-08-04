@@ -18,6 +18,7 @@
 @class KKPaddedScrollView;
 @class KKPillToggleRowView;
 @class KKPopoverHeaderView;
+@class KKPopoverPeekButton;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -151,6 +152,7 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   NSButton *_navPrevButton;
   NSButton *_navNextButton;
   NSButton *_closeButton;
+  KKPopoverPeekButton *_compositionPeekButton;
   void (^_onNavigate)(NSInteger);
   KKPopoverHeaderView *_header;
   BOOL _hasHeader;

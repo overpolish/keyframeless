@@ -46,6 +46,29 @@ void KKPopoverRemoveKeepAliveWindow(NSWindow *window);
 /// YES if `screenPoint` lies within any registered, visible keep-alive window.
 BOOL KKPopoverPointInKeepAliveWindow(NSPoint screenPoint);
 
+/// Install a consuming keyboard event tap for shortcuts that must remain live
+/// while Final Cut, rather than the plugin panel, owns keyboard focus. Return
+/// YES from `handler` to keep the event from also reaching Final Cut. The
+/// caller must retain the returned token for the lifetime of the shortcut and
+/// pass it to `KKRemoveGlobalKeyCapture` when finished. Returns nil when macOS
+/// does not permit an active event tap.
+FOUNDATION_EXPORT
+    id _Nullable KKInstallGlobalKeyCapture(BOOL (^handler)(NSEvent *event));
+FOUNDATION_EXPORT void KKRemoveGlobalKeyCapture(id _Nullable token);
+
+/// Header button used by primary editors to momentarily reveal Final Cut's
+/// full composition behind the panel. Unlike a normal click button, it owns
+/// both halves of the gesture and calls `onHoldChanged(YES)` on mouse-down and
+/// `onHoldChanged(NO)` wherever the matching mouse-up lands.
+@interface KKPopoverPeekButton : NSButton
+@property(nonatomic, copy, nullable) void (^onHoldChanged)(BOOL held);
+@end
+
+/// House-styled layered-rectangles peek button, including its localized
+/// accessibility label and P-key tooltip.
+FOUNDATION_EXPORT KKPopoverPeekButton *
+KKCreateCompositionPeekButton(void (^onHoldChanged)(BOOL held));
+
 /// Post `KKStaticValuesPopoverDidOpenNotification` for `popover` with the
 /// standard companion-panel userInfo - `window`, `contentView`, and the visible
 /// card's screen rect `contentRect` (the window frame includes shadow/arrow
@@ -56,6 +79,14 @@ BOOL KKPopoverPointInKeepAliveWindow(NSPoint screenPoint);
 void KKPostStaticValuesPopoverDidOpen(NSPopover *popover, id sender,
                                       NSString *kind, BOOL isBoundary,
                                       double fraction);
+
+/// Panel-hosted equivalent of `KKPostStaticValuesPopoverDidOpen`. It posts the
+/// same notification and keys so existing template, colour and layer-list
+/// companions can attach without caring whether the primary editor uses an
+/// NSPopover or a persistent panel.
+void KKPostStaticValuesEditorDidOpen(NSWindow *window, NSView *contentView,
+                                     id sender, NSString *kind, BOOL isBoundary,
+                                     double fraction);
 
 /// Post `KKStaticValuesPopoverDidNavigateNotification` for an in-place move of
 /// the open popover to a new `fraction`. `sender` is the presenting view.

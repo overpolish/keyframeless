@@ -5,6 +5,7 @@
 
 #import "KKPopoverKeepAlive.h"
 
+#import "KKLocalized.h"
 #import "KKLog.h"
 
 NSNotificationName const KKStaticValuesPopoverDidOpenNotification =
@@ -13,6 +14,179 @@ NSNotificationName const KKStaticValuesPopoverDidCloseNotification =
     @"KKStaticValuesPopoverDidCloseNotification";
 NSNotificationName const KKStaticValuesPopoverDidNavigateNotification =
     @"KKStaticValuesPopoverDidNavigateNotification";
+
+@interface _KKGlobalKeyCapture : NSObject
+- (instancetype)initWithHandler:(BOOL (^)(NSEvent *event))handler;
+- (void)invalidate;
+@end
+
+@implementation _KKGlobalKeyCapture {
+  CFMachPortRef _tap;
+  CFRunLoopSourceRef _source;
+  BOOL (^_handler)(NSEvent *event);
+}
+
+static CGEventRef KKGlobalKeyCaptureCallback(CGEventTapProxy proxy,
+                                             CGEventType type, CGEventRef event,
+                                             void *context) {
+  _KKGlobalKeyCapture *capture = (__bridge _KKGlobalKeyCapture *)context;
+  if (type == kCGEventTapDisabledByTimeout ||
+      type == kCGEventTapDisabledByUserInput) {
+    if (capture->_tap)
+      CGEventTapEnable(capture->_tap, true);
+    return event;
+  }
+  if (type != kCGEventKeyDown && type != kCGEventKeyUp)
+    return event;
+  NSEvent *keyEvent = [NSEvent eventWithCGEvent:event];
+  return (keyEvent && capture->_handler && capture->_handler(keyEvent)) ? NULL
+                                                                        : event;
+}
+
+- (instancetype)initWithHandler:(BOOL (^)(NSEvent *event))handler {
+  if (!(self = [super init]))
+    return nil;
+  _handler = [handler copy];
+  CGEventMask mask =
+      CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp);
+  _tap = CGEventTapCreate(kCGSessionEventTap, kCGHeadInsertEventTap,
+                          kCGEventTapOptionDefault, mask,
+                          KKGlobalKeyCaptureCallback, (__bridge void *)self);
+  if (!_tap)
+    return nil;
+  _source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, _tap, 0);
+  if (!_source) {
+    CFRelease(_tap);
+    _tap = NULL;
+    return nil;
+  }
+  CFRunLoopAddSource(CFRunLoopGetMain(), _source, kCFRunLoopCommonModes);
+  CGEventTapEnable(_tap, true);
+  return self;
+}
+
+- (void)invalidate {
+  _handler = nil;
+  if (_source) {
+    CFRunLoopRemoveSource(CFRunLoopGetMain(), _source, kCFRunLoopCommonModes);
+    CFRelease(_source);
+    _source = NULL;
+  }
+  if (_tap) {
+    CGEventTapEnable(_tap, false);
+    CFRelease(_tap);
+    _tap = NULL;
+  }
+}
+
+- (void)dealloc {
+  [self invalidate];
+}
+
+@end
+
+id KKInstallGlobalKeyCapture(BOOL (^handler)(NSEvent *event)) {
+  if (!handler)
+    return nil;
+  _KKGlobalKeyCapture *capture =
+      [[_KKGlobalKeyCapture alloc] initWithHandler:handler];
+  if (!capture)
+    KKLogWarn(@"[Shortcuts] Could not install consuming global key capture");
+  return capture;
+}
+
+void KKRemoveGlobalKeyCapture(id token) {
+  if ([token isKindOfClass:[_KKGlobalKeyCapture class]])
+    [(id)token invalidate];
+}
+
+@implementation KKPopoverPeekButton {
+  BOOL _holding;
+  id _mouseUpLocalMonitor;
+  id _mouseUpGlobalMonitor;
+}
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  if (!self.onHoldChanged) {
+    [super mouseDown:event];
+    return;
+  }
+  if (_holding)
+    return;
+  _holding = YES;
+  self.highlighted = YES;
+
+  // Arm release BEFORE the callback hides or parks the editor window.
+  // ViewBridge can reroute the matching mouse-up to FCP as soon as that
+  // happens; adding monitors afterwards leaves a small but real gap where the
+  // release is lost.
+  __weak typeof(self) weak = self;
+  _mouseUpLocalMonitor =
+      [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp
+                                            handler:^NSEvent *(NSEvent *e) {
+                                              [weak _endHold];
+                                              return e;
+                                            }];
+  _mouseUpGlobalMonitor =
+      [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp
+                                             handler:^(NSEvent *e) {
+                                               [weak _endHold];
+                                             }];
+  self.onHoldChanged(YES);
+}
+
+- (void)_endHold {
+  [self _removeHoldMonitors];
+  if (!_holding)
+    return;
+  _holding = NO;
+  self.highlighted = NO;
+  if (self.onHoldChanged)
+    self.onHoldChanged(NO);
+}
+
+- (void)_removeHoldMonitors {
+  if (_mouseUpLocalMonitor) {
+    [NSEvent removeMonitor:_mouseUpLocalMonitor];
+    _mouseUpLocalMonitor = nil;
+  }
+  if (_mouseUpGlobalMonitor) {
+    [NSEvent removeMonitor:_mouseUpGlobalMonitor];
+    _mouseUpGlobalMonitor = nil;
+  }
+}
+
+- (void)dealloc {
+  [self _removeHoldMonitors];
+}
+
+@end
+
+KKPopoverPeekButton *
+KKCreateCompositionPeekButton(void (^onHoldChanged)(BOOL held)) {
+  KKPopoverPeekButton *button = [KKPopoverPeekButton buttonWithTitle:@""
+                                                              target:nil
+                                                              action:nil];
+  button.translatesAutoresizingMaskIntoConstraints = NO;
+  button.bordered = NO;
+  button.bezelStyle = NSBezelStyleShadowlessSquare;
+  button.imageScaling = NSImageScaleProportionallyDown;
+  NSString *label = KKLoc(@"View composition",
+                          @"Accessibility label for the button held to hide "
+                           "an editor panel and reveal Final Cut's viewer.");
+  button.image = [NSImage imageWithSystemSymbolName:@"rectangle.on.rectangle"
+                           accessibilityDescription:label];
+  button.accessibilityLabel = label;
+  button.toolTip = KKLoc(@"Hold to view the full composition. (P)",
+                         @"Tooltip for the composition-peek button in an "
+                          "editor panel header.");
+  button.onHoldChanged = onHoldChanged;
+  return button;
+}
 
 // Weak set of windows that count as "inside" for popover outside-click
 // dismissal. Registry + popover dismissal both run on the main thread, so no
@@ -112,6 +286,31 @@ void KKPostStaticValuesPopoverDidOpen(NSPopover *popover, id sender,
                                       NSString *kind, BOOL isBoundary,
                                       double fraction) {
   KKPostPopoverOpenWhenWindowed(popover, sender, kind, isBoundary, fraction, 0);
+}
+
+void KKPostStaticValuesEditorDidOpen(NSWindow *window, NSView *contentView,
+                                     id sender, NSString *kind, BOOL isBoundary,
+                                     double fraction) {
+  NSMutableDictionary *info = [NSMutableDictionary dictionary];
+  if (window)
+    info[@"window"] = window;
+  if (contentView) {
+    info[@"contentView"] = contentView;
+    NSWindow *liveWindow = contentView.window ?: window;
+    if (liveWindow) {
+      NSRect rect = [liveWindow
+          convertRectToScreen:[contentView convertRect:contentView.bounds
+                                                toView:nil]];
+      info[@"contentRect"] = [NSValue valueWithRect:rect];
+    }
+  }
+  info[@"isBoundary"] = @(isBoundary);
+  info[@"fraction"] = @(fraction);
+  info[@"kind"] = kind ?: @"constants";
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:KKStaticValuesPopoverDidOpenNotification
+                    object:sender
+                  userInfo:info];
 }
 
 void KKPostStaticValuesPopoverDidNavigate(id sender, BOOL isBoundary,

@@ -39,10 +39,12 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   NSButton *_splitButton;
   NSButton *_selectionButton;
   BOOL _showSelectionActive;
-  /// B, S and M, watched LOCALLY only - a global monitor cannot consume, and a
-  /// shortcut Final Cut also acts on is worse than none. The inspector's
-  /// -miniGrabsKeyFocusOnClick is what makes the local one see them at all.
+  /// Local delivery while one of our windows is key, plus a consuming event
+  /// tap while focus is back in Final Cut. Both are scoped to the lifetime of
+  /// the visible editor so B/S/M never become application-wide shortcuts.
   id _shortcutMonitor;
+  id _globalShortcutCapture;
+  pid_t _shortcutHostPID;
   /// YES while the B key - rather than the mouse - is holding the bypass on.
   /// The key-up that would release it can be delivered to another application,
   /// so this is what lets every teardown path drop a bypass the keyboard put on
@@ -333,29 +335,23 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 
 // The three compare keys, live for as long as the row is on the preview.
 //
-// ONE monitor, and a LOCAL one, because a shortcut that fires without also
-// being consumed is worse than no shortcut: M flipped the matte AND reached
-// Final Cut, which took it as "add marker" - and B and S went the same way to
-// the blade and the host's own bindings. Only a local monitor can return nil,
-// and only a local monitor sees a key at all when this process holds the
-// keyboard.
+// The local monitor consumes events while one of our windows owns keyboard
+// focus. When focus returns to Final Cut, a consuming event tap does the same
+// job; an observe-only global monitor would flip our control AND let Final Cut
+// add a marker, select the blade, etc.
 //
-// What puts it there is the inspector's -miniGrabsKeyFocusOnClick, the same
-// opt-in Canvas makes so a bare Delete removes a layer rather than the effect:
-// a click in the preview makes the popover key, and from then on Final Cut
-// delivers the letter here first. See KKMiniViewerView's own note on why a
-// GLOBAL monitor can only watch a key go past on its way to the host.
+// The inspector's -miniGrabsKeyFocusOnClick still supplies the local route,
+// the same opt-in Canvas makes so a bare Delete removes a layer rather than the
+// effect. The consuming capture supplies only the focus-away half.
 //
-// Any window of ours will do - the browser or Color panel beside the popover
-// counts, since a keyDown reaches a local monitor whichever of our windows is
-// key (its `window` is the ViewBridge host window in every case, which is why
-// nothing here gates on it). The keyboard being in the PROCESS is the whole
-// requirement; the gates below are about the user's intent, not the window.
+// Any window of ours will do for local delivery. For capture delivery, the
+// foreground PID must still be the Final Cut host remembered when the editor
+// opened, so leaving Final Cut immediately returns B/S/M to the next app.
 //
-// Installed with the row and dropped with it, so a letter typed anywhere in
-// Final Cut with no preview open is nobody's business but Final Cut's. This is
-// the only installation: the Color panel used to own an identical one, and two
-// monitors for one key is two chances to consume it twice.
+// Both routes are installed with the row and dropped with it, so a letter typed
+// with no preview open is nobody's business but Final Cut's. The Color panel
+// used to own an identical local route; keeping this as the one owner avoids
+// two handlers toggling the same state.
 - (void)_installShortcutMonitor {
   if (_shortcutMonitor)
     return;
@@ -369,10 +365,25 @@ static const CGFloat kEdgeInset = KKPaddingSM;
                                        return nil; // ours: don't also type it
                                      return e;
                                    }];
+  _shortcutHostPID =
+      NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+  _globalShortcutCapture = KKInstallGlobalKeyCapture(^BOOL(NSEvent *e) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return NO;
+    pid_t front =
+        NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+    if (s->_shortcutHostPID == 0 || front != s->_shortcutHostPID)
+      return NO;
+    return [s _handleShortcutEvent:e];
+  });
 }
 
 - (void)_dropShortcutMonitor {
   MirageDropMonitor(&_shortcutMonitor);
+  KKRemoveGlobalKeyCapture(_globalShortcutCapture);
+  _globalShortcutCapture = nil;
+  _shortcutHostPID = 0;
   // A bypass the keyboard is holding cannot survive the monitor that would
   // release it: the key-up would arrive with nothing listening and leave the
   // preview permanently unprocessed.

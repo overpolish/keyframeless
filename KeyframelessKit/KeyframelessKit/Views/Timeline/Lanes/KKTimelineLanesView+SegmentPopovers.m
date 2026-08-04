@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKFloatingPanel.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
@@ -24,6 +25,7 @@
     (NSArray<NSArray<NSString *> *> *)compounds;
 - (void)_resizeOpenSegmentPopoverToEditor:(KKSegmentEditView *)edit;
 - (NSButton *)_makePopoverCloseButton;
+- (KKPopoverPeekButton *)_makePopoverPeekButton;
 - (void)_wireSegmentEditor:(KKSegmentEditView *)edit
            onParticipation:(void (^)(NSInteger, BOOL))onParticipation
                onDragBegin:(void (^)(void))onDragBegin
@@ -80,7 +82,8 @@
 // grow/shrink the open popover by the editor's height delta so the checklist
 // isn't clipped / leaves a gap.
 - (void)_resizeOpenSegmentPopoverToEditor:(KKSegmentEditView *)edit {
-  if (!_openSegEditHeightConstraint || !_openContentPopover)
+  if (!_openSegEditHeightConstraint || ![self _editorPanelIsVisible] ||
+      _openEditorIsStaticFamily)
     return;
   CGFloat newH = [edit contentHeight];
   CGFloat delta = newH - _openSegEditHeightConstraint.constant;
@@ -90,10 +93,10 @@
   // Grow/shrink the container too, else its old fixed height fights the
   // wrapper-edge constraints and the header is pushed out of view.
   _openSegContainerHeightConstraint.constant += delta;
-  // Changing contentSize moves/resizes the popover window; the companion's own
-  // move/resize observers reposition it (no re-post - that reopens the panel).
-  NSSize sz = _openContentPopover.contentSize;
-  _openContentPopover.contentSize = NSMakeSize(sz.width, sz.height + delta);
+  // Hold the editor panel's top edge while its body changes height. The shared
+  // panel host clamps the result fully inside the active screen.
+  NSSize sz = _openEditorPanel.frame.size;
+  [self _setOpenEditorContentSize:NSMakeSize(sz.width, sz.height + delta)];
 }
 
 // The modulate popover's participation is COMPOUND (one entry per lane: master
@@ -199,7 +202,9 @@
   // constants popover so a fixed-position companion is easy to dismiss (the
   // default close-on-focus-loss still applies).
   NSButton *closeButton = [self _makePopoverCloseButton];
+  KKPopoverPeekButton *peekButton = [self _makePopoverPeekButton];
   [container addSubview:closeButton];
+  [container addSubview:peekButton];
   [container addSubview:header];
   // Trailing end of the title row, where the keypose / constants popovers put
   // their size pill: the segment's own [Reset][Make Default] actions.
@@ -226,7 +231,13 @@
     // Match the keypose / constants popover close button (22pt square).
     [closeButton.widthAnchor constraintEqualToConstant:22.0],
     [closeButton.heightAnchor constraintEqualToConstant:22.0],
-    [header.leadingAnchor constraintEqualToAnchor:closeButton.trailingAnchor
+    [peekButton.leadingAnchor constraintEqualToAnchor:closeButton.trailingAnchor
+                                             constant:KKPaddingSM],
+    [peekButton.centerYAnchor
+        constraintEqualToAnchor:closeButton.centerYAnchor],
+    [peekButton.widthAnchor constraintEqualToConstant:22.0],
+    [peekButton.heightAnchor constraintEqualToConstant:22.0],
+    [header.leadingAnchor constraintEqualToAnchor:peekButton.trailingAnchor
                                          constant:KKSpacingMD],
     [header.topAnchor constraintEqualToAnchor:container.topAnchor
                                      constant:KKPaddingMD],
@@ -276,30 +287,31 @@
   // presenter swaps content on the live window when already shown (gap-to-gap,
   // or coming from any other popover), so the buttons inside never go dead from
   // a reopen.
-  NSPopover *pop =
-      [self _showPopoverWithContent:container
-                           fromView:self
-                      preferredEdge:[self _inspectorSidePreferredEdge]
-                            onClose:^{
-                              if (onClose)
-                                onClose();
-                              __strong typeof(weak) s = weak;
-                              if (!s)
-                                return;
-                              s->_openExtraRows = nil;
-                              // Signal close so the graphs clear their
-                              // active-gap highlight (same companion signal the
-                              // static-values / manage popovers post).
-                              [NSNotificationCenter.defaultCenter
-                                  postNotificationName:
-                                      KKStaticValuesPopoverDidCloseNotification
-                                                object:s];
-                            }];
+  KKFloatingPanel *panel = [self
+      _showEditorPanelWithContent:container
+                         fromView:self
+                     staticFamily:NO
+                          onClose:^{
+                            if (onClose)
+                              onClose();
+                            __strong typeof(weak) s = weak;
+                            if (!s)
+                              return;
+                            s->_openExtraRows = nil;
+                            // Signal close so the graphs clear their
+                            // active-gap highlight (same companion signal the
+                            // static-values / manage popovers post).
+                            [NSNotificationCenter.defaultCenter
+                                postNotificationName:
+                                    KKStaticValuesPopoverDidCloseNotification
+                                              object:s];
+                          }];
   // Signal the open so a multi-layer host (Canvas) can attach its layer-list
   // companion beside the "Applies to" checklist (Basic only - Advanced's
   // popover is opened on one lane that already lives on a single layer).
   if (postApplies)
-    KKPostStaticValuesPopoverDidOpen(pop, self, @"appliesTo", NO, 0.0);
+    KKPostStaticValuesEditorDidOpen(panel, container, self, @"appliesTo", NO,
+                                    0.0);
 }
 
 - (void)_presentGapPopoverFromAnchor:(NSView *)anchor
@@ -603,8 +615,15 @@
   return b;
 }
 
+- (KKPopoverPeekButton *)_makePopoverPeekButton {
+  __weak typeof(self) weak = self;
+  return KKCreateCompositionPeekButton(^(BOOL held) {
+    [weak _setCompositionPeekHeld:held keyboard:NO];
+  });
+}
+
 - (void)_segmentCloseButtonClicked:(id)sender {
-  [_openContentPopover close];
+  [self _closeEditorPanel];
 }
 
 // Unified static-values popover presenter. Constants AND keypose (boundary)

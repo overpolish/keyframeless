@@ -78,7 +78,7 @@
   // same layer must not drive the host selection back (ping-pong against a
   // selection the user just changed) - only a user graph-click/nav moves
   // selection.
-  if (!(_openContentPopover.isShown && anyOptedIn &&
+  if (!([self _editorPanelIsVisible] && anyOptedIn &&
         [NSDate timeIntervalSinceReferenceDate] >=
             _boundaryRedriveSuppressUntil))
     return;
@@ -333,7 +333,7 @@
 }
 
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction {
-  if (!(_openContentPopover.isShown && _openStaticIsBoundary))
+  if (!([self _editorPanelIsVisible] && _openStaticIsBoundary))
     return;
   NSArray<NSNumber *> *fracs = [self _animatableKPFractions];
   NSInteger idx = [self _indexOfFraction:_openStaticBoundaryFraction
@@ -357,7 +357,8 @@
     self.onGuideRenderModeChanged(mode);
   // Pill toggle while a boundary popover is open → re-publish so the
   // render side switches single↔multi without close/reopen.
-  if (_openContentPopover.isShown && _openStaticIsBoundary && _openStaticView) {
+  if ([self _editorPanelIsVisible] && _openStaticIsBoundary &&
+      _openStaticView) {
     [self _publishBoundaryRequestForFraction:_openStaticBoundaryFraction];
     if (self.onBoundaryPreviewNeedsRender)
       self.onBoundaryPreviewNeedsRender();
@@ -415,7 +416,7 @@
 - (void)_republishBoundaryRequestIfOpen {
   if (_renderMode == KKMiniViewerRenderModeOff)
     return;
-  if (!(_openContentPopover.isShown && _openStaticIsBoundary &&
+  if (!([self _editorPanelIsVisible] && _openStaticIsBoundary &&
         _openStaticView))
     return;
   [self _publishBoundaryRequestForFraction:_openStaticBoundaryFraction];
@@ -428,7 +429,7 @@
                                       fraction:(double)fraction
                                 excludedLabels:
                                     (NSArray<NSString *> *)excludedLabels {
-  if (!(_openContentPopover.isShown && _openStaticIsBoundary &&
+  if (!([self _editorPanelIsVisible] && _openStaticIsBoundary &&
         _openStaticView))
     return;
   BOOL fracChanged = fabs(fraction - _openStaticBoundaryFraction) > 1e-6;

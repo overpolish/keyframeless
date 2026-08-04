@@ -6,6 +6,7 @@
 #import "KKTimelineLanesView.h"
 #import "KKCheckboxRowView.h"
 #import "KKCurveDefaults.h"
+#import "KKFloatingPanel.h"
 #import "KKLaneCategoryNav.h"
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
@@ -161,7 +162,7 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   id del = self.miniViewerDelegate;
   if ([del respondsToSelector:NSSelectorFromString(@"setEditFraction:")])
     [del setValue:@(fraction) forKey:@"editFraction"];
-  [_openContentMiniViewer setNeedsDisplay:YES];
+  [_openEditorMiniViewer setNeedsDisplay:YES];
 }
 
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
@@ -389,6 +390,7 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
       };
   _basicGraph.onRequestClosePopover = ^{
     __strong typeof(weakSelf) s = weakSelf;
+    [s _closeEditorPanel];
     if (s->_openContentPopover.isShown)
       [s->_openContentPopover close];
   };
@@ -491,6 +493,7 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
       };
   _advancedGraph.onRequestClosePopover = ^{
     __strong typeof(weakSelf) s = weakSelf;
+    [s _closeEditorPanel];
     if (s->_openContentPopover.isShown)
       [s->_openContentPopover close];
   };
@@ -1266,6 +1269,7 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   // against one doesn't map cleanly onto the other, so dismiss any open popover
   // on the switch (which also clears its graph highlight) rather than trying to
   // re-target it across the two representations.
+  [self _closeEditorPanel];
   [_openContentPopover close];
   [self _refresh];
   if (_onAccessoryButtonsChanged)
@@ -1343,8 +1347,80 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   [_advancedGraph setNeedsDisplay:YES];
 }
 
+// Momentarily reveal Final Cut's own viewer without ending the editing
+// session. Ordering an NSPopover window out triggers its private fade-away
+// presentation state under ViewBridge; ordering it front again reports visible
+// but leaves that presentation layer faded out. Keep it ordered and move the
+// unchanged window off-screen instead, then restore its exact frame.
+- (void)_setCompositionPeekHeld:(BOOL)held keyboard:(BOOL)keyboard {
+  if (keyboard)
+    _compositionPeekKeyHeld = held;
+  else
+    _compositionPeekMouseHeld = held;
+
+  BOOL shouldHide = _compositionPeekKeyHeld || _compositionPeekMouseHeld;
+  if (shouldHide) {
+    if (_compositionPeekWindow)
+      return;
+    NSWindow *window =
+        _openEditorPanel
+            ?: _openContentPopover.contentViewController.view.window;
+    if (!window)
+      return;
+    _compositionPeekWindow = window;
+    _compositionPeekSavedFrame = window.frame;
+    // Persistent editor panels normally clamp every move back inside a visible
+    // screen. Parking one for composition peek is the intentional exception:
+    // suspend that observer until the exact saved frame has been restored.
+    if ([window isKindOfClass:[KKFloatingPanel class]]) {
+      ((KKFloatingPanel *)window).keepsEntireFrameVisible = NO;
+      _compositionPeekSuspendedFrameClamp = YES;
+    }
+    NSRect parked = _compositionPeekSavedFrame;
+    parked.origin = NSMakePoint(-100000.0 - parked.size.width,
+                                -100000.0 - parked.size.height);
+    [window setFrame:parked display:NO animate:NO];
+    return;
+  }
+
+  NSWindow *window = _compositionPeekWindow;
+  if (window)
+    [window setFrame:_compositionPeekSavedFrame display:YES animate:NO];
+  if (_compositionPeekSuspendedFrameClamp &&
+      [window isKindOfClass:[KKFloatingPanel class]])
+    ((KKFloatingPanel *)window).keepsEntireFrameVisible = YES;
+  _compositionPeekSuspendedFrameClamp = NO;
+  _compositionPeekWindow = nil;
+  _compositionPeekSavedFrame = NSZeroRect;
+}
+
+- (void)_cancelCompositionPeek {
+  _compositionPeekMouseHeld = NO;
+  _compositionPeekKeyHeld = NO;
+  NSWindow *window = _compositionPeekWindow;
+  if (window)
+    [window setFrame:_compositionPeekSavedFrame display:YES animate:NO];
+  if (_compositionPeekSuspendedFrameClamp &&
+      [window isKindOfClass:[KKFloatingPanel class]])
+    ((KKFloatingPanel *)window).keepsEntireFrameVisible = YES;
+  _compositionPeekSuspendedFrameClamp = NO;
+  _compositionPeekWindow = nil;
+  _compositionPeekSavedFrame = NSZeroRect;
+}
+
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {
   _renderMode = mode;
+}
+
+- (void)dealloc {
+  if (_editorKeyMonitor)
+    [NSEvent removeMonitor:_editorKeyMonitor];
+  if (_editorGlobalKeyDownMonitor)
+    [NSEvent removeMonitor:_editorGlobalKeyDownMonitor];
+  if (_editorGlobalKeyUpMonitor)
+    [NSEvent removeMonitor:_editorGlobalKeyUpMonitor];
+  [_staticEditorPanel hidePanel];
+  [_segmentEditorPanel hidePanel];
 }
 
 @end

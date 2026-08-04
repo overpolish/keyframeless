@@ -10,8 +10,8 @@
 #import "KKScopedDefaults.h"
 #import "NSColor+KKColors.h"
 
-// Remembered positions are UI state, not per-shader state, so they get their own
-// fixed scope rather than the active one. Mirage's active scope carries the
+// Remembered positions are UI state, not per-shader state, so they get their
+// own fixed scope rather than the active one. Mirage's active scope carries the
 // loaded shader's id, which would give every shader its own panel position.
 static NSString *const kPositionScope = @"ui";
 
@@ -62,16 +62,21 @@ static const CGFloat kMinVisibleHeight = 44.0;
   NSPoint _grabOffset;
   id _dragLocalMonitor;
   id _dragGlobalMonitor;
+  BOOL _screenClampScheduled;
 }
+
+@synthesize allowsKeyWindow = _allowsKeyWindow;
+@synthesize userMovable = _userMovable;
+@synthesize keepsEntireFrameVisible = _keepsEntireFrameVisible;
 
 - (instancetype)initWithContentSize:(NSSize)size
                         positionKey:(NSString *)positionKey {
-  if ((self = [super initWithContentRect:NSMakeRect(0, 0, size.width,
-                                                    size.height)
-                               styleMask:NSWindowStyleMaskBorderless |
-                                         NSWindowStyleMaskNonactivatingPanel
-                                 backing:NSBackingStoreBuffered
-                                   defer:YES])) {
+  if ((self =
+           [super initWithContentRect:NSMakeRect(0, 0, size.width, size.height)
+                            styleMask:NSWindowStyleMaskBorderless |
+                                      NSWindowStyleMaskNonactivatingPanel
+                              backing:NSBackingStoreBuffered
+                                defer:YES])) {
     _positionKey = [positionKey copy];
     self.becomesKeyOnlyIfNeeded = NO;
     self.hasShadow = YES;
@@ -84,15 +89,17 @@ static const CGFloat kMinVisibleHeight = 44.0;
     self.opaque = NO;
     self.animationBehavior = NSWindowAnimationBehaviorNone;
     self.movableByWindowBackground = NO; // dragging is handled here, see below
+    _userMovable = YES;
   }
   return self;
 }
 
 - (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
   [self _removeDragMonitors];
 }
 
-// Never key, deliberately.
+// Control-only panels are never key by default, deliberately.
 //
 // Undo is why. A companion panel that takes key takes the keyboard with it, and
 // Cmd-Z then goes to a window with no undo stack of its own: the user drags a
@@ -101,17 +108,110 @@ static const CGFloat kMinVisibleHeight = 44.0;
 // popover holding the keyboard the whole time, so every host shortcut keeps
 // working while this panel is in use.
 //
-// The panel loses nothing by it: clicks and drags reach its views regardless (the
-// style mask is already NonactivatingPanel, and the drags run off event monitors),
-// and there is nothing here to type into. A panel that ever needs text input needs
-// an opt-in, not a change to this default.
+// The panel loses nothing by it: clicks and drags reach its views regardless
+// (the style mask is already NonactivatingPanel, and the drags run off event
+// monitors), and there is nothing there to type into. Primary editor panels
+// explicitly opt in because their number fields, expressions and code editors
+// need a field editor; the nonactivating style still keeps Final Cut active.
 - (BOOL)canBecomeKeyWindow {
-  return NO;
+  return _allowsKeyWindow;
 }
 
-// Resizable rounded-rect mask. The visual-effect view uses this both to clip its
-// material AND to shape the window shadow, so the shadow follows the corners
-// instead of the square backing - a plain layer cornerRadius leaves a
+// Pick the screen that owns the largest portion of `frame`. This is more
+// stable than `self.screen` while a window is between displays, and gives a
+// deterministic home to a remembered frame after the display arrangement
+// changes.
+- (NSScreen *)_bestScreenForFrame:(NSRect)frame {
+  NSScreen *best = nil;
+  CGFloat bestArea = 0.0;
+  for (NSScreen *screen in NSScreen.screens) {
+    NSRect hit = NSIntersectionRect(frame, screen.visibleFrame);
+    CGFloat area = NSWidth(hit) * NSHeight(hit);
+    if (!best || area > bestArea) {
+      best = screen;
+      bestArea = area;
+    }
+  }
+  return best ?: self.screen ?: NSScreen.mainScreen;
+}
+
+- (NSRect)_fullyVisibleFrame:(NSRect)frame {
+  NSScreen *screen = [self _bestScreenForFrame:frame];
+  if (!screen)
+    return frame;
+  NSRect visible = screen.visibleFrame;
+  // Callers size editor content to the screen before it reaches the panel.
+  // Still cap defensively so a malformed or stale remembered size cannot make
+  // the window impossible to recover.
+  frame.size.width = MIN(frame.size.width, NSWidth(visible));
+  frame.size.height = MIN(frame.size.height, NSHeight(visible));
+  frame.origin.x = MIN(MAX(frame.origin.x, NSMinX(visible)),
+                       NSMaxX(visible) - NSWidth(frame));
+  frame.origin.y = MIN(MAX(frame.origin.y, NSMinY(visible)),
+                       NSMaxY(visible) - NSHeight(frame));
+  return frame;
+}
+
+- (void)setContentSizeKeepingTopEdge:(NSSize)size {
+  NSRect frame = self.frame;
+  CGFloat top = NSMaxY(frame);
+  frame.size = size;
+  frame.origin.y = top - size.height;
+  if (_keepsEntireFrameVisible)
+    frame = [self _fullyVisibleFrame:frame];
+  [self setFrame:frame display:self.isVisible];
+}
+
+- (void)_scheduleFullFrameClamp:(NSNotification *)note {
+  if (!_keepsEntireFrameVisible || !self.isVisible || _screenClampScheduled)
+    return;
+  _screenClampScheduled = YES;
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weak) self = weak;
+    if (!self)
+      return;
+    self->_screenClampScheduled = NO;
+    if (!self->_keepsEntireFrameVisible || !self.isVisible)
+      return;
+    NSRect current = self.frame;
+    NSRect clamped = [self _fullyVisibleFrame:current];
+    if (!NSEqualRects(current, clamped))
+      [self setFrame:clamped display:YES];
+  });
+}
+
+- (void)_installScreenSafetyObserversForParent:(NSWindow *)parent {
+  NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
+  [nc removeObserver:self name:NSWindowDidMoveNotification object:self];
+  [nc removeObserver:self name:NSWindowDidMoveNotification object:parent];
+  [nc removeObserver:self name:NSWindowDidResizeNotification object:parent];
+  [nc removeObserver:self
+                name:NSApplicationDidChangeScreenParametersNotification
+              object:NSApp];
+  if (!_keepsEntireFrameVisible)
+    return;
+  [nc addObserver:self
+         selector:@selector(_scheduleFullFrameClamp:)
+             name:NSWindowDidMoveNotification
+           object:self];
+  [nc addObserver:self
+         selector:@selector(_scheduleFullFrameClamp:)
+             name:NSWindowDidMoveNotification
+           object:parent];
+  [nc addObserver:self
+         selector:@selector(_scheduleFullFrameClamp:)
+             name:NSWindowDidResizeNotification
+           object:parent];
+  [nc addObserver:self
+         selector:@selector(_scheduleFullFrameClamp:)
+             name:NSApplicationDidChangeScreenParametersNotification
+           object:NSApp];
+}
+
+// Resizable rounded-rect mask. The visual-effect view uses this both to clip
+// its material AND to shape the window shadow, so the shadow follows the
+// corners instead of the square backing - a plain layer cornerRadius leaves a
 // rectangular shadow past them.
 static NSImage *KKRoundedMaskImage(CGFloat radius) {
   CGFloat dim = radius * 2.0 + 1.0;
@@ -121,8 +221,8 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
               drawingHandler:^BOOL(NSRect rect) {
                 [NSColor.blackColor set];
                 [[NSBezierPath bezierPathWithRoundedRect:rect
-                                                xRadius:radius
-                                                yRadius:radius] fill];
+                                                 xRadius:radius
+                                                 yRadius:radius] fill];
                 return YES;
               }];
   image.capInsets = NSEdgeInsetsMake(radius, radius, radius, radius);
@@ -230,11 +330,14 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
                 _positionKey, NSStringFromPoint(remembered));
     frame = [self _frameBesideCard:card];
   }
+  if (_keepsEntireFrameVisible)
+    frame = [self _fullyVisibleFrame:frame];
   [self setFrame:frame display:NO];
   if (self.parentWindow && self.parentWindow != parent)
     [self.parentWindow removeChildWindow:self];
   if (self.parentWindow != parent)
     [parent addChildWindow:self ordered:NSWindowAbove];
+  [self _installScreenSafetyObserversForParent:parent];
   KKPopoverAddKeepAliveWindow(self);
 }
 
@@ -242,6 +345,7 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
   _dragging = NO;
   [self _removeDragMonitors];
   KKPopoverRemoveKeepAliveWindow(self);
+  [NSNotificationCenter.defaultCenter removeObserver:self];
   [self.parentWindow removeChildWindow:self];
   [self orderOut:nil];
 }
@@ -279,6 +383,8 @@ static BOOL KKViewWantsItsOwnClicks(NSView *view) {
 }
 
 - (BOOL)_shouldStartDragForEvent:(NSEvent *)event {
+  if (!_userMovable)
+    return NO;
   NSView *content = self.contentView;
   if (!content)
     return NO;
@@ -299,16 +405,17 @@ static BOOL KKViewWantsItsOwnClicks(NSView *view) {
 
 // The cursor in AppKit screen coordinates, taken from the underlying CGEvent.
 //
-// NOT via `[event.window convertPointToScreen:event.locationInWindow]`: during a
-// drag the event's window is often THIS panel, whose frame is what the drag is
-// changing, so the conversion mixes a location measured against the old frame
-// with the new one and the panel scatters across the screen. CGEventGetLocation
-// is in global display space and owes nothing to any window, so it is immune -
-// and unlike NSEvent's global-state queries it is carried by the event itself,
-// which is what makes it usable inside a plugin's XPC process.
+// NOT via `[event.window convertPointToScreen:event.locationInWindow]`: during
+// a drag the event's window is often THIS panel, whose frame is what the drag
+// is changing, so the conversion mixes a location measured against the old
+// frame with the new one and the panel scatters across the screen.
+// CGEventGetLocation is in global display space and owes nothing to any window,
+// so it is immune - and unlike NSEvent's global-state queries it is carried by
+// the event itself, which is what makes it usable inside a plugin's XPC
+// process.
 //
-// Global display space has its origin at the TOP-left of the primary display and
-// y grows downward, hence the flip into AppKit's bottom-left screen space.
+// Global display space has its origin at the TOP-left of the primary display
+// and y grows downward, hence the flip into AppKit's bottom-left screen space.
 static NSPoint KKCursorScreenPoint(NSEvent *event) {
   CGEventRef cg = event.CGEvent;
   if (cg) {
@@ -326,8 +433,12 @@ static NSPoint KKCursorScreenPoint(NSEvent *event) {
 - (void)_dragTickAtScreenPoint:(NSPoint)screenPoint {
   if (!_dragging)
     return;
-  [self setFrameOrigin:NSMakePoint(screenPoint.x - _grabOffset.x,
-                                   screenPoint.y - _grabOffset.y)];
+  NSRect frame = self.frame;
+  frame.origin =
+      NSMakePoint(screenPoint.x - _grabOffset.x, screenPoint.y - _grabOffset.y);
+  if (_keepsEntireFrameVisible)
+    frame = [self _fullyVisibleFrame:frame];
+  [self setFrameOrigin:frame.origin];
 }
 
 - (void)_endDrag {

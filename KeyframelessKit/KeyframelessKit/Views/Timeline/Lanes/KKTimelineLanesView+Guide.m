@@ -37,10 +37,12 @@
 }
 
 - (void)guideCloseContentPopover {
+  [self _closeEditorPanel];
   [_openContentPopover close];
 }
 
 - (void)guideCloseAllPopovers {
+  [self _closeEditorPanel];
   [_openContentPopover close];
   [self closeManagePopover];
   [self closeFilterPopover];
