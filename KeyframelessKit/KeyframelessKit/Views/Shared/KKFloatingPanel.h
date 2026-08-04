@@ -90,6 +90,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// hosted layout itself can synchronously perturb the panel frame.
 - (void)setContentSize:(NSSize)size keepingTopEdgeAt:(CGFloat)top;
 
+/// Apply a temporary, non-persisted frame beside `card`. Joyride uses this to
+/// put an editor in a predictable place and size without overwriting the
+/// user's remembered layout. A later normal `showBesideCard:` still restores
+/// the persisted frame.
+- (void)setTransientContentSize:(NSSize)size besideCard:(NSRect)card;
+
 /// The view dragging is initiated from. Defaults to the whole content view, so
 /// the panel drags by any part of its background that does not handle the click
 /// itself. Set to a header strip for a panel whose body is interactive.

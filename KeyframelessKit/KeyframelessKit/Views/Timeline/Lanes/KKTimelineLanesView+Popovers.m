@@ -764,6 +764,24 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   NSRect card = [anchor.window
       convertRectToScreen:[anchor convertRect:anchor.bounds toView:nil]];
   [panel showBesideCard:card ofWindow:anchor.window];
+  if (_guideEditorLayoutOverrideActive) {
+    // A panel can be lazily created by the guide. Capture the remembered frame
+    // after normal presentation has restored it, so teardown can put even a
+    // cold-session panel back exactly where the user left it.
+    if (staticFamily && !_guideSavedStaticEditorFrameValid) {
+      _guideSavedStaticEditorFrame = panel.frame;
+      _guideSavedStaticEditorFrameValid = YES;
+    } else if (!staticFamily && !_guideSavedSegmentEditorFrameValid) {
+      _guideSavedSegmentEditorFrame = panel.frame;
+      _guideSavedSegmentEditorFrameValid = YES;
+    }
+    // Ignore the persisted frame for the duration of the guide only. `size` is
+    // this editor's natural expanded size because guide begin forced compact
+    // off before the content was built.
+    panel.userMovable = NO;
+    panel.userResizable = NO;
+    [panel setTransientContentSize:size besideCard:card];
+  }
   if (staticFamily &&
       [content isKindOfClass:[_KKStaticValuesPopoverView class]])
     [(_KKStaticValuesPopoverView *)content

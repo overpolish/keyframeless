@@ -77,6 +77,11 @@ NS_ASSUME_NONNULL_BEGIN
   /// first sees it, so the restore is not thrown away by the stale-selection
   /// fallback.
   NSString *_pendingRackSelectionID;
+  /// Guides seed the legacy/default shader's bare lane keys. Temporarily pin
+  /// that rack entry while a guide runs, then restore the user's entry only
+  /// after the real timeline has been restored.
+  NSString *_guideSavedRackSelectionID;
+  BOOL _guideRackSelectionActive;
 }
 
 @end

@@ -47,11 +47,9 @@
   NSString *newID = KKTimelineStampSlotInstance(
       updated, kMirageRackGroupName, @[ [self _rackDefaultCodeLanePrototype] ]);
   if (!newID.length) {
-    KKLogWarn(@"[Rack] append minted no entry id - nothing added");
+    KKLogWarn(@"[Mirage] shader append minted no entry id - nothing added");
     return;
   }
-  KKLogInfo(@"[Rack] appended default shader as entry %@ (%lu now)", newID,
-            (unsigned long)MirageRackEntryIDs(updated).count);
   // Commit BEFORE selecting, unlike every other mutation here. A selection is
   // re-derived against the lanes view's LIVE timeline, and until the commit
   // lands that timeline's registry has never heard of this entry - so the
@@ -60,9 +58,6 @@
   // -[_KKStaticValuesPopoverView updateUnoptedLanes:] closes the popover on.
   // "+" therefore dismissed the very popover it was appending into. Committed
   // first, the entry exists before anything asks what it owns.
-  KKLogDebug(@"[Rack] append: commit before select so entry %@ has lanes to "
-             @"scope the constants rows to",
-             newID);
   // The selection rides INSIDE the commit's action scope, so the chain and the
   // entry the user lands on are one undo entry - Cmd-Z takes back the append
   // and puts them back on the entry they were editing, in one step. The
@@ -106,8 +101,6 @@
   // when the first is going. Never "none" - the rack always has a row.
   NSString *survivor = doomed > 0 ? ids[doomed - 1] : ids[1];
   [self _rackSelectEntry:survivor persist:NO];
-  KKLogInfo(@"[Rack] removed entry %@ (%lu left)", entryID,
-            (unsigned long)MirageRackEntryIDs(updated).count);
   // Folded into the commit for the same reason the append's is: undoing a
   // removal brings the entry back AND puts the user back on it, once.
   [self commitRackTimeline:updated selecting:survivor];
@@ -128,8 +121,6 @@
       MirageRackReorderedEntryIDs(MirageRackEntryIDs(updated), entryID, index);
   if (!MirageRackSetEntryIDs(updated, reordered))
     return;
-  KKLogInfo(@"[Rack] moved entry %@ to %ld -> %@", entryID, (long)index,
-            [reordered componentsJoinedByString:@","]);
   [self commitRackTimeline:updated];
 }
 
@@ -162,7 +153,6 @@
     [lanes addObject:lane];
   }
   updated.lanes = lanes;
-  KKLogInfo(@"[Rack] entry %@ %@", entryID, enabled ? @"enabled" : @"disabled");
   [self commitRackTimeline:updated];
 }
 

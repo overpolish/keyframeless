@@ -13,14 +13,14 @@
 #import "CanvasPresets.h"
 #import "CanvasThumbnailBake.h" // link-picker poster bake
 #import "CanvasToolbar.h" // CanvasToolbarToolPen (arrow guide pen-tool step)
+#import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKJoyrideController.h>  // KKJoyrideStep / controller
+#import <KeyframelessKit/KKJoyrideDragStep.h>    // slider drag-to-zero step
+#import <KeyframelessKit/KKJoyrideGuideHost.h>   // shared guide host
+#import <KeyframelessKit/KKJoyrideLanesBinder.h> // step binding
+#import <KeyframelessKit/KKJoyrideTrigger.h>     // advance triggers
 #import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
-#import <KeyframelessKit/KKBezierPath.h>
-#import <KeyframelessKit/KKJoyrideController.h>    // KKJoyrideStep / controller
-#import <KeyframelessKit/KKJoyrideDragStep.h>      // slider drag-to-zero step
-#import <KeyframelessKit/KKJoyrideGuideHost.h>     // shared guide host
-#import <KeyframelessKit/KKJoyrideLanesBinder.h>   // step binding
-#import <KeyframelessKit/KKJoyrideTrigger.h>       // advance triggers
 #import <KeyframelessKit/KKMiniViewerView.h> // mini toolbar guide methods
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h> // In-phase toggle rect
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // timingGuideHost
@@ -50,7 +50,7 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   NSString *_selectedLayerID; // layer the inspector edits (nil = topmost)
   BOOL _dragging;             // a graph keypose drag is in progress
   id<PROAPIAccessing>
-      _apiManager; // for per-instance OSC-visibility state reads
+      _apiManager;                // for per-instance OSC-visibility state reads
   NSInteger _thumbBakeGeneration; // coalesces thumbnail bakes (see Mirage)
 }
 
@@ -242,9 +242,10 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
     };
     // Annotation presets: a content preset (payloadKind "canvasLayers") inserts
     // its pre-built layer(s) into the stack rather than applying a timeline.
-    self.onApplyPresetPayload = ^(NSString *kind, NSString *json, BOOL atPlayhead) {
-      [weak _applyCanvasLayerPresetPayload:kind json:json];
-    };
+    self.onApplyPresetPayload =
+        ^(NSString *kind, NSString *json, BOOL atPlayhead) {
+          [weak _applyCanvasLayerPresetPayload:kind json:json];
+        };
     _layerListController.templateLaneCount = availableLanes.count;
     // Canvas's property list is short (Scale, Position), so the Animated
     // popover - and the layer panel beside it, which matches its height - would
@@ -272,12 +273,13 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   if (preset.count == 0)
     return;
   // Aspect-sensitive geometry (the checkmark) is authored square; compress X
-  // about the canvas centre by the live aspect (outH/outW) so 45-degree art stays
-  // square on any canvas shape. Falls back to 16:9 if the output size is unknown.
+  // about the canvas centre by the live aspect (outH/outW) so 45-degree art
+  // stays square on any canvas shape. Falls back to 16:9 if the output size is
+  // unknown.
   if (aspectX) {
     float ow = 0.0f, oh = 0.0f;
-    float f = (CanvasOutputSize(&ow, &oh) && ow > 0.0f) ? (oh / ow)
-                                                        : (9.0f / 16.0f);
+    float f =
+        (CanvasOutputSize(&ow, &oh) && ow > 0.0f) ? (oh / ow) : (9.0f / 16.0f);
     for (KKBezierPath *p in preset) {
       NSUInteger n = p.count;
       if (n == 0)
@@ -550,7 +552,8 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
 }
 
 // Canvas renders each layer through KKTransformVertexShader, so it can emit a
-// per-layer velocity buffer for the Fast (reconstruction) motion-blur technique.
+// per-layer velocity buffer for the Fast (reconstruction) motion-blur
+// technique.
 - (BOOL)motionBlurSupportsFastTechnique {
   return YES;
 }
@@ -654,12 +657,10 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   for (KKBezierPath *p in _miniViewerRenderer.layers) {
     if (p.layerID.length == 0)
       continue;
-    NSData *layerJPEG = CanvasRenderThumbnailJPEG(_miniViewerRenderer, 320,
-                                                  180, src, p.layerID);
+    NSData *layerJPEG = CanvasRenderThumbnailJPEG(_miniViewerRenderer, 320, 180,
+                                                  src, p.layerID);
     if (layerJPEG.length)
-      [KKLinkBus writeThumbnailJPEG:layerJPEG
-                            forUUID:uuid
-                            layerID:p.layerID];
+      [KKLinkBus writeThumbnailJPEG:layerJPEG forUUID:uuid layerID:p.layerID];
   }
 }
 
@@ -820,12 +821,14 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   KKJoyrideGuideHost *host = [self timingGuideHost];
   host.forwardsGestures = YES;
   [self setActiveTab:KKTimelineTabBasic];
+  [self setPlayheadFraction:0.0];
   if (self.onScrub)
     self.onScrub(0.0);
   // Save the user's remembered constant tab; the guide forces Core before the
   // "navigate to the Stroke group" step (when the drawn path guarantees a Core
   // category exists) and restores this on completion.
-  self.arrowGuideSavedCategory = [self.basicLanesView guideRememberedConstantCategory];
+  self.arrowGuideSavedCategory =
+      [self.basicLanesView guideRememberedConstantCategory];
   self.arrowGuideActive = YES;
   // The guide owns the play accent for its duration so FCP's bursty currentTime
   // can't flicker it during the watch-back step (restored on completion).

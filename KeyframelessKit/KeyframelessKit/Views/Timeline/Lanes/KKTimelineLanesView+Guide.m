@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKFloatingPanel.h"
 #import "KKLaneFilterBar.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
@@ -93,6 +94,61 @@
   if (!bar || bar.isHidden || !w)
     return NSZeroRect;
   return [w convertRectToScreen:[bar convertRect:bar.bounds toView:nil]];
+}
+
+- (void)guideBeginEditorLayoutOverride {
+  if (_guideEditorLayoutOverrideActive)
+    return;
+  _guideEditorLayoutOverrideActive = YES;
+  _guideSavedEditorCompactMode = _editorCompactMode;
+  _guideSavedExpandedSizeBeforeCompact = _editorExpandedSizeBeforeCompact;
+  _guideSavedStaticEditorFrameValid = _staticEditorPanel != nil;
+  _guideSavedStaticEditorFrame = _staticEditorPanel.frame;
+  _guideSavedSegmentEditorFrameValid = _segmentEditorPanel != nil;
+  _guideSavedSegmentEditorFrame = _segmentEditorPanel.frame;
+
+  // Do not call the normal setter: this is transient guide state and must not
+  // overwrite the user's scoped default. Every editor built during the run now
+  // starts expanded, including plugin-specific guides such as Canvas Arrow.
+  _editorCompactMode = NO;
+  _editorExpandedSizeBeforeCompact = NSZeroSize;
+}
+
+- (void)guideEndEditorLayoutOverride {
+  if (!_guideEditorLayoutOverrideActive)
+    return;
+
+  _editorCompactMode = _guideSavedEditorCompactMode;
+  _editorExpandedSizeBeforeCompact = _guideSavedExpandedSizeBeforeCompact;
+
+  if (_openStaticView) {
+    [_openStaticView setCompactMode:_editorCompactMode];
+    _staticEditorPanel.minSize = [_openStaticView minimumHostedContentSize];
+  }
+  if (_guideSavedStaticEditorFrameValid && _staticEditorPanel) {
+    [_staticEditorPanel setFrame:_guideSavedStaticEditorFrame
+                         display:_staticEditorPanel.isVisible];
+  } else if (_openStaticView && _staticEditorPanel) {
+    NSSize natural = [_openStaticView naturalHostedContentSize];
+    natural.width = MAX(_staticEditorPanel.frame.size.width,
+                        _staticEditorPanel.minSize.width);
+    natural.height = MAX(natural.height, _staticEditorPanel.minSize.height);
+    [_staticEditorPanel setContentSizeKeepingTopEdge:natural];
+  }
+  if (_openStaticView && _staticEditorPanel)
+    [_openStaticView applyHostedContentSize:_staticEditorPanel.frame.size];
+  if (_guideSavedSegmentEditorFrameValid && _segmentEditorPanel)
+    [_segmentEditorPanel setFrame:_guideSavedSegmentEditorFrame
+                          display:_segmentEditorPanel.isVisible];
+
+  _staticEditorPanel.userMovable = YES;
+  _staticEditorPanel.userResizable = YES;
+  _segmentEditorPanel.userMovable = YES;
+  _segmentEditorPanel.userResizable = NO;
+
+  _guideSavedStaticEditorFrameValid = NO;
+  _guideSavedSegmentEditorFrameValid = NO;
+  _guideEditorLayoutOverrideActive = NO;
 }
 
 @end

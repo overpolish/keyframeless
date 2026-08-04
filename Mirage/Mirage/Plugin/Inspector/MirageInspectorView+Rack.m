@@ -58,8 +58,6 @@
   // torn down with the view they live on.
   [self _rackSetPreviewMode:MirageRackPreviewModeOff entry:nil];
   [self _observeKeyposePopoverLifecycle];
-  KKLogInfo(@"[Rack] strip built (height %.0f)",
-            [MirageShaderRackView stripHeight]);
   [self refreshRack];
   return rack;
 }
@@ -97,15 +95,11 @@
 - (void)refreshRack {
   // The ordinary state between popovers, not a fault: the strip lives in the
   // popover, so there is nothing to refresh while it is closed.
-  if (!_rackView) {
-    KKLogDebug(@"[Rack] refresh: no strip (popover closed)");
+  if (!_rackView)
     return;
-  }
   KKTimeline *timeline = self.basicLanesView.currentTimeline;
-  if (!timeline) {
-    KKLogInfo(@"[Rack] refresh: no timeline yet");
+  if (!timeline)
     return;
-  }
   NSArray<NSString *> *entryIDs = MirageRackEntryIDs(timeline);
   NSArray<MirageRackEntry *> *rows = [self _rackRowsForTimeline:timeline
                                                        entryIDs:entryIDs];
@@ -131,9 +125,6 @@
       entryIDs.count > 1 &&
       KKInstanceStateForAPI(_thumbAPIManager).chainRenderingSlowerThanRealTime;
 
-  KKLogInfo(@"[Rack] refresh: %lu entries, %lu not selectable, strip frame %@",
-            (unsigned long)entryIDs.count, (unsigned long)blocked.count,
-            NSStringFromRect(_rackView.frame));
   [_rackView applyEntries:rows
                  selected:selected
               previewMode:_rackPreviewMode
@@ -185,8 +176,6 @@
       [entryIDs containsObject:_pendingRackSelectionID]) {
     NSString *pending = _pendingRackSelectionID;
     _pendingRackSelectionID = nil;
-    KKLogInfo(@"[Rack] adopting restored selection %@ (registry caught up)",
-              pending);
     [self _rackSelectEntry:pending persist:NO];
   }
   // A selection pointing at an entry that is gone (the one just removed, or a
@@ -247,8 +236,6 @@
   _rackPreviewEntryID = [nextEntry copy];
   _miniViewerRenderer.rackPreviewMode = next;
   _miniViewerRenderer.rackPreviewEntryID = nextEntry;
-  KKLogDebug(@"[Rack] preview mode=%ld entry=%@", (long)next,
-             nextEntry ?: @"(whole chain)");
   // The preview is a PAUSED Metal view, so it holds its last frame until
   // someone marks it.
   [MirageFindMiniViewer(_rackView.window.contentView ?: _rackView)

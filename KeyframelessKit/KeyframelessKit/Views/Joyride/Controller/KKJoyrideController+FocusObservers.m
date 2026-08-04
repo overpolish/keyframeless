@@ -6,6 +6,16 @@
 #import "KKJoyrideController_Private.h"
 #import "KKLog.h"
 
+// Primary editors are independent NSPanel children of the bridged inspector.
+// Making one key legitimately makes the inspector resign key; that is still
+// the same editing session and must not dismiss its guide.
+static BOOL KKJoyrideWindowBelongsToHost(NSWindow *window, NSWindow *host) {
+  for (NSWindow *w = window; w; w = w.parentWindow)
+    if (w == host)
+      return YES;
+  return NO;
+}
+
 @implementation KKJoyrideController (FocusObservers)
 
 // Tear the guide down on anything that invalidates the spotlight's
@@ -45,7 +55,21 @@
                                   object:hostWindow
                                    queue:nil
                               usingBlock:^(NSNotification *n) {
-                                bail(@"host window resigned key");
+                                // Curve/modulate and constants/keypose now
+                                // live in key-capable child panels. Check on
+                                // the next tick, after AppKit has installed the
+                                // replacement key window, and keep the guide
+                                // alive when focus only moved into that child.
+                                dispatch_async(dispatch_get_main_queue(), ^{
+                                  __strong typeof(weak) s = weak;
+                                  if (!s || !s->_active)
+                                    return;
+                                  NSWindow *key = NSApp.keyWindow;
+                                  if (KKJoyrideWindowBelongsToHost(key,
+                                                                   hostWindow))
+                                    return;
+                                  [s dismiss];
+                                });
                               }]];
     [_focusObservers
         addObject:[nc addObserverForName:NSWindowDidResizeNotification

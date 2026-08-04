@@ -20,6 +20,24 @@
 
 @implementation MirageInspectorView (RackSelection)
 
+- (void)_guidePrepareDefaultRackSelection {
+  if (_guideRackSelectionActive)
+    return;
+  _guideRackSelectionActive = YES;
+  _guideSavedRackSelectionID = [self.selectedRackEntryID copy];
+  [self _rackSelectEntry:kMirageRackSentinelEntryID persist:NO];
+}
+
+- (void)_guideRestoreRackSelection {
+  if (!_guideRackSelectionActive)
+    return;
+  NSString *saved = _guideSavedRackSelectionID;
+  _guideSavedRackSelectionID = nil;
+  _guideRackSelectionActive = NO;
+  [self _rackSelectEntry:(saved.length ? saved : kMirageRackSentinelEntryID)
+                 persist:NO];
+}
+
 - (void)_rackSelectEntry:(NSString *)entryID persist:(BOOL)persist {
   if (!entryID.length)
     return;
@@ -31,12 +49,8 @@
   // restore, an append) pass persist:NO and must always land.
   NSSet<NSString *> *editable =
       [self.basicLanesView openKeyposePopoverLayerKeys];
-  if (persist && editable.count && ![editable containsObject:entryID]) {
-    KKLogInfo(@"[Rack] select %@ refused: no keypose at the open keypose "
-              @"popover's time",
-              entryID);
+  if (persist && editable.count && ![editable containsObject:entryID])
     return;
-  }
   BOOL moved = ![entryID isEqualToString:self.selectedRackEntryID ?: @""];
   self.selectedRackEntryID = entryID;
   // Same process as the OSC and the AI author, so this is where they read which
@@ -54,11 +68,8 @@
   // selection to remember and a legacy project must see no new writes at all.
   if (!KKTimelineSlotInstanceIDs(self.basicLanesView.currentTimeline,
                                  kMirageRackGroupName)
-           .count) {
-    KKLogDebug(@"[Rack] select %@ not persisted (project has no rack registry)",
-               entryID);
+           .count)
     return;
-  }
   if (self.onRackSelectionPersist)
     self.onRackSelectionPersist(entryID);
 }
@@ -109,7 +120,6 @@
   // the old ones one frame longer.
   [MirageFindMiniViewer(_rackView.window.contentView ?: _rackView)
       setNeedsDisplay:YES];
-  KKLogInfo(@"[Rack] selection -> %@", self.selectedRackEntryID);
 }
 
 - (BOOL)rackShowsLaneInConstants:(KKLane *)lane {
@@ -146,12 +156,9 @@
     // parameter changes, and this one can arrive first. Hold the value rather
     // than dropping it: -refreshRack adopts it the moment the registry agrees.
     _pendingRackSelectionID = [restored copy];
-    KKLogInfo(@"[Rack] restored selection %@ held (registry has not caught up)",
-              restored);
     return;
   }
   _pendingRackSelectionID = nil;
-  KKLogInfo(@"[Rack] restoring selection %@ from the host", restored);
   [self _rackSelectEntry:restored persist:NO];
   [self refreshRack];
 }

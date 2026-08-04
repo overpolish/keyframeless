@@ -9,10 +9,10 @@
 #import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKOSCGuideStrategy.h>
 #import <KeyframelessKit/KKResizeCursor.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingGuide.h>
-#import <KeyframelessKit/KKTimeline.h>
 
 // Object-space tolerance within which the drag snaps to / counts as on the
 // glowing target.
@@ -28,9 +28,13 @@ static NSString *const kMirageGuideScaleLabel = @"uScale";
 // live value the interactive OSC drag applies.
 static KKTimeline *MirageGuideOriginTimeline(double objX, double objY) {
   KKTimeline *tl = [KKTimeline timeline];
-  KKLane *lane = [KKLane laneWithKey:kMirageGuideCenterLabel label:kMirageGuideCenterLabel];
+  KKLane *lane = [KKLane laneWithKey:kMirageGuideCenterLabel
+                               label:kMirageGuideCenterLabel];
   lane.enabled = YES;
-  lane.valueType = KKLaneValueTypeGeneric;
+  // `#point` is a two-component Float lane. Generic looks similar in the UI,
+  // but the canonical template quite correctly treats it as a type change and
+  // replaces the guide's animation with its single-pose default.
+  lane.valueType = KKLaneValueTypeFloat;
   lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
                                        values:@[ @(objX), @(objY) ]] ];
   tl.lanes = @[ lane ];
@@ -72,7 +76,7 @@ static BOOL MirageGuideOriginNearTarget(NSPoint p) {
   // the uniform, matching the OSC element key.
   cfg.oscKeepLabels = @[ kMirageGuideCenterLabel ];
   cfg.primaryComponentCount = 2;
-  cfg.primaryValueType = KKLaneValueTypeGeneric;
+  cfg.primaryValueType = KKLaneValueTypeFloat;
   cfg.primarySeedValues = @[ @0.5, @0.5 ];
   // Second lane in the Advanced seed, so the per-property timeline + marquee
   // multi-select are taught across two rows. Scale is a non-featured lane (not

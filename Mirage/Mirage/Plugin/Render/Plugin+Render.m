@@ -1033,7 +1033,7 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   if (slow == self.chainRenderSlowPublished)
     return;
   self.chainRenderSlowPublished = slow;
-  KKLogInfo(@"[Rack] chain render %@ real time (EMA %.2f ms, budget %.2f ms)",
+  KKLogInfo(@"[Mirage] chain render %@ real time (EMA %.2f ms, budget %.2f ms)",
             slow ? @"slower than" : @"back within",
             self.chainRenderCostEMA * 1000.0, budget * 1000.0);
   id<PROAPIAccessing> api = self.apiManager;

@@ -747,9 +747,6 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // instance that happens to share the id. The re-derive above still stands (a
   // rack change does move the lane set); only the SELECTION is refused.
   if ([restoredGroup isEqualToString:kMirageRackGroupName]) {
-    KKLogDebug(@"[Rack] registry diff was the rack itself (entry %@) - the "
-               @"Color panel keeps its selection",
-               restoredInstance);
     return nil;
   }
   return restoredInstance;

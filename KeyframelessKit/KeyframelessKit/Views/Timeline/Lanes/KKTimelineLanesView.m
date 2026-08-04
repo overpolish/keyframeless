@@ -1470,6 +1470,11 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
 }
 
 - (void)_setEditorCompactMode:(BOOL)compact {
+  // Joyride deliberately demonstrates the full mini-viewer. Ignore its
+  // shortcut/button while a guide owns the layout, without touching the
+  // user's persisted compact choice.
+  if (_guideEditorLayoutOverrideActive && compact)
+    return;
   BOOL changed = _editorCompactMode != compact;
   _editorCompactMode = compact;
   if (changed)

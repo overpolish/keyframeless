@@ -22,6 +22,7 @@
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKGLSLSyntax.h> // KKExprCatalogMarkdown (AI reference)
 #import <KeyframelessKit/KKHelpSection.h>
+#import <KeyframelessKit/KKJoyrideGuideHost.h>
 #import <KeyframelessKit/KKLicense.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
@@ -461,9 +462,6 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
                           renderer:renderer
                          compounds:compounds
                            paramID:kParamUIState];
-  KKLogDebug(@"[Rack] OSC checklist rewired: %lu compounds across the rack "
-             @"(editor entry %@)",
-             (unsigned long)compounds.count, entryID);
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -685,7 +683,6 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
       __strong __typeof(weakSelf) strongSelf = weakSelf;
       if (!strongSelf || strongSelf.restoringRackSelection)
         return;
-      KKLogInfo(@"[Rack] persisting selection %@", entryID);
       [strongSelf patchUIStateKey:@"selectedRackEntryID"
                             value:(entryID ?: @"")paramID:kParamUIState];
     };
@@ -726,8 +723,6 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
             KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString],
                                      kParamRenderNudge);
           }];
-          KKLogInfo(@"[Rack] committed mutation selecting %@ (one undo entry)",
-                    entryID);
         };
 
     // An `off` shader must REFUSE the toggle, not merely start unticked -
@@ -751,13 +746,32 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
 
     // Force OSCs visible while a guide runs (so its mini-viewer + viewer
     // handles are usable), then restore the user's OSC setting on guide end.
-    [self kkInstallGuideOSCForcingOnHost:[(MirageInspectorView *)
-                                                 view timingGuideHost]
+    KKJoyrideGuideHost *guideHost =
+        [(MirageInspectorView *)view timingGuideHost];
+    [self kkInstallGuideOSCForcingOnHost:guideHost
                                     view:view
                              elementKeys:
                                  [MiragePlugin
                                      oscElementKeysForRackTimeline:timeline]
                             nudgeParamID:kParamRenderNudge];
+
+    // Guide seeds describe the default shader with bare keys such as
+    // `uCenter`. A user's selected rack entry uses scoped keys, so pin the
+    // default entry before every kind of guide builds its seed and restore the
+    // selection only after the user's timeline is back.
+    __weak MirageInspectorView *weakGuideView = (MirageInspectorView *)view;
+    void (^priorWillPrepare)(void) = guideHost.onRunWillPrepare;
+    guideHost.onRunWillPrepare = ^{
+      if (priorWillPrepare)
+        priorWillPrepare();
+      [weakGuideView _guidePrepareDefaultRackSelection];
+    };
+    void (^priorDidRestore)(void) = guideHost.onRunDidRestore;
+    guideHost.onRunDidRestore = ^{
+      if (priorDidRestore)
+        priorDidRestore();
+      [weakGuideView _guideRestoreRackSelection];
+    };
 
     // Let the intro guide's closing step spotlight this effect's Help button
     // (owned by the plugin's logo banner, resolved live).

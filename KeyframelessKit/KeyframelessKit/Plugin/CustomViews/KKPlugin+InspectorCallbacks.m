@@ -353,13 +353,10 @@
       CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
       CMTime inputStart = kCMTimeZero, inputDuration = kCMTimeZero;
       CMTime timelineStart = kCMTimeZero, timelineEnd = kCMTimeZero;
-      CMTime timelineIn = kCMTimeInvalid, timelineOut = kCMTimeInvalid;
       [timing startTimeForEffect:&effectStart];
       [timing durationTimeForEffect:&effectDuration];
       [timing startTimeOfInputToFilter:&inputStart];
       [timing durationTimeOfInputToFilter:&inputDuration];
-      [timing inPointTimeOfTimelineForEffect:&timelineIn];
-      [timing outPointTimeOfTimelineForEffect:&timelineOut];
 
       double startSec, endSec;
       if ([KKHostInfo isRunningInFinalCut]) {
@@ -376,12 +373,6 @@
         return;
 
       double frameDur = KKProcessFrameDurationSeconds();
-      double targetSec = startSec + frac * (endSec - startSec);
-      double lo = startSec + frameDur * 0.5;
-      double hi = endSec - frameDur * 0.5;
-      if (hi > lo)
-        targetSec = MAX(lo, MIN(hi, targetSec));
-
       CMTime currentTime = action ? [action currentTime] : kCMTimeInvalid;
       // A filter on a Motion transition layer reports template-local timeline
       // values here (e.g. 7s), while FxCommandAPI expects the parent FCP
@@ -391,17 +382,53 @@
       BOOL localTimelineMapping =
           [KKHostInfo isRunningInFinalCut] &&
           startSec + frameDur < CMTimeGetSeconds(inputStart);
-      if (localTimelineMapping) {
-        KKLogWarn(@"[scrub-local-timeline] cannot seek without the outer "
-                  @"project origin: frac=%.6f current=%.6f effectStart=%.6f "
-                  @"inputStart=%.6f localStart=%.6f timelineIn=%.6f "
-                  @"timelineOut=%.6f",
-                  frac, CMTimeGetSeconds(currentTime),
-                  CMTimeGetSeconds(effectStart), CMTimeGetSeconds(inputStart),
-                  startSec, CMTimeGetSeconds(timelineIn),
-                  CMTimeGetSeconds(timelineOut));
-        return;
+      // Adjustment/filter clips can also report a mapped clock numerically
+      // below their source clock, but their input and effect spans are the
+      // same and FxCommandAPI expects that mapped clock (the long-standing
+      // working path). A Motion transition layer is genuinely nested: its
+      // input span differs from the effect span and the command needs the
+      // outer project clock instead.
+      double effectDurSec = CMTimeGetSeconds(effectDuration);
+      double inputDurSec = CMTimeGetSeconds(inputDuration);
+      BOOL nestedLocalMapping =
+          localTimelineMapping &&
+          fabs(inputDurSec - effectDurSec) > MAX(frameDur, 0.001);
+      if (nestedLocalMapping) {
+        __strong KKTimelineInspectorView *insp = weakView;
+        double outerStart = insp ? insp.clipProjectStartSec : -1.0;
+        double effectStartSec = CMTimeGetSeconds(effectStart);
+        double currentSec = CMTimeGetSeconds(currentTime);
+        // Usually the render tick supplies the authoritative project start,
+        // but some Motion-template hosts map that value into their local clock
+        // too. Trust it only when it describes the clip containing FCP's
+        // current absolute playhead. On the local-mapping host shape,
+        // startTimeForEffect remains on the outer clock and is the fallback.
+        double tolerance = MAX(frameDur * 2.0, 0.05);
+        BOOL currentKnown =
+            CMTIME_IS_VALID(currentTime) && isfinite(currentSec);
+        BOOL cachedContainsCurrent =
+            outerStart >= 0.0 &&
+            (!currentKnown ||
+             (currentSec >= outerStart - tolerance &&
+              currentSec <= outerStart + effectDurSec + tolerance));
+        if (!cachedContainsCurrent && isfinite(effectStartSec))
+          outerStart = effectStartSec;
+        if (!(outerStart >= 0.0) || !(effectDurSec > 0.0)) {
+          KKLogWarn(@"[scrub-local-timeline] missing outer project timing: "
+                    @"frac=%.6f current=%.6f effectStart=%.6f duration=%.6f",
+                    frac, CMTimeGetSeconds(currentTime), effectStartSec,
+                    effectDurSec);
+          return;
+        }
+        startSec = outerStart;
+        endSec = outerStart + effectDurSec;
       }
+
+      double targetSec = startSec + frac * (endSec - startSec);
+      double lo = startSec + frameDur * 0.5;
+      double hi = endSec - frameDur * 0.5;
+      if (hi > lo)
+        targetSec = MAX(lo, MIN(hi, targetSec));
 
       // The return value is IGNORED on purpose. Measured on an adjustment
       // clip: movePlayheadToTime: reports NO for an effect on a connected

@@ -234,6 +234,11 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   };
   cfg.scrubToFraction = ^(double fraction) {
     __strong typeof(weak) s = weak;
+    // Guide-driven scrubs do not originate in either graph, so they must push
+    // the local playhead explicitly before asking the host to seek. Otherwise
+    // the seeded timeline renders at the user's stale pre-guide fraction until
+    // FCP eventually echoes the seek back.
+    [s setPlayheadFraction:fraction];
     if (s.onScrub)
       s.onScrub(fraction);
   };
@@ -332,6 +337,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // the run - the checkbox / pill handlers update OSC state directly; the force
   // only stops an async refresh from reverting it. Restored on completion.
   self.guideOSCKeepLabels = nil;
+  if (cfg.scrubToFraction)
+    cfg.scrubToFraction(0.0);
   __weak typeof(self) weak = self;
   [host
       runWithSeed:^KKTimeline * {
@@ -344,6 +351,11 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
       }
       buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
                                              KKJoyrideLanesBinder *binder) {
+        // Reassert after the seed has landed. Applying the timeline can cause
+        // a host render/current-time echo, and the viewer OSC must resolve the
+        // first seeded keypose before its opening step is drawn.
+        if (cfg.scrubToFraction)
+          cfg.scrubToFraction(0.0);
         return [KKOSCGuide stepsForGuide:guide binder:binder config:cfg];
       }
       extraOnComplete:^{
@@ -380,8 +392,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // Basic-incompatible, so a stray switch to Basic would bounce endlessly).
   [self setActiveTab:KKTimelineTabAdvanced];
   self.guideOwnsTab = YES;
-  if (self.onScrub)
-    self.onScrub(0.0);
+  if (cfg.scrubToFraction)
+    cfg.scrubToFraction(0.0);
 
   self.guideOSCKeepLabels = cfg.oscKeepLabels;
   __weak typeof(self) weak = self;
@@ -391,6 +403,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
       }
       buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
                                              KKJoyrideLanesBinder *binder) {
+        if (cfg.scrubToFraction)
+          cfg.scrubToFraction(0.0);
         return [KKMiniViewerGuide stepsForGuide:guide binder:binder config:cfg];
       }
       extraOnComplete:^{
@@ -426,6 +440,9 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // can't flicker it, and so a watch-back step's setPlayingAccent takes.
   // Mirrors the Basic/Advanced timing runners. Restored on completion.
   self.guideOwnsPlayState = YES;
+  // Custom guides do not carry a config, so mirror config.scrubToFraction:
+  // update the local playhead as well as asking FCP to seek.
+  [self setPlayheadFraction:0.0];
   if (self.onScrub)
     self.onScrub(0.0);
 
@@ -478,8 +495,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // The guide owns the play accent for its duration so FCP's bursty
   // currentTime can't flicker it. Restored on completion.
   self.guideOwnsPlayState = YES;
-  if (self.onScrub)
-    self.onScrub(0.0);
+  if (cfg.scrubToFraction)
+    cfg.scrubToFraction(0.0);
 
   self.guideOSCKeepLabels = cfg.oscKeepLabels;
   __weak typeof(self) weak = self;
@@ -498,6 +515,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
         s.onPlaybackToggleTapped = ^{
           [wb notifyPlaybackToggleTapped];
         };
+        if (cfg.scrubToFraction)
+          cfg.scrubToFraction(0.0);
         return [KKTimingGuide basicStepsForGuide:guide
                                           binder:binder
                                           config:cfg];
@@ -529,8 +548,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
 
   // Start visually on Basic so the user sees the tab switch in step 1.
   [self setActiveTab:KKTimelineTabBasic];
-  if (self.onScrub)
-    self.onScrub(0.0);
+  if (cfg.scrubToFraction)
+    cfg.scrubToFraction(0.0);
 
   self.guideOSCKeepLabels = cfg.oscKeepLabels;
   __weak typeof(self) weak = self;
@@ -554,6 +573,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
       }
       buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
                                              KKJoyrideLanesBinder *binder) {
+        if (cfg.scrubToFraction)
+          cfg.scrubToFraction(0.0);
         return [KKTimingGuide advancedStepsForGuide:guide
                                              binder:binder
                                              config:cfg];

@@ -106,6 +106,17 @@ NS_ASSUME_NONNULL_BEGIN
   BOOL _editorRightPanelVisible;
   BOOL _editorCompactMode;
   NSSize _editorExpandedSizeBeforeCompact;
+  // Joyride temporarily owns the editor layout. The guide always uses the
+  // expanded mini-viewer at its natural size beside the inspector, while the
+  // user's exact frames + compact state remain untouched and are restored at
+  // teardown.
+  BOOL _guideEditorLayoutOverrideActive;
+  BOOL _guideSavedEditorCompactMode;
+  NSSize _guideSavedExpandedSizeBeforeCompact;
+  BOOL _guideSavedStaticEditorFrameValid;
+  NSRect _guideSavedStaticEditorFrame;
+  BOOL _guideSavedSegmentEditorFrameValid;
+  NSRect _guideSavedSegmentEditorFrame;
   NSString *_openEditorSidebarKind;
   double _openEditorSidebarFraction;
   BOOL _openEditorSidebarIsBoundary;

@@ -24,8 +24,11 @@ FOUNDATION_EXPORT NSNotificationName const KKJoyrideRunDidEndNotification;
 /// against a KKTimelineLanesView:
 ///   - allocs the KKJoyrideController + KKJoyrideLanesBinder per run,
 ///   - saves the inspector's pre-guide timeline + applies a seed,
+///   - saves the floating editor's position, size and compact mode, then uses
+///     a deterministic expanded layout for the guide,
 ///   - on completion fires `onGuideCompleted` when the final step was
 ///     reached, tears down the binder, restores the saved timeline, and
+///     restores the exact editor layout,
 ///     releases the controller on the next runloop tick (avoiding the
 ///     "deallocate from inside onComplete" trap),
 ///   - exposes the live controller + binder mid-run so the steps builder
@@ -61,12 +64,20 @@ FOUNDATION_EXPORT NSNotificationName const KKJoyrideRunDidEndNotification;
 @property(nonatomic, copy, nullable) void (^onGuideCompleted)(void);
 
 /// Fired at the start of EVERY run (before the first step shows) and at the
-/// end of EVERY run (on completion OR skip). Use to force transient state for
-/// the guide's duration and restore it after - e.g. forcing on-screen controls
-/// visible so the guide's handles are usable, then restoring the user's prior
-/// OSC visibility.
+/// end of EVERY run (on completion OR skip). `onRunDidEnd` precedes the
+/// deferred timeline/layout restore; use `onRunDidRestore` below when cleanup
+/// depends on that state already being back. Suitable here for transient state
+/// such as forced on-screen-control visibility.
 @property(nonatomic, copy, nullable) void (^onRunWillStart)(void);
 @property(nonatomic, copy, nullable) void (^onRunDidEnd)(void);
+
+/// Fired after stale editors are closed but before the seed is built/applied.
+/// This is for plugin state which determines how seed lane keys are resolved.
+@property(nonatomic, copy, nullable) void (^onRunWillPrepare)(void);
+
+/// Fired on the restore tick, after the saved timeline, selections, lane
+/// filter and floating-editor layout are all back in place.
+@property(nonatomic, copy, nullable) void (^onRunDidRestore)(void);
 
 #pragma mark - Per-run config
 

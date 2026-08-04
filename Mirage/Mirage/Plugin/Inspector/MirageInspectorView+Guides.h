@@ -20,4 +20,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (KKTimingGuideConfig *)_timingGuideConfig;
 @end
 
+/// Private selectors implemented by the rack-selection category and consumed
+/// by the plugin's guide lifecycle wiring. Kept out of BasicTimingGuide so
+/// Clang does not expect that category's implementation to define them.
+@interface MirageInspectorView (GuideRackSelectionDeclarations)
+- (void)_guidePrepareDefaultRackSelection;
+- (void)_guideRestoreRackSelection;
+@end
+
 NS_ASSUME_NONNULL_END

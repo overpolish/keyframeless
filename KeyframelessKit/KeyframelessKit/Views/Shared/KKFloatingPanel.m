@@ -163,6 +163,30 @@ typedef NS_OPTIONS(NSUInteger, KKResizeEdges) {
   [self _updatePointerTrackingArea];
 }
 
+- (void)setTransientContentSize:(NSSize)size besideCard:(NSRect)card {
+  if (size.width <= 0.0 || size.height <= 0.0)
+    return;
+  NSRect frame = NSMakeRect(0.0, 0.0, size.width, size.height);
+  frame.origin.y = NSMaxY(card) - frame.size.height;
+  frame.origin.x = NSMaxX(card) + kCardGap;
+  NSScreen *screen = nil;
+  for (NSScreen *candidate in NSScreen.screens)
+    if (NSIntersectsRect(card, candidate.frame)) {
+      screen = candidate;
+      break;
+    }
+  NSRect visible = (screen ?: NSScreen.mainScreen).visibleFrame;
+  if (NSMaxX(frame) > NSMaxX(visible))
+    frame.origin.x = NSMinX(card) - kCardGap - frame.size.width;
+  frame.origin.x = MAX(frame.origin.x, NSMinX(visible));
+  frame.origin.y = MIN(frame.origin.y, NSMaxY(visible) - frame.size.height);
+  frame.origin.y = MAX(frame.origin.y, NSMinY(visible));
+  if (_keepsEntireFrameVisible)
+    frame = [self _fullyVisibleFrame:frame];
+  [self setFrame:frame display:self.isVisible];
+  [self _updatePointerTrackingArea];
+}
+
 - (void)_scheduleFullFrameClamp:(NSNotification *)note {
   if (!_keepsEntireFrameVisible || !self.isVisible || _screenClampScheduled)
     return;

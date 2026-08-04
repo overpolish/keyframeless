@@ -83,6 +83,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// the Advanced tab).
 - (NSRect)guideLaneFilterBarScreenRect;
 
+/// Snapshot the user's floating-editor position, size and compact choice, then
+/// force a deterministic expanded layout for the guide. Idempotent per run.
+- (void)guideBeginEditorLayoutOverride;
+
+/// Restore the exact editor layout captured by
+/// `guideBeginEditorLayoutOverride`. Safe when no override is active.
+- (void)guideEndEditorLayoutOverride;
+
 @end
 
 NS_ASSUME_NONNULL_END
