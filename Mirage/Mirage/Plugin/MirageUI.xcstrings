@@ -2353,44 +2353,44 @@
         }
       }
     },
-    "Ask a question or describe a shader…": {
+    "Ask Kai a question or describe a shader…": {
       "comment": "AI prompt field placeholder for Mirage.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stelle eine Frage oder beschreibe einen Mirage…"
+            "value": "Frag Kai oder beschreibe einen Shader…"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Haz una pregunta o describe un shader…"
+            "value": "Pregunta a Kai o describe un shader…"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Posez une question ou décrivez un shader…"
+            "value": "Demandez à Kai ou décrivez un shader…"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "質問するか、シェーダーを入力…"
+            "value": "Kaiに質問するか、シェーダーを入力…"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "질문하거나 셰이더를 설명하세요…"
+            "value": "Kai에게 질문하거나 셰이더를 설명하세요…"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "提问或描述一个着色器…"
+            "value": "向 Kai 提问或描述一个着色器…"
           }
         }
       }

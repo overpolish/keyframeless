@@ -50,7 +50,7 @@ public final class AIBannerHost: NSObject {
 	}
 
 	/// The standard `aiAccessoryView` spine: the plugin variant above PLUS the
-	/// "Keyframeless AI update available" banner wiring. `checkForAIUpdate`
+	/// "Kai update available" banner wiring. `checkForAIUpdate`
 	/// runs the host's update check (the plugin owns `KKUpdateChecker`; this
 	/// package can't import KeyframelessKit) and reports the available version
 	/// + notes URL through its completion, which lands in the popover via

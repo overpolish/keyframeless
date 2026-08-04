@@ -6,7 +6,7 @@
 import Combine
 import Foundation
 
-/// Outlives the AI popover. Holds the standalone "Keyframeless AI" helper's
+/// Outlives the Kai popover. Holds the standalone Kai helper's
 /// update status so the popover can show an "update available" banner.
 ///
 /// This package can't import KeyframelessKit (no dependency), so the host plugin

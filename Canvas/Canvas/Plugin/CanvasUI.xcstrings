@@ -1303,44 +1303,44 @@
         }
       }
     },
-    "Ask a question or describe an animation…": {
+    "Ask Kai a question or describe an animation…": {
       "comment": "AI prompt field placeholder for Canvas.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stelle eine Frage oder beschreibe eine Animation…"
+            "value": "Frag Kai oder beschreibe eine Animation…"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Haz una pregunta o describe una animación…"
+            "value": "Pregunta a Kai o describe una animación…"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Posez une question ou décrivez une animation…"
+            "value": "Demandez à Kai ou décrivez une animation…"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "質問するか、アニメーションを入力…"
+            "value": "Kaiに質問するか、アニメーションを入力…"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "질문하거나 애니메이션을 설명하세요…"
+            "value": "Kai에게 질문하거나 애니메이션을 설명하세요…"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "提问或描述一个动画…"
+            "value": "向 Kai 提问或描述一个动画…"
           }
         }
       }

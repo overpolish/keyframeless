@@ -24,8 +24,8 @@ rerun the script:
 
 `KKUpdateChecker` derives its path from the running bundle's ID
 (`KKComponentForBundleID`), so the folder under `changelog/` must match that
-slug: `mirage`, `canvas`, `keyframelessx`. The AI helper's check is hardcoded to
-`keyframeless-ai`. Rename a folder without changing the code and the in-app
+slug: `mirage`, `canvas`, `keyframelessx`. Kai's check is hardcoded to
+`kai`. Rename a folder without changing the code and the in-app
 update banner silently stops appearing for that product.
 
 **One binary, one version.** Keyframeless X ships Steno and Sonar in a single

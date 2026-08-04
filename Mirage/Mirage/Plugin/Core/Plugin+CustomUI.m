@@ -890,10 +890,10 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
     ],
   ];
 
-  NSString *placeholder = RLoc(@"Ask a question or describe a shader…",
+  NSString *placeholder = RLoc(@"Ask Kai a question or describe a shader…",
                                @"AI prompt field placeholder for Mirage.");
 
-  // Wire the "Keyframeless AI update available" banner: the popover fires this
+  // Wire the "Kai update available" banner: the popover fires this
   // when it opens, we run the standalone-helper update check (its own installer
   // + version, read by KKUpdateChecker) and push the result into the popover.
   // This is the one spot that links both KeyframelessKit and KeyframelessAI.

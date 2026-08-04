@@ -81,7 +81,7 @@ private struct AudioModelRow: View {
 
 			Spacer(minLength: KKSpacingLG)
 
-			// Trailing badges, stacked like the Keyframeless AI model list:
+			// Trailing badges, stacked like the Kai model list:
 			// "Recommended" on its own row above size + RAM, so the pills never
 			// squeeze the (flexible) title. Hidden while downloading - the
 			// progress bar takes the row's trailing space instead.

@@ -13,7 +13,7 @@
 #   keyframelessx  Keyframeless X app
 #   mirage         Mirage plugin
 #   canvas         Canvas plugin
-#   ai             Keyframeless AI (standalone local helper)
+#   ai             Kai (standalone local helper)
 
 set -euo pipefail
 
@@ -26,7 +26,7 @@ usage() {
   echo "  keyframelessx  Keyframeless X app"
   echo "  mirage         Mirage plugin"
   echo "  canvas         Canvas plugin"
-  echo "  ai             Keyframeless AI (standalone local helper)"
+  echo "  ai             Kai (standalone local helper)"
   echo ""
   echo "Version format: BREAKING.MAJOR.MINOR[-vN]"
   echo ""
@@ -71,7 +71,7 @@ plist_for_component() {
 # The generated alias pages keep those paths resolving.
 changelog_slug_for_component() {
   case "$1" in
-    ai) echo "keyframeless-ai" ;;
+    ai) echo "kai" ;;
     *)  echo "$1" ;;
   esac
 }
@@ -215,10 +215,10 @@ case "$COMPONENT" in
     ;;
 
   ai)
-    # Standalone "Keyframeless AI" helper: the version manifest (staged beside
+    # Standalone Kai helper: the version manifest (staged beside
     # the helper, read by KKUpdateChecker) + the pkg component version.
     bump_plist "Distribution/helper/kk-ai-helper.plist"
-    bump_pkgproj "com.keyframeless.KeyframelessAI"
+    bump_pkgproj "com.keyframeless.Kai"
     ;;
   keyframelessx)
     proj="Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"

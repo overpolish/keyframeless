@@ -61,7 +61,7 @@ static NSString *KKComponentForBundleID(NSString *bundleID) {
   return slug.length ? [slug copy] : nil;
 }
 
-// The standalone "Keyframeless AI" helper installs its version manifest beside
+// The standalone Kai helper installs its version manifest beside
 // the binary (staged in build-and-sign.sh, installed by the pkg). Reading it
 // tells us the INSTALLED helper version, independent of the running plugin.
 static NSString *const kAIHelperVersionPlist =
@@ -268,10 +268,10 @@ static NSString *const kAIHelperVersionPlist =
   NSString *installed = [self readInstalledAIVersion];
   self->_aiCurrentVersion = installed;
   self->_aiNotesURL =
-      [NSURL URLWithString:[NSString stringWithFormat:@"%@/keyframeless-ai/",
+      [NSURL URLWithString:[NSString stringWithFormat:@"%@/kai/",
                                                       KKUpdateBaseURL()]];
 
-  // No manifest = the Keyframeless AI helper isn't installed, so there's
+  // No manifest = Kai isn't installed, so there's
   // nothing to update. (Cloud-only / BYOK users never install it.)
   if (!installed) {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -297,7 +297,7 @@ static NSString *const kAIHelperVersionPlist =
   NSMutableURLRequest *request =
       [NSMutableURLRequest requestWithURL:self->_aiNotesURL];
   request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
-  KKLogInfo(@"Checking for Keyframeless AI updates at %@", self->_aiNotesURL);
+  KKLogInfo(@"Checking for Kai updates at %@", self->_aiNotesURL);
 
   NSURLSessionDataTask *task = [[NSURLSession sharedSession]
       dataTaskWithRequest:request
@@ -305,7 +305,7 @@ static NSString *const kAIHelperVersionPlist =
                             NSError *error) {
           NSString *latest = nil;
           if (error) {
-            KKLogWarn(@"Keyframeless AI update check failed: %@",
+            KKLogWarn(@"Kai update check failed: %@",
                       error.localizedDescription);
           } else if (((NSHTTPURLResponse *)response).statusCode == 200) {
             NSString *body =
@@ -316,7 +316,7 @@ static NSString *const kAIHelperVersionPlist =
           BOOL hasUpdate = latest && [self isVersion:latest
                                            newerThan:installed];
           if (hasUpdate)
-            KKLogInfo(@"Keyframeless AI update available: %@ -> %@", installed,
+            KKLogInfo(@"Kai update available: %@ -> %@", installed,
                       latest);
           dispatch_async(dispatch_get_main_queue(), ^{
             self->_aiAvailableVersion = hasUpdate ? latest : nil;

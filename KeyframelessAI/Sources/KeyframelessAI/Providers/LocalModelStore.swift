@@ -118,7 +118,7 @@ public final class LocalModelStore: ObservableObject {
 	public func download(_ id: String) async {
 		guard downloadingModel == nil, LocalModelCatalog.model(id: id) != nil else { return }
 		guard let runner = LocalLLM.runner as? SharedHelperRunner else {
-			lastError = "Local AI engine unavailable - install Keyframeless AI."
+			lastError = "Local AI engine unavailable - install Kai."
 			return
 		}
 		downloadingModel = id

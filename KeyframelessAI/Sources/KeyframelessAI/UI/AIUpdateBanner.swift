@@ -6,7 +6,7 @@
 import AppKit
 import SwiftUI
 
-/// "Keyframeless AI vX available" banner shown at the top of the AI popover when
+/// "Kai vX available" banner shown at the top of the Kai popover when
 /// the installed helper is out of date. Ported from Steno's UpdateBanner, using
 /// this package's own tokens (KeyframelessAI can't import KeyframelessKit).
 struct AIUpdateBanner: View {
@@ -18,7 +18,7 @@ struct AIUpdateBanner: View {
 		HStack(spacing: 8) {
 			Image(systemName: "arrow.down.circle.fill")
 				.font(.system(size: 12))
-			Text(AILoc("Keyframeless AI \(version) available"))
+			Text(AILoc("Kai \(version) available"))
 				.font(.system(size: 11, weight: .medium))
 			Spacer(minLength: 0)
 			if let url {

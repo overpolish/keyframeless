@@ -7,17 +7,17 @@
 # in the app-group container); delete that folder by hand if you want the space back:
 #   ~/Library/Group Containers/group.com.keyframeless/huggingface
 #
-# Installed at /Applications/Keyframeless/Uninstall Keyframeless AI (alongside the
+# Installed at /Applications/Keyframeless/Uninstall Kai (alongside the
 # plugins) so it's easy to find.
 
 LABEL="com.keyframeless.aihelper"
 UID_NUM="$(id -u)"
 ENGINE="/Library/Application Support/Keyframeless"
 PLIST="/Library/LaunchAgents/$LABEL.plist"
-SELF="/Applications/Keyframeless/Uninstall Keyframeless AI"
+SELF="/Applications/Keyframeless/Uninstall Kai"
 
-echo "Keyframeless AI Uninstaller"
-echo "=============================="
+echo "Kai Uninstaller"
+echo "==============="
 echo ""
 echo "Removes the shared on-device AI engine. Your plugins keep working with"
 echo "remote (BYOK) AI. Downloaded models are left in place."
@@ -27,7 +27,7 @@ echo "The following will be deleted:"
 [ -e "$ENGINE" ] && echo "  $ENGINE"
 [ -e "$PLIST" ] && echo "  $PLIST"
 if [ ! -e "$ENGINE" ] && [ ! -e "$PLIST" ]; then
-    echo "  (nothing - Keyframeless AI is already uninstalled)"
+    echo "  (nothing - Kai is already uninstalled)"
     sleep 2
     osascript -e 'tell application "Terminal" to close front window' &
     exit 0
@@ -50,6 +50,6 @@ sudo rm -f "$SELF"
 sudo rmdir "/Applications/Keyframeless" 2>/dev/null || true
 
 echo ""
-echo "Keyframeless AI uninstalled. Plugins fall back to remote (BYOK) AI."
+echo "Kai uninstalled. Plugins fall back to remote (BYOK) AI."
 sleep 2
 osascript -e 'tell application "Terminal" to close front window' &

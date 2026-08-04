@@ -24,7 +24,7 @@ Usage:
   scripts/split-pkgproj.py --version <component>           print the product version
   scripts/split-pkgproj.py --components                    list component keys
 
-Components: keyframelessx canvas mirage
+Components: keyframelessx canvas mirage (or keyframelessai explicitly for Kai)
 Output:    Distribution/<Name>.pkgproj   (builds to build/<Name>.pkg)
 
 Build one unsigned:  packagesbuild "Distribution/<Name>.pkgproj"
@@ -48,7 +48,7 @@ COMPONENT_ID = {
     # The shared local-AI engine (helper + LaunchAgent to /Library). Not a plugin
     # (no .app / Motion Template), so `--components` (which drives `all`) excludes it;
     # build it explicitly. build-and-sign.sh stages the helper before packaging.
-    "keyframelessai": "com.keyframeless.KeyframelessAI",
+    "keyframelessai": "com.keyframeless.Kai",
 }
 
 # The FxPlug plugins + the workflow extension (everything `all` builds). The AI engine

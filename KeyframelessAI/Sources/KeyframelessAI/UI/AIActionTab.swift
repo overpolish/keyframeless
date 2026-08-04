@@ -75,7 +75,7 @@ struct AIActionTab: View {
 				Image(systemName: "sparkles")
 					.font(.system(size: 10))
 					.foregroundStyle(Color.accentColor)
-				Text(AILoc("Last answer"))
+				Text(AILoc("Kai's answer"))
 					.font(.system(size: 10, weight: .semibold))
 					.foregroundStyle(Color.aiSecondaryText)
 					.textCase(.uppercase)

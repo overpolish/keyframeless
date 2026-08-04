@@ -15,7 +15,7 @@ let package = Package(
 		// the standalone kk-ai-helper executable links this.
 		.library(name: "KeyframelessAILocal", targets: ["KeyframelessAILocal"]),
 		// The shared out-of-process helper, built once and shipped by the standalone
-		// "Keyframeless AI" installer (signed Developer ID + app-group + hardened
+		// Kai installer (signed Developer ID + app-group + hardened
 		// runtime at packaging time). Never linked by a plugin.
 		.executable(name: "kk-ai-helper", targets: ["kk-ai-helper"]),
 	],

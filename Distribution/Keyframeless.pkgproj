@@ -1185,7 +1185,7 @@
 											<key>GID</key>
 											<integer>0</integer>
 											<key>PATH</key>
-											<string>helper/Uninstall Keyframeless AI</string>
+											<string>helper/Uninstall Kai</string>
 											<key>PATH_TYPE</key>
 											<integer>1</integer>
 											<key>PERMISSIONS</key>
@@ -1826,11 +1826,11 @@
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
 				<false/>
 				<key>IDENTIFIER</key>
-				<string>com.keyframeless.KeyframelessAI</string>
+				<string>com.keyframeless.Kai</string>
 				<key>LOCATION</key>
 				<integer>0</integer>
 				<key>NAME</key>
-				<string>Keyframeless AI</string>
+				<string>Kai</string>
 				<key>OVERWRITE_PERMISSIONS</key>
 				<false/>
 				<key>PAYLOAD_SIZE</key>
@@ -2610,7 +2610,7 @@
 										<key>LANGUAGE</key>
 										<string>English</string>
 										<key>VALUE</key>
-										<string>Run the Keyframeless assistant privately on your Mac with downloadable local AI models. Shared helper for Keyframeless plugins.</string>
+										<string>Kai is the AI inside every Keyframeless plugin. Run it privately on your Mac with downloadable local models, or connect Claude or OpenAI.</string>
 									</dict>
 								</array>
 								<key>OPTIONS</key>

@@ -54,14 +54,14 @@ struct LocalModelsView: View {
 }
 
 /// Shown when the shared local-inference engine isn't installed: local models can be
-/// browsed but need the one-time "Keyframeless AI" install before they'll run.
+/// browsed but need the one-time Kai install before they'll run.
 private struct KKAIEngineNotice: View {
 	var body: some View {
 		HStack(alignment: .top, spacing: 8) {
 			Image(systemName: "shippingbox.fill")
 				.font(.system(size: 12))
 			VStack(alignment: .leading, spacing: 1) {
-				Text(AILoc("Install Keyframeless AI to run local models"))
+				Text(AILoc("Install Kai to run local models"))
 					.font(.system(size: 11, weight: .medium))
 					.fixedSize(horizontal: false, vertical: true)
 				Text(

@@ -129,7 +129,7 @@ struct AppShell: View {
 					return
 				}
 			#endif
-			// Keyframeless AI (its own installer) update check: the AI popover
+			// Kai (its own installer) update check: the AI popover
 			// fires this on open; run the helper's check + push into that banner.
 			AIUpdateBridge.setCheckHandler {
 				KKUpdateChecker.shared().checkAIUpdate { _ in

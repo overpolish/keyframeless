@@ -109,14 +109,14 @@ stage_ai_helper() {
     }
   done
   # Version manifest: installs beside the helper so KKUpdateChecker can read the
-  # installed CFBundleShortVersionString (the "Keyframeless AI" update check).
+  # installed CFBundleShortVersionString (the Kai update check).
   cp "$ROOT/Distribution/helper/kk-ai-helper.plist" "$AI_STAGE/kk-ai-helper.plist"
   local expected_version manifest_version
   expected_version="$(python3 "$SPLIT" --version keyframelessai)"
   manifest_version="$(/usr/libexec/PlistBuddy -c \
     'Print :CFBundleShortVersionString' "$AI_STAGE/kk-ai-helper.plist")"
   [[ "$manifest_version" == "$expected_version" ]] || {
-    echo "Error: Keyframeless AI manifest is $manifest_version; package is $expected_version"
+    echo "Error: Kai manifest is $manifest_version; package is $expected_version"
     rm -rf "$dd"
     exit 1
   }

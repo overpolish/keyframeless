@@ -89,7 +89,7 @@ public enum LocalLLM {
 	}
 
 	/// The runner is ALWAYS the shared out-of-process helper (installed once by the
-	/// "Keyframeless AI" package, launched on demand by launchd). MLX is never linked
+	/// Kai package, launched on demand by launchd). MLX is never linked
 	/// in-process here - this is the thin client every plugin/extension links.
 	/// `SharedHelperRunner` init returns nil without the `group.com.keyframeless`
 	/// entitlement (no app-group socket path); local inference is then unavailable and
@@ -99,7 +99,7 @@ public enum LocalLLM {
 			llmLog.notice("LocalLLM: shared out-of-process helper (app-group)")
 			return shared
 		}
-		llmLog.error("LocalLLM: no app-group socket; local disabled (install Keyframeless AI)")
+		llmLog.error("LocalLLM: no app-group socket; local disabled (install Kai)")
 		return nil
 	}
 

@@ -128,7 +128,7 @@ Build an installer and sign it in one step. The first argument is the target:
 scripts/build-and-sign.sh combined       "<apple-id>" "<team-id>"   # all-in-one Keyframeless.pkg
 scripts/build-and-sign.sh canvas          "<apple-id>" "<team-id>"   # just Canvas.pkg
 scripts/build-and-sign.sh all             "<apple-id>" "<team-id>"   # every plugin, one .pkg each
-scripts/build-and-sign.sh keyframelessai  "<apple-id>" "<team-id>"   # the local-AI helper .pkg
+scripts/build-and-sign.sh keyframelessai  "<apple-id>" "<team-id>"   # standalone Kai.pkg
 ```
 
 Per-product targets generate a single-product `.pkgproj` and a per-plugin uninstaller
@@ -165,7 +165,7 @@ KK_NOTARY_PROFILE= scripts/build-and-sign.sh all "<apple-id>" "<team-id>"
 ```
 
 The unified `combined` installer always runs `stage_ai_helper` before packaging, so
-Keyframeless AI cannot be omitted or picked up from a stale staging directory.
+Kai cannot be omitted or picked up from a stale staging directory.
 `stage_ai_helper` `xcodebuild`s the `kk-ai-helper` scheme in `KeyframelessAI/` (only the
 Metal toolchain compiles MLX's metallib), thins it to arm64 (MLX is Apple-Silicon only),
 Developer-ID signs it with the app-group + hardened-runtime entitlements, and stages it
@@ -173,7 +173,7 @@ plus its SwiftPM resource bundles into `Distribution/helper/staging` where the
 `.pkgproj` payload points.
 
 **`keyframelessai` remains a separate target and is NOT included in `all`.** Use that
-target only when producing the standalone AI installer. `all` means the standalone
+target only when producing the standalone `Kai.pkg` installer. `all` means the standalone
 app/plugin packages; the supported suite installer is `combined`, which includes AI.
 
 To sign an already-built `.pkg` without rebuilding (base name, no `.pkg`):

@@ -23,8 +23,7 @@ class AudioModelManager: ObservableObject {
 		let displayName: String
 		/// Download size on disk (what actually comes over the wire).
 		let sizeDescription: String
-		/// Minimum system RAM to run comfortably, mirroring the Keyframeless AI
-		/// model list's RAM badge.
+		/// Minimum system RAM to run comfortably, mirroring Kai's RAM badge.
 		let minRAMGB: Int
 		let hint: String
 		let engine: Engine

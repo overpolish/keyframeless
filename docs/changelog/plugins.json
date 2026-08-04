@@ -13,9 +13,9 @@
       "name": "Keyframeless X",
       "kind": "workflow extension"
     },
-    "keyframeless-ai": {
-      "name": "Keyframeless AI",
-      "kind": "local AI helper, bundled in the installer"
+    "kai": {
+      "name": "Kai",
+      "kind": "AI assistant and local-model helper, bundled in the installer"
     },
     "magicmove": {
       "name": "MagicMove",

@@ -91,44 +91,44 @@
     "%lld%%" : {
 
     },
-    "Action" : {
-      "comment" : "Tab label: the run/action tab.",
+    "Ask Kai" : {
+      "comment" : "Tab label for asking Kai to perform an action or answer a question.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aktion"
+            "value" : "Kai fragen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Acción"
+            "value" : "Preguntar a Kai"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Action"
+            "value" : "Demander à Kai"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "アクション"
+            "value" : "Kaiに質問"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "작업"
+            "value" : "Kai에게 묻기"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "操作"
+            "value" : "问 Kai"
           }
         }
       }
@@ -514,44 +514,44 @@
         }
       }
     },
-    "Configure AI key" : {
-      "comment" : "Tooltip on the AI button when no key is configured.",
+    "Configure Kai" : {
+      "comment" : "Tooltip on the Kai button when no provider is configured.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "KI-Schlüssel konfigurieren"
+            "value" : "Kai konfigurieren"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Configurar clave de IA"
+            "value" : "Configurar Kai"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Configurer la clé d'IA"
+            "value" : "Configurer Kai"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AIキーを設定"
+            "value" : "Kaiを設定"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 키 설정"
+            "value" : "Kai 설정"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "配置 AI 密钥"
+            "value" : "配置 Kai"
           }
         }
       }
@@ -1313,42 +1313,42 @@
         }
       }
     },
-    "Install Keyframeless AI to run local models" : {
+    "Install Kai to run local models" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keyframeless AI installieren, um lokale Modelle auszuführen"
+            "value" : "Kai installieren, um lokale Modelle auszuführen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Instala Keyframeless AI para ejecutar modelos locales"
+            "value" : "Instala Kai para ejecutar modelos locales"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Installez Keyframeless AI pour exécuter les modèles locaux"
+            "value" : "Installez Kai pour exécuter les modèles locaux"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ローカルモデルを実行するには Keyframeless AI をインストール"
+            "value" : "ローカルモデルを実行するには Kai をインストール"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "로컬 모델을 실행하려면 Keyframeless AI를 설치하세요"
+            "value" : "로컬 모델을 실행하려면 Kai를 설치하세요"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "安装 Keyframeless AI 以运行本地模型"
+            "value" : "安装 Kai 以运行本地模型"
           }
         }
       }
@@ -1395,86 +1395,86 @@
         }
       }
     },
-    "Keyframeless AI %@ available" : {
-      "comment" : "Update banner title in the AI popover. %@ is the new version number.",
+    "Kai %@ available" : {
+      "comment" : "Update banner title in the Kai popover. %@ is the new version number.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keyframeless AI %@ verfügbar"
+            "value" : "Kai %@ verfügbar"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keyframeless AI %@ disponible"
+            "value" : "Kai %@ disponible"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keyframeless AI %@ disponible"
+            "value" : "Kai %@ disponible"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keyframeless AI %@ が利用可能"
+            "value" : "Kai %@ が利用可能"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keyframeless AI %@ 사용 가능"
+            "value" : "Kai %@ 사용 가능"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keyframeless AI %@ 可用"
+            "value" : "Kai %@ 可用"
           }
         }
       }
     },
-    "Last answer" : {
-      "comment" : "Header above the last AI answer card.",
+    "Kai's answer" : {
+      "comment" : "Header above Kai's latest answer card.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Letzte Antwort"
+            "value" : "Kais Antwort"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Última respuesta"
+            "value" : "Respuesta de Kai"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dernière réponse"
+            "value" : "Réponse de Kai"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "前回の回答"
+            "value" : "Kaiの回答"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "마지막 답변"
+            "value" : "Kai의 답변"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上一个回答"
+            "value" : "Kai 的回答"
           }
         }
       }

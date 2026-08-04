@@ -364,7 +364,7 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 
 	/// Start the shared helper without exec'ing it ourselves. The sandbox forbids a
 	/// plugin from launching an out-of-bundle binary, but it CAN look up an app-group
-	/// Mach service - and the helper is installed once (by the "Keyframeless AI"
+	/// Mach service - and the helper is installed once (by the Kai
 	/// package) as an on-demand LaunchAgent that vends exactly that service. Opening
 	/// the connection and sending one message makes launchd launch the helper, which
 	/// then binds its socket and serves as before. On a dev machine with no installed

@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 overpolish
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Dev loop for the shared local-AI helper WITHOUT installing the "Keyframeless AI"
+# Dev loop for the shared local-AI helper WITHOUT installing Kai
 # package. Builds kk-ai-helper and runs it manually, bound to the app-group socket.
 #
 # Because SharedHelperRunner connects to the socket BEFORE trying to wake/launch the

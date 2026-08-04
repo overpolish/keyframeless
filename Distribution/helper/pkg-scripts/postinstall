@@ -14,6 +14,10 @@ set -e
 LABEL="com.keyframeless.aihelper"
 PLIST="/Library/LaunchAgents/$LABEL.plist"
 
+# The public product name changed to Kai. Packages replaces the payload but does
+# not remove a file whose name changed, so clear the old uninstaller on upgrade.
+rm -f "/Applications/Keyframeless/Uninstall Keyframeless AI"
+
 CONSOLE_USER=$(stat -f "%Su" /dev/console)
 if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ] && [ -f "$PLIST" ]; then
 	USER_UID=$(id -u "$CONSOLE_USER")

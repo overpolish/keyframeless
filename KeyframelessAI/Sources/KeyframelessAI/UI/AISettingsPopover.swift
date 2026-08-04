@@ -16,7 +16,7 @@ public struct AISettingsPopover: View {
 		public var id: String { rawValue }
 		var label: String {
 			switch self {
-			case .action: return AILoc("Action")
+			case .action: return AILoc("Ask Kai")
 			case .config: return AILoc("Config")
 			}
 		}
@@ -68,7 +68,7 @@ public struct AISettingsPopover: View {
 				AIUpdateBanner(
 					version: updateState.availableVersion ?? "1.0.2",
 					url: updateState.notesURL
-						?? URL(string: "https://keyframeless.com/keyframeless-ai/"),
+						?? URL(string: "https://keyframeless.com/kai/"),
 					onDismiss: { updateState.dismissed = true }
 				)
 			}

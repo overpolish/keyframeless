@@ -9,7 +9,7 @@
 #
 # What moves (worth keeping):
 #   ~/Library/Group Containers/group.co.overpolish.keyframeless
-#     huggingface/  Keyframeless AI local models (tens of GB)
+#     huggingface/  Kai local models (tens of GB)
 #     Sonar/        published spectrograms, Links/, Thumbnails/, Manifests/
 #   ~/Library/Containers/co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP
 #     Documents/huggingface     WhisperKit transcription models

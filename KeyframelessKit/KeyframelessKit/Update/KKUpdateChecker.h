@@ -39,17 +39,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// `version` query params. (DEBUG points at the local docs server.)
 @property(nonatomic, copy, readonly, nullable) NSURL *feedbackURL;
 
-/// The installed standalone "Keyframeless AI" helper version (read from its
+/// The installed standalone Kai helper version (read from its
 /// version manifest), or nil when the helper isn't installed.
 @property(nonatomic, copy, readonly, nullable) NSString *aiCurrentVersion;
 
-/// A newer Keyframeless AI helper version from the docs site, or nil.
+/// A newer Kai helper version from the docs site, or nil.
 @property(nonatomic, copy, readonly, nullable) NSString *aiAvailableVersion;
 
-/// YES when the installed Keyframeless AI helper has an update available.
+/// YES when the installed Kai helper has an update available.
 @property(nonatomic, assign, readonly) BOOL aiUpdateAvailable;
 
-/// The Keyframeless AI release-notes page (the "What's New" / update target).
+/// The Kai release-notes page (the "What's New" / update target).
 @property(nonatomic, copy, readonly, nullable) NSURL *aiNotesURL;
 
 + (instancetype)shared;
@@ -57,7 +57,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Checks the docs site once per session. Calls `completion` on the main queue.
 - (void)checkWithCompletion:(nullable void (^)(BOOL updateAvailable))completion;
 
-/// Checks the standalone "Keyframeless AI" helper (separate installer) for an
+/// Checks the standalone Kai helper (separate installer) for an
 /// update: reads the installed helper's version manifest and compares it
 /// against the docs site's `ai` release page. No-ops (reports NO) when the
 /// helper isn't installed. Any plugin can call this when its AI popover opens.

@@ -5,7 +5,7 @@
 #
 # Dev loop that exercises the REAL launchd on-demand wake path (NSXPC Mach-service
 # lookup -> launchd launches the helper) with your local build, without building the
-# "Keyframeless AI" installer. Signs a release kk-ai-helper with the app-group
+# Kai installer. Signs a release kk-ai-helper with the app-group
 # entitlement + hardened runtime, drops a per-user LaunchAgent pointing at it, and
 # bootstraps it. After this, a local AI action in a plugin wakes THIS binary.
 #
