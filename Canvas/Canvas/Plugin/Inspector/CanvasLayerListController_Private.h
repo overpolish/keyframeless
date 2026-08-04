@@ -39,6 +39,14 @@ NS_ASSUME_NONNULL_BEGIN
   // selectable. Cleared on close.
   NSString *_openPopoverKind;
   double _openPopoverFraction;
+  // The content surface the layer-list window is physically attached to.
+  // A temporary option popover can open over a persistent editor; in that
+  // case the list borrows the option's selection scope without reparenting its
+  // NSPanel (ViewBridge raises if the same child window is reparented there).
+  __weak NSView *_attachedContentView;
+  __weak NSView *_overlayContentView;
+  NSString *_underlyingPopoverKind;
+  double _underlyingPopoverFraction;
   // Backs the public templateLaneCount property; declared here so the
   // +NonSelectable category can read it.
   NSUInteger _templateLaneCount;

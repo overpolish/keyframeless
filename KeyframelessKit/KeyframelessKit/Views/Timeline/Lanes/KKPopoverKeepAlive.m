@@ -380,6 +380,14 @@ void KKPostStaticValuesEditorDidOpen(NSWindow *window, NSView *contentView,
                   userInfo:info];
 }
 
+void KKPostStaticValuesSurfaceDidClose(NSView *contentView, id sender) {
+  NSDictionary *info = contentView ? @{@"contentView" : contentView} : @{};
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:KKStaticValuesPopoverDidCloseNotification
+                    object:sender
+                  userInfo:info];
+}
+
 void KKPostStaticValuesSidebarVisibility(NSWindow *window, NSView *contentView,
                                          id sender, NSString *kind,
                                          BOOL isBoundary, double fraction,

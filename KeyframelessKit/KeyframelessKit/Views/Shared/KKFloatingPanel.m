@@ -367,6 +367,12 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
 - (void)showBesideCard:(NSRect)card ofWindow:(NSWindow *)parent {
   if (!parent)
     return;
+  // Final Cut draws a few inspector separators/selection rules in a sibling
+  // overlay above the bridged inspector window. A child window at the parent's
+  // default level can therefore have those one-pixel host lines composited over
+  // it. Keep editor panels above host chrome but below menus, matching the
+  // joyride overlay's established level.
+  self.level = NSPopUpMenuWindowLevel - 1;
   BOOL found = NO;
   NSPoint remembered = [self _rememberedOrigin:&found];
   NSRect frame = self.frame;

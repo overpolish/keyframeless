@@ -18,6 +18,7 @@ static const CGFloat kPanelWidth = 300.0;
 @implementation MirageBrowserController {
   KKCompanionPanelController *_panelController;
   MirageBrowserView *_browser;
+  __weak NSView *_attachedContentView;
 }
 
 - (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView {
@@ -173,6 +174,7 @@ static const CGFloat kPanelWidth = 300.0;
   [[self _ensurePanelController] openBesideCard:card
                                   popoverWindow:popoverWindow
                              popoverContentView:contentView];
+  _attachedContentView = contentView;
   KKLogDebug(@"[Panel] browser attach kind=%@ -> shown", kind);
 }
 
@@ -185,6 +187,11 @@ static const CGFloat kPanelWidth = 300.0;
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {
+  NSView *closingContent = note.userInfo[@"contentView"];
+  if (closingContent && _attachedContentView &&
+      closingContent != _attachedContentView)
+    return;
+  _attachedContentView = nil;
   [_panelController hide];
 }
 

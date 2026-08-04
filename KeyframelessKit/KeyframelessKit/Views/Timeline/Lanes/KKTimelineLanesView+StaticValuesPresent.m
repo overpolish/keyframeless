@@ -540,10 +540,7 @@
                             __strong typeof(weak) s = weak;
                             if (!s)
                               return;
-                            [NSNotificationCenter.defaultCenter
-                                postNotificationName:
-                                    KKStaticValuesPopoverDidCloseNotification
-                                              object:s];
+                            KKPostStaticValuesSurfaceDidClose(staticView, s);
                             s->_openStaticView = nil;
                             // Read the LIVE mode, not the fresh-create capture:
                             // an in-place constants<->keypose switch changes

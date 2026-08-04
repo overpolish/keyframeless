@@ -342,10 +342,7 @@
                             // Signal close so the graphs clear their
                             // active-gap highlight (same companion signal the
                             // static-values / manage popovers post).
-                            [NSNotificationCenter.defaultCenter
-                                postNotificationName:
-                                    KKStaticValuesPopoverDidCloseNotification
-                                              object:s];
+                            KKPostStaticValuesSurfaceDidClose(container, s);
                           }];
   panel.dragHandleView = dragHandle;
   // Signal the open so a multi-layer host (Canvas) can attach its layer-list

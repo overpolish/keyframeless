@@ -249,7 +249,20 @@ static const CGFloat kPanelWidth = 200.0;
 
 - (void)_popoverDidOpen:(NSNotification *)note {
   NSNumber *sidebarVisible = note.userInfo[@"sidebarVisible"];
+  // NSPopover-hosted structural surfaces (Animated/filter/OSC) do not carry
+  // the editor-only sidebarVisible metadata. They still share the SAME global
+  // sidebar preference: hiding Layers in Constants must not let Animated
+  // resurrect it and take ownership of the child panel. Resolve the live lanes
+  // view state when the notification omits the key.
+  if (!sidebarVisible &&
+      [note.object
+          respondsToSelector:NSSelectorFromString(@"editorSidebarVisible")])
+    sidebarVisible = [note.object valueForKey:@"editorSidebarVisible"];
   if (sidebarVisible && !sidebarVisible.boolValue) {
+    _openGeneration++;
+    _attachedContentView = nil;
+    _overlayContentView = nil;
+    _underlyingPopoverKind = nil;
     [_panelController hide];
     return;
   }
@@ -275,6 +288,23 @@ static const CGFloat kPanelWidth = 200.0;
   //  - manage (Animated dropdown): none - any layer's params can be animated.
   NSString *kind = note.userInfo[@"kind"] ?: @"constants";
   double frac = [note.userInfo[@"fraction"] doubleValue];
+
+  // An option popover (Animated/filter/OSC) may sit over the persistent
+  // keypose/constants editor. The layer list is already a child of that editor
+  // panel. ViewBridge does not permit moving the same marshalled child window
+  // straight onto the option popover and raises from addChildWindow: if we try.
+  // Keep the window where it is and only borrow the option's logical scope;
+  // closing the option restores the editor scope below.
+  BOOL borrowsExistingPanel = _panelController.visible &&
+                              _attachedContentView && contentView &&
+                              contentView != _attachedContentView;
+  if (borrowsExistingPanel) {
+    if (!_overlayContentView) {
+      _underlyingPopoverKind = [_openPopoverKind copy];
+      _underlyingPopoverFraction = _openPopoverFraction;
+    }
+    _overlayContentView = contentView;
+  }
   _openPopoverKind = [kind copy];
   _openPopoverFraction = frac;
   NSSet<NSString *> *nonSelectable = [self _nonSelectableForKind:kind
@@ -307,27 +337,31 @@ static const CGFloat kPanelWidth = 200.0;
   // Mark this popover as the pending target, then show once it is actually on
   // screen - the delay also lets the popover's own entrance play first.
   _pendingNonSelectable = nonSelectable;
-  // Off the notification turn. The popover is presented from this process but
-  // composites through ViewBridge on this same thread, so every millisecond
-  // spent building the panel here is a millisecond the popover is not yet on
-  // screen. Everything the open needs is captured; the panel's own show path
-  // re-reads the live card anyway.
-  NSInteger generation = ++_openGeneration;
-  __weak typeof(self) weak = self;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    __strong typeof(weak) s = weak;
-    // The popover closed (or another opened) inside that one tick.
-    if (!s || s->_openGeneration != generation)
-      return;
-    [[s _ensurePanelController] openBesideCard:card
-                                 popoverWindow:popoverWindow
-                            popoverContentView:contentView];
-  });
+  if (borrowsExistingPanel) {
+    _listView.nonSelectableReason = [self _nonSelectableReasonForKind:kind];
+    [_listView setNonSelectableLayerIDs:nonSelectable];
+    return;
+  }
+  // Match Mirage's reliable template-browser path: hand the request directly
+  // to the shared controller. It already waits/retries until the editor window
+  // is visible and cancels a stale wait by content-view identity. Canvas used
+  // to add a second dispatch/generation layer here; that extra lifecycle could
+  // lose a reopen even though the persisted sidebar toggle still said ON.
+  ++_openGeneration;
+  _attachedContentView = contentView;
+  _overlayContentView = nil;
+  _underlyingPopoverKind = nil;
+  [[self _ensurePanelController] openBesideCard:card
+                                  popoverWindow:popoverWindow
+                             popoverContentView:contentView];
 }
 
 - (void)_sidebarVisibilityChanged:(NSNotification *)note {
   if (![note.userInfo[@"visible"] boolValue]) {
     _openGeneration++;
+    _attachedContentView = nil;
+    _overlayContentView = nil;
+    _underlyingPopoverKind = nil;
     [_panelController hide];
     return;
   }
@@ -360,7 +394,22 @@ static const CGFloat kPanelWidth = 200.0;
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {
+  NSView *closingContent = note.userInfo[@"contentView"];
+  if (closingContent && closingContent == _overlayContentView) {
+    _overlayContentView = nil;
+    _openPopoverKind = [_underlyingPopoverKind copy];
+    _openPopoverFraction = _underlyingPopoverFraction;
+    _underlyingPopoverKind = nil;
+    [self _refreshNonSelectableForOpenPopover];
+    return;
+  }
+  if (closingContent && _attachedContentView &&
+      closingContent != _attachedContentView)
+    return;
   _openGeneration++;
+  _attachedContentView = nil;
+  _overlayContentView = nil;
+  _underlyingPopoverKind = nil;
   [_panelController hide];
 }
 

@@ -193,10 +193,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                               if (!s)
                                 return;
                               s->_openManageView = nil;
-                              [NSNotificationCenter.defaultCenter
-                                  postNotificationName:
-                                      KKStaticValuesPopoverDidCloseNotification
-                                                object:s];
+                              KKPostStaticValuesSurfaceDidClose(manageView, s);
                               if (s.onManagePopoverClosed)
                                 s.onManagePopoverClosed();
                             }];
@@ -1568,10 +1565,7 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
                       preferredEdge:NSRectEdgeMinX
                             onClose:^{
                               __strong typeof(weak) s = weak;
-                              [NSNotificationCenter.defaultCenter
-                                  postNotificationName:
-                                      KKStaticValuesPopoverDidCloseNotification
-                                                object:s];
+                              KKPostStaticValuesSurfaceDidClose(content, s);
                               if (onClose)
                                 onClose();
                             }];

@@ -17,6 +17,9 @@ NS_ASSUME_NONNULL_BEGIN
 extern NSNotificationName const KKStaticValuesPopoverDidOpenNotification;
 
 /// Posted when that popover closes. `object` is the same `KKTimelineLanesView`.
+/// `userInfo[@"contentView"]` identifies the exact editor/popover surface that
+/// closed, so observers can ignore a temporary option popover closing over a
+/// still-open primary editor.
 extern NSNotificationName const KKStaticValuesPopoverDidCloseNotification;
 
 /// Posted when an ALREADY-OPEN static popover changes what it is editing
@@ -113,6 +116,13 @@ void KKPostStaticValuesPopoverDidOpen(NSPopover *popover, id sender,
 void KKPostStaticValuesEditorDidOpen(NSWindow *window, NSView *contentView,
                                      id sender, NSString *kind, BOOL isBoundary,
                                      double fraction);
+
+/// Post the matching close for one exact editor/popover content surface.
+/// Passing the content view is important when a temporary popover is layered
+/// over a persistent editor: its close must not tear down companions belonging
+/// to the editor underneath.
+void KKPostStaticValuesSurfaceDidClose(NSView *_Nullable contentView,
+                                       id sender);
 
 /// Post the dedicated primary-sidebar visibility signal with enough live panel
 /// geometry for a browser/list to attach again when toggled on.

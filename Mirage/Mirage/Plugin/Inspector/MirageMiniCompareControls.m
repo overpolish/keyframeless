@@ -117,13 +117,13 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   NSView *content = note.userInfo[@"contentView"];
   if (![content isKindOfClass:[NSView class]])
     return;
-  _popoverContentView = content;
   KKMiniViewerView *mini = MirageFindMiniViewer(content);
   // A popover with no preview in it - a structural one, or a lane the plugin
   // publishes no descriptor for - gets no row and no shortcuts. There is
   // nothing for either to act on.
   if (!mini)
     return;
+  _popoverContentView = content;
   // In the notification turn, like both companion panels. This was deferred a
   // tick, guarded on `_popoverContentView` still being this content view - and
   // that guard cannot hold: the popover instance is reused across opens, so an
@@ -138,6 +138,10 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {
+  NSView *closingContent = note.userInfo[@"contentView"];
+  if (closingContent && _popoverContentView &&
+      closingContent != _popoverContentView)
+    return;
   [self _teardown];
 }
 

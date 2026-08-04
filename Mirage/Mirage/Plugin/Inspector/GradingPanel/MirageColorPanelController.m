@@ -135,8 +135,16 @@ static const double kRingMaxStop = 5.0;
 }
 
 - (void)setSurfaceEnabled:(BOOL)surfaceEnabled {
-  if (_surfaceEnabled == surfaceEnabled)
+  if (_surfaceEnabled == surfaceEnabled) {
+    // Timeline/application order is not guaranteed on a fresh apply: the
+    // editor can open while the outgoing shader is still current, then the new
+    // grading timeline arrives with the availability bit already YES. Treat an
+    // idempotent YES as a chance to fulfil a missing visible panel rather than
+    // requiring the whole editor to be closed and reopened.
+    if (surfaceEnabled && !_panel.isVisible)
+      [self _showIfPopoverOpen];
     return;
+  }
   _surfaceEnabled = surfaceEnabled;
   if (self.onSurfaceAvailabilityChanged)
     self.onSurfaceAvailabilityChanged(surfaceEnabled);
@@ -625,6 +633,10 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
 }
 
 - (void)_popoverDidClose:(NSNotification *)note {
+  NSView *closingContent = note.userInfo[@"contentView"];
+  if (closingContent && _popoverContentView &&
+      closingContent != _popoverContentView)
+    return;
   [self _endPuckDragReason:@"the popover closed"];
   [self _stopSampling];
   // A declaration is a statement about the shot being graded, so it does not
