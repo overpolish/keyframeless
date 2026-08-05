@@ -180,14 +180,14 @@ def load_plugin_releases(plugin_id):
 def render_topbar(title, sub, href, logo, label="Download →"):
     return (
         '      <header class="topbar">\n'
-        '        <div class="brand">\n'
+        '        <a class="brand" href="https://keyframeless.com">\n'
         f'          <img class="logo" src="{html.escape(logo)}" alt="" />\n'
         '          <div class="title">\n'
         f"            <h1>{esc(title)}</h1>\n"
         f'            <span class="sub">{esc(sub)}</span>\n'
         "          </div>\n"
-        "        </div>\n"
-        f'        <a class="cta" href="{html.escape(href)}">{esc(label)}</a>\n'
+        "        </a>\n"
+        f'        <a class="cta cta-shine" href="{html.escape(href)}">{esc(label)}</a>\n'
         "      </header>"
     )
 

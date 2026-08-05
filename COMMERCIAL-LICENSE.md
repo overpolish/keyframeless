@@ -1,26 +1,34 @@
 # Keyframeless Commercial License
 
-This document describes the commercial-use license granted to buyers of Keyframeless plugins. It is published in this repository for transparency. **The license only takes effect upon a valid purchase and applies only to the named purchaser on the corresponding invoice.**
+This document describes the commercial-use license granted to buyers of Keyframeless plugins. It is published in this repository for transparency. **The license only takes effect upon a valid purchase and applies only to the named purchaser on the corresponding invoice or order confirmation.**
 
-Keyframeless plugins are sold individually and as the Keyframeless Bundle, which groups them at a single price. Each plugin is always delivered as its own installer, whether bought individually or via the bundle. The same license terms below apply to every purchase. Which plugins your license covers is determined by your invoice.
+Keyframeless is distributed through a single installer which may contain several plugins. Installing the software does not grant a license to every plugin in that installer. Each plugin is licensed and activated individually, including plugins bought together through the Keyframeless Bundle.
+
+The Bundle is a purchase option which groups the individual plugin licenses at one price. It is not a separate kind of license. The same terms below apply to every individual plugin license, whether it was bought on its own or supplied as part of the Bundle.
 
 ## What you get
 
-When you buy a Keyframeless plugin (or the Keyframeless Bundle), you (the named purchaser on the invoice) receive a perpetual, non-transferable, worldwide license to install and use the plugin(s) named on that invoice for any purpose, including commercial and client work.
+When you buy a Keyframeless plugin, you (the named purchaser on the invoice or order confirmation) receive a perpetual, non-transferable, worldwide license to install and use that plugin for any purpose, including commercial and client work.
 
-The Keyframeless Bundle covers every plugin it groups. An individual plugin purchase covers only that plugin.
+An individual purchase covers only the plugin purchased. A Keyframeless Bundle purchase supplies an individual license for every Keyframeless plugin available at the time of purchase, plus an individual license for each Keyframeless plugin released in future.
 
-The license includes all current and future versions of the plugin(s) you purchased. That said, this is a license, not a promise of ongoing development. It does not obligate us to release new versions, keep a plugin compatible with future versions of Final Cut Pro or macOS, or provide support. Any updates or support we do offer are provided at our discretion.
+Each individual plugin license includes all current and future versions of that plugin. That said, this is a license, not a promise of ongoing development. It does not obligate us to release new versions, keep a plugin compatible with future versions of Final Cut Pro or macOS, or provide support. Any updates or support we do offer are provided at our discretion.
+
+## Installer, trials, and activation
+
+The installer may install plugins that you have not purchased. Those plugins remain in trial mode and are subject to the trial restrictions shown in the software. Installing or trying a plugin does not grant a commercial-use license for it.
+
+Each purchased plugin is activated using its own license key. Activation is a technical check that unlocks that plugin; it does not expand the license to other plugins in the installer. License keys are personal purchase credentials and may not be shared, sold, transferred, or published.
 
 ## What "per person" means
 
 The license is granted to one named individual. You may install and use the plugin(s) you purchased on any number of machines that you personally use (laptop, desktop, etc.).
 
-You may not share, resell, transfer, or sublicense your purchase to anyone else. If you work in a team, each person needs their own license.
+You may not share, resell, transfer, or sublicense your purchase or license keys to anyone else. If you work in a team, each person needs their own license.
 
 ## What's still under PolyForm Noncommercial
 
-The source code in this repository remains licensed under [PolyForm Noncommercial 1.0.0](./LICENSE). Self-built copies from source are bound by that license, not this one. This commercial grant covers only the binaries installed from an official signed installer.
+The source code in this repository remains licensed under [PolyForm Noncommercial 1.0.0](./LICENSE). Self-built copies from source are bound by that license, not this one. This commercial grant covers only the binaries installed from the official signed Keyframeless installer.
 
 ## Ownership
 
@@ -40,7 +48,7 @@ Some jurisdictions do not allow the exclusion or limitation of certain warrantie
 
 ## Proof of license
 
-Your invoice (or order confirmation email) is your proof of license, and it names the plugin(s) it covers. Keep it somewhere safe.
+Your invoice or order confirmation email is your proof of purchase. An individual order covers the plugin purchased. A Bundle order covers the individual plugin licenses described above. The license keys issued for an order are used for activation and should be kept private.
 
 ## Refunds and termination
 
@@ -52,7 +60,7 @@ This license is governed by the laws of England and Wales, without regard to its
 
 ## The whole agreement
 
-This document, together with your invoice, is the entire agreement between you and us regarding commercial use of the plugin(s), and it replaces any prior understanding on that subject. If any part of this license is found to be unenforceable, the rest stays in effect. Our not enforcing a term on one occasion does not waive our right to enforce it later.
+This document, together with your invoice or order confirmation, is the entire agreement between you and us regarding commercial use of the plugin(s), and it replaces any prior understanding on that subject. If any part of this license is found to be unenforceable, the rest stays in effect. Our not enforcing a term on one occasion does not waive our right to enforce it later.
 
 ## Contact
 

@@ -63,6 +63,8 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
+  color: var(--text);
+  text-decoration: none;
 }
 
 .brand .logo {
@@ -109,6 +111,31 @@ body {
 
 .cta:hover {
   filter: brightness(1.08);
+}
+
+.cta-shine {
+  background-image: linear-gradient(
+    110deg,
+    #ff5000 0% 38%,
+    #ff9a79 46%,
+    #fff0e9 50%,
+    #ff8a63 54%,
+    #ff5000 62% 100%
+  );
+  background-size: 280% 100%;
+  box-shadow: 0 6px 22px rgba(255, 80, 0, 0.2);
+  animation: cta-button-shine 5s ease-in-out infinite;
+}
+
+@keyframes cta-button-shine {
+  0%,
+  58% {
+    background-position: 100% 50%;
+  }
+  82%,
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 /* release block = KKPanel: white.opacity(0.04) fill, faint border, radius 12 */
@@ -340,4 +367,10 @@ a {
   border-top: 1px solid var(--panel-border);
   color: var(--muted);
   font-size: 12.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-shine {
+    animation: none;
+  }
 }

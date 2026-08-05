@@ -148,27 +148,143 @@ body {
   opacity: 0.85;
 }
 
-/* Video slot: 16:9 placeholder until a real clip lands in R2. */
-.demo {
-  border: 1px solid var(--panel-border);
-  border-radius: var(--r-panel);
-  background: var(--panel);
-  aspect-ratio: 16 / 9;
-  width: 100%;
-  margin: 0 0 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-size: 12.5px;
-  overflow: hidden;
+/* The artwork already carries its own title and product UI, so the showcase
+   stays quiet around it: one image, simple navigation, no auto-rotation. */
+.showcase {
+  margin: 0 0 48px;
 }
 
-.demo video {
+.showcase-viewport {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.showcase-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  outline: none;
+}
+
+.showcase-track::-webkit-scrollbar {
+  display: none;
+}
+
+.showcase-track:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent)
+    inset;
+}
+
+.showcase-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  aspect-ratio: 6 / 5;
+  margin: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  background: #161618;
+}
+
+.showcase-slide img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.showcase-arrow {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  margin-top: -19px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(22, 22, 24, 0.72);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 7px 22px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.showcase-arrow:hover {
+  background: rgba(35, 35, 38, 0.88);
+  transform: scale(1.05);
+}
+
+.showcase-arrow:focus-visible,
+.showcase-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.showcase-arrow.previous {
+  left: 14px;
+}
+
+.showcase-arrow.next {
+  right: 14px;
+}
+
+.showcase-arrow svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.showcase-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 12px 8px 0;
+}
+
+.showcase-tabs button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.showcase-tabs button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.showcase-tabs button[aria-selected="true"] {
+  color: #fff;
+  background: color-mix(in srgb, var(--accent) 88%, #b83800);
 }
 
 /* Sections */
@@ -253,6 +369,37 @@ body {
    border rather than by a separate section. */
 .product.bundle {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--panel-border));
+  box-shadow:
+    0 0 28px rgba(255, 80, 0, 0.07),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+/* Magic UI Shiny Button treatment, saved for the highest-value action so the
+   animation still means something. The long pause keeps it from flashing. */
+.cta-shine,
+.bundle-shine {
+  background-image: linear-gradient(
+    110deg,
+    #ff5000 0% 38%,
+    #ff9a79 46%,
+    #fff0e9 50%,
+    #ff8a63 54%,
+    #ff5000 62% 100%
+  );
+  background-size: 280% 100%;
+  box-shadow: 0 6px 22px rgba(255, 80, 0, 0.2);
+  animation: cta-button-shine 5s ease-in-out infinite;
+}
+
+@keyframes cta-button-shine {
+  0%,
+  58% {
+    background-position: 100% 50%;
+  }
+  82%,
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .reqs {
@@ -280,7 +427,47 @@ body {
   .hero h2 {
     font-size: 24px;
   }
+  .showcase {
+    margin-bottom: 40px;
+  }
+  .showcase-viewport {
+    border-radius: 14px;
+  }
+  .showcase-arrow {
+    width: 34px;
+    height: 34px;
+    margin-top: -17px;
+  }
+  .showcase-arrow.previous {
+    left: 8px;
+  }
+  .showcase-arrow.next {
+    right: 8px;
+  }
+  .showcase-tabs {
+    gap: 3px;
+    padding-inline: 0;
+  }
+  .showcase-tabs button {
+    font-size: 11px;
+    padding: 7px 8px;
+  }
   .product .buy {
     align-self: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-shine,
+  .bundle-shine {
+    animation: none;
+  }
+
+  .showcase-track {
+    scroll-behavior: auto;
+  }
+  .showcase-arrow,
+  .showcase-tabs button {
+    transition: none;
   }
 }
