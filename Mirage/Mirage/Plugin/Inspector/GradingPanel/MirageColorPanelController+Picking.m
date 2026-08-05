@@ -146,18 +146,37 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   [self _installPickMonitors];
 }
 
-// The colour eyedropper. Same click, a different question: what the shader's
-// `pick=` controls should be aimed at, rather than what should be neutral.
-- (void)_toggleColorPicking:(id)sender {
-  BOOL wasArmed = _pickingColor;
-  [self _disarmPicking];
-  if (wasArmed)
+// A screen-space colour pick. Unlike the reference sampler, this needs only the
+// display RGB under the pointer. NSColorSampler owns the cross-app eyedropper,
+// so Final Cut does not need to select the effect or draw its OSC first.
+- (void)_beginScreenColorPick {
+  if (_screenColorSampler)
     return;
-  _pickingColor = YES;
-  KKInstanceStateForAPI(_apiManager).mirageViewerPickMode =
-      MirageViewerPickModeColor;
-  _pickColorButton.contentTintColor = NSColor.accentMatchingHost;
-  [self _installPickMonitors];
+  [self _disarmPicking];
+  NSColorSampler *sampler = [NSColorSampler new];
+  _screenColorSampler = sampler;
+  NSButton *button = _pickSourceButton;
+  button.contentTintColor = NSColor.accentMatchingHost;
+  __weak typeof(self) weak = self;
+  [sampler showSamplerWithSelectionHandler:^(NSColor *selectedColor) {
+    __strong typeof(weak) self = weak;
+    if (!self)
+      return;
+    self->_screenColorSampler = nil;
+    button.contentTintColor = NSColor.secondaryLabelColor;
+    if (!selectedColor || !self->_panel.isVisible)
+      return;
+    NSColor *rgb =
+        [selectedColor colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+    if (!rgb) {
+      KKLogWarn(@"[Pick] the sampled screen colour could not convert to sRGB");
+      return;
+    }
+    [self _schedulePickWrite:@[
+      @(rgb.redComponent), @(rgb.greenComponent), @(rgb.blueComponent)
+    ]
+              activePuckOnly:YES];
+  }];
 }
 
 // Click-to-pick: one click in the preview aims the active puck at a colour.
@@ -167,15 +186,7 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
 // state you can forget you are in turns the next ordinary click on the preview
 // into a parameter write nobody asked for.
 - (void)_togglePickFromClip:(id)sender {
-  BOOL wasArmed = _pickingSource;
-  [self _disarmPicking];
-  if (wasArmed)
-    return;
-  _pickingSource = YES;
-  KKInstanceStateForAPI(_apiManager).mirageViewerPickMode =
-      MirageViewerPickModeSource;
-  _pickSourceButton.contentTintColor = NSColor.accentMatchingHost;
-  [self _installPickMonitors];
+  [self _beginScreenColorPick];
 }
 
 - (void)_installPickMonitors {
@@ -256,7 +267,6 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   KKInstanceStateForAPI(_apiManager).mirageViewerPickMode =
       MirageViewerPickModeNone;
   _pickButton.contentTintColor = NSColor.secondaryLabelColor;
-  _pickColorButton.contentTintColor = NSColor.secondaryLabelColor;
   _pickSourceButton.contentTintColor = NSColor.secondaryLabelColor;
   MirageDropMonitor(&_pickMonitor);
   MirageDropMonitor(&_pickGlobalMonitor);
@@ -583,14 +593,7 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   return NO;
 }
 
-/// Title both pickers for what they actually do in THIS shader.
-///
-/// The grey one is a measurement and always says so. The write picker names the
-/// control it is pointed at - "Pick Pivot", "Pick Target Hue" - because that is
-/// the only honest label: the same button sets a luminance in one shader and a
-/// hue in the next, so any fixed wording would be wrong somewhere. With several
-/// subscribers there is no single name to borrow, so it falls back to the
-/// generic.
+/// Title the reference sampler for what it measures in this shader.
 - (void)_refreshHeaderButtonTitlesIn:(KKTimeline *)timeline
                               source:(NSString *)source {
   // The grey reference feeds the cast cross, which only the hue ring draws - so
@@ -599,7 +602,15 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   // -_applyPanelLayout so it sits below the wheel it belongs to.
   BOOL hueRing =
       MirageColorSurfaceDeclaresRing(source, MirageColorSurfaceRingHue);
-  _pickButton.hidden = !hueRing;
+  // The reference sampler records a POSITION, not just a colour. It therefore
+  // needs somewhere that can deliver a frame coordinate: the expanded mini
+  // viewer, or a currently drawn main-viewer OSC. In compact mode with no OSC
+  // it would arm successfully and then have nowhere for the click to land.
+  BOOL miniAvailable = !_lanesView.editorCompactMode;
+  BOOL mainViewerAvailable =
+      KKInstanceStateForAPI(_apiManager).oscMasterVisible &&
+      MirageHasCanvasReference();
+  _pickButton.hidden = !hueRing || (!miniAvailable && !mainViewerAvailable);
   if (_pickButton.hidden && _picking)
     [self _disarmPicking];
   // Both come from the declaration, so the one button says what it is about to
@@ -607,27 +618,6 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   // making.
   _pickButton.title = MirageSampleTitle(_pickDeclaration);
   _pickButton.toolTip = MirageSampleTooltip(_pickDeclaration);
-
-  if (!_pickColorButton.hidden) {
-    NSArray<NSString *> *labels = [self _pickTargetLabelsIn:timeline
-                                                     source:source];
-    _pickColorButton.title =
-        labels.count == 1
-            ? [NSString
-                  stringWithFormat:RLoc(@"Pick %@",
-                                        @"Color panel button that sets one "
-                                        @"named control from a colour "
-                                        @"clicked in the frame. %@ is that "
-                                        @"control's name."),
-                                   labels.firstObject]
-            : RLoc(@"Pick from frame",
-                   @"Color panel button that sets several "
-                   @"controls at once from a colour clicked "
-                   @"in the frame.");
-    _pickColorButton.toolTip = RLoc(
-        @"Click a color in the frame to set this shader's controls from it.",
-        @"Tooltip for the Color panel's sampler that writes controls.");
-  }
   // The add/remove pair reads the same two facts this method is already
   // holding - what the shader declares and what the project has - so it is
   // refreshed from here rather than from its own pass over both.
@@ -643,26 +633,6 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
     _wellRowMask = mask;
     [self _applyPanelLayout];
   }
-}
-
-/// Inspector labels of the controls the eyedropper would write, in lane order.
-- (NSArray<NSString *> *)_pickTargetLabelsIn:(KKTimeline *)timeline
-                                      source:(NSString *)source {
-  NSDictionary<NSString *, NSNumber *> *picks = [self _picksInSource:source];
-  if (!picks.count)
-    return @[];
-  NSSet<NSString *> *drivable = [self _drivableKeysIn:timeline
-                                             fraction:[self _editFraction]];
-  NSMutableArray<NSString *> *labels = [NSMutableArray array];
-  for (KKLane *lane in timeline.lanes) {
-    NSString *bare = [self _bareKeyForLane:lane];
-    if (!bare || !picks[bare])
-      continue;
-    if (![drivable containsObject:lane.key])
-      continue;
-    [labels addObject:lane.label.length ? lane.label : bare];
-  }
-  return labels;
 }
 
 /// The ring whose `activePuck` click-to-pick answers to.

@@ -77,7 +77,6 @@ NS_ASSUME_NONNULL_BEGIN
   NSStackView *_readoutStack;
   NSTextField *_readoutHint;
   NSButton *_pickButton;
-  NSButton *_pickColorButton;
   /// Arms the click-to-pick gesture: one click in the preview aims the ACTIVE
   /// puck's `pick=` controls at whatever colour was clicked.
   NSButton *_pickSourceButton;
@@ -132,6 +131,11 @@ NS_ASSUME_NONNULL_BEGIN
   /// same click and mean different things by it - arming any one disarms the
   /// others.
   BOOL _pickingSource;
+  /// The colour-writing eyedropper needs only an RGB value, not a frame
+  /// coordinate. AppKit's sampler owns its cross-app session and can therefore
+  /// pick from Final Cut's viewer (or anywhere else) without the effect's OSC
+  /// being selected. Non-nil until that one-shot session completes.
+  NSColorSampler *_screenColorSampler;
   id _pickMonitor;
   id _pickGlobalMonitor;
   /// While armed, the pointer over the preview says so. The mini viewer's own
@@ -147,6 +151,9 @@ NS_ASSUME_NONNULL_BEGIN
   id _pickKeyGlobalMonitor;
   MirageScopeSampler *_sampler;
   __weak KKMiniViewerView *_measuredMini;
+  /// Like the Help window's guide gate, the disable edge must be polled: when
+  /// Final Cut stops drawing the OSC there is deliberately no final event.
+  dispatch_source_t _presentationAvailabilityTimer;
   NSTimeInterval _lastSampleTime;
   BOOL _samplePending;
   /// When the previous puck-drag tick started, so the log reports the rate the
@@ -237,7 +244,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_showPickMenu:(id)sender;
 - (void)_choosePickDeclaration:(NSMenuItem *)item;
 - (void)_armPicking;
-- (void)_toggleColorPicking:(id)sender;
 - (void)_togglePickFromClip:(id)sender;
 - (void)_installPickMonitors;
 - (void)_updatePickCursor;
@@ -252,8 +258,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)_hasDrivablePicksIn:(KKTimeline *)timeline source:(NSString *)source;
 - (void)_refreshHeaderButtonTitlesIn:(KKTimeline *)timeline
                               source:(NSString *)source;
-- (NSArray<NSString *> *)_pickTargetLabelsIn:(KKTimeline *)timeline
-                                      source:(NSString *)source;
 - (NSUInteger)_pickRingIndex;
 - (NSDictionary<NSString *, NSNumber *> *)
     _picksForActivePuckIn:(KKTimeline *)timeline

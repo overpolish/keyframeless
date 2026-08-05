@@ -667,9 +667,6 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   // normally typed with the panel already open, and a `visibleby=` choice can
   // be switched while it is.
   BOOL canPick = [self _hasDrivablePicksIn:timeline source:source];
-  _pickColorButton.hidden = !canPick;
-  if (!canPick && _pickingColor)
-    [self _disarmPicking];
   // Present whenever the shader subscribes anything at all, but only ENABLED
   // when the handle you last touched has a subscriber of its own: a click that
   // would write nothing is a click the button has to refuse before you spend

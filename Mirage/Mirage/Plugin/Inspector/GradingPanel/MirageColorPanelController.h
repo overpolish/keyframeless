@@ -88,6 +88,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// having to be closed and reopened.
 - (void)timelineDidChange;
 
+/// Re-evaluate controls whose usefulness depends on whether the editor's mini
+/// viewer or Final Cut's main-viewer OSC is currently available.
+- (void)presentationContextDidChange;
+
 /// Make the handle belonging to `instanceID` the one the panel is talking
 /// about, for a `#slots` instance that arrived from OUTSIDE the panel.
 ///

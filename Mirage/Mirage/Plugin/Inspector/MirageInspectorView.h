@@ -62,6 +62,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onRackTimelineMutatedSelecting)
     (KKTimeline *updated, NSString *entryID);
 
+/// Re-evaluate grading-panel controls that depend on compact/OSC presentation.
+- (void)refreshColorReferencePickerAvailability;
+
 @end
 
 /// The one rack-selection entry point the PLUGIN calls (parameterChanged for

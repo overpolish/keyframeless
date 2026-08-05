@@ -462,6 +462,17 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
                           renderer:renderer
                          compounds:compounds
                            paramID:kParamUIState];
+  // The grading reference sampler needs either its expanded mini viewer or a
+  // live main-viewer OSC to receive a coordinate. Keep its availability in
+  // step with the master OSC toggle while preserving the shared persistence
+  // handler installed above.
+  void (^persistOSCVisibility)(BOOL) = view.onOSCVisibleToggled;
+  __weak MirageInspectorView *weakMirageView = (MirageInspectorView *)view;
+  view.onOSCVisibleToggled = ^(BOOL visible) {
+    if (persistOSCVisibility)
+      persistOSCVisibility(visible);
+    [weakMirageView refreshColorReferencePickerAvailability];
+  };
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {

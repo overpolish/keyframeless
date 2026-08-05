@@ -29,19 +29,17 @@ static const CGFloat kWellButtonSide = 18.0;
 // Added to the well before the circles, so a stray click in the row's band
 // reaches the button rather than the circle underneath it.
 - (void)_buildWellRowInWell:(NSView *)well {
-  NSString *fromClip =
-      RLoc(@"Set from clip", @"Color panel button: arms a click in the preview "
-                             @"that aims the selected handle's controls at the "
-                             @"color clicked in the original footage.");
+  NSString *fromClip = RLoc(
+      @"Set from screen", @"Color panel button: opens the macOS screen color "
+                          @"sampler and aims the selected handle's controls at "
+                          @"the chosen color.");
   NSButton *pickSource =
       [self _iconButtonNamed:@"eyedropper.halffull"
                        label:fromClip
                       action:@selector(_togglePickFromClip:)];
-  pickSource.toolTip = RLoc(
-      @"Click a color in the preview to aim the selected handle at it. The "
-      @"color is read from the original clip, not from the graded result.",
-      @"Tooltip for the Color panel's click-to-pick button, explaining that "
-      @"the sampled color comes from the untouched footage.");
+  pickSource.toolTip =
+      RLoc(@"Pick any color on screen to aim the selected handle at it.",
+           @"Tooltip for the Color panel's screen color sampler.");
   pickSource.hidden = YES;
   pickSource.autoresizingMask = NSViewNotSizable;
   [well addSubview:pickSource];

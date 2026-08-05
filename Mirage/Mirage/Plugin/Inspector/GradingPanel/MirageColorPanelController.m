@@ -80,6 +80,10 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
            selector:@selector(_mainViewerPickRequested:)
                name:kMirageViewerPickDidRequestNotification
              object:nil];
+    [nc addObserver:self
+           selector:@selector(_oscCanvasAvailabilityChanged:)
+               name:kMirageOSCPositionNotification
+             object:nil];
   }
   return self;
 }
@@ -494,27 +498,53 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   if (!_sampler)
     _sampler = [MirageScopeSampler new];
   KKMiniViewerView *mini = MirageFindMiniViewer(_popoverContentView);
-  if (!mini || mini == _measuredMini)
+  if (!mini)
     return;
-  [self _stopSampling];
-  _measuredMini = mini;
-  __weak typeof(self) weak = self;
-  mini.onProcessedFrameReady = ^{
-    [weak _frameReady];
-  };
-  // The frame already on screen shouldn't wait for the next one - but it
-  // shouldn't be measured in the turn that is still putting the panel up
-  // either. Next tick: the popover gets the main thread back first.
-  __weak typeof(self) weakSelf = self;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_measuredMini == mini)
-      [s _sampleOnce];
-  });
+  if (mini != _measuredMini) {
+    // This reset also tears down the availability poll, so the poll MUST be
+    // installed after it. Installing it before this line produced a timer that
+    // was cancelled in the same call and made availability update only when a
+    // puck happened to trigger an unrelated refresh.
+    [self _stopSampling];
+    _measuredMini = mini;
+    __weak typeof(self) weak = self;
+    mini.onProcessedFrameReady = ^{
+      [weak _frameReady];
+    };
+    // The frame already on screen shouldn't wait for the next one - but it
+    // shouldn't be measured in the turn that is still putting the panel up
+    // either. Next tick: the popover gets the main thread back first.
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      __strong typeof(weakSelf) s = weakSelf;
+      if (s && s->_measuredMini == mini)
+        [s _sampleOnce];
+    });
+  }
+
+  // The OSC-position notification catches the enable edge, but deselecting the
+  // clip simply stops draw ticks: there is no "OSC disappeared" event. Match
+  // the Help window's live guide gate with the same one-second freshness poll.
+  if (!_presentationAvailabilityTimer) {
+    dispatch_source_t timer = dispatch_source_create(
+        DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    _presentationAvailabilityTimer = timer;
+    __weak typeof(self) weakAvailability = self;
+    dispatch_source_set_event_handler(timer, ^{
+      [weakAvailability presentationContextDidChange];
+    });
+    dispatch_source_set_timer(
+        timer, dispatch_time(DISPATCH_TIME_NOW, (int64_t)NSEC_PER_SEC),
+        NSEC_PER_SEC, (uint64_t)(0.1 * NSEC_PER_SEC));
+    dispatch_resume(timer);
+  }
 }
 
 - (void)_stopSampling {
   [self _disarmPicking];
+  if (_presentationAvailabilityTimer)
+    dispatch_source_cancel(_presentationAvailabilityTimer);
+  _presentationAvailabilityTimer = nil;
   _measuredMini.onProcessedFrameReady = nil;
   // The compare state - and the bypass a held button or key put on - belongs to
   // the row on the preview, which is torn down by the same popover close this
@@ -635,6 +665,15 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   if (!_panel.isVisible)
     return;
   [self _refreshPuck];
+}
+
+- (void)presentationContextDidChange {
+  if (_panel.isVisible)
+    [self _refreshPuck];
+}
+
+- (void)_oscCanvasAvailabilityChanged:(NSNotification *)note {
+  [self presentationContextDidChange];
 }
 
 // The selection move the add and remove buttons make, asked for from outside:

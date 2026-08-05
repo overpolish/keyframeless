@@ -1479,6 +1479,8 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   _editorCompactMode = compact;
   if (changed)
     KKScopedDefaultWrite(@(compact), kEditorCompactModeKey, kEditorLayoutScope);
+  if (changed && self.onEditorCompactModeChanged)
+    self.onEditorCompactModeChanged(compact);
   if (!_openEditorPanel || !_openEditorIsStaticFamily || !_openStaticView)
     return;
 
@@ -1511,6 +1513,10 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   // Reassert the edge captured before the compact/expanded layout changed.
   [_openEditorPanel setContentSize:_openEditorPanel.frame.size
                   keepingTopEdgeAt:anchoredTop];
+}
+
+- (BOOL)editorCompactMode {
+  return _editorCompactMode;
 }
 
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {

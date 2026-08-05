@@ -261,10 +261,10 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
   return [self _iconButtonNamed:nil label:nil action:action];
 }
 
-/// Lay out the header strip: the samplers, right-aligned.
+/// Lay out the header strip's reference sampler, right-aligned.
 ///
-/// They write parameters and are named for the control they write, which
-/// changes with the source, so they keep their text and the right edge.
+/// Its title names the kind of reference it will measure, so it keeps its text
+/// and the right edge.
 ///
 /// Nothing else is here. The three buttons that act on ONE HANDLE moved into
 /// the well, above the ring they aim at (`-_layoutWellRowInRect:`), and the
@@ -272,13 +272,12 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
 /// and Show Selection belong to the mini viewer every template has, not to the
 /// panel only a `#color-surface` one gets.
 ///
-/// Re-run on every title change, since a text button's width is its content and
-/// a stale frame would leave the pair overlapping or adrift.
+/// Re-run on every title change, since a text button's width is its content.
 - (void)_layoutHeaderButtons {
   CGFloat height = 18.0;
   CGFloat y = (kHeaderHeight - height) * 0.5;
   CGFloat right = kPanelWidth - KKPaddingMD;
-  for (NSButton *button in @[ _pickButton, _pickColorButton ]) {
+  for (NSButton *button in @[ _pickButton ]) {
     if (!button || button.hidden)
       continue;
     CGFloat width = ceil(button.attributedTitle.size.width) + KKPaddingSM;
@@ -328,15 +327,10 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
                            ceil(titleSize.width), titleHeight);
   [header addSubview:title];
 
-  // Both pickers are TEXT, not dropper icons. Two droppers side by side were
-  // indistinguishable and neither said what it did - and they do opposite
-  // things: one takes a MEASUREMENT the ring draws, the other WRITES a control.
-  // An icon cannot carry that difference, and the write picker's label changes
-  // with the shader anyway, so there was never one glyph that would have been
-  // honest.
-  //
-  // They are NSControls, so the panel's drag hit-test hands them their own
-  // clicks while the rest of the header strip still drags the window.
+  // This is the reference sampler, not the eyedropper that writes a handle.
+  // The latter lives beside the wheel as its single, familiar picker icon.
+  // As an NSControl, the panel's drag hit-test hands this button its own clicks
+  // while the rest of the header strip still drags the window.
   NSButton *pick = [self _headerButtonWithAction:@selector(_showPickMenu:)];
   // Only meaningful on a hue ring: the cast cross it feeds is drawn there and
   // nowhere else, so on a light ring this button measured something the circle
@@ -345,12 +339,6 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
   pick.hidden = YES;
   [header addSubview:pick];
   _pickButton = pick;
-
-  NSButton *pickColor =
-      [self _headerButtonWithAction:@selector(_toggleColorPicking:)];
-  pickColor.hidden = YES;
-  [header addSubview:pickColor];
-  _pickColorButton = pickColor;
 
   [body addSubview:header];
 

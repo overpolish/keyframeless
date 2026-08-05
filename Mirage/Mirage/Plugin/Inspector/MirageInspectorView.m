@@ -207,6 +207,10 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     _colorPanelController = [[MirageColorPanelController alloc]
         initWithLanesView:self.basicLanesView
                apiManager:apiManager];
+    self.basicLanesView.onEditorCompactModeChanged = ^(BOOL compact) {
+      __strong typeof(weak) s = weak;
+      [s->_colorPanelController presentationContextDidChange];
+    };
     // Mirage opts into the shared right-panel header control; Canvas and other
     // plugins leave this capability off, so no dead button appears for them.
     self.basicLanesView.editorRightPanelToggleSupported = YES;
@@ -300,6 +304,10 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     };
   }
   return self;
+}
+
+- (void)refreshColorReferencePickerAvailability {
+  [_colorPanelController presentationContextDidChange];
 }
 
 // Render each shipped built-in shader to a thumbnail once per process, using a

@@ -322,6 +322,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, copy, nullable) void (^onEditorRightPanelVisibilityChanged)
     (BOOL visible);
 
+/// Whether the floating constants/keypose editor is currently hiding its mini
+/// viewer. Hosts with companion panels can use this to avoid offering actions
+/// that require that preview while it is absent.
+@property(nonatomic, readonly) BOOL editorCompactMode;
+@property(nonatomic, copy, nullable) void (^onEditorCompactModeChanged)
+    (BOOL compact);
+
 /// Optional scope for the CONSTANTS editor only: return NO for a lane the
 /// constants popover should not list. The graphs, the Animated dropdown and
 /// every write path are untouched - the timeline still holds every lane under
