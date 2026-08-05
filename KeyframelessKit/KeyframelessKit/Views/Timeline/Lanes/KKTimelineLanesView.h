@@ -328,6 +328,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, readonly) BOOL editorCompactMode;
 @property(nonatomic, copy, nullable) void (^onEditorCompactModeChanged)
     (BOOL compact);
+/// Keep the mini-viewer's frame pipeline alive while compact for a companion
+/// surface that genuinely consumes pixels (for example a live vectorscope).
+/// Default NO. The compact editor remains visually hidden either way; setting
+/// this only opts into the texture/render cost for the lifetime of that
+/// consumer.
+@property(nonatomic) BOOL editorMiniViewerFramesRequired;
 /// Stable identity of the effect instance that owns this editor. Compact mode
 /// is remembered under this identity, so every newly-applied/copied instance
 /// starts compact while reopening the same instance restores its last choice.

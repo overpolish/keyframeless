@@ -1497,6 +1497,8 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     _editorExpandedSizeBeforeCompact = current;
 
   [_openStaticView setCompactMode:compact];
+  _openEditorMiniViewer.activitySuspended =
+      compact && !_editorMiniViewerFramesRequired;
   _openEditorPanel.minSize = [_openStaticView minimumHostedContentSize];
 
   NSSize target;
@@ -1528,8 +1530,8 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   _editorStatePersistenceKey = [key copy];
   BOOL compact = YES;
   if (key.length) {
-    NSString *preferenceKey = [@"timeline.editor.compactMode.instance."
-        stringByAppendingString:key];
+    NSString *preferenceKey =
+        [@"timeline.editor.compactMode.instance." stringByAppendingString:key];
     compact = KKEditorStoredBool(preferenceKey, YES);
   }
   [self _setEditorCompactMode:compact];
@@ -1546,6 +1548,19 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
 
 - (BOOL)editorCompactMode {
   return _editorCompactMode;
+}
+
+- (void)setEditorMiniViewerFramesRequired:(BOOL)required {
+  if (_editorMiniViewerFramesRequired == required)
+    return;
+  _editorMiniViewerFramesRequired = required;
+  _openEditorMiniViewer.activitySuspended = _editorCompactMode && !required;
+  _openEditorMiniViewer.pixelConsumerActive = required;
+  [self _syncMiniViewerFeedActivity];
+}
+
+- (BOOL)editorMiniViewerFramesRequired {
+  return _editorMiniViewerFramesRequired;
 }
 
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {

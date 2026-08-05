@@ -21,6 +21,80 @@
 // +Rendering encoders. MTKViewDelegate lives here.
 @implementation KKMiniViewerView (Draw)
 
+// A hidden MTKView receives no drawable, so AppKit correctly skips
+// drawInMTKView:. A compact editor's vectorscope still needs the shader result,
+// though. Render just the active frame into a modest offscreen texture: no
+// drawable, presentation, filmstrip, compare composite or OSC chrome. Mirage's
+// renderer retains its host-raster fidelity internally; the 1024px result is
+// ample for scope binning without adding another full-size BGRA texture.
+- (void)_requestPixelConsumerRender {
+  if (!_pixelConsumerActive || _activitySuspended ||
+      !self.isHiddenOrHasHiddenAncestor)
+    return;
+  if (_pixelConsumerRenderPending) {
+    _pixelConsumerRenderAgain = YES;
+    return;
+  }
+  NSUInteger index = [self _activeSlotIndex];
+  if (index >= _filmstripSlots.count)
+    return;
+  _KKMiniFilmSlot *slot = _filmstripSlots[index];
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
+  if (!slot.sourceTexture ||
+      ![del respondsToSelector:@selector(miniViewer:processSourceTexture:
+                                         intoTexture:commandBuffer:)])
+    return;
+
+  NSUInteger sw = slot.sourceTexture.width;
+  NSUInteger sh = slot.sourceTexture.height;
+  if (!sw || !sh)
+    return;
+  static const NSUInteger kScopeLongEdge = 1024;
+  double scale = MIN(1.0, (double)kScopeLongEdge / (double)MAX(sw, sh));
+  NSUInteger width = MAX((NSUInteger)1, (NSUInteger)llround(sw * scale));
+  NSUInteger height = MAX((NSUInteger)1, (NSUInteger)llround(sh * scale));
+  if (!slot.processedTexture || slot.processedTexture.width != width ||
+      slot.processedTexture.height != height) {
+    MTLTextureDescriptor *td = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                     width:width
+                                    height:height
+                                 mipmapped:NO];
+    td.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget |
+               MTLTextureUsagePixelFormatView;
+    td.storageMode = MTLStorageModePrivate;
+    slot.processedTexture = [self.device newTextureWithDescriptor:td];
+  }
+  if (!slot.processedTexture)
+    return;
+
+  id<MTLCommandBuffer> cb = [_queue commandBuffer];
+  if (!cb)
+    return;
+  _pixelConsumerRenderPending = YES;
+  [del miniViewer:self
+      processSourceTexture:slot.sourceTexture
+               intoTexture:slot.processedTexture
+             commandBuffer:cb];
+  _processedTexture = slot.processedTexture;
+  __weak typeof(self) weak = self;
+  [cb addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      __strong typeof(weak) s = weak;
+      if (!s)
+        return;
+      s->_pixelConsumerRenderPending = NO;
+      if (s.onProcessedFrameReady)
+        s.onProcessedFrameReady();
+      BOOL again = s->_pixelConsumerRenderAgain;
+      s->_pixelConsumerRenderAgain = NO;
+      if (again)
+        [s _requestPixelConsumerRender];
+    });
+  }];
+  [cb commit];
+}
+
 - (void)drawInMTKView:(MTKView *)view {
   id<CAMetalDrawable> drawable = self.currentDrawable;
   MTLRenderPassDescriptor *rpd = self.currentRenderPassDescriptor;
@@ -85,10 +159,9 @@
     } @catch (...) {
     }
   }
-  NSString *wmProduct =
-      [del isKindOfClass:[KKMiniViewerRenderer class]]
-          ? ((KKMiniViewerRenderer *)del).watermarkProductID
-          : nil;
+  NSString *wmProduct = [del isKindOfClass:[KKMiniViewerRenderer class]]
+                            ? ((KKMiniViewerRenderer *)del).watermarkProductID
+                            : nil;
   if (canProcess || canGenerate) {
     for (NSUInteger i = 0; i < n; i++) {
       _KKMiniFilmSlot *slot = _filmstripSlots[i];
@@ -121,13 +194,13 @@
         // footage the feed just delivered rather than trailing a
         // separately-polled playhead. The multi-slot fan-out already keys off
         // the same tag.
-        // During live playback prefer the publisher's PLAYHEAD fraction over the
-        // frame's own tag. The tag is correct for its pixels, but FCP renders a
-        // constant ~0.27s (16-20 frames at 60fps) ahead of the playhead, so
-        // evaluating at the tag ran the animation that far early - a keypose
-        // visibly started part-way in. Buffering the pixels to delay them
-        // properly would cost ~20 surfaces at ~9MB, so the delivered frame is
-        // drawn as-is and only the effect is pulled back into sync with the
+        // During live playback prefer the publisher's PLAYHEAD fraction over
+        // the frame's own tag. The tag is correct for its pixels, but FCP
+        // renders a constant ~0.27s (16-20 frames at 60fps) ahead of the
+        // playhead, so evaluating at the tag ran the animation that far early -
+        // a keypose visibly started part-way in. Buffering the pixels to delay
+        // them properly would cost ~20 surfaces at ~9MB, so the delivered frame
+        // is drawn as-is and only the effect is pulled back into sync with the
         // viewer. Falls back to the tag when the publisher had no fresh sample
         // (< 0), which is also the whole multi-slot path.
         double evalFrac = slot.tag;
@@ -173,8 +246,8 @@
 
   // Tell a measuring consumer once the effect's pixels are actually finished.
   // On the completion handler, not here: the encoder above has only been
-  // ENQUEUED, so reading processedTexture now races the GPU and would measure the
-  // previous frame (or a half-written one).
+  // ENQUEUED, so reading processedTexture now races the GPU and would measure
+  // the previous frame (or a half-written one).
   if (self.onProcessedFrameReady && _processedTexture) {
     void (^ready)(void) = self.onProcessedFrameReady;
     [cb addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
@@ -230,10 +303,10 @@
     // modes fall through to the plain graded draw.
     BOOL compareBypass = [self _compareBypassActive];
     BOOL compareSplit = [self _compareSplitActive];
-    // Taken from the SNAPPED divider position, not the raw fraction, so the join
-    // and the line drawn over it resolve to the same pixel. Derived from two
-    // different numbers they can round apart, and then the stroke marks a seam
-    // that is not quite where the images actually meet.
+    // Taken from the SNAPPED divider position, not the raw fraction, so the
+    // join and the line drawn over it resolve to the same pixel. Derived from
+    // two different numbers they can round apart, and then the stroke marks a
+    // seam that is not quite where the images actually meet.
     CGRect comparePts = [self contentRectInViewPoints];
     CGFloat compareX = [self _compareDividerXInViewPoints];
     CGFloat splitU =
@@ -251,14 +324,12 @@
         (_zoom > 3.0 && _pipelineLinearSourceNearest)
             ? _pipelineLinearSourceNearest
             : _pipelineLinearSource;
-    void (^selectPlainTexturePipeline)(id<MTLTexture>) =
-        ^(id<MTLTexture> tex) {
-          BOOL linearSource =
-              tex.pixelFormat == MTLPixelFormatRGBA16Float &&
-              linearSourcePassthrough != nil;
-          [enc setRenderPipelineState:linearSource ? linearSourcePassthrough
-                                                   : passthrough];
-        };
+    void (^selectPlainTexturePipeline)(id<MTLTexture>) = ^(id<MTLTexture> tex) {
+      BOOL linearSource = tex.pixelFormat == MTLPixelFormatRGBA16Float &&
+                          linearSourcePassthrough != nil;
+      [enc setRenderPipelineState:linearSource ? linearSourcePassthrough
+                                               : passthrough];
+    };
     void (^drawSlotComposite)(NSUInteger, _KKMiniFilmSlot *) =
         ^(NSUInteger i, _KKMiniFilmSlot *slot) {
           id<MTLTexture> graded = slot.processedTexture ?: slot.sourceTexture;
@@ -270,7 +341,8 @@
             // Land the seam on a whole DRAWABLE pixel, then re-derive the split
             // fraction from where it actually landed. Both halves are cut with
             // that one number, so they meet exactly rather than overlapping or
-            // leaving a sub-pixel gap that samples through to whatever is behind.
+            // leaving a sub-pixel gap that samples through to whatever is
+            // behind.
             CGRect cell = [self _filmstripCellRectInDrawable:i ofTotal:n];
             CGFloat u = splitU;
             if (cell.size.width > 0.0) {
@@ -366,13 +438,12 @@
     NSMutableArray<KKMiniElement *> *els = [NSMutableArray array];
     if (del &&
         [del respondsToSelector:@selector(miniViewer:elementsForContentRect:)])
-      [els addObjectsFromArray:[del miniViewer:self
-                        elementsForContentRect:cr]];
-    // The compare divider is the canvas's OWN on-screen control, drawn as a bare
-    // stroke through the encoder because no element kind draws one. It carries no
-    // grip glyph: a handle says "there is a value here", and the divider has none
-    // to offer - the whole line is the target, and a square only added something
-    // to collide with the parameter handles underneath it.
+      [els addObjectsFromArray:[del miniViewer:self elementsForContentRect:cr]];
+    // The compare divider is the canvas's OWN on-screen control, drawn as a
+    // bare stroke through the encoder because no element kind draws one. It
+    // carries no grip glyph: a handle says "there is a value here", and the
+    // divider has none to offer - the whole line is the target, and a square
+    // only added something to collide with the parameter handles underneath it.
     [self _encodeCompareDividerInContentRect:cr encoder:enc];
     if (els.count) {
       if (_linePipeline) {
@@ -600,12 +671,13 @@
 // Two-tone like the alignment grid: a dark wide stroke under a thin white one,
 // so the divider reads against both a blown highlight and a crushed black.
 //
-// Drawn as FILLED QUADS on the flat-colour pipeline, the same way the grid draws
-// its hairlines, and deliberately not as an antialiased line strip. The AA line
-// takes its width in view points through the OSC size scale, so the stroke came
-// out an arbitrary fraction of a device pixel wide: every step of the drag landed
-// the fade on a different sub-pixel phase and the line flickered dark, white,
-// dark as it moved. A hard-edged quad on whole pixels has no phase to shift.
+// Drawn as FILLED QUADS on the flat-colour pipeline, the same way the grid
+// draws its hairlines, and deliberately not as an antialiased line strip. The
+// AA line takes its width in view points through the OSC size scale, so the
+// stroke came out an arbitrary fraction of a device pixel wide: every step of
+// the drag landed the fade on a different sub-pixel phase and the line
+// flickered dark, white, dark as it moved. A hard-edged quad on whole pixels
+// has no phase to shift.
 - (void)_encodeCompareDividerInContentRect:(CGRect)contentRect
                                    encoder:(id<MTLRenderCommandEncoder>)enc {
   CGFloat x = [self _compareDividerXInViewPoints];
@@ -631,7 +703,9 @@
     KKVertex2D q[4] = {
         {{L, T}, {0, 0}}, {{L, B}, {0, 0}}, {{R, T}, {0, 0}}, {{R, B}, {0, 0}}};
     [enc setVertexBytes:q length:sizeof(q) atIndex:KKVertexInputIndex_Vertices];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
   };
   bar((simd_float4){0.0f, 0.0f, 0.0f, 0.55f}, 1.5f);
   bar((simd_float4){1.0f, 1.0f, 1.0f, 0.95f}, 0.5f);

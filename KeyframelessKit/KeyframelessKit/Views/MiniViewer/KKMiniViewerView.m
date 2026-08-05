@@ -388,6 +388,24 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
     [self _poll];
 }
 
+- (void)setPixelConsumerActive:(BOOL)active {
+  if (_pixelConsumerActive == active)
+    return;
+  _pixelConsumerActive = active;
+  if (active)
+    [self _requestPixelConsumerRender];
+}
+
+- (BOOL)pixelConsumerActive {
+  return _pixelConsumerActive;
+}
+
+- (void)setNeedsDisplay:(BOOL)needsDisplay {
+  [super setNeedsDisplay:needsDisplay];
+  if (needsDisplay && _pixelConsumerActive && self.isHiddenOrHasHiddenAncestor)
+    [self _requestPixelConsumerRender];
+}
+
 // Cmd-0 snaps zoom/pan back to fit, matching double-click and the inspector's
 // Reset Zoom button. Inside FCP's ViewBridge XPC, a command key-equivalent
 // (Cmd-0) NEVER crosses into the plugin process: the host resolves key

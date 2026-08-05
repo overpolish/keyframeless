@@ -103,6 +103,9 @@ NS_ASSUME_NONNULL_BEGIN
   NSMutableArray<_KKMiniFilmSlot *> *_auxSlots;
   NSTimer *_pollTimer;
   BOOL _activitySuspended;
+  BOOL _pixelConsumerActive;
+  BOOL _pixelConsumerRenderPending;
+  BOOL _pixelConsumerRenderAgain;
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
                     // arrive global, like scroll/magnify)
@@ -222,6 +225,7 @@ NS_ASSUME_NONNULL_BEGIN
 // () extension) so the primary @implementation isn't expected to provide the
 // required delegate methods - they live in KKMiniViewerView+Draw.m.
 @interface KKMiniViewerView (Draw) <MTKViewDelegate>
+- (void)_requestPixelConsumerRender;
 /// Stroke the compare divider across the content rect. No-op unless the split
 /// is active and there's an ungraded frame to split against.
 - (void)_encodeCompareDividerInContentRect:(CGRect)contentRect

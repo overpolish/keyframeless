@@ -81,16 +81,22 @@
 // both states. Pan keeps the scrollWheel: responder below - AppKit delivers
 // scroll to inactive windows, so it already works non-key.
 - (void)scrollWheel:(NSEvent *)event {
+  // Keep AppKit's gesture machinery in the responder chain. A trackpad pinch
+  // begins as part of the same gesture stream as precise scrolling; dropping
+  // the superclass dispatch here made two-finger pan continue to work while
+  // preventing the subsequent NSEventTypeMagnify events from being formed.
+  // Our classification below still owns the actual pan / mouse-wheel zoom, so
+  // restoring this does not undo the Parsec/smooth-wheel normalization.
+  [super scrollWheel:event];
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
   // `hasPreciseScrollingDeltas` is not a reliable trackpad test: smooth-wheel
   // mice (including Logitech devices and the Magic Mouse) report precise
   // deltas too. Trackpad two-finger gestures carry a gesture phase, whereas a
   // mouse wheel is normally phase-less. Keep two-finger scrolling as pan, but
   // make every mouse wheel zoom even when its driver enables smooth scrolling.
-  BOOL trackpadGesture =
-      event.hasPreciseScrollingDeltas &&
-      (event.phase != NSEventPhaseNone ||
-       event.momentumPhase != NSEventPhaseNone);
+  BOOL trackpadGesture = event.hasPreciseScrollingDeltas &&
+                         (event.phase != NSEventPhaseNone ||
+                          event.momentumPhase != NSEventPhaseNone);
   if (trackpadGesture) {
     // Trackpad two-finger → pan.
     _lastPanZoomTime = CACurrentMediaTime();

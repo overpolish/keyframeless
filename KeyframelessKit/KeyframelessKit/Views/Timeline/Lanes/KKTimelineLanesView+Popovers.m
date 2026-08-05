@@ -53,17 +53,19 @@ void KKSetSuppressedHandles(id delegate,
 // previewing so it can pull that frame (via -scheduleInputs:).
 static NSMutableDictionary *KKReadMutableViewerRequest(NSString *path) {
   NSData *data = path.length ? [NSData dataWithContentsOfFile:path] : nil;
-  NSDictionary *json =
-      data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil]
-           : nil;
+  NSDictionary *json = data ? [NSJSONSerialization JSONObjectWithData:data
+                                                              options:0
+                                                                error:nil]
+                            : nil;
   return [json isKindOfClass:[NSDictionary class]]
              ? [json mutableCopy]
              : [NSMutableDictionary dictionary];
 }
 
 static void KKWriteViewerRequest(NSString *path, NSDictionary *request) {
-  NSData *json =
-      [NSJSONSerialization dataWithJSONObject:request options:0 error:nil];
+  NSData *json = [NSJSONSerialization dataWithJSONObject:request
+                                                 options:0
+                                                   error:nil];
   [json writeToFile:path atomically:YES];
 }
 
@@ -460,7 +462,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
 
 - (void)_syncMiniViewerFeedActivity {
   BOOL active = ([self _editorPanelIsVisible] && _openEditorIsStaticFamily &&
-                 !_editorCompactMode);
+                 (!_editorCompactMode || self.editorMiniViewerFramesRequired));
   if (_publishedMiniViewerFeedActiveValid &&
       _publishedMiniViewerFeedActive == active)
     return;
@@ -800,6 +802,10 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   KKFindMiniViewer(content).grabsKeyFocusOnClick =
       self.miniGrabsKeyFocusOnClick;
   _openEditorMiniViewer.livePlaybackActive = _openPopoverLivePlaying;
+  _openEditorMiniViewer.activitySuspended =
+      _editorCompactMode && !self.editorMiniViewerFramesRequired;
+  _openEditorMiniViewer.pixelConsumerActive =
+      self.editorMiniViewerFramesRequired;
 
   NSRect card = [anchor.window
       convertRectToScreen:[anchor convertRect:anchor.bounds toView:nil]];

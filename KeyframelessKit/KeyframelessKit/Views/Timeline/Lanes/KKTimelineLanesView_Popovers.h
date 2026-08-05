@@ -105,6 +105,7 @@ NS_ASSUME_NONNULL_BEGIN
   BOOL _editorSidebarVisible;
   BOOL _editorRightPanelVisible;
   BOOL _editorCompactMode;
+  BOOL _editorMiniViewerFramesRequired;
   NSString *_editorStatePersistenceKey;
   NSSize _editorExpandedSizeBeforeCompact;
   BOOL _publishedMiniViewerFeedActive;

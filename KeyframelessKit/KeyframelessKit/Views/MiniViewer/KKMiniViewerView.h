@@ -693,6 +693,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// resolves an IOSurface; the current source is resolved when expanded again.
 @property(nonatomic, getter=isActivitySuspended) BOOL activitySuspended;
 
+/// Keep producing `processedTexture` for a headless pixel consumer while this
+/// view is hidden (for example a compact editor's vectorscope). The offscreen
+/// pass has no drawable or OSC/chrome and is coalesced to one frame in flight.
+/// Default NO.
+@property(nonatomic) BOOL pixelConsumerActive;
+
 /// When YES, a click in the mini makes the mini the window's first responder
 /// (instead of resigning to nil), so an NSPopover-hosted mini becomes the key
 /// window and its local keyDown monitor fires - letting bare keys (e.g. Delete

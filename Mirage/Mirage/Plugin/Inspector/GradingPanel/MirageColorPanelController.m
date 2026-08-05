@@ -9,6 +9,7 @@
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMiniViewerRenderer.h>
 #import <KeyframelessKit/KKPaddedScrollView.h>
+#import <KeyframelessKit/KKPluginInstanceState.h>
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -53,6 +54,14 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   if ((self = [super init])) {
     _lanesView = lanesView;
     _apiManager = apiManager;
+    // The persisted rack selection is seeded into the per-instance state
+    // before the inspector is constructed. Start on that same entry: the
+    // subclass's first -applyTimeline: runs from super-init, before this
+    // controller exists, so waiting for that push left the first editor open
+    // resolving the sentinel shader. A second open happened to work only
+    // because the rack refresh had corrected the controller by then.
+    _selectedRackEntryID = [MirageRackEntryIDOrSentinel(
+        KKInstanceStateForAPI(apiManager).selectedRackEntryID) copy];
     _wellRowMask = -1;
     _userVisible = YES;
     NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
@@ -92,6 +101,7 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   [self _endPuckDragReason:@"invalidate"];
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [self _stopSampling];
+  _lanesView.editorMiniViewerFramesRequired = NO;
   [_panel hidePanel];
 }
 
@@ -181,6 +191,7 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   } else {
     [self _endPuckDragReason:@"panel hidden"];
     [self _stopSampling];
+    _lanesView.editorMiniViewerFramesRequired = NO;
     [_panel hidePanel];
   }
 }
@@ -192,6 +203,7 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   if (!userVisible) {
     [self _endPuckDragReason:@"panel toggled off"];
     [self _stopSampling];
+    _lanesView.editorMiniViewerFramesRequired = NO;
     [_panel hidePanel];
   } else {
     [self _showIfPopoverOpen];
@@ -328,6 +340,10 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   KKFloatingPanel *panel = [self _ensurePanel];
   panel.appearance = _parentWindow.appearance;
   [panel showBesideCard:card ofWindow:_parentWindow];
+  // A vectorscope is a real pixel consumer. Compact mode normally tears down
+  // the hidden mini's frame pipeline; opt it back in only while this companion
+  // panel is actually visible, then release it again on every hide/close path.
+  _lanesView.editorMiniViewerFramesRequired = YES;
   [self _refreshPuck];
   [self _startSampling];
 }
@@ -653,9 +669,12 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
 // Called on every timeline apply, so a recompile refreshes the ring, the labels
 // and the puck even when the opt-in flag itself did not change.
 - (void)timelineDidChange {
-  if (!_panel.isVisible)
-    return;
-  [self _refreshPuck];
+  // A cold-open editor can precede the first fully-applied timeline. Recheck
+  // the source here so that arrival can reveal both the header toggle and the
+  // companion panel in place, without requiring the editor to be reopened.
+  self.surfaceEnabled = [self _resolveSurfaceEnabledFromLanes];
+  if (_panel.isVisible)
+    [self _refreshPuck];
 }
 
 - (void)presentationContextDidChange {
@@ -694,6 +713,7 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
     return;
   [self _endPuckDragReason:@"the popover closed"];
   [self _stopSampling];
+  _lanesView.editorMiniViewerFramesRequired = NO;
   // A declaration is a statement about the shot being graded, so it does not
   // outlive the popover it was made in. The matte does not either, and it is
   // reset through the SETTER by the row that owns it - so the reset carries a

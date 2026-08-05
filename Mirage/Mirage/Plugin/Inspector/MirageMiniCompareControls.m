@@ -13,6 +13,7 @@
 #import <QuartzCore/QuartzCore.h>
 
 #import "Constants.h"
+#import "MirageCategory.h"
 #import "MirageInspectorChrome.h"
 #import "MirageLocalized.h"
 #import "MirageSurfaceResponse.h" // MirageSurfaceSelectionToggleForSource
@@ -292,6 +293,19 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   return MirageSurfaceSelectionToggleForSource([self _source]).length > 0;
 }
 
+// Expanded mode can ask the mini whether it resolved an untouched source.
+// Compact mode intentionally released that texture, so use the same template
+// capability test as the main-viewer OSC instead. Otherwise hiding the mini
+// also hides/disables B and S even though their main-viewer buttons remain on
+// screen and the render path can still perform both comparisons.
+- (BOOL)_compareAvailable {
+  if (_mini.compareAvailable)
+    return YES;
+  return _mini.isActivitySuspended &&
+         ![MirageCategoryForSource([self _source])
+             isEqualToString:kMirageCategoryGenerator];
+}
+
 // Which buttons the row is showing, how they are tinted, and how wide that
 // makes it.
 //
@@ -305,7 +319,7 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   KKMiniViewerView *mini = _mini;
   if (!_chip || !mini)
     return;
-  BOOL available = mini.compareAvailable;
+  BOOL available = [self _compareAvailable];
   BOOL hasSelection = [self _declaresSelectionToggle];
   // Selection is a capability of ONE shader, not of the rack. Heal any stale
   // session state as soon as a recompile/selection lands on a shader that does
@@ -369,7 +383,7 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 // compare toggle must never bury the edit the user actually wants to step back.
 - (void)_toggleCompareSplit:(id)sender {
   KKMiniViewerView *mini = _mini;
-  if (!mini.compareAvailable)
+  if (![self _compareAvailable])
     return;
   mini.compareSplitEnabled = !mini.compareSplitEnabled;
   KKInstanceStateForAPI(_apiManager).mirageCompareSplitEnabled =
@@ -384,7 +398,7 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 
 - (void)_setCompareBypass:(BOOL)held {
   KKMiniViewerView *mini = _mini;
-  if (!mini.compareAvailable)
+  if (![self _compareAvailable])
     return;
   mini.compareBypassing = held;
   KKInstanceStateForAPI(_apiManager).mirageCompareBypassing = held;
