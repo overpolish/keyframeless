@@ -20,7 +20,7 @@
   --r-md: 8px;
   --r-panel: 12px;
 
-  --maxw: 680px;
+  --maxw: 760px;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
     Arial, sans-serif;
 }
@@ -111,6 +111,11 @@ body {
 
 .cta:hover {
   filter: brightness(1.08);
+}
+
+/* Keep the header row the same height as the landing-page header. */
+.topbar .cta {
+  padding-block: 5px;
 }
 
 .cta-shine {
