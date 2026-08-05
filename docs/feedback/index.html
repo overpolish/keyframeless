@@ -119,6 +119,16 @@
         opacity: 0.5;
         cursor: default;
       }
+      .success-callout {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .success-callout .cta {
+        flex: none;
+        align-self: center;
+      }
       .visually-hidden {
         position: absolute;
         width: 1px;
@@ -248,9 +258,14 @@
       </p>
       <div class="ctx" id="ctx" hidden></div>
 
-      <div class="callout tip" id="ok" hidden>
-        <div class="callout-title">Thanks</div>
-        <div class="callout-body" id="ok-body">Feedback submitted.</div>
+      <div class="callout tip success-callout" id="ok" hidden>
+        <div>
+          <div class="callout-title">Thanks</div>
+          <div class="callout-body" id="ok-body">Feedback submitted.</div>
+        </div>
+        <button class="cta" type="button" id="another-feedback">
+          Send more feedback
+        </button>
       </div>
 
       <div class="callout caution" id="err" hidden>
@@ -398,9 +413,9 @@
       const params = new URLSearchParams(location.search);
       const plugin = params.get("plugin") || "";
       const version = params.get("version") || "";
+      const ctx = document.getElementById("ctx");
 
       if (plugin || version) {
-        const ctx = document.getElementById("ctx");
         const name = PLUGIN_NAMES[plugin] || plugin || "Keyframeless";
         ctx.innerHTML =
           "<strong>" +
@@ -415,9 +430,24 @@
       const submit = document.getElementById("submit");
       const ok = document.getElementById("ok");
       const okBody = document.getElementById("ok-body");
+      const anotherFeedback = document.getElementById("another-feedback");
       const err = document.getElementById("err");
       const errTitle = document.getElementById("err-title");
       const errBody = document.getElementById("err-body");
+
+      // Local-only preview of the post-submit state for visual QA.
+      const previewSubmitted =
+        (location.hostname === "localhost" || location.hostname === "127.0.0.1") &&
+        params.get("preview") === "submitted";
+      if (previewSubmitted) {
+        okBody.innerHTML =
+          'Feedback submitted - <a href="https://github.com/overpolish/keyframeless/issues" ' +
+          'target="_blank" rel="noopener">view it on GitHub</a>.';
+        intro.hidden = true;
+        ctx.hidden = true;
+        form.hidden = true;
+        ok.hidden = false;
+      }
 
       // title defaults to the send-failure wording; pass one for validation.
       function showError(msg, title) {
@@ -525,6 +555,23 @@
         });
       }
 
+      anotherFeedback.addEventListener("click", () => {
+        form.reset();
+        selectedImages.splice(0);
+        imagesInput.value = "";
+        renderPreviews();
+        if (window.turnstile) window.turnstile.reset();
+
+        submit.disabled = false;
+        submit.textContent = "Send feedback";
+        ok.hidden = true;
+        err.hidden = true;
+        intro.hidden = false;
+        ctx.hidden = !(plugin || version);
+        form.hidden = false;
+        document.getElementById("title").focus();
+      });
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         err.hidden = true;
@@ -576,7 +623,7 @@
           }
           intro.hidden = true;
           form.hidden = true;
-          document.getElementById("ctx").hidden = true;
+          ctx.hidden = true;
           ok.hidden = false;
           ok.scrollIntoView({ behavior: "smooth", block: "center" });
         } catch (e) {

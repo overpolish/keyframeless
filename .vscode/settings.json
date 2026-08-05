@@ -141,7 +141,8 @@
   ],
   "conventionalCommits.scopes": [
     "KeyframelessKit",
-    "FxPlug",    "Canvas",
+    "FxPlug",
+    "Canvas",
     "Timing",
     "MotionBlur",
     "Joyride",
@@ -149,6 +150,7 @@
     "Keyframeless X - Steno",
     "KeyframelessAI",
     "Mirage",
-    "Keyframeless X - Sonar"
+    "Keyframeless X - Sonar",
+    "keyframeless.com"
   ]
 }
