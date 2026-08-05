@@ -48,6 +48,50 @@ fi
 
 as_user() { sudo -u "$CURRENT_USER" "$@"; }
 
+MIGRATION_OK=1
+
+# Merge an old directory into an already-created new directory without
+# overwriting either side. Missing entries are moved into place. Identical
+# files are de-duplicated. A genuinely different old file is kept beside the
+# new one with a visible suffix so the migration can never silently discard it.
+unique_old_path() {
+  local target="$1"
+  local candidate="${target}.from-overpolish"
+  local number=2
+  while [ -e "$candidate" ] || [ -L "$candidate" ]; do
+    candidate="${target}.from-overpolish-${number}"
+    number=$((number + 1))
+  done
+  printf '%s\n' "$candidate"
+}
+
+merge_old_tree() {
+  local source="$1"
+  local destination="$2"
+  local entry name target preserved
+
+  as_user mkdir -p "$destination" || return 1
+
+  while IFS= read -r -d '' entry; do
+    name=$(basename "$entry")
+    target="$destination/$name"
+
+    if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+      mv "$entry" "$target" || return 1
+    elif [ -d "$entry" ] && [ ! -L "$entry" ] && \
+         [ -d "$target" ] && [ ! -L "$target" ]; then
+      merge_old_tree "$entry" "$target" || return 1
+      rmdir "$entry" || return 1
+    elif [ -f "$entry" ] && [ -f "$target" ] && cmp -s "$entry" "$target"; then
+      rm -f "$entry" || return 1
+    else
+      preserved=$(unique_old_path "$target")
+      mv "$entry" "$preserved" || return 1
+      echo "  preserved conflict as ${preserved#$NEW_GROUP/}"
+    fi
+  done < <(find "$source" -mindepth 1 -maxdepth 1 -print0)
+}
+
 # --- 1. Superseded LaunchAgents ------------------------------------------
 # The helper's plist is installed by FILENAME, so the renamed one lands beside
 # the old rather than replacing it, leaving two agents with the old one still
@@ -67,23 +111,53 @@ OLD_GROUP="$USER_HOME/Library/Group Containers/group.co.overpolish.keyframeless"
 NEW_GROUP="$USER_HOME/Library/Group Containers/group.com.keyframeless"
 if [ -d "$OLD_GROUP" ]; then
   echo "group: migrating $(du -sh "$OLD_GROUP" 2>/dev/null | cut -f1)"
-  as_user mkdir -p "$NEW_GROUP"
-  for item in "$OLD_GROUP"/*; do
-    [ -e "$item" ] || continue
+  as_user mkdir -p "$NEW_GROUP" || MIGRATION_OK=0
+  while IFS= read -r -d '' item; do
     name=$(basename "$item")
     # The socket is recreated by the helper; never carry a stale one over.
-    [ "$name" = "kkai.sock" ] && continue
-    if [ -e "$NEW_GROUP/$name" ]; then
-      echo "  skip $name (already present)"
-    else
-      mv "$item" "$NEW_GROUP/$name" && echo "  moved $name"
+    if [ "$name" = "kkai.sock" ]; then
+      rm -f "$item"
+      continue
     fi
-  done
+    if [ -e "$NEW_GROUP/$name" ] || [ -L "$NEW_GROUP/$name" ]; then
+      if [ -d "$item" ] && [ ! -L "$item" ] && \
+         [ -d "$NEW_GROUP/$name" ] && [ ! -L "$NEW_GROUP/$name" ]; then
+        echo "  merge $name (already present)"
+        if merge_old_tree "$item" "$NEW_GROUP/$name"; then
+          rmdir "$item" || MIGRATION_OK=0
+        else
+          echo "  ERROR: could not completely merge $name; old data retained"
+          MIGRATION_OK=0
+        fi
+      elif [ -f "$item" ] && [ -f "$NEW_GROUP/$name" ] && \
+           cmp -s "$item" "$NEW_GROUP/$name"; then
+        rm -f "$item" || MIGRATION_OK=0
+      else
+        preserved=$(unique_old_path "$NEW_GROUP/$name")
+        if mv "$item" "$preserved"; then
+          echo "  preserved conflict as ${preserved#$NEW_GROUP/}"
+        else
+          echo "  ERROR: could not preserve conflicting $name; old data retained"
+          MIGRATION_OK=0
+        fi
+      fi
+    else
+      if mv "$item" "$NEW_GROUP/$name"; then
+        echo "  moved $name"
+      else
+        echo "  ERROR: could not move $name; old data retained"
+        MIGRATION_OK=0
+      fi
+    fi
+  done < <(find "$OLD_GROUP" -mindepth 1 -maxdepth 1 -print0)
   # The metadata plist names the OLD group; leaving it would misidentify the
   # container. containermanagerd rewrites it on first entitled access.
   rm -f "$NEW_GROUP/.com.apple.containermanagerd.metadata.plist"
-  chown -R "$CURRENT_USER:staff" "$NEW_GROUP"
-  rm -rf "$OLD_GROUP"
+  chown -R "$CURRENT_USER:staff" "$NEW_GROUP" || MIGRATION_OK=0
+  if ! rmdir "$OLD_GROUP" 2>/dev/null; then
+    echo "group: old container retained because migration was incomplete"
+    MIGRATION_OK=0
+  fi
 fi
 
 # --- 3. Keyframeless X container (transcription models) --------------------
@@ -148,7 +222,14 @@ rm -rf "$USER_HOME/Library/Containers/co.overpolish.keyframeless.Canvas.PlugIn" 
 echo "removed retired containers/caches"
 
 # --- 6. Done ---------------------------------------------------------------
-as_user mkdir -p "$(dirname "$MARKER")" 2>/dev/null
-as_user touch "$MARKER"
-echo "=== migration complete ==="
-exit 0
+if [ "$MIGRATION_OK" -eq 1 ]; then
+  if as_user mkdir -p "$(dirname "$MARKER")" 2>/dev/null && \
+     as_user touch "$MARKER"; then
+    echo "=== migration complete ==="
+    exit 0
+  fi
+  echo "ERROR: could not write migration marker"
+fi
+
+echo "=== migration incomplete; it will retry on the next install ==="
+exit 1
