@@ -250,11 +250,9 @@ MirageRackEntryEnabledAtFraction(KKTimeline *_Nullable timeline,
   return MirageRackEntryEnabledDefault;
 }
 
-/// What the INSPECTOR's mini viewer is showing of the chain, for this popover
-/// session and nothing longer. Never persisted, never a lane, never an undo
-/// entry - and Final Cut's own viewer always shows the whole chain, whichever
-/// of these is on. Only one is active at a time, on one entry, across the whole
-/// rack.
+/// What both viewers show of the chain for this editor-panel session and
+/// nothing longer. Never persisted, never a lane and never an undo entry. Only
+/// one is active at a time, on one entry, across the whole rack.
 typedef NS_ENUM(NSInteger, MirageRackPreviewMode) {
   /// Every enabled entry, in order. What a session starts on.
   MirageRackPreviewModeOff = 0,
@@ -264,6 +262,49 @@ typedef NS_ENUM(NSInteger, MirageRackPreviewMode) {
   /// ONE entry, fed the original clip: what that entry ALONE contributes.
   MirageRackPreviewModeSolo,
 };
+
+/// The shared mini/main render plan for the session-only rack preview.
+/// `enabledEntryIDs` is the ordinary animated Enabled-lane answer at this
+/// frame. Solo deliberately ignores it for its focused entry: Enabled asks
+/// whether a shader belongs in the chain, while Solo asks what that shader
+/// does by itself. A missing/stale focus safely falls back to the full enabled
+/// chain.
+static inline NSArray<NSString *> *MirageRackPreviewEntryPlan(
+    NSArray<NSString *> *entryIDs, NSSet<NSString *> *enabledEntryIDs,
+    MirageRackPreviewMode mode, NSString *_Nullable focusEntryID) {
+  NSUInteger focusIndex =
+      focusEntryID.length ? [entryIDs indexOfObject:focusEntryID] : NSNotFound;
+  if (mode == MirageRackPreviewModeSolo && focusIndex != NSNotFound)
+    return @[ entryIDs[focusIndex] ];
+
+  NSUInteger limit = entryIDs.count;
+  if (mode == MirageRackPreviewModeUpToHere && focusIndex != NSNotFound)
+    limit = focusIndex + 1;
+
+  NSMutableArray<NSString *> *plan = [NSMutableArray array];
+  for (NSUInteger i = 0; i < limit; i++)
+    if ([enabledEntryIDs containsObject:entryIDs[i]])
+      [plan addObject:entryIDs[i]];
+  return plan;
+}
+
+/// The effective viewer plan after diagnostic overlays are considered.
+/// A selection matte describes the SELECTED entry's result, so entries after
+/// it must not process that matte. Earlier enabled entries still run because
+/// they are the selected shader's real input. A stale selection safely falls
+/// back to the ordinary session preview plan.
+static inline NSArray<NSString *> *MirageRackViewerEntryPlan(
+    NSArray<NSString *> *entryIDs, NSSet<NSString *> *enabledEntryIDs,
+    MirageRackPreviewMode mode, NSString *_Nullable focusEntryID,
+    BOOL selectionMatteActive, NSString *_Nullable selectedEntryID) {
+  if (selectionMatteActive && selectedEntryID.length &&
+      [entryIDs containsObject:selectedEntryID])
+    return MirageRackPreviewEntryPlan(entryIDs, enabledEntryIDs,
+                                      MirageRackPreviewModeUpToHere,
+                                      selectedEntryID);
+  return MirageRackPreviewEntryPlan(entryIDs, enabledEntryIDs, mode,
+                                    focusEntryID);
+}
 
 /// One entry's code lane, found by key (`MirageRackCodeLaneKey`) in timeline
 /// order. nil if the entry has never had one stamped - a rack entry that

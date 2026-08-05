@@ -11,6 +11,7 @@
 
 #import "MirageInspectorView_Private.h"
 
+#import "Constants.h"
 #import "MirageInspectorChrome.h" // MirageFindMiniViewer
 #import "MirageRack.h"
 
@@ -61,6 +62,17 @@
   state.selectedRackEntryID = entryID;
   if (!moved)
     return;
+  // A matte belongs to the shader that was selected when it was enabled. A
+  // selection move must return to the normal image rather than carrying that
+  // diagnostic into a different shader (which may not expose one at all).
+  if (state.mirageCompareSelectionEnabled) {
+    state.mirageCompareSelectionEnabled = NO;
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:kMirageCompareStateDidChangeNotification
+                      object:nil];
+    if (self.basicLanesView.onBoundaryPreviewNeedsRender)
+      self.basicLanesView.onBoundaryPreviewNeedsRender();
+  }
   [self rackSelectionDidChange];
   if (!persist)
     return;
@@ -110,6 +122,12 @@
   // The Color panel is derived from ONE entry's source: a selection move is the
   // same event to it as a recompile.
   [_colorPanelController setSelectedRackEntryID:self.selectedRackEntryID];
+  // The mini compare row also has one source-derived control: Show Selection.
+  // A rack selection changes that capability without changing the timeline,
+  // so -applyTimeline: will not necessarily run and cannot be relied on to
+  // refresh it. Re-evaluate now, from the final selected entry, just as the
+  // main viewer does on its next OSC draw.
+  [_compareControls timelineDidChange];
   // The OSC surfaces are the plugin's, not the view's: the viewer's controls
   // re-derive themselves off the per-instance selection on their next tick, but
   // the visibility CHECKLIST and the mini viewer's control sets are pushed, so

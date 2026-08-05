@@ -61,15 +61,6 @@
 /// log the composition and its skips once when they change rather than on every
 /// frame of playback.
 @property(nonatomic, copy, nullable) NSString *lastRackChainSignature;
-/// SHADER RACK, measured cost: an exponential moving average of how long one
-/// whole render callback takes (seconds), the run of consecutive frames that
-/// average has stayed over the project's frame budget, and the last answer
-/// published to the inspector. A rack that is genuinely slower than real time
-/// is the only thing the strip's warning is allowed to say, and only
-/// measurement can tell that from an eight-shader chain that runs fine.
-@property(nonatomic) double chainRenderCostEMA;
-@property(nonatomic) NSInteger chainRenderOverBudgetFrames;
-@property(nonatomic) BOOL chainRenderSlowPublished;
 /// Memo for -linkableLanesForManifest: the lane set last built, and the
 /// timeline blob + audio bindings it was built from. The manifest is rebuilt on
 /// every render tick and a rack multiplies the directive parse behind it by its

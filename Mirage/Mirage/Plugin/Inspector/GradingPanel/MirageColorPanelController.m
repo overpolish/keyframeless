@@ -38,11 +38,21 @@ static const NSUInteger kToneBinCount = 96;
 static const double kRingMinStop = -7.0;
 static const double kRingMaxStop = 5.0;
 
+/// Primary editors are themselves KKFloatingPanel children of the stable
+/// inspector/anchor window. The Color surface must be their SIBLING, not their
+/// child: siblings retain the same above-FCP ordering, while dragging one does
+/// not translate the other.
+static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
+  return editorWindow.parentWindow ?: editorWindow;
+}
+
 @implementation MirageColorPanelController
 
-- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView {
+- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView
+                       apiManager:(id)apiManager {
   if ((self = [super init])) {
     _lanesView = lanesView;
+    _apiManager = apiManager;
     _wellRowMask = -1;
     _userVisible = YES;
     NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
@@ -65,6 +75,10 @@ static const double kRingMaxStop = 5.0;
     [nc addObserver:self
            selector:@selector(_windowResignedKey:)
                name:NSWindowDidResignKeyNotification
+             object:nil];
+    [nc addObserver:self
+           selector:@selector(_mainViewerPickRequested:)
+               name:kMirageViewerPickDidRequestNotification
              object:nil];
   }
   return self;
@@ -119,6 +133,12 @@ static const double kRingMaxStop = 5.0;
   // letting it land on the new entry's lanes is the same rule the popover
   // close applies.
   [self _endPuckDragReason:@"the selected shader changed"];
+  // Preview overrides are keyed only by the author-facing control label. If
+  // the old shader had a selection switch and the new one does not, merely
+  // pushing the new shader's (empty) set cannot retract the old value: it
+  // would keep forcing the upstream shader to render its matte. Selection is
+  // a hard ownership boundary, so drop the old entry's overrides first.
+  [self _clearLivePreviewValues];
   _selectedRackEntryID = [next copy];
   // Force the spec rebuild: the ring set is cached against the SOURCE it was
   // built from, and two entries running the same template have the same source
@@ -132,6 +152,7 @@ static const double kRingMaxStop = 5.0;
     [self _resolveRingsFromLanes];
     [self _refreshPuck];
   }
+  [self _pushPreviewOverrides];
 }
 
 - (void)setSurfaceEnabled:(BOOL)surfaceEnabled {
@@ -270,7 +291,7 @@ static const double kRingMaxStop = 5.0;
   // The window may not exist yet (cold boot), in which case the popover's
   // content view is what eventually acquires one.
   if (!_parentWindow)
-    _parentWindow = _popoverContentView.window;
+    _parentWindow = MirageColorPanelHostWindow(_popoverContentView.window);
   if (!_parentWindow || !_parentWindow.isVisible) {
     if (!_popoverContentView || attempt + 1 >= kMaxAttempts) {
       if (_popoverContentView)
@@ -409,7 +430,11 @@ static const double kRingMaxStop = 5.0;
     return;
   }
   NSValue *cardVal = note.userInfo[@"contentRect"];
-  _parentWindow = popoverWindow;
+  // The editor panel and Color surface are peers under the same stable host.
+  // Attaching Color directly to the editor made it follow every editor drag;
+  // making it top-level fixed that movement but lost the ordering that keeps
+  // plugin panels above Final Cut.
+  _parentWindow = MirageColorPanelHostWindow(popoverWindow);
   _openCard = cardVal ? cardVal.rectValue
                       : (popoverWindow ? popoverWindow.frame : NSZeroRect);
   _openFraction = [note.userInfo[@"fraction"] doubleValue];

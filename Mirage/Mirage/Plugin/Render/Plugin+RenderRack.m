@@ -212,10 +212,26 @@ static void MirageApplyRackSelectionPreview(MirageShaderModel *model,
   // frame's own instant is what selects it.
   NSMutableArray<NSNumber *> *enabled = [NSMutableArray array];
   NSMutableArray<NSString *> *entryIDs = [NSMutableArray array];
+  NSMutableSet<NSString *> *enabledEntryIDs = [NSMutableSet set];
   for (NSInteger i = 0; i < entryCount; i++) {
-    [entryIDs addObject:MirageStateBlobEntryIDAtIndex(pluginState, i)];
+    NSString *entryID = MirageStateBlobEntryIDAtIndex(pluginState, i);
+    [entryIDs addObject:entryID];
     if (MirageStateBlobEntryEnabled(pluginState, i, 0))
-      [enabled addObject:@(i)];
+      [enabledEntryIDs addObject:entryID];
+  }
+
+  KKPluginInstanceState *session = KKInstanceStateForAPI(self.apiManager);
+  MirageRackPreviewMode previewMode =
+      (MirageRackPreviewMode)session.mirageRackPreviewMode;
+  NSString *selectedEntry =
+      MirageRackEntryIDOrSentinel(session.selectedRackEntryID);
+  NSArray<NSString *> *plan = MirageRackViewerEntryPlan(
+      entryIDs, enabledEntryIDs, previewMode, session.mirageRackPreviewEntryID,
+      session.mirageCompareSelectionEnabled, selectedEntry);
+  for (NSString *entryID in plan) {
+    NSUInteger index = [entryIDs indexOfObject:entryID];
+    if (index != NSNotFound)
+      [enabled addObject:@(index)];
   }
 
   NSMutableArray<NSString *> *shape =
@@ -226,6 +242,13 @@ static void MirageApplyRackSelectionPreview(MirageShaderModel *model,
                                                     ? @""
                                                     : @"(skipped)"]];
   NSString *signature = [shape componentsJoinedByString:@" -> "];
+  if (previewMode != MirageRackPreviewModeOff)
+    signature = [signature
+        stringByAppendingFormat:@" | preview=%ld:%@", (long)previewMode,
+                                session.mirageRackPreviewEntryID ?: @"(none)"];
+  if (session.mirageCompareSelectionEnabled)
+    signature =
+        [signature stringByAppendingFormat:@" | matte=%@", selectedEntry];
   if (![signature isEqualToString:self.lastRackChainSignature]) {
     self.lastRackChainSignature = signature;
     KKLogDebug(@"[Mirage] rack chain entries=%ld enabled=%ld | %@",

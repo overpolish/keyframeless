@@ -61,6 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
   /// The declared rings, in declaration order: index 0 is the circle on top.
   NSArray<NSNumber *> *_ringKinds;
   __weak KKTimelineLanesView *_lanesView;
+  id _apiManager;
   BOOL _userVisible;
   /// One circle per surface the grammar allows, built once and shown as the
   /// source asks. Built up front rather than on demand because a recompile can
@@ -242,6 +243,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_updatePickCursor;
 - (void)_disarmPicking;
 - (BOOL)_handlePickEvent:(NSEvent *)event;
+- (void)_mainViewerPickRequested:(NSNotification *)note;
 - (void)_pickFromSourceAtUV:(NSPoint)uv inMini:(KKMiniViewerView *)mini;
 - (void)_schedulePickWrite:(NSArray<NSNumber *> *)rgb
             activePuckOnly:(BOOL)activePuckOnly;

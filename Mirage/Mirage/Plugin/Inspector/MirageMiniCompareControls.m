@@ -279,7 +279,10 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 /// The shader source the row's one shader-dependent button is a function of.
 - (NSString *)_source {
   KKTimeline *timeline = _lanesView.currentTimeline;
-  return timeline ? [MiragePlugin shaderSourceFromTimeline:timeline] : @"";
+  if (!timeline)
+    return @"";
+  NSString *selected = KKInstanceStateForAPI(_apiManager).selectedRackEntryID;
+  return [MiragePlugin shaderSourceFromTimeline:timeline forRackEntry:selected];
 }
 
 /// Whether this shader offers a selection switch at all. The DECLARATION alone,
@@ -303,9 +306,26 @@ static const CGFloat kEdgeInset = KKPaddingSM;
   if (!_chip || !mini)
     return;
   BOOL available = mini.compareAvailable;
+  BOOL hasSelection = [self _declaresSelectionToggle];
+  // Selection is a capability of ONE shader, not of the rack. Heal any stale
+  // session state as soon as a recompile/selection lands on a shader that does
+  // not declare it, so neither M nor a previously visible button can turn the
+  // upstream shader's old override back on.
+  if (!hasSelection && _showSelectionActive) {
+    _showSelectionActive = NO;
+    KKInstanceStateForAPI(_apiManager).mirageCompareSelectionEnabled = NO;
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:kMirageCompareStateDidChangeNotification
+                      object:nil];
+    if (_lanesView.onBoundaryPreviewNeedsRender)
+      _lanesView.onBoundaryPreviewNeedsRender();
+    if (self.onSelectionChanged)
+      self.onSelectionChanged(NO);
+    [mini setNeedsDisplay:YES];
+  }
   _splitButton.hidden = !available;
   _beforeButton.hidden = !available;
-  _selectionButton.hidden = ![self _declaresSelectionToggle];
+  _selectionButton.hidden = !hasSelection;
   _splitButton.contentTintColor = (available && mini.compareSplitEnabled)
                                       ? NSColor.accentMatchingHost
                                       : NSColor.secondaryLabelColor;

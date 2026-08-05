@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-// The strip the shader chain scrolls inside: the scrolling rail, its overflow
-// fades, and the measured-slowness warning pinned past the end of it.
+// The strip the shader chain scrolls inside: the scrolling rail and its
+// overflow fades.
 //
 // What one box CONTAINS is MirageShaderRackView+Boxes.m; the reorder drag is
 // MirageShaderRackView+DragDrop.m.
@@ -108,13 +108,11 @@ static const CGFloat kMirageRackEdgeAlpha = 0.3;
   // (which can only sit at the scroller's edges) would run to the popover's
   // edge while the pill nav's stop short of it.
   NSClipView *clip = _scroll.contentView;
-  _scrollTrailing =
-      [_scroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                             constant:-KKPaddingMD];
   [NSLayoutConstraint activateConstraints:@[
     [_scroll.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                           constant:KKPaddingMD],
-    _scrollTrailing,
+    [_scroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                           constant:-KKPaddingMD],
     [_scroll.topAnchor constraintEqualToAnchor:self.topAnchor],
     [_scroll.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
 
@@ -136,39 +134,6 @@ static const CGFloat kMirageRackEdgeAlpha = 0.3;
   ]];
   [_chain setContentHuggingPriority:NSLayoutPriorityRequired - 1
                      forOrientation:NSLayoutConstraintOrientationHorizontal];
-  [self _buildSlowGlyph];
-}
-
-// The measured-slowness warning: one glyph at the trailing end of the strip,
-// past the chain rather than on it. OUTSIDE the scrolling region on purpose - a
-// warning that scrolls away with the boxes is a warning nobody sees on a long
-// rack - and hidden by default, so the boxes keep the whole width until there
-// is something to say.
-//
-// Trailing rather than in a header of its own: the strip has no header, and
-// giving it one for a state that is off almost always would cost every project
-// a row of popover height.
-- (void)_buildSlowGlyph {
-  _slowGlyph = [NSImageView
-      imageViewWithImage:
-          [[NSImage imageWithSystemSymbolName:@"exclamationmark.triangle"
-                     accessibilityDescription:nil]
-              imageWithSymbolConfiguration:_symConfig]];
-  _slowGlyph.translatesAutoresizingMaskIntoConstraints = NO;
-  _slowGlyph.contentTintColor = NSColor.warning;
-  _slowGlyph.hidden = YES;
-  _slowGlyph.toolTip =
-      RLoc(@"This chain is rendering slower than real time.",
-           @"Mirage rack: tooltip on the warning shown when the measured cost "
-           @"of rendering the whole shader chain stays above one frame.");
-  [self addSubview:_slowGlyph];
-  [NSLayoutConstraint activateConstraints:@[
-    [_slowGlyph.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                              constant:-KKPaddingMD],
-    [_slowGlyph.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    [_slowGlyph.widthAnchor constraintEqualToConstant:KKIconSizeSM],
-    [_slowGlyph.heightAnchor constraintEqualToConstant:KKIconSizeSM],
-  ]];
 }
 
 - (void)applyEntries:(NSArray<MirageRackEntry *> *)entries
@@ -184,22 +149,6 @@ static const CGFloat kMirageRackEdgeAlpha = 0.3;
   _nonSelectableEntryIDs = [nonSelectableEntryIDs copy];
   _nonSelectableReason = [reason copy];
   [self rebuildBoxes];
-}
-
-- (BOOL)renderingSlowerThanRealTime {
-  return _renderingSlow;
-}
-
-- (void)setRenderingSlowerThanRealTime:(BOOL)slow {
-  if (slow == _renderingSlow)
-    return;
-  _renderingSlow = slow;
-  _slowGlyph.hidden = !slow;
-  // The scroller gives the glyph its width rather than overlapping it, so a
-  // full chain is shortened by exactly the warning instead of running under it.
-  _scrollTrailing.constant =
-      slow ? -(KKPaddingMD + KKIconSizeSM + KKSpacingSM) : -KKPaddingMD;
-  self.needsLayout = YES;
 }
 
 // The same overflow fade KKPillBar gives the category nav directly below this

@@ -62,14 +62,6 @@ NS_ASSUME_NONNULL_BEGIN
        nonSelectable:(nullable NSSet<NSString *> *)nonSelectableEntryIDs
               reason:(nullable NSString *)reason;
 
-/// Whether the chain is MEASURED to be rendering slower than real time right
-/// now: a warning glyph at the strip's trailing edge, with a tooltip saying so.
-/// Display state and nothing else - no lane, no parameter, no undo entry - and
-/// pushed in like everything else here, since the view has no way to time a
-/// render of its own. The host only ever sets it for a real chain: one shader
-/// that is slow is just a slow shader, and this warning is about the chain.
-@property(nonatomic) BOOL renderingSlowerThanRealTime;
-
 /// A box was clicked. Selection is session UI state - the host stores it, and
 /// this phase does nothing else with it.
 @property(nonatomic, copy, nullable) void (^onSelectEntry)(NSString *entryID);

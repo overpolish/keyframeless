@@ -6,10 +6,9 @@
 // The mini preview's shader chain: which entries this draw renders, the
 // intermediates they hand one another, and the per-entry encode.
 //
-// The chain SHAPE mirrors the FCP render's (Plugin+RenderRack.m) - same skip
-// rule, same gamma-encoded intermediates, same shortened-chain fallback when an
-// intermediate cannot be allocated - while the preview adds the two
-// session-only questions Final Cut's viewer never asks: up-to-here and solo.
+// The chain SHAPE mirrors the FCP render's (Plugin+RenderRack.m) - same shared
+// up-to-here / solo plan, same skip rule, same gamma-encoded intermediates and
+// same shortened-chain fallback when an intermediate cannot be allocated.
 
 #import "MirageMiniViewerRenderer.h"
 #import "MirageMiniViewerRenderer_Internal.h"
@@ -87,26 +86,14 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
 // than leaving the destination cleared.
 - (NSArray<NSString *> *)_previewChainEntryIDs {
   NSArray<NSString *> *entryIDs = MirageRackEntryIDs(self.timeline);
-  NSString *focus = self.rackPreviewEntryID;
-  NSUInteger focusIndex =
-      focus.length ? [entryIDs indexOfObject:focus] : NSNotFound;
-  // SOLO renders its entry whatever the Enabled lane says. The two questions
-  // are different ones: the checkbox answers "is this in the chain", solo
-  // answers "what would this do" - and a bypassed entry is exactly the one a
-  // user reaches for solo to judge before switching it back on.
-  if (self.rackPreviewMode == MirageRackPreviewModeSolo &&
-      focusIndex != NSNotFound)
-    return @[ entryIDs[focusIndex] ];
-  NSUInteger limit = entryIDs.count;
-  if (self.rackPreviewMode == MirageRackPreviewModeUpToHere &&
-      focusIndex != NSNotFound)
-    limit = focusIndex + 1;
   double frac = [self _previewFraction];
-  NSMutableArray<NSString *> *plan = [NSMutableArray array];
-  for (NSUInteger i = 0; i < limit; i++)
-    if (MirageRackEntryEnabledAtFraction(self.timeline, entryIDs[i], frac))
-      [plan addObject:entryIDs[i]];
-  return plan;
+  NSMutableSet<NSString *> *enabled = [NSMutableSet set];
+  for (NSString *entryID in entryIDs)
+    if (MirageRackEntryEnabledAtFraction(self.timeline, entryID, frac))
+      [enabled addObject:entryID];
+  return MirageRackViewerEntryPlan(
+      entryIDs, enabled, self.rackPreviewMode, self.rackPreviewEntryID,
+      self.selectionMatteActive, MirageRackEntryIDOrSentinel(self.rackEntryID));
 }
 
 // A reusable RGBA16Float intermediate for chain position `index`, at the

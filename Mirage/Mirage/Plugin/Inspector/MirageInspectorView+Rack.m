@@ -89,6 +89,14 @@
 }
 
 - (void)_keyposePopoverLifecycleChanged:(NSNotification *)note {
+  // Rack preview is panel chrome, not project state. If the panel closes while
+  // Solo / Up to Here is armed, restore both viewers immediately instead of
+  // leaving Final Cut's main viewer on a preview with no visible way to clear
+  // it. Navigation/open notifications only need the ordinary rack refresh.
+  if ([note.name isEqualToString:KKStaticValuesPopoverDidCloseNotification]) {
+    [self _rackSetPreviewMode:MirageRackPreviewModeOff entry:nil];
+    return;
+  }
   [self refreshRack];
 }
 
@@ -114,16 +122,6 @@
                  @"Mirage rack: tooltip on a grayed shader box while a keypose "
                  @"popover is open on a time that shader has no keypose at.")
           : nil;
-
-  // The measured slowness the render tick publishes (Plugin+Render.m). Read
-  // from the instance state rather than held on this view: the strip is built
-  // fresh with every popover, and so is this view when the host remounts the
-  // custom UI, while the answer belongs to the clip. Gated on there BEING a
-  // chain, so a rack shortened back to one shader shows nothing even if the
-  // render's own clear has not landed yet.
-  _rackView.renderingSlowerThanRealTime =
-      entryIDs.count > 1 &&
-      KKInstanceStateForAPI(_thumbAPIManager).chainRenderingSlowerThanRealTime;
 
   [_rackView applyEntries:rows
                  selected:selected
@@ -213,10 +211,10 @@
   return blocked;
 }
 
-// The mini viewer's chain preview. NOT a write: no lane, no parameter, no undo
-// entry and nothing persisted - it changes what the inspector's preview draws
-// and stops there, so Final Cut's viewer keeps showing the whole chain
-// throughout. The same shape the compare row's split and matte have.
+// Both viewers' chain preview. NOT a write: no lane, no parameter, no undo
+// entry and nothing persisted. It rides the same per-instance session state as
+// the compare row's split and matte, so compact mode can show the result in
+// Final Cut's main viewer while the mini stays in exact sync.
 //
 // One mode at a time across the whole rack: arming either one on any box
 // disarms whatever was running, and asking for the mode already running on that
@@ -229,17 +227,29 @@
                                    ? MirageRackPreviewModeOff
                                    : mode;
   NSString *nextEntry = (next == MirageRackPreviewModeOff) ? nil : entryID;
-  if (next == _rackPreviewMode &&
-      [(nextEntry ?: @"") isEqualToString:_rackPreviewEntryID ?: @""])
+  BOOL localUnchanged =
+      next == _rackPreviewMode &&
+      [(nextEntry ?: @"") isEqualToString:_rackPreviewEntryID ?: @""];
+  KKPluginInstanceState *session = KKInstanceStateForAPI(_thumbAPIManager);
+  BOOL sharedUnchanged = session.mirageRackPreviewMode == next &&
+                         [(session.mirageRackPreviewEntryID
+                               ?: @"") isEqualToString:nextEntry ?: @""];
+  if (localUnchanged && sharedUnchanged)
     return;
   _rackPreviewMode = next;
   _rackPreviewEntryID = [nextEntry copy];
   _miniViewerRenderer.rackPreviewMode = next;
   _miniViewerRenderer.rackPreviewEntryID = nextEntry;
+  session.mirageRackPreviewMode = next;
+  session.mirageRackPreviewEntryID = nextEntry;
   // The preview is a PAUSED Metal view, so it holds its last frame until
   // someone marks it.
   [MirageFindMiniViewer(_rackView.window.contentView ?: _rackView)
       setNeedsDisplay:YES];
+  // A session-state change does not itself invalidate Final Cut's cached
+  // frame. Use the same non-undo render nudge as the main-viewer compare row.
+  if (self.onBoundaryPreviewNeedsRender)
+    self.onBoundaryPreviewNeedsRender();
   // Re-drives the boxes so the tint - and which boxes carry the pair at all -
   // follows the mode. Cannot recurse: the entry it just stored is one the
   // registry holds, and clearing stores none at all.

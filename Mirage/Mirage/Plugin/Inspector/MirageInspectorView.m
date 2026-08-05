@@ -205,7 +205,8 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
           [s->_browserController refreshLocal]; // local change, don't re-fetch
         };
     _colorPanelController = [[MirageColorPanelController alloc]
-        initWithLanesView:self.basicLanesView];
+        initWithLanesView:self.basicLanesView
+               apiManager:apiManager];
     // Mirage opts into the shared right-panel header control; Canvas and other
     // plugins leave this capability off, so no dead button appears for them.
     self.basicLanesView.editorRightPanelToggleSupported = YES;
@@ -250,8 +251,10 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
                                                   apiManager:apiManager];
     _compareControls.onSelectionChanged = ^(BOOL showing) {
       __strong typeof(weak) s = weak;
-      if (s)
+      if (s) {
+        s->_miniViewerRenderer.selectionMatteActive = showing;
         s->_colorPanelController.showSelectionActive = showing;
+      }
     };
     _compareControls.shortcutsSuppressed = ^BOOL {
       __strong typeof(weak) s = weak;

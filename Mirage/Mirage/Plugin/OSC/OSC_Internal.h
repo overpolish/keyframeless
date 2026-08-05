@@ -28,6 +28,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)_currentShaderSource;
 - (void)_invalidateCompareRender;
 - (void)_setCompareDividerFromX:(double)x;
+- (BOOL)_viewerPickContainsX:(double)x y:(double)y;
+- (void)_completeViewerPickAtX:(double)x y:(double)y;
 
 // Position-handle mouse routing (dynamic `#point osc` controllers). Return YES
 // when a controller claimed the event. Implemented in OSC.m.

@@ -180,6 +180,42 @@ int main(void) {
               @"an entry with no lane of its own is enabled, whatever another "
               @"entry's lane says at that instant");
 
+    // --- MirageRackPreviewEntryPlan: shared mini/main viewer shape --------
+    NSArray<NSString *> *previewEntries = @[ @"0", @"aaa", @"bbb", @"ccc" ];
+    NSSet<NSString *> *previewEnabled =
+        [NSSet setWithArray:@[ @"0", @"bbb", @"ccc" ]];
+    KKRequire([MirageRackPreviewEntryPlan(previewEntries, previewEnabled,
+                                          MirageRackPreviewModeOff, nil)
+                  isEqualToArray:(@[ @"0", @"bbb", @"ccc" ])],
+              @"preview off renders the complete enabled chain");
+    KKRequire([MirageRackPreviewEntryPlan(previewEntries, previewEnabled,
+                                          MirageRackPreviewModeUpToHere, @"bbb")
+                  isEqualToArray:(@[ @"0", @"bbb" ])],
+              @"up-to-here truncates after the focused entry and still skips "
+              @"disabled entries before it");
+    KKRequire([MirageRackPreviewEntryPlan(previewEntries, previewEnabled,
+                                          MirageRackPreviewModeSolo, @"aaa")
+                  isEqualToArray:@[ @"aaa" ]],
+              @"solo renders its focused entry even when that entry is "
+              @"disabled in the ordinary chain");
+    KKRequire([MirageRackPreviewEntryPlan(
+                  previewEntries, previewEnabled, MirageRackPreviewModeUpToHere,
+                  @"gone") isEqualToArray:(@[ @"0", @"bbb", @"ccc" ])],
+              @"a stale preview focus falls back to the complete chain");
+
+    KKRequire([MirageRackViewerEntryPlan(
+                  previewEntries, previewEnabled, MirageRackPreviewModeOff, nil,
+                  YES, @"bbb") isEqualToArray:(@[ @"0", @"bbb" ])],
+              @"selection matte stops after the selected entry");
+    KKRequire([MirageRackViewerEntryPlan(previewEntries, previewEnabled,
+                                         MirageRackPreviewModeSolo, @"ccc", NO,
+                                         @"bbb") isEqualToArray:@[ @"ccc" ]],
+              @"inactive matte leaves the explicit rack preview unchanged");
+    KKRequire([MirageRackViewerEntryPlan(
+                  previewEntries, previewEnabled, MirageRackPreviewModeOff, nil,
+                  YES, @"gone") isEqualToArray:(@[ @"0", @"bbb", @"ccc" ])],
+              @"a stale matte selection falls back to the complete chain");
+
     // --- MirageRackDedupedDisplayNames -------------------------------------
     NSArray<NSString *> *names = MirageRackDedupedDisplayNames(
         @[ @"Grade", @"Grade", @"Selective", @"Grade" ]);

@@ -59,6 +59,7 @@ static const NSInteger kMirageCompareSplitPart = 9002;
 static const NSInteger kMirageCompareSelectionPart = 9003;
 static const NSInteger kMirageCompareDividerPart = 9004;
 static const NSInteger kMirageCompareToolbarBodyPart = 9099;
+static const NSInteger kMirageViewerPickPart = 9100;
 
 // The axis mask for a rotate block's `axes = x y z` subset (default Z).
 static KKRotationAxes MirageExprRotationAxes(NSString *axes) {
@@ -84,6 +85,8 @@ NSNotificationName const kMirageOSCPositionNotification =
     @"com.keyframeless.kk.oscGuidePosition";
 NSNotificationName const kMirageCompareStateDidChangeNotification =
     @"com.keyframeless.mirage.compareStateChanged";
+NSNotificationName const kMirageViewerPickDidRequestNotification =
+    @"com.keyframeless.mirage.viewerPickRequested";
 
 // All OSC-guide affine / staleness / velocity-gate state now lives in the
 // generic KKOSCGuideBridge (KeyframelessKit). One process-lifetime instance
@@ -348,6 +351,48 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       postNotificationName:kMirageCompareStateDidChangeNotification
                     object:nil];
   [self _invalidateCompareRender];
+}
+
+// An armed Color-panel picker gets the empty picture, but never the toolbar or
+// split divider (those are tested first in hitTest). The panel and OSC share
+// only this one-shot mode through instance state; the actual sample/write stays
+// with the panel, alongside the identical mini-viewer path.
+- (BOOL)_viewerPickContainsX:(double)x y:(double)y {
+  if (KKInstanceStateForAPI(self.apiManager).mirageViewerPickMode ==
+      MirageViewerPickModeNone)
+    return NO;
+  CGPoint tr = CGPointZero, bl = CGPointZero;
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+    return NO;
+  return x >= MIN(tr.x, bl.x) && x <= MAX(tr.x, bl.x) && y >= MIN(tr.y, bl.y) &&
+         y <= MAX(tr.y, bl.y);
+}
+
+- (void)_completeViewerPickAtX:(double)x y:(double)y {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  MirageViewerPickMode mode = (MirageViewerPickMode)state.mirageViewerPickMode;
+  if (mode == MirageViewerPickModeNone)
+    return;
+  simd_float2 object = [self objectPointFromCanvasPoint:CGPointMake(x, y)];
+  double u = MAX(0.0, MIN(1.0, object.x));
+  double v = MAX(0.0, MIN(1.0, object.y));
+  // Clear before notifying. The controller's handler may schedule a render,
+  // and that tick must already see the picker as one-shot and complete.
+  state.mirageViewerPickMode = MirageViewerPickModeNone;
+  NSString *instance = KKInstanceUUIDForAPI(self.apiManager);
+  if (instance.length)
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:kMirageViewerPickDidRequestNotification
+                      object:instance
+                    userInfo:@{
+                      @"mode" : @(mode),
+                      @"u" : @(u),
+                      @"v" : @(v),
+                    }];
+  id<FxOnScreenControlAPI_v4> api =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  [api setCursor:NSCursor.arrowCursor];
+  self.pointCursorSet = NO;
 }
 
 - (void)_drawCompareDividerInDestination:(FxImageTile *)destinationImage {
@@ -1660,6 +1705,15 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     return;
   }
   _compareToolbar.hoveredTag = 0;
+
+  if ([self _viewerPickContainsX:positionX y:positionY]) {
+    *activePart = kMirageViewerPickPart;
+    id<FxOnScreenControlAPI_v4> api =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [api setCursor:NSCursor.crosshairCursor];
+    self.pointCursorSet = YES;
+    return;
+  }
 
   // Hit-test each position handle (tangent > arc > anchor-dot precedence lives
   // in the controller). First hit wins and sets the cursor.

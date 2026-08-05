@@ -8,12 +8,14 @@
 #import <KeyframelessKit/KKFloatingPanel.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMiniViewerRenderer.h>
+#import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKPaddedScrollView.h>
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 
+#import "Constants.h"
 #import "MirageColorPanelController_Internal.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageLocalized.h"
@@ -138,6 +140,8 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
 - (void)_armPicking {
   [self _disarmPicking];
   _picking = YES;
+  KKInstanceStateForAPI(_apiManager).mirageViewerPickMode =
+      MirageViewerPickModeReference;
   _pickButton.contentTintColor = NSColor.accentMatchingHost;
   [self _installPickMonitors];
 }
@@ -150,6 +154,8 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   if (wasArmed)
     return;
   _pickingColor = YES;
+  KKInstanceStateForAPI(_apiManager).mirageViewerPickMode =
+      MirageViewerPickModeColor;
   _pickColorButton.contentTintColor = NSColor.accentMatchingHost;
   [self _installPickMonitors];
 }
@@ -166,6 +172,8 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   if (wasArmed)
     return;
   _pickingSource = YES;
+  KKInstanceStateForAPI(_apiManager).mirageViewerPickMode =
+      MirageViewerPickModeSource;
   _pickSourceButton.contentTintColor = NSColor.accentMatchingHost;
   [self _installPickMonitors];
 }
@@ -231,7 +239,10 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   if (!_picking && !_pickingColor && !_pickingSource)
     return;
   KKMiniViewerView *mini = MirageFindMiniViewer(_popoverContentView);
-  if ([mini pointerOverCanvas])
+  NSRect mainViewer = MirageSharedOSCGuideBridge().estimatedViewerScreenRect;
+  BOOL overMain = MirageHasCanvasReference() && !NSIsEmptyRect(mainViewer) &&
+                  NSPointInRect(NSEvent.mouseLocation, mainViewer);
+  if ([mini pointerOverCanvas] || overMain)
     [NSCursor.crosshairCursor set];
   else
     [NSCursor.arrowCursor set];
@@ -242,6 +253,8 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   _picking = NO;
   _pickingColor = NO;
   _pickingSource = NO;
+  KKInstanceStateForAPI(_apiManager).mirageViewerPickMode =
+      MirageViewerPickModeNone;
   _pickButton.contentTintColor = NSColor.secondaryLabelColor;
   _pickColorButton.contentTintColor = NSColor.secondaryLabelColor;
   _pickSourceButton.contentTintColor = NSColor.secondaryLabelColor;
@@ -253,6 +266,38 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   MirageDropMonitor(&_pickKeyGlobalMonitor);
   if (wasArmed)
     [NSCursor.arrowCursor set];
+}
+
+/// The main-viewer OSC has consumed the same one-shot pick the mini monitor
+/// handles above. Its coordinates are frame UVs, so the existing sampler can
+/// answer the click from the mini renderer's matching source/processed frame;
+/// only the event route differs. This keeps every conversion and every
+/// timeline write shared between the two viewers.
+- (void)_mainViewerPickRequested:(NSNotification *)note {
+  NSString *instance = KKInstanceUUIDForAPI(_apiManager);
+  if (!instance.length || ![note.object isEqual:instance] || !_panel.isVisible)
+    return;
+  MirageViewerPickMode mode =
+      (MirageViewerPickMode)[note.userInfo[@"mode"] integerValue];
+  if (mode == MirageViewerPickModeNone)
+    return;
+  NSPoint uv = NSMakePoint([note.userInfo[@"u"] doubleValue],
+                           [note.userInfo[@"v"] doubleValue]);
+  KKMiniViewerView *mini =
+      _measuredMini ?: MirageFindMiniViewer(_popoverContentView);
+  if (!_sampler)
+    _sampler = [MirageScopeSampler new];
+  if (mode == MirageViewerPickModeSource) {
+    [self _pickFromSourceAtUV:uv inMini:mini];
+  } else if (mode == MirageViewerPickModeColor) {
+    _sampler.probeUV = uv;
+    _pendingColorPick = YES;
+    [self _sampleOnce];
+  } else if (mode == MirageViewerPickModeReference) {
+    _sampler.pickUV = uv;
+    [self _sampleOnce];
+  }
+  [self _disarmPicking];
 }
 
 - (BOOL)_handlePickEvent:(NSEvent *)event {

@@ -22,6 +22,20 @@ extern NSNotificationName const kMirageOSCPositionNotification;
 /// Carries no parameter write; observers redraw their own viewer chrome.
 extern NSNotificationName const kMirageCompareStateDidChangeNotification;
 
+/// Which one-shot Color-panel sampler is waiting for a click in either viewer.
+/// Session state only: arming a picker publishes this to the main OSC, and any
+/// completed/cancelled pick clears it.
+typedef NS_ENUM(NSInteger, MirageViewerPickMode) {
+  MirageViewerPickModeNone = 0,
+  MirageViewerPickModeReference,
+  MirageViewerPickModeColor,
+  MirageViewerPickModeSource,
+};
+
+/// Posted by the main-viewer OSC after it consumes an armed pick. `object` is
+/// the effect instance UUID; userInfo carries `mode`, `u` and `v`.
+extern NSNotificationName const kMirageViewerPickDidRequestNotification;
+
 @class KKOSCGuideBridge;
 /// The shared OSC-guide engine for this XPC process - the generic affine /
 /// staleness / notification state behind the Mirage OSC guide. Hand this to

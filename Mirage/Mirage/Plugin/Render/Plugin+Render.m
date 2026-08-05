@@ -5,12 +5,11 @@
 
 #import "Constants.h"
 #import "MirageCustomShader.h"
-#import "MirageDirectives.h"            // MirageCommonDefault
-#import "MirageFeedbackSet.h"           // MirageNewBufferTexture
-#import "MirageFrameOffsets.h"          // `// #frames` neighbour offsets
-#import "MirageInspectorView_Private.h" // -refreshRack (the strip's warning)
-#import "MirageMiniViewerRenderer.h"    // per-instance descriptor path
-#import "MirageRenderUniforms.h"        // MirageMakeUniforms (shared with mini)
+#import "MirageDirectives.h"         // MirageCommonDefault
+#import "MirageFeedbackSet.h"        // MirageNewBufferTexture
+#import "MirageFrameOffsets.h"       // `// #frames` neighbour offsets
+#import "MirageMiniViewerRenderer.h" // per-instance descriptor path
+#import "MirageRenderUniforms.h"     // MirageMakeUniforms (shared with mini)
 #import "MirageStateBlob.h"
 #import "MirageSurfaceResponse.h"
 #import "Plugin+Render_Internal.h"
@@ -21,7 +20,6 @@
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKWatermark.h>
-#import <QuartzCore/QuartzCore.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -825,7 +823,6 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  CFTimeInterval t0 = CACurrentMediaTime();
   BOOL ok = [self _renderDestinationImageInner:destinationImage
                                   sourceImages:sourceImages
                                    pluginState:pluginState
@@ -841,8 +838,6 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   // clean frame out of the trial.
   KKWatermarkApplyIfUnlicensed(KKLicenseProductMirage, destinationImage);
   [self _reportStrayRenderWaits];
-  CFTimeInterval elapsed = CACurrentMediaTime() - t0;
-  [self _trackChainRenderCost:elapsed pluginState:pluginState];
   return ok;
 }
 
@@ -962,86 +957,6 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   [cb waitUntilCompleted];
   [cache returnCommandQueueToCache:queue];
   return YES;
-}
-
-// SHADER RACK, measured cost. An eight-shader chain can run with no lag at all,
-// so counting passes and warning on the count would warn about racks that are
-// fine. What the strip's warning says is measured instead, on the only honest
-// seam there is from in here: the callback itself. ONE mandatory wait per
-// callback is the architecture (see the RenderGuard canary above), and the
-// destination pass is what carries it, so wall time across the callback covers
-// the whole chain's GPU work plus the CPU that set it up - which is the cost
-// Final Cut is actually paying per frame.
-//
-// Smoothed, because a single frame proves nothing: a cold seek, a feedback
-// buffer warming up or a shader compiling on first use all spike far past
-// budget and then never again. Only a run of frames whose AVERAGE is over the
-// project's frame duration is a chain that is slower than real time.
-//
-// Reduced-size renders (thumbnails, the effects browser, library previews) go
-// through here too and are much cheaper than a full frame. They can only pull
-// the average DOWN, which is the safe direction: this warning is allowed to
-// miss, never to cry wolf.
-- (void)_trackChainRenderCost:(NSTimeInterval)elapsed
-                  pluginState:(NSData *)pluginState {
-  // The smoothing constant, the run length, and the hysteresis. ~12 frames is
-  // half a second at 24fps - long enough that nothing transient reaches the
-  // strip, short enough that a user dragging a control feels the answer follow.
-  // Clearing at 0.85 of budget rather than at budget keeps a chain sitting
-  // exactly on the line from flickering the glyph on and off.
-  static const double kEMAAlpha = 0.2;
-  static const NSInteger kSustainedFrames = 12;
-  static const double kClearFactor = 0.85;
-
-  double budget = self.renderCache.frameDurSec;
-  // Not a chain, or no frame budget to compare against: nothing to warn about,
-  // and a rack shortened back to one shader clears whatever it was saying.
-  if (budget <= 0.0 || elapsed <= 0.0 ||
-      MirageStateBlobEntryCount(pluginState) < 2) {
-    self.chainRenderCostEMA = 0.0;
-    self.chainRenderOverBudgetFrames = 0;
-    [self _publishChainRenderSlow:NO budget:budget];
-    return;
-  }
-
-  double ema = self.chainRenderCostEMA;
-  ema = ema > 0.0 ? ema + kEMAAlpha * (elapsed - ema) : elapsed;
-  self.chainRenderCostEMA = ema;
-  if (ema > budget)
-    self.chainRenderOverBudgetFrames++;
-  else if (ema < budget * kClearFactor)
-    self.chainRenderOverBudgetFrames = 0;
-
-  BOOL slow = self.chainRenderSlowPublished;
-  if (self.chainRenderOverBudgetFrames >= kSustainedFrames)
-    slow = YES;
-  else if (self.chainRenderOverBudgetFrames == 0)
-    slow = NO;
-  [self _publishChainRenderSlow:slow budget:budget];
-}
-
-// The render -> inspector hop the clip's timeline position already takes
-// (-_publishClipTimelineStart): a value the render is the only one able to
-// measure, landed on main because a view is what consumes it. Written to the
-// per-instance state rather than only to the view, so a popover opened after
-// the fact still finds the answer - the strip is torn down with every popover,
-// this outlives it.
-//
-// NOT a write in the FxPlug sense: no parameter, no lane, no undo entry. Only
-// on a CHANGE, so steady playback costs one comparison per frame.
-- (void)_publishChainRenderSlow:(BOOL)slow budget:(double)budget {
-  if (slow == self.chainRenderSlowPublished)
-    return;
-  self.chainRenderSlowPublished = slow;
-  KKLogInfo(@"[Mirage] chain render %@ real time (EMA %.2f ms, budget %.2f ms)",
-            slow ? @"slower than" : @"back within",
-            self.chainRenderCostEMA * 1000.0, budget * 1000.0);
-  id<PROAPIAccessing> api = self.apiManager;
-  MirageInspectorView *iv = (MirageInspectorView *)self.inspectorView;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    KKInstanceStateForAPI(api).chainRenderingSlowerThanRealTime = slow;
-    [iv refreshRack];
-  });
 }
 
 // Canary: ONE mandatory wait per callback is the architecture, on every path -

@@ -64,10 +64,9 @@ NS_ASSUME_NONNULL_BEGIN
   /// popover owns it and drops it on close, and -refreshRack is a no-op
   /// between opens rather than talking to an orphan.
   __weak MirageShaderRackView *_rackView;
-  /// The mini viewer's chain preview: which of the two questions is being
-  /// asked, and of which entry. SESSION-ONLY, like the compare row's split and
-  /// matte - no lane, no parameter, no undo entry - and cleared with every
-  /// popover, so a session always opens on the whole chain.
+  /// Both viewers' chain preview: which of the two questions is being asked,
+  /// and of which entry. SESSION-ONLY, like the compare row's split and matte
+  /// - no lane, no parameter, no undo entry - and cleared with every editor.
   MirageRackPreviewMode _rackPreviewMode;
   NSString *_rackPreviewEntryID;
   /// A selection restored by the host that the timeline in hand does not
@@ -100,9 +99,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// "now" (which keypose an enable edits, which entries are switched on) is
 /// answered at.
 - (double)playheadFractionForRack;
-/// Arm / disarm the mini viewer's chain preview. NOT a write: no lane, no
-/// parameter, no undo entry. `MirageRackPreviewModeOff` (or re-asking for the
-/// mode already running on that entry) goes back to the whole chain.
+/// Arm / disarm both viewers' chain preview. NOT a write: no lane, no parameter
+/// and no undo entry. `MirageRackPreviewModeOff` (or re-asking for the mode
+/// already running on that entry) goes back to the whole chain.
 - (void)_rackSetPreviewMode:(MirageRackPreviewMode)mode
                       entry:(nullable NSString *)entryID;
 @end

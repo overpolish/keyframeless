@@ -67,9 +67,6 @@ FOUNDATION_EXPORT NSPasteboardType const kMirageRackBoxDragType;
   /// the scrolling region, and the scroller's trailing constraint it makes room
   /// in. Hidden, it costs nothing: the constant goes back and the boxes get the
   /// width again.
-  NSImageView *_slowGlyph;
-  NSLayoutConstraint *_scrollTrailing;
-  BOOL _renderingSlow;
 }
 @end
 

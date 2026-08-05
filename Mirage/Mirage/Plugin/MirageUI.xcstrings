@@ -9367,48 +9367,6 @@
         }
       }
     },
-    "This chain is rendering slower than real time.": {
-      "comment": "Mirage rack: tooltip on the warning shown when the measured cost of rendering the whole shader chain stays above one frame.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese Kette wird langsamer als in Echtzeit gerendert."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta cadena se renderiza más lento que en tiempo real."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cette chaîne est rendue plus lentement que le temps réel."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このチェーンのレンダリングはリアルタイムより遅くなっています。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이 체인은 실시간보다 느리게 렌더링되고 있습니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此链的渲染速度慢于实时。"
-          }
-        }
-      }
-    },
     "This pixel's position, in pixels.": {
       "comment": "Mirage code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
       "extractionState": "manual",

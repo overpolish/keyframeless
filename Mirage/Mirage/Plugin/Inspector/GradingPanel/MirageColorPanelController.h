@@ -20,7 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// dragging controls in the inspector.
 @interface MirageColorPanelController : NSObject
 
-- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView;
+- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView
+                       apiManager:(id)apiManager;
 
 /// Whether the loaded shader opted in.
 ///

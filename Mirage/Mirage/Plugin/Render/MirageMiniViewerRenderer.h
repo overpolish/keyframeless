@@ -43,13 +43,17 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// mini's control sets are built once per source change rather than re-derived
 /// per tick like the viewer's.
 ///
-/// Only the OSC side reads this. The RENDER walks the whole chain regardless,
-/// so the preview keeps showing every enabled entry composited while the
-/// handles on top of it belong to one.
+/// The OSC side reads this, and the render uses it as the endpoint while a
+/// selection matte is active so later shaders cannot alter the diagnostic.
 ///
 /// nil / the sentinel id is what an unracked project has, and resolves exactly
 /// as it did before the rack.
 @property(nonatomic, copy, nullable) NSString *rackEntryID;
+
+/// Whether the selected shader's diagnostic matte is currently shown. Kept
+/// separately from the value override so the mini render graph can stop at
+/// the selected entry before downstream shaders process the matte.
+@property(nonatomic) BOOL selectionMatteActive;
 
 /// TIMELINE seconds to sample `// #audio` at, from the inspector's playhead.
 ///
@@ -85,11 +89,9 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 @property(nonatomic) int motionBlurSamples;
 
 /// Which part of the shader rack the preview is showing, and the entry that
-/// mode is about. SESSION-ONLY: pushed in by the rack strip, dropped when the
-/// popover closes, and never written anywhere - the preview is the only thing
-/// either one changes, and Final Cut's viewer keeps rendering the whole chain
-/// throughout. `Off` (the default) renders every enabled entry, which is what a
-/// rack with no preview mode - and every single-template project - gets.
+/// mode is about. SESSION-ONLY: pushed in by the rack strip, shared with Final
+/// Cut's main viewer, dropped when the editor closes, and never persisted.
+/// `Off` (the default) renders every enabled entry.
 @property(nonatomic) MirageRackPreviewMode rackPreviewMode;
 @property(nonatomic, copy, nullable) NSString *rackPreviewEntryID;
 

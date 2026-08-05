@@ -77,17 +77,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) BOOL mirageCompareSplitEnabled;
 @property(nonatomic) CGFloat mirageCompareSplitFraction;
 @property(nonatomic) BOOL mirageCompareSelectionEnabled;
+/// MirageViewerPickMode, kept integer here so the shared kit does not depend
+/// on Mirage's Constants.h. Session-only and cleared after one click/Escape.
+@property(nonatomic) NSInteger mirageViewerPickMode;
 
-/// YES while the MEASURED cost of rendering a chained-shader plugin's whole
-/// chain (Mirage's rack) has stayed above the project's frame budget for long
-/// enough to be a sustained state rather than one cold frame. Written from the
-/// render tick's smoothing (hopped to main), read by the inspector when it
-/// rebuilds the rack strip - which is why it lives here rather than only on the
-/// view: the strip is torn down with every popover, and the answer outlives it.
-///
-/// Display state, never a write: no lane, no parameter, no undo entry. Always
-/// NO for an unracked instance, where a slow shader is just a slow shader.
-@property(nonatomic) BOOL chainRenderingSlowerThanRealTime;
+/// Mirage's shader-rack preview is the same kind of session-only viewer state
+/// as the compare toolbar above. The inspector writes the enum's integer value
+/// plus its focused rack entry; both the mini renderer and the main FxPlug
+/// render read them. Zero / nil means the complete enabled chain.
+@property(nonatomic) NSInteger mirageRackPreviewMode;
+@property(nonatomic, copy, nullable) NSString *mirageRackPreviewEntryID;
 
 /// YES while a guide is transiently forcing OSC visibility (see
 /// `-kkForceOSCForGuideKeepingLabels:...`). The UI-state OSC refresh checks

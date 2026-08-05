@@ -151,9 +151,9 @@ static NSString *const kPositionKey = @"mirage.gradingPanel.origin";
   NSRect frame = _panel.frame;
   if (fabs(NSHeight(frame) - height) > 0.5) {
     CGFloat top = NSMaxY(frame);
-    frame.size.height = height;
-    frame.origin.y = top - height;
-    [_panel setFrame:frame display:_panel.isVisible];
+    [_panel setContentSize:NSMakeSize(kPanelWidth, height)
+          keepingTopEdgeAt:top];
+    frame = _panel.frame;
   }
   _body.frame = NSMakeRect(0.0, 0.0, kPanelWidth, height);
   _header.frame =

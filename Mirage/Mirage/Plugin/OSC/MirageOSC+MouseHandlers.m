@@ -39,6 +39,11 @@
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  if (activePart == 9100) {
+    [self _completeViewerPickAtX:positionX y:positionY];
+    *forceUpdate = YES;
+    return;
+  }
   if (activePart == 9099) {
     *forceUpdate = YES;
     return;

@@ -195,8 +195,8 @@ static const CGFloat kMirageRackGlyphAlpha = 0.85;
   // look, select back, look). Wider boxes are the price; the inactive pair is
   // secondary ink so a four-box strip still reads as names, not as buttons.
   //
-  // Both are pure preview: they change what the mini viewer above shows and
-  // nothing else. Final Cut's own viewer keeps rendering the whole chain.
+  // Both are pure preview: they change what the mini viewer and Final Cut's
+  // main viewer show, without changing the project or adding an undo entry.
   if (_entries.count > 1) {
     [box addArrangedSubview:
              [self _previewButtonForEntry:entry
@@ -259,12 +259,10 @@ static const CGFloat kMirageRackGlyphAlpha = 0.85;
       (NSUInteger)index,
       active ? [NSColor accentMatchingHost] : NSColor.secondaryLabelColor);
   button.toolTip =
-      upToHere ? RLoc(@"Preview the chain up to here. Final Cut's viewer still "
-                      @"shows the whole chain.",
+      upToHere ? RLoc(@"Preview the chain up to here.",
                       @"Mirage rack: tooltip on the button that previews the "
                       @"shader chain truncated after this shader.")
-               : RLoc(@"Preview this shader alone, on the original clip. Final "
-                      @"Cut's viewer still shows the whole chain.",
+               : RLoc(@"Preview this shader alone, on the original clip.",
                       @"Mirage rack: tooltip on the button that previews only "
                       @"this shader's own contribution.");
   return button;
