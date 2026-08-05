@@ -105,7 +105,10 @@ NS_ASSUME_NONNULL_BEGIN
   BOOL _editorSidebarVisible;
   BOOL _editorRightPanelVisible;
   BOOL _editorCompactMode;
+  NSString *_editorStatePersistenceKey;
   NSSize _editorExpandedSizeBeforeCompact;
+  BOOL _publishedMiniViewerFeedActive;
+  BOOL _publishedMiniViewerFeedActiveValid;
   // Joyride temporarily owns the editor layout. The guide always uses the
   // expanded mini-viewer at its natural size beside the inspector, while the
   // user's exact frames + compact state remain untouched and are restored at
@@ -290,6 +293,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// (Popovers) category in KKTimelineLanesView.h. Both are implemented in
 /// KKTimelineLanesView+Popovers.m.
 @interface KKTimelineLanesView (PopoversInternal)
+- (void)_syncMiniViewerFeedActivity;
 - (void)_showManagePopoverFromView:(NSView *)anchorView;
 /// The owner a layer-navigable dropdown should open on, resolved against
 /// `lanes`: the host's LIVE selection (`constantsLaneFilter`) when it supplies

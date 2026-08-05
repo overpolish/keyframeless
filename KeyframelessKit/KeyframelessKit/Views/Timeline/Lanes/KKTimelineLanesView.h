@@ -328,6 +328,10 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, readonly) BOOL editorCompactMode;
 @property(nonatomic, copy, nullable) void (^onEditorCompactModeChanged)
     (BOOL compact);
+/// Stable identity of the effect instance that owns this editor. Compact mode
+/// is remembered under this identity, so every newly-applied/copied instance
+/// starts compact while reopening the same instance restores its last choice.
+@property(nonatomic, copy, nullable) NSString *editorStatePersistenceKey;
 
 /// Optional scope for the CONSTANTS editor only: return NO for a lane the
 /// constants popover should not list. The graphs, the Animated dropdown and

@@ -68,6 +68,7 @@
   KKTimelineInspectorView *view = buildView(ctx);
   if (!view)
     return nil;
+  view.basicLanesView.editorStatePersistenceKey = ctx.instanceUUID;
   if (ctx.seedClipDurSec > 0)
     [view setClipDurationSeconds:ctx.seedClipDurSec];
   if (ctx.seedFrameDurSec > 0)

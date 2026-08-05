@@ -76,6 +76,10 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   // param rows show. nil/empty when <2 distinct lane categories (no pill).
   KKPillToggleRowView *_categoryPill;
   KKPillBar *_categoryPillBar; // the pill's scrolling wrapper (see the rebuild)
+  // Ordered [key, symbol] pairs used to avoid tearing down the category bar on
+  // an ordinary value refresh. Recreating it while its parameter row is
+  // tracking a drag invalidates that control and can reset the visible page.
+  NSArray<NSArray<NSString *> *> *_categoryDefinitions;
   NSArray<NSString *> *_categoryKeys; // ordered, first-seen
   NSString *_selectedCategory;        // currently shown category key
   NSDictionary<NSString *, NSString *> *_rowCategoryByLabel;

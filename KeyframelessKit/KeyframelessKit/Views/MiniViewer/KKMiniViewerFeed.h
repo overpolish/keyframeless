@@ -12,7 +12,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Render-side source feed for a mini-viewer preview, reusable by any plugin.
 ///
-/// Owns one persistent `IOSurface`-backed `MTLTexture` (long edge capped),
+/// Owns one persistent `IOSurface`-backed `MTLTexture` (long edge capped by
+/// default),
 /// MPS-downscales the effect's source frame into it on full-frame render
 /// ticks, and publishes a tiny JSON descriptor file so a `KKMiniViewerView`
 /// - which lives in the separate ViewBridge process and cannot see an
@@ -31,6 +32,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// BGRA8 feed. Use for technical color processing that must retain HDR values
 /// and wide-gamut components. Changing it recreates surfaces lazily.
 @property(nonatomic) BOOL linearFloat;
+
+/// Keep feed surfaces at the source raster instead of applying the normal
+/// 2048-pixel long-edge preview cap. Resolution-sensitive renderers use this
+/// when their integer sample grid must exactly match the host render.
+/// Changing it recreates surfaces lazily.
+@property(nonatomic) BOOL fullResolution;
 
 /// Downscale the full source frame into the persistent surface and publish
 /// the descriptor. Safe to call every full-frame render tick - it
@@ -117,6 +124,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// `KKMiniViewerView` resolves `sourceMediaSize` - which px-scaled value fields
 /// need. Ignored once real source slots are published (they carry their own).
 @property(nonatomic) CGSize mediaSize;
+
+/// Canonical frame size that raw `units="px"` controls are authored against.
+/// For a scaled source this differs from `primarySourceSize`: a 4K source in a
+/// 1080p project has a 3840x2160 source texture but a 1920x1080 pixel-reference
+/// frame. Published in the descriptor so the inspector process can apply the
+/// same pixel scale as the FxPlug render process.
+@property CGSize pixelReferenceSize;
+
+/// Exact output raster used by the host for the render tick being published.
+/// Unlike `pixelReferenceSize` this includes FCP's current render scale
+/// (viewer quality/proxy/thumbnails). Resolution-sensitive previews render at
+/// this size so their integer pixel grid matches the main viewer exactly.
+@property CGSize renderPixelSize;
 
 /// Live playhead fraction (0..1) at publish time, or < 0 when unknown / not
 /// playing. Published as `playheadFrac` in the descriptor.

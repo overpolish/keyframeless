@@ -471,11 +471,11 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
     CGFloat maxRowsViewportH = floor(sharedH * (visibleCodeRow ? 0.5 : 0.4));
     if (visibleCodeRow) {
       CGFloat otherRowsH = MAX(0.0, rowsH - codeBaseHeight);
-      // Viewer and code grow together until the editor reaches 150pt. From
-      // there every additional point belongs to the viewer. The 100pt floor is
+      // Viewer and code grow together until the editor reaches 250pt. From
+      // there every additional point belongs to the viewer. The 200pt floor is
       // the last usable text area; below that the outer rows scroller is the
       // fallback instead of crushing the editor chrome.
-      CGFloat codeH = MIN(150.0, MAX(100.0, maxRowsViewportH - otherRowsH));
+      CGFloat codeH = MIN(250.0, MAX(200.0, maxRowsViewportH - otherRowsH));
       [visibleCodeRow setEditorRowHeight:codeH];
       rowsH = otherRowsH + codeH;
     }
@@ -582,6 +582,7 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
 
 - (void)setCompactMode:(BOOL)compact {
   _compactMode = compact;
+  _miniViewer.activitySuspended = compact;
   _compactButton.state =
       compact ? NSControlStateValueOn : NSControlStateValueOff;
   _compactButton.contentTintColor = compact ? NSColor.accentMatchingHost : nil;
@@ -1066,6 +1067,7 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
 
 - (void)_rebuildCategoryNavForLanes:(NSArray<KKLane *> *)lanes
                     initialCategory:(NSString *)requested {
+  _categoryDefinitions = [KKOrderedLaneCategories(lanes) copy];
   [_categoryPillBar removeFromSuperview];
   _categoryPillBar = nil;
   [_categoryPill removeFromSuperview];
@@ -1991,11 +1993,18 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
     for (NSString *label in _rowsByLabel)
       _rowsByLabel[label].defaultValues = _defaultsProvider(label);
 
-  // Rebuild the category nav so a tab disappears the moment its last constant
-  // lane is moved to animated (and the selection falls back to a populated
-  // tab).
+  // Rebuild only when the category run itself changed. A normal value write
+  // refreshes the constants lanes too; tearing down the unchanged pill bar in
+  // the middle of its row's slider drag invalidates that tracking control and
+  // can make the freshly-built bar fall back to its first page ("Shader").
+  // Structural changes still rebuild immediately so an emptied category
+  // disappears as before.
   _rowCategoryByLabel = KKLaneCategoryByLabel(lanes);
-  [self _rebuildCategoryNavForLanes:lanes initialCategory:_selectedCategory];
+  NSArray<NSArray<NSString *> *> *categoryDefinitions =
+      KKOrderedLaneCategories(lanes);
+  if (![_categoryDefinitions isEqualToArray:categoryDefinitions])
+    [self _rebuildCategoryNavForLanes:lanes
+                      initialCategory:_selectedCategory];
   [self _applyCategoryFilter];
 
   // No rows left = nothing to edit = close... unless a host accessory strip is

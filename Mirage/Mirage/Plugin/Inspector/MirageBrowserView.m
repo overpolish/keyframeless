@@ -507,8 +507,6 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
   // that it owes a rebuild and pay it when the panel is next shown.
   if (!self.window.isVisible) {
     _dirtyWhileHidden = YES;
-    KKLogDebug(@"[Panel] browser gallery rebuild deferred: panel window %@",
-               self.window ? @"not visible yet" : @"not attached yet");
     return;
   }
   _dirtyWhileHidden = NO;

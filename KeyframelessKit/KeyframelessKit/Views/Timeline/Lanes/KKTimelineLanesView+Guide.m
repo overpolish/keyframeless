@@ -112,6 +112,7 @@
   // starts expanded, including plugin-specific guides such as Canvas Arrow.
   _editorCompactMode = NO;
   _editorExpandedSizeBeforeCompact = NSZeroSize;
+  [self _syncMiniViewerFeedActivity];
 }
 
 - (void)guideEndEditorLayoutOverride {
@@ -149,6 +150,7 @@
   _guideSavedStaticEditorFrameValid = NO;
   _guideSavedSegmentEditorFrameValid = NO;
   _guideEditorLayoutOverrideActive = NO;
+  [self _syncMiniViewerFeedActivity];
 }
 
 @end

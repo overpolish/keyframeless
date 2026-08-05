@@ -825,6 +825,8 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   copy.miniViewerRequestPath = _miniViewerRequestPath;
   copy.miniViewerDelegate = _miniViewerDelegate;
   copy.miniGrabsKeyFocusOnClick = _miniGrabsKeyFocusOnClick;
+  copy.basicLanesView.editorStatePersistenceKey =
+      _basicView.editorStatePersistenceKey;
   copy.managePopoverSpotlightLabel = _managePopoverSpotlightLabel;
   copy.constantsButtonTitle = _constantsButtonTitle;
   copy.presetPluginKey = self.presetPluginKey;

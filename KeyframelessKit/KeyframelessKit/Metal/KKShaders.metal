@@ -239,6 +239,38 @@ fragment float4 KKTextureNearestFragment(KKRasterizerData in [[stage_in]],
     return tex.sample(s, in.textureCoordinate);
 }
 
+static float3 KKLinearToSRGB(float3 c) {
+    c = max(c, float3(0.0));
+    return select(1.055 * pow(c, float3(1.0 / 2.4)) - 0.055,
+                  12.92 * c, c <= float3(0.0031308));
+}
+
+static float4 KKLinearSourceForDisplay(float4 c) {
+    if (c.a <= 0.000001)
+        return float4(0.0);
+    float3 straight = c.rgb / c.a;
+    return float4(KKLinearToSRGB(straight) * c.a, c.a);
+}
+
+/// RGBA16F mini feeds preserve the host's linear source without an 8-bit
+/// round-trip. Before/Split can draw that raw feed directly, so encode it to
+/// display values here while keeping premultiplied alpha intact.
+fragment float4 KKTextureLinearSourceFragment(
+    KKRasterizerData in [[stage_in]],
+    texture2d<float> tex [[texture(KKTextureIndex_InputImage)]]) {
+    constexpr sampler s(mag_filter::linear, min_filter::linear,
+                        address::clamp_to_edge);
+    return KKLinearSourceForDisplay(tex.sample(s, in.textureCoordinate));
+}
+
+fragment float4 KKTextureLinearSourceNearestFragment(
+    KKRasterizerData in [[stage_in]],
+    texture2d<float> tex [[texture(KKTextureIndex_InputImage)]]) {
+    constexpr sampler s(mag_filter::nearest, min_filter::linear,
+                        address::clamp_to_edge);
+    return KKLinearSourceForDisplay(tex.sample(s, in.textureCoordinate));
+}
+
 /// Like the passthrough, but scales the (premultiplied) sample by a uniform
 /// opacity 0..1 - multiplying all four channels keeps it premultiplied so the
 /// usual "over" blend fades the layer correctly. Used by layer-compositing

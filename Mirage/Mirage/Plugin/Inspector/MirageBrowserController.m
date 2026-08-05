@@ -137,8 +137,6 @@ static const CGFloat kPanelWidth = 300.0;
   NSString *kind = note.userInfo[@"kind"];
   if (![kind isEqualToString:@"constants"] &&
       ![kind isEqualToString:@"keypose"]) {
-    KKLogDebug(@"[Panel] browser attach kind=%@ -> skipped(structural popover)",
-               kind);
     return;
   }
   NSWindow *popoverWindow = note.userInfo[@"window"];
@@ -150,9 +148,6 @@ static const CGFloat kPanelWidth = 300.0;
   if (![popoverWindow isKindOfClass:[NSWindow class]])
     popoverWindow = nil;
   if (!popoverWindow && ![contentView isKindOfClass:[NSView class]]) {
-    KKLogDebug(@"[Panel] browser attach kind=%@ -> skipped(no window and no "
-               @"content view to wait on)",
-               kind);
     return;
   }
   NSValue *cardVal = note.userInfo[@"contentRect"];
@@ -175,7 +170,6 @@ static const CGFloat kPanelWidth = 300.0;
                                   popoverWindow:popoverWindow
                              popoverContentView:contentView];
   _attachedContentView = contentView;
-  KKLogDebug(@"[Panel] browser attach kind=%@ -> shown", kind);
 }
 
 - (void)_sidebarVisibilityChanged:(NSNotification *)note {

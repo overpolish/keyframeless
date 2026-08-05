@@ -506,6 +506,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// or zero until the source resolves. Used to show crop in pixel units.
 @property(nonatomic, readonly) CGSize sourceMediaSize;
 
+/// Canonical frame size used to scale raw `units="px"` controls. This may be
+/// smaller than `sourceMediaSize` when native media is scaled into a project.
+/// Falls back to `sourceMediaSize` for descriptors from an older renderer.
+@property(nonatomic, readonly) CGSize sourcePixelReferenceSize;
+
+/// Exact host output raster for the most recently published frame. Used by
+/// resolution-sensitive renderers to preserve the main viewer's pixel grid.
+/// Falls back to `sourcePixelReferenceSize` for older descriptors.
+@property(nonatomic, readonly) CGSize sourceRenderPixelSize;
+
 /// A SECOND source texture, when the feed published one via
 /// `-[KKMiniViewerFeed updateChannel1WithSourceTexture:...]`; nil otherwise.
 ///
@@ -677,6 +687,11 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// feed. Default NO restores the edited-keypose frame with its controls on the
 /// next redraw.
 @property(nonatomic) BOOL livePlaybackActive;
+/// Releases every resolved feed texture while the containing editor is
+/// compact. A fresh compact editor briefly reads descriptor metadata so
+/// pixel-scaled fields retain the correct frame dimensions, but it never
+/// resolves an IOSurface; the current source is resolved when expanded again.
+@property(nonatomic, getter=isActivitySuspended) BOOL activitySuspended;
 
 /// When YES, a click in the mini makes the mini the window's first responder
 /// (instead of resigning to nil), so an NSPopover-hosted mini becomes the key

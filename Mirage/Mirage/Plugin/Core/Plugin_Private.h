@@ -60,7 +60,6 @@
 /// The chain the last render actually encoded ("id,id,..."), so the render can
 /// log the composition and its skips once when they change rather than on every
 /// frame of playback.
-@property(nonatomic, copy, nullable) NSString *lastRackChainSignature;
 /// Memo for -linkableLanesForManifest: the lane set last built, and the
 /// timeline blob + audio bindings it was built from. The manifest is rebuilt on
 /// every render tick and a rack multiplies the directive parse behind it by its

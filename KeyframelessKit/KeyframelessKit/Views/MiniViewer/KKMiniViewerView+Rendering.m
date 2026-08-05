@@ -47,6 +47,21 @@ static const BOOL kPointShadingLighterTop = YES;
   if (!_pipelineNearest)
     KKLogError(@"KKMiniViewerView: nearest pipeline build failed: %@", err);
 
+  pd.fragmentFunction =
+      [lib newFunctionWithName:@"KKTextureLinearSourceFragment"];
+  _pipelineLinearSource =
+      [device newRenderPipelineStateWithDescriptor:pd error:&err];
+  if (!_pipelineLinearSource)
+    KKLogError(@"KKMiniViewerView: linear-source pipeline failed: %@", err);
+
+  pd.fragmentFunction =
+      [lib newFunctionWithName:@"KKTextureLinearSourceNearestFragment"];
+  _pipelineLinearSourceNearest =
+      [device newRenderPipelineStateWithDescriptor:pd error:&err];
+  if (!_pipelineLinearSourceNearest)
+    KKLogError(@"KKMiniViewerView: nearest linear-source pipeline failed: %@",
+               err);
+
   // Onion-skin: tint+alpha texture pass, premultiplied alpha blending so
   // overlaid ghost frames composite over the active opaque base.
   MTLRenderPipelineDescriptor *op = [[MTLRenderPipelineDescriptor alloc] init];

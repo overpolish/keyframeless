@@ -188,7 +188,6 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
     [self _endWriteGroup:@"superseded by a new write"];
   }
   _writeGroupOpen = YES;
-  KKLogInfo(@"[Surface] write group OPEN (%@)", reason);
   if (self.onDragBegin)
     self.onDragBegin();
 }
@@ -197,7 +196,6 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   if (!_writeGroupOpen)
     return; // idempotent: safe to call from every teardown path
   _writeGroupOpen = NO;
-  KKLogInfo(@"[Surface] write group CLOSED (%@)", reason);
   if (self.onDragEnd)
     self.onDragEnd();
 }
@@ -378,8 +376,6 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   _puckDragIndex = puckIndex;
   _puckDragRing = ringIndex;
   _puckDragActive = YES;
-  KKLogInfo(@"[Surface] %@ puck %lu drag beginning", ring,
-            (unsigned long)puckIndex);
   [self _beginWriteGroup:[NSString stringWithFormat:@"%@ puck %lu drag", ring,
                                                     (unsigned long)puckIndex]];
   // AFTER the capture above, which is why the clear near the top of this method
@@ -416,9 +412,6 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
     return;
   _puckDragActive = NO;
   _dragStartValues = nil;
-  KKLogInfo(@"[Surface] %@ puck %lu drag ending (%@)",
-            MirageRingLogName([self _ringAtIndex:_puckDragRing]),
-            (unsigned long)_puckDragIndex, reason);
   // The gesture's one write, INSIDE the group the begin opened - so the drag is
   // one step back, exactly as when every tick wrote. Nil means the puck was
   // pressed and released without moving: nothing to persist, and writing the

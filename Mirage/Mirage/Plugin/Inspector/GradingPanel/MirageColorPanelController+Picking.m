@@ -424,10 +424,8 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
     s->_pickWriteInFlight = NO;
     // The popover can close between the measurement and this block, and its
     // controller outlives it.
-    if (!s->_panel.isVisible) {
-      KKLogInfo(@"[Pick] the panel closed before the colour write, dropped");
+    if (!s->_panel.isVisible)
       return;
-    }
     // The click that armed the pick can land while a puck drag is still open -
     // the drag's mouse-up may have gone to another application - and opening
     // the pick's group inside that one is the nesting FCP's channel lock raises
@@ -454,11 +452,6 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   NSDictionary<NSString *, NSNumber *> *picks =
       activePuckOnly ? [self _picksForActivePuckIn:timeline source:source]
                      : [self _picksInSource:source];
-  if (activePuckOnly)
-    KKLogInfo(@"[Pick] click-to-pick reaches %lu of the shader's %lu pick= "
-              @"control(s)",
-              (unsigned long)picks.count,
-              (unsigned long)[self _picksInSource:source].count);
   if (!picks.count)
     return;
   double r = rgb[0].doubleValue, g = rgb[1].doubleValue, b = rgb[2].doubleValue;
@@ -489,7 +482,6 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
   double frac = [self _editFraction];
   NSSet<NSString *> *drivable = [self _drivableKeysIn:timeline fraction:frac];
   NSMutableArray<KKLane *> *lanes = [timeline.lanes mutableCopy];
-  NSUInteger written = 0;
   BOOL changed = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {
     KKLane *lane = lanes[i];
@@ -508,7 +500,7 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
     switch ((MirageSurfacePickKind)boxed.integerValue) {
     case MirageSurfacePickKindColor:
       if (values.count < 3) {
-        KKLogInfo(@"[Pick] %@ asked for pick=color but is not a colour control",
+        KKLogWarn(@"[Pick] %@ asks for pick=color but is not a colour control",
                   lane.key);
         continue;
       }
@@ -519,11 +511,8 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
       values[2] = @(b);
       break;
     case MirageSurfacePickKindHue: {
-      if (hue < 0.0) {
-        KKLogInfo(@"[Pick] the patch is neutral, so it has no hue to give %@",
-                  lane.key);
+      if (hue < 0.0)
         continue;
-      }
       // Wrapped to the control's own convention rather than clamped: a hue is
       // circular, so clamping 350 into a -180..180 control would land on 180 -
       // the opposite colour - instead of on -10.
@@ -556,24 +545,16 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
       continue;
     }
     lanes[i] = KKLaneBySettingValuesAtIndex(lane, idx, values);
-    written++;
     changed = YES;
   }
   if (!changed)
     return;
   KKTimeline *updated = [timeline copy];
   updated.lanes = lanes;
-  // Logged on both sides on purpose. If the channel-lock exception comes back,
-  // the question is whether one of these writes was still open when it was
-  // raised, and a "beginning" with no "done" answers it - as does neither line,
-  // which would say the picker had nothing to do with it.
-  KKLogInfo(@"[Pick] colour write beginning, %lu lane(s)",
-            (unsigned long)written);
   [self _beginWriteGroup:@"eyedropper"];
   if (self.onTimelineMutated)
     self.onTimelineMutated(updated);
   [self _endWriteGroup:@"eyedropper"];
-  KKLogInfo(@"[Pick] colour write done, %lu lane(s)", (unsigned long)written);
   [self _refreshPuck];
 }
 

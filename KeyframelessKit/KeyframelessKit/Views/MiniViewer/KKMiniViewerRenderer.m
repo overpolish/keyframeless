@@ -70,9 +70,6 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   // Diagnostic only: the last (label, fractions) an override was REFUSED for,
   // so a refusal that repeats every frame of a drag is logged once rather than
   // sixty times a second.
-  NSString *_liveRefusedLabel;
-  double _liveRefusedAt;
-  double _liveRefusedWanted;
   BOOL _pointGrabbed;
   BOOL _rotationGrabbed;
   // Rotation drag state (set by the default rotation hooks; mirrored on the
@@ -542,22 +539,6 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     NSArray<NSNumber *> *live = _liveValues[label];
     if (live.count > 0 && fabs(self.editFraction - _liveFraction) < 1e-4)
       return live;
-    // An in-flight value that the fraction gate then refuses is a live preview
-    // the user is watching not happen: the picture stays on the committed
-    // timeline for the whole gesture and the edit appears in one step on
-    // mouse-up. Logged (once per distinct refusal) rather than silently
-    // dropped, because the two fractions name who disagreed - the pusher or the
-    // encode pass that moved editFraction under it.
-    if (live.count > 0 && (![_liveRefusedLabel isEqualToString:label] ||
-                           fabs(_liveRefusedAt - self.editFraction) > 1e-4 ||
-                           fabs(_liveRefusedWanted - _liveFraction) > 1e-4)) {
-      _liveRefusedLabel = [label copy];
-      _liveRefusedAt = self.editFraction;
-      _liveRefusedWanted = _liveFraction;
-      KKLogWarn(@"[MiniViewer] live override for \"%@\" refused: pushed at "
-                @"fraction %.6f, rendering at %.6f",
-                label, _liveFraction, self.editFraction);
-    }
   }
   for (KKLane *lane in self.timeline.lanes) {
     if (![lane.key isEqualToString:label])

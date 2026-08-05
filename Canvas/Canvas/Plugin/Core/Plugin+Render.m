@@ -359,6 +359,7 @@ static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
                               multiSlotActive:YES
                             changesOutputSize:NO
                                   linearFloat:NO
+                               fullResolution:YES
                                    defaultTag:[self.renderCache
                                                   clipFractionAtSeconds:
                                                       CMTimeGetSeconds(

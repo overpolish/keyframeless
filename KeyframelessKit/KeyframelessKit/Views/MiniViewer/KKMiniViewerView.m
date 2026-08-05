@@ -61,6 +61,19 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   return _sourceMediaSize;
 }
 
+- (CGSize)sourcePixelReferenceSize {
+  if (_sourcePixelReferenceSize.width > 0.0 &&
+      _sourcePixelReferenceSize.height > 0.0)
+    return _sourcePixelReferenceSize;
+  return _sourceMediaSize;
+}
+
+- (CGSize)sourceRenderPixelSize {
+  if (_sourceRenderPixelSize.width > 0.0 && _sourceRenderPixelSize.height > 0.0)
+    return _sourceRenderPixelSize;
+  return self.sourcePixelReferenceSize;
+}
+
 - (id<MTLTexture>)channel1Texture {
   return _channel1Slot.sourceTexture;
 }
@@ -292,7 +305,8 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   [self _startPollTimer];
   if (self.window) {
     [self _poll];
-    [self _installKeyMonitor];
+    if (!_activitySuspended)
+      [self _installKeyMonitor];
   }
 }
 
@@ -304,6 +318,13 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   _pollTimer = nil;
   if (!self.window)
     return;
+  // A compact viewer has no need to resolve or retain image surfaces, but its
+  // value rows still need the descriptor's frame dimensions to translate
+  // normalized point/multi values to `px`. Poll only until those dimensions
+  // arrive, then stop completely while compact.
+  if (_activitySuspended && _sourceMediaSize.width > 0.0 &&
+      _sourceMediaSize.height > 0.0)
+    return;
   // Weak block (NOT target:self) - a target:self repeating timer retains the
   // view, so it only deallocs when the timer is invalidated (window-leave /
   // dealloc). The guide's popover juggling (content moving to the overlay /
@@ -313,7 +334,9 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   // the view dealloc as soon as its popover releases it; dealloc invalidates
   // the timer.
   __weak typeof(self) weakSelf = self;
-  NSTimeInterval iv = _livePlaybackActive ? kPollIntervalLive : kPollInterval;
+  NSTimeInterval iv = (!_activitySuspended && _livePlaybackActive)
+                          ? kPollIntervalLive
+                          : kPollInterval;
   _pollTimer = [NSTimer scheduledTimerWithTimeInterval:iv
                                                repeats:YES
                                                  block:^(NSTimer *t) {
@@ -331,6 +354,38 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   if (active)
     [_overlay endInteractionForLivePlayback];
   [self _startPollTimer];
+}
+
+- (void)setActivitySuspended:(BOOL)suspended {
+  if (_activitySuspended == suspended)
+    return;
+  _activitySuspended = suspended;
+  if (suspended) {
+    // Drop every consumer-side reference to the producer's IOSurfaces. Merely
+    // hiding the scroll view left this 60fps poll alive during playback, so a
+    // compact editor could retain and process the same full-resolution frames
+    // as an expanded one even though nobody could see them.
+    _sourceTexture = nil;
+    _processedTexture = nil;
+    _sourceSurface = NULL; // unowned alias; slots release their own +1
+    _resolvedSurfaceID = 0;
+    _resolvedGeneration = 0;
+    _filmstripSlots =
+        [NSMutableArray arrayWithObject:[[_KKMiniFilmSlot alloc] init]];
+    _channel1Slot = nil;
+    _auxSlots = nil;
+    // Keep the three CGSize values: they are metadata, not GPU resources, and
+    // are required by every normalized control displayed as pixels. A fresh
+    // compact editor without metadata keeps a short-lived descriptor poll
+    // until the render side publishes its dimensions-only document.
+    [self _startPollTimer];
+    if (self.window)
+      [self _poll];
+    return;
+  }
+  [self _startPollTimer];
+  if (self.window)
+    [self _poll];
 }
 
 // Cmd-0 snaps zoom/pan back to fit, matching double-click and the inspector's
@@ -582,9 +637,24 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   CGSize prevMedia = _sourceMediaSize;
   _sourceMediaSize = CGSizeMake([desc[@"srcWidth"] doubleValue],
                                 [desc[@"srcHeight"] doubleValue]);
+  _sourcePixelReferenceSize = CGSizeMake([desc[@"pixelRefWidth"] doubleValue],
+                                         [desc[@"pixelRefHeight"] doubleValue]);
+  _sourceRenderPixelSize = CGSizeMake([desc[@"renderWidth"] doubleValue],
+                                      [desc[@"renderHeight"] doubleValue]);
   if (!CGSizeEqualToSize(prevMedia, _sourceMediaSize) &&
       _sourceMediaSize.width > 0 && self.onSourceResolved)
     self.onSourceResolved();
+
+  // Compact mode consumes descriptor metadata only. Never look up an
+  // IOSurface, create a texture, process a frame, or keep polling once the
+  // dimensions needed by pixel-scaled controls have arrived.
+  if (_activitySuspended) {
+    if (_sourceMediaSize.width > 0.0 && _sourceMediaSize.height > 0.0) {
+      [_pollTimer invalidate];
+      _pollTimer = nil;
+    }
+    return;
+  }
 
   // A second texture (Shader's "To" image well), independent of the slots and
   // of the generator/filter split - resolve it before either path returns.

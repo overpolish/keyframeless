@@ -22,6 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// `active` is true. Returns nil otherwise. Falls back to single-element
 /// `[frac]` for legacy single-fraction payloads.
 NSArray<NSNumber *> *_Nullable KKReadBoundaryRequestFracs(NSString *path);
+BOOL KKReadMiniViewerFeedActive(NSString *path);
 
 /// Process-global timeline snapshot. One plugin instance per XPC process,
 /// so a single static slot suffices to hand the current timeline to OSC
@@ -87,6 +88,7 @@ double KKProcessFrameDurationSeconds(void);
 /// KKBuildSourceRequests; read by the render-output side to pair
 /// delivered tiles to slots.
 @property(nonatomic) BOOL boundaryFeedActive;
+@property(nonatomic) BOOL miniViewerFeedActive;
 @property(nonatomic) double lastBoundaryReqSec;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *boundaryReqSecs;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *boundaryReqFracs;

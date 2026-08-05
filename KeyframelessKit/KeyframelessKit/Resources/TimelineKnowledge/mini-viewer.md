@@ -26,7 +26,7 @@ For longer edits against the full composition, press V or use the compact-editor
 
 Mirage mirrors its small Before, Split and Show Selection toolbar in the top-left of Final Cut's main viewer. The buttons and B/S/M shortcuts share state with the mini-viewer, so compact mode does not remove the comparison tools.
 
-Drag empty space or the decorative title in an editor's title bar to put it where you want. Curve and modulation remember one position, while Constants and keypose remember another. The Constants/keypose panel can be resized from any edge or corner. The viewer fills its whole canvas and takes priority over parameter rows, which scroll when they need more room. A code editor grows alongside the viewer up to 150pt, then further growth belongs to the viewer. Its size and both panel positions are remembered.
+Drag empty space or the decorative title in an editor's title bar to put it where you want. Curve and modulation remember one position, while Constants and keypose remember another. The Constants/keypose panel can be resized from any edge or corner. The viewer fills its whole canvas and takes priority over parameter rows, which scroll when they need more room. A code editor grows alongside the viewer up to 250pt, then further growth belongs to the viewer. Its size and both panel positions are remembered.
 
 The sidebar button beside composition peek, or the L key, hides and shows the plugin's main companion browser: templates in Mirage and layers in Canvas. It is shown by default. Compact mode and both sidebar visibility choices are remembered after Final Cut restarts.
 

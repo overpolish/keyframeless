@@ -240,11 +240,31 @@
         (compareX >= 0.0 && comparePts.size.width > 0.0)
             ? (compareX - CGRectGetMinX(comparePts)) / comparePts.size.width
             : self.compareSplitFraction;
+    // Past a modest zoom, swap to NEAREST magnification so texels read as crisp
+    // squares (pixel inspection) instead of bilinear blur; normal/zoomed-out
+    // viewing keeps the smooth linear passthrough. Raw RGBA16F feed textures
+    // additionally need linear->display encoding when Before/Split draws them
+    // without passing through the plugin renderer.
+    id<MTLRenderPipelineState> passthrough =
+        (_zoom > 3.0 && _pipelineNearest) ? _pipelineNearest : _pipeline;
+    id<MTLRenderPipelineState> linearSourcePassthrough =
+        (_zoom > 3.0 && _pipelineLinearSourceNearest)
+            ? _pipelineLinearSourceNearest
+            : _pipelineLinearSource;
+    void (^selectPlainTexturePipeline)(id<MTLTexture>) =
+        ^(id<MTLTexture> tex) {
+          BOOL linearSource =
+              tex.pixelFormat == MTLPixelFormatRGBA16Float &&
+              linearSourcePassthrough != nil;
+          [enc setRenderPipelineState:linearSource ? linearSourcePassthrough
+                                                   : passthrough];
+        };
     void (^drawSlotComposite)(NSUInteger, _KKMiniFilmSlot *) =
         ^(NSUInteger i, _KKMiniFilmSlot *slot) {
           id<MTLTexture> graded = slot.processedTexture ?: slot.sourceTexture;
           id<MTLTexture> raw = slot.sourceTexture;
           if (compareBypass && raw) {
+            selectPlainTexturePipeline(raw);
             drawSlotQuad(i, raw);
           } else if (compareSplit && raw && graded && graded != raw) {
             // Land the seam on a whole DRAWABLE pixel, then re-derive the split
@@ -257,18 +277,15 @@
               CGFloat seam = floor(cell.origin.x + splitU * cell.size.width);
               u = (seam - cell.origin.x) / cell.size.width;
             }
+            selectPlainTexturePipeline(graded);
             drawSlotQuadSpan(i, graded, 0.0, u);
+            selectPlainTexturePipeline(raw);
             drawSlotQuadSpan(i, raw, u, 1.0);
           } else if (graded) {
+            selectPlainTexturePipeline(graded);
             drawSlotQuad(i, graded);
           }
         };
-
-    // Past a modest zoom, swap to NEAREST magnification so texels read as crisp
-    // squares (pixel inspection) instead of bilinear blur; normal/zoomed-out
-    // viewing keeps the smooth linear passthrough. Onion ghosts stay linear.
-    id<MTLRenderPipelineState> passthrough =
-        (_zoom > 3.0 && _pipelineNearest) ? _pipelineNearest : _pipeline;
     [enc setRenderPipelineState:passthrough];
     [enc setVertexBytes:&vp
                  length:sizeof(vp)

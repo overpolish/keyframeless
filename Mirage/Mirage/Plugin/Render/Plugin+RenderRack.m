@@ -13,6 +13,7 @@
 
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <math.h>
 
 // SHADER RACK, render half. One instance, an ordered chain of entries, each
 // with its own independently transpiled pipelines and its own std140 uniform
@@ -232,27 +233,6 @@ static void MirageApplyRackSelectionPreview(MirageShaderModel *model,
     NSUInteger index = [entryIDs indexOfObject:entryID];
     if (index != NSNotFound)
       [enabled addObject:@(index)];
-  }
-
-  NSMutableArray<NSString *> *shape =
-      [NSMutableArray arrayWithCapacity:entryCount];
-  for (NSInteger i = 0; i < entryCount; i++)
-    [shape addObject:[NSString stringWithFormat:@"%@%@", entryIDs[i],
-                                                [enabled containsObject:@(i)]
-                                                    ? @""
-                                                    : @"(skipped)"]];
-  NSString *signature = [shape componentsJoinedByString:@" -> "];
-  if (previewMode != MirageRackPreviewModeOff)
-    signature = [signature
-        stringByAppendingFormat:@" | preview=%ld:%@", (long)previewMode,
-                                session.mirageRackPreviewEntryID ?: @"(none)"];
-  if (session.mirageCompareSelectionEnabled)
-    signature =
-        [signature stringByAppendingFormat:@" | matte=%@", selectedEntry];
-  if (![signature isEqualToString:self.lastRackChainSignature]) {
-    self.lastRackChainSignature = signature;
-    KKLogDebug(@"[Mirage] rack chain entries=%ld enabled=%ld | %@",
-               (long)entryCount, (long)enabled.count, signature);
   }
 
   // Every entry off: pass the clip through rather than leaving the destination

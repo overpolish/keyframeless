@@ -11,6 +11,8 @@
 #import "KKMiniViewerRenderer.h"
 #import "KKTimelineInspectorView.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <errno.h>
+#import <signal.h>
 
 @implementation KKRenderCache
 - (instancetype)init {
@@ -46,6 +48,22 @@ NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   if (frac)
     return @[ frac ];
   return nil;
+}
+
+BOOL KKReadMiniViewerFeedActive(NSString *path) {
+  if (path.length == 0)
+    return NO;
+  NSData *data = [NSData dataWithContentsOfFile:path];
+  NSDictionary *json =
+      data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil]
+           : nil;
+  if (![json isKindOfClass:[NSDictionary class]] ||
+      ![json[@"viewerActive"] boolValue])
+    return NO;
+  pid_t pid = (pid_t)[json[@"viewerProcessID"] intValue];
+  if (pid <= 0)
+    return NO;
+  return kill(pid, 0) == 0 || errno == EPERM;
 }
 
 static KKTimeline *sProcessTimelineSnapshot = nil;
@@ -106,7 +124,10 @@ NSArray *KKBuildSourceRequests(CMTime renderTime, NSString *boundaryRequestPath,
   // animation over a single source frame (see the header). A footage-smear
   // effect would call +[KKMotionBlur appendSourceRequestsForState:...] itself.
 
-  NSArray<NSNumber *> *fracs = KKReadBoundaryRequestFracs(boundaryRequestPath);
+  BOOL viewerActive = KKReadMiniViewerFeedActive(boundaryRequestPath);
+  cache.miniViewerFeedActive = viewerActive;
+  NSArray<NSNumber *> *fracs =
+      viewerActive ? KKReadBoundaryRequestFracs(boundaryRequestPath) : nil;
   BOOL boundaryActive = fracs.count > 0;
   cache.boundaryFeedActive = boundaryActive;
   if (boundaryActive) {

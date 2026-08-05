@@ -62,7 +62,7 @@ NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
 
 // The generic mini-viewer should size `dest` to the pixels the preview
 // actually occupies. Our normal single-sample path still renders through the
-// 1080-tall fidelity intermediate in -hiResTargetForDest:, but motion-blur
+// host-raster fidelity intermediate in -hiResTargetForDest:, but motion-blur
 // sampling deliberately skips that intermediate and renders N times straight
 // into `dest`. Without this opt-in, `dest` stays at the source size (typically
 // 1920x1080), turning a small inspector preview into N full-HD shader passes.

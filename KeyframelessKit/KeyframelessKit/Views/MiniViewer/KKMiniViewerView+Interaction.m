@@ -8,6 +8,7 @@
 #import "KKTokens.h"
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h> // CACurrentMediaTime (gesture-active timing)
+#import <math.h>
 
 // View transform (zoom / pan), pointer-handle dragging, and screen-rect
 // geometry. The canvas's interactive surface, kept apart from the render path.
@@ -80,9 +81,17 @@
 // both states. Pan keeps the scrollWheel: responder below - AppKit delivers
 // scroll to inactive windows, so it already works non-key.
 - (void)scrollWheel:(NSEvent *)event {
-  [super scrollWheel:event];
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
-  if (event.hasPreciseScrollingDeltas) {
+  // `hasPreciseScrollingDeltas` is not a reliable trackpad test: smooth-wheel
+  // mice (including Logitech devices and the Magic Mouse) report precise
+  // deltas too. Trackpad two-finger gestures carry a gesture phase, whereas a
+  // mouse wheel is normally phase-less. Keep two-finger scrolling as pan, but
+  // make every mouse wheel zoom even when its driver enables smooth scrolling.
+  BOOL trackpadGesture =
+      event.hasPreciseScrollingDeltas &&
+      (event.phase != NSEventPhaseNone ||
+       event.momentumPhase != NSEventPhaseNone);
+  if (trackpadGesture) {
     // Trackpad two-finger → pan.
     _lastPanZoomTime = CACurrentMediaTime();
     CGFloat s = [self _backingScale];
@@ -93,8 +102,17 @@
     [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindPan];
   } else {
     // Mouse wheel → zoom toward cursor.
-    CGFloat factor = 1.0 - event.scrollingDeltaY * 0.05;
+    // Parsec sends a single ordinary notch as precise scrollingDeltaY=120 but
+    // legacy deltaY=12. Normalise that legacy notch instead of treating the
+    // transport's 120 as 120 physical wheel steps. Clamp bursty remote events
+    // so one packet can never jump from fit straight to the zoom limit.
+    CGFloat raw = event.deltaY;
+    if (fabs(raw) < 0.001)
+      raw = event.scrollingDeltaY / 10.0;
+    CGFloat steps = MAX(-3.0, MIN(3.0, raw / 12.0));
+    CGFloat factor = pow(1.12, -steps);
     [self _zoomTo:_zoom * factor aboutViewPoint:p];
+    [self _drawNowForInteraction];
   }
 }
 

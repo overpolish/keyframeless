@@ -85,27 +85,29 @@
   return ps;
 }
 
-// A cached reference-resolution (1080-tall, dest aspect) intermediate render
-// target, or nil when `dest` is already tall enough that rendering direct is
-// fine. The type is rendered into this at full resolution and then downscaled
-// into the small mini texture, so grain / dither / any resolution-dependent
-// effect looks like a proper minified copy of the FCP render.
+// A cached intermediate at the EXACT raster FCP used for the published main
+// render. Rendering resolution-sensitive shaders into a preview-derived size
+// and merely scaling their `px` uniforms preserves apparent size but not the
+// integer grid's phase: resizing the mini can move Bayer/dither cells onto
+// different pixels. Render once in the host raster, then scale only the
+// finished pixels into `dest`, exactly as FCP scales its viewer image.
 - (id<MTLTexture>)hiResTargetForDest:(id<MTLTexture>)dest {
-  // Motion blur re-renders this N times per preview frame, and at 1080 that
-  // made each sample as expensive as a full render tick. The intermediate only
+  // Motion blur re-renders this N times per preview frame, and at host raster
+  // size that makes each sample as expensive as a full render tick. The
+  // intermediate only
   // buys correct MINIFICATION of grain / dither, which the blur's averaging
   // destroys anyway, so skip it while sampling. Mirage can't use the Fast
   // (velocity) technique - an arbitrary GLSL shader has no analytic velocity -
   // so the sample path has to be affordable on its own.
   if (self.previewMotionBlurSampling)
     return nil;
-  NSUInteger dh = dest.height;
-  const NSUInteger refH = 1080;
-  if (dh == 0 || dh >= refH)
-    return nil; // already high enough, render straight in
-  NSUInteger refW = (NSUInteger)llround((double)refH * dest.width / (double)dh);
-  if (refW < 1)
-    refW = 1;
+  CGSize hostRaster = self.canvas.sourceRenderPixelSize;
+  NSUInteger refW = (NSUInteger)llround(hostRaster.width);
+  NSUInteger refH = (NSUInteger)llround(hostRaster.height);
+  if (refW == 0 || refH == 0)
+    return nil;
+  if (dest.width == refW && dest.height == refH)
+    return nil; // direct rendering is already pixel-identical
   if (!_hiResTex || _hiResTex.width != refW || _hiResTex.height != refH ||
       _hiResTex.pixelFormat != dest.pixelFormat) {
     // Mipmapped so the down-blit can area-average the whole minification

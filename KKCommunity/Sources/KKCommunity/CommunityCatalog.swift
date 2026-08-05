@@ -207,8 +207,21 @@ public struct CommunityCatalog: Sendable {
   /// consumer decides what to do with them (write to disk, parse into lanes...).
   public func downloadFiles(_ entry: CommunityEntry) async throws -> [String: Data] {
     var out: [String: Data] = [:]
+    let cacheToken = String(Int(Date().timeIntervalSince1970 * 1_000))
     for file in entry.files where file.name != "metadata.json" {
-      let (data, _) = try await URLSession.shared.data(from: file.downloadURL)
+      // raw.githubusercontent.com caches branch/path URLs at the CDN edge. A
+      // template replaced on `main` can therefore download its previous bytes
+      // for several minutes even after the catalog was force-refreshed. Give
+      // the payload request its own cache-busting URL as well as bypassing the
+      // process URLCache, so delete + redownload always installs current main.
+      var url = file.downloadURL
+      if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+        var items = components.queryItems ?? []
+        items.append(URLQueryItem(name: "t", value: cacheToken))
+        components.queryItems = items
+        url = components.url ?? url
+      }
+      let data = try await fetchFresh(url)
       out[file.name] = data
     }
     return out

@@ -44,6 +44,7 @@ NS_ASSUME_NONNULL_BEGIN
                           multiSlotActive:(BOOL)multiSlotActive
                         changesOutputSize:(BOOL)changesOutputSize
                              linearFloat:(BOOL)linearFloat
+                          fullResolution:(BOOL)fullResolution
                                defaultTag:(double)defaultTag
                               renderCache:(nullable KKRenderCache *)renderCache;
 

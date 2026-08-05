@@ -124,8 +124,9 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// Prefer -writeLinkManifestWithClipStartSec:durationSec: on the render path:
 /// this form re-enters the host three times for a clip span the tick's render
-/// cache already holds. Kept for callers with no cache (the document-load
-/// registration, which runs on main inside an action scope).
+/// cache already holds. Kept for host-invoked callers with no render cache. The
+/// document-load callback must never use it: its synchronous host queries can
+/// deadlock Final Cut while the document lock is held.
 - (void)writeLinkManifest;
 
 /// -writeLinkManifest with the clip's absolute span supplied by the caller -

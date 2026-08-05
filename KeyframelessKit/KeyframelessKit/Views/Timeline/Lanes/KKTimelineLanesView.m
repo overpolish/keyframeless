@@ -28,7 +28,6 @@ static NSString *const kEditorSidebarVisibleKey =
     @"timeline.editor.sidebarVisible";
 static NSString *const kEditorRightPanelVisibleKey =
     @"timeline.editor.rightPanelVisible";
-static NSString *const kEditorCompactModeKey = @"timeline.editor.compactMode";
 
 static BOOL KKEditorStoredBool(NSString *key, BOOL fallback) {
   id stored = KKScopedDefaultRead(key, kEditorLayoutScope);
@@ -195,7 +194,10 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     _editorSidebarVisible = KKEditorStoredBool(kEditorSidebarVisibleKey, YES);
     _editorRightPanelVisible =
         KKEditorStoredBool(kEditorRightPanelVisibleKey, YES);
-    _editorCompactMode = KKEditorStoredBool(kEditorCompactModeKey, NO);
+    // Compact is an INSTANCE default, not a shared UI preference. The host
+    // supplies the instance UUID after constructing the view, at which point
+    // setEditorStatePersistenceKey: restores that instance's prior choice.
+    _editorCompactMode = YES;
     [self _buildUI];
     [self _refresh];
   }
@@ -1477,10 +1479,14 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     return;
   BOOL changed = _editorCompactMode != compact;
   _editorCompactMode = compact;
-  if (changed)
-    KKScopedDefaultWrite(@(compact), kEditorCompactModeKey, kEditorLayoutScope);
+  if (changed && _editorStatePersistenceKey.length) {
+    NSString *key = [@"timeline.editor.compactMode.instance."
+        stringByAppendingString:_editorStatePersistenceKey];
+    KKScopedDefaultWrite(@(compact), key, kEditorLayoutScope);
+  }
   if (changed && self.onEditorCompactModeChanged)
     self.onEditorCompactModeChanged(compact);
+  [self _syncMiniViewerFeedActivity];
   if (!_openEditorPanel || !_openEditorIsStaticFamily || !_openStaticView)
     return;
 
@@ -1513,6 +1519,29 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
   // Reassert the edge captured before the compact/expanded layout changed.
   [_openEditorPanel setContentSize:_openEditorPanel.frame.size
                   keepingTopEdgeAt:anchoredTop];
+}
+
+- (void)setEditorStatePersistenceKey:(NSString *)key {
+  if (_editorStatePersistenceKey == key ||
+      [_editorStatePersistenceKey isEqualToString:key])
+    return;
+  _editorStatePersistenceKey = [key copy];
+  BOOL compact = YES;
+  if (key.length) {
+    NSString *preferenceKey = [@"timeline.editor.compactMode.instance."
+        stringByAppendingString:key];
+    compact = KKEditorStoredBool(preferenceKey, YES);
+  }
+  [self _setEditorCompactMode:compact];
+}
+
+- (void)setMiniViewerRequestPath:(NSString *)path {
+  if (_miniViewerRequestPath == path ||
+      [_miniViewerRequestPath isEqualToString:path])
+    return;
+  _miniViewerRequestPath = [path copy];
+  _publishedMiniViewerFeedActiveValid = NO;
+  [self _syncMiniViewerFeedActivity];
 }
 
 - (BOOL)editorCompactMode {

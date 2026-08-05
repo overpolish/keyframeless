@@ -354,8 +354,6 @@
   [self.window makeKeyWindow];
   _dragging = YES;
   [self _installDragMonitors];
-  KKLogInfo(@"[dragundo] mouseDown overlay=%p canvas=%p win=%p key=%d", self,
-            (void *)c, (void *)self.window, self.window.isKeyWindow);
   if (c.onHandleDragBegin)
     c.onHandleDragBegin();
   [d miniViewer:c
@@ -443,7 +441,6 @@
   _dragging = NO;
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
-  KKLogInfo(@"[dragundo] end overlay=%p reason=%@", self, reason);
   if ([d respondsToSelector:@selector(miniViewerEndHandleDrag:)])
     [d miniViewerEndHandleDrag:c];
   if (c.onHandleDragEnd)

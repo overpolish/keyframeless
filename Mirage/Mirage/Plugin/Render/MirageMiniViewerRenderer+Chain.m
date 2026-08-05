@@ -41,11 +41,19 @@
 static void MirageScaleMiniPixelProps(MirageShaderModel *model,
                                       vector_float4 *pool, int poolCount,
                                       float renderW, float renderH,
-                                      CGSize mediaSize) {
-  if (!model || !pool || mediaSize.width <= 0.0 || mediaSize.height <= 0.0)
+                                      CGSize referenceSize) {
+  if (!model || !pool)
     return;
-  float scaleX = renderW / (float)mediaSize.width;
-  float scaleY = renderH / (float)mediaSize.height;
+  // Detached renders such as the built-in browser thumbnail bake have no
+  // cross-process feed descriptor, so there is no source pixel reference to
+  // read from the canvas. Their controls are still authored against the
+  // canonical 1080p frame used by the built-in thumbnail values. Without this
+  // fallback a 30px Frame border remains 30px in a 320x180 card instead of
+  // scaling to 5px, which makes the border and glow look enormous.
+  if (referenceSize.width <= 0.0 || referenceSize.height <= 0.0)
+    referenceSize = CGSizeMake(1920.0, 1080.0);
+  float scaleX = renderW / (float)referenceSize.width;
+  float scaleY = renderH / (float)referenceSize.height;
   float scale = fminf(scaleX, scaleY);
   if (!isfinite(scale) || scale <= 0.0f || scale == 1.0f)
     return;
@@ -287,7 +295,7 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
                           valuesForLabel:values
                            slotInstances:slotInstances];
   MirageScaleMiniPixelProps(poolModel, colorPool, colorPoolN, W, H,
-                            self.canvas.sourceMediaSize);
+                            self.canvas.sourcePixelReferenceSize);
   // Sampled at the playhead's PROJECT time, pushed by the inspector - the same
   // instant the viewer is showing, so the preview and the render agree. Still
   // called when that's unknown (a large negative reads as outside the

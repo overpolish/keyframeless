@@ -6,8 +6,8 @@
 #import "OSC.h"
 #import "Constants.h"
 #import "MirageDirectives.h" // MirageShaderModel (osc directives)
+#import "MirageCategory.h"
 #import "MirageLocalized.h"
-#import "MirageMiniViewerRenderer.h" // per-instance source feed path
 #import "MirageOSCBlock.h"           // // @osc custom-handling blocks
 #import "MirageOSCBlockRuntime.h" // compiled block: eval / invert (shared w/ mini)
 #import "MirageOSCSnapshot.h"     // KKProcessTimelineSnapshot via the kit
@@ -18,7 +18,6 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKLinkExpr.h>
 #import <KeyframelessKit/KKLog.h>
-#import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKToolbar.h>
@@ -217,18 +216,6 @@ static const double kMirageExprBoxFineFactor = 0.2;
 static BOOL MirageExprBoxHandleIsCorner(NSInteger idx) { return idx < 4; }
 static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   return idx < 4 || idx == 5 || idx == 7;
-}
-
-- (nullable id<MTLTexture>)_compareSourceTextureForDestination:
-    (FxImageTile *)destinationImage {
-  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
-  id<MTLDevice> device =
-      [cache deviceWithRegistryID:destinationImage.deviceRegistryID];
-  NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
-  if (!device || !uuid.length)
-    return nil;
-  return KKMiniViewerFeedLoadPrimarySource(
-      MirageMiniViewerDescriptorPathForUUID(uuid), device);
 }
 
 - (void)_invalidateCompareRender {
@@ -1451,8 +1438,8 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
-  id<MTLTexture> compareSource =
-      [self _compareSourceTextureForDestination:destinationImage];
+  BOOL hasCompareSource = ![MirageCategoryForSource([self _currentShaderSource])
+      isEqualToString:kMirageCategoryGenerator];
   [self _syncOSCControllers];
   double ringFrac = [self fractionAtTime:time];
 
@@ -1661,11 +1648,11 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   // after shader-authored OSCs so a large control cannot erase it. Before
   // bypass gates it off in `_drawCompareDivider...`, leaving one clean source
   // frame while the eye is held.
-  if (compareSource)
+  if (hasCompareSource)
     [self _drawCompareDividerInDestination:destinationImage];
   [self _drawCompareToolbarWithWidth:width
                               height:height
-                           hasSource:(compareSource != nil)
+                           hasSource:hasCompareSource
                     destinationImage:destinationImage];
 }
 

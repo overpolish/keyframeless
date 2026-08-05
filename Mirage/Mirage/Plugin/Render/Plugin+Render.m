@@ -669,7 +669,15 @@ static NSString *MirageChainNeighborSource(NSData *pluginState,
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive
                           changesOutputSize:NO
-                                linearFloat:technicalTransform
+                                // Every Mirage shader is re-evaluated in the
+                                // mini. An 8-bit display-coded feed introduces
+                                // a second quantisation before threshold
+                                // effects such as Dither; values on a boundary
+                                // can then choose a different Bayer cell than
+                                // the main render. Preserve the host's linear
+                                // source in half-float for every shader.
+                                linearFloat:YES
+                             fullResolution:YES
                                  defaultTag:
                                      [self.renderCache
                                          clipFractionAtSeconds:CMTimeGetSeconds(

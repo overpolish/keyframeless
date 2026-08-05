@@ -158,8 +158,11 @@ static NSDictionary *KKMiniFeedSlotEntry(_KKMiniFeedSlot *slot) {
                          h:(NSUInteger)sh
                       slot:(_KKMiniFeedSlot *)slot {
   NSUInteger longEdge = MAX(sw, sh);
-  double scale =
-      longEdge > 0 ? (double)kTargetLongEdge / (double)longEdge : 1.0;
+  double scale = self.fullResolution
+                     ? 1.0
+                     : (longEdge > 0
+                            ? (double)kTargetLongEdge / (double)longEdge
+                            : 1.0);
   if (scale > 1.0)
     scale = 1.0; // never upscale a small source
   NSUInteger w = (NSUInteger)lround((double)sw * scale);
@@ -199,12 +202,13 @@ static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
   MTLPixelFormat expectedFormat = self.linearFloat
                                       ? MTLPixelFormatRGBA16Float
                                       : MTLPixelFormatBGRA8Unorm_sRGB;
+  NSUInteger oldDstW = slot.dstW;
+  NSUInteger oldDstH = slot.dstH;
+  [self _computeDstForSrcW:sw h:sh slot:slot];
   if (slot.surfaceTexture &&
       slot.surfaceTexture.pixelFormat == expectedFormat && sw == slot.srcW &&
-      sh == slot.srcH)
+      sh == slot.srcH && oldDstW == slot.dstW && oldDstH == slot.dstH)
     return YES;
-
-  [self _computeDstForSrcW:sw h:sh slot:slot];
 
   slot.surfaceTexture = nil;
   if (slot.surface) {
@@ -308,6 +312,18 @@ static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
       NSMutableDictionary *dimsOnly = [@{
         @"srcWidth" : @(_mediaSize.width),
         @"srcHeight" : @(_mediaSize.height),
+        @"pixelRefWidth" : @(self.pixelReferenceSize.width > 0
+                                 ? self.pixelReferenceSize.width
+                                 : _mediaSize.width),
+        @"pixelRefHeight" : @(self.pixelReferenceSize.height > 0
+                                  ? self.pixelReferenceSize.height
+                                  : _mediaSize.height),
+        @"renderWidth" : @(self.renderPixelSize.width > 0
+                               ? self.renderPixelSize.width
+                               : _mediaSize.width),
+        @"renderHeight" : @(self.renderPixelSize.height > 0
+                                ? self.renderPixelSize.height
+                                : _mediaSize.height),
         @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
         @"slots" : @[],
       } mutableCopy];
@@ -326,6 +342,18 @@ static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
     @"height" : @(first.dstH),
     @"srcWidth" : @(first.srcW),
     @"srcHeight" : @(first.srcH),
+    @"pixelRefWidth" : @(self.pixelReferenceSize.width > 0
+                             ? self.pixelReferenceSize.width
+                             : first.srcW),
+    @"pixelRefHeight" : @(self.pixelReferenceSize.height > 0
+                              ? self.pixelReferenceSize.height
+                              : first.srcH),
+    @"renderWidth" : @(self.renderPixelSize.width > 0
+                           ? self.renderPixelSize.width
+                           : first.srcW),
+    @"renderHeight" : @(self.renderPixelSize.height > 0
+                            ? self.renderPixelSize.height
+                            : first.srcH),
     @"generation" : @(first.generation),
     @"pixelFormat" : KKMiniFeedFormatName(first),
     @"surfaceToken" : first.surfaceToken ?: @"",

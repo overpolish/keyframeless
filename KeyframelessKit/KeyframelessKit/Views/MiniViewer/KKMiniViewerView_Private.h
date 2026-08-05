@@ -73,6 +73,11 @@ NS_ASSUME_NONNULL_BEGIN
   // threshold so a zoomed-in preview shows crisp texels instead of bilinear
   // blur.
   id<MTLRenderPipelineState> _pipelineNearest;
+  // Raw RGBA16F feed frames are linear/premultiplied. These encode them for
+  // display when Before/Split draws the source directly instead of through a
+  // plugin renderer.
+  id<MTLRenderPipelineState> _pipelineLinearSource;
+  id<MTLRenderPipelineState> _pipelineLinearSourceNearest;
   id<MTLRenderPipelineState> _onionPipeline;
   id<MTLCommandQueue> _queue;
   // Slot 0 aliases - keep the existing names so the handle/border/OSC code
@@ -97,6 +102,7 @@ NS_ASSUME_NONNULL_BEGIN
   // -auxTextureAtIndex:.
   NSMutableArray<_KKMiniFilmSlot *> *_auxSlots;
   NSTimer *_pollTimer;
+  BOOL _activitySuspended;
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
                     // arrive global, like scroll/magnify)
@@ -112,6 +118,8 @@ NS_ASSUME_NONNULL_BEGIN
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset
   CGSize _sourceMediaSize; // original media px (from descriptor srcW/H)
+  CGSize _sourcePixelReferenceSize; // canonical px for units="px" scaling
+  CGSize _sourceRenderPixelSize; // active host output raster for pixel parity
   // Deferred filmstrip cell activation: mouseDown records the candidate cell
   // but waits for mouseUp so a click-drag pan doesn't swap the active cell.
   // Cancelled in mouseDragged once the gesture moves past the click threshold.

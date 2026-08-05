@@ -169,8 +169,6 @@
       KKTimelineStampSlotInstance(updated, scoped, prototypes);
   if (!instanceID.length)
     return;
-  KKLogInfo(@"[Slots] adding \"%@\" instance %@ (%lu now)", scoped, instanceID,
-            (unsigned long)KKTimelineSlotInstanceIDs(updated, scoped).count);
   [self _beginWriteGroup:@"add slot instance"];
   if (self.onTimelineMutated)
     self.onTimelineMutated(updated);
@@ -225,9 +223,6 @@
   // re-renders them from the prototypes on the next build, but the timeline is
   // what the inspector draws in the meantime.
   KKTimelineRestampSlotLabels(updated, scoped, prototypes);
-  KKLogInfo(@"[Slots] removing \"%@\" instance %@ (%lu left)", scoped,
-            instanceID,
-            (unsigned long)KKTimelineSlotInstanceIDs(updated, scoped).count);
   [self _disarmPicking];
   [self _beginWriteGroup:@"remove slot instance"];
   if (self.onTimelineMutated)

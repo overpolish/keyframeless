@@ -21,6 +21,7 @@
 #import <KeyframelessKit/KKSegmentEditView.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <QuartzCore/QuartzCore.h>
+#import <unistd.h>
 
 // Implemented in KKTimelineStaticValuesPopover.m; called on popover close to
 // free the mini-viewer's GPU memory even if the backing window shell lingers.
@@ -50,20 +51,34 @@ void KKSetSuppressedHandles(id delegate,
 
 // Reverse channel: tell the render side which clip fraction the popover is
 // previewing so it can pull that frame (via -scheduleInputs:).
+static NSMutableDictionary *KKReadMutableViewerRequest(NSString *path) {
+  NSData *data = path.length ? [NSData dataWithContentsOfFile:path] : nil;
+  NSDictionary *json =
+      data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil]
+           : nil;
+  return [json isKindOfClass:[NSDictionary class]]
+             ? [json mutableCopy]
+             : [NSMutableDictionary dictionary];
+}
+
+static void KKWriteViewerRequest(NSString *path, NSDictionary *request) {
+  NSData *json =
+      [NSJSONSerialization dataWithJSONObject:request options:0 error:nil];
+  [json writeToFile:path atomically:YES];
+}
+
 void KKWriteBoundaryRequest(NSString *path, double frac, BOOL active) {
   if (!path)
     return;
   // Single-time payload. `frac` and `fracs` both written for backward
   // compatibility (older render readers only see `frac`; new readers prefer
   // `fracs` for onion-skin's N-time request).
-  NSDictionary *d = @{
-    @"frac" : @(frac),
-    @"fracs" : @[ @(frac) ],
-    @"active" : @(active ? 1 : 0),
-    @"gen" : @((long long)(CACurrentMediaTime() * 1000.0))
-  };
-  NSData *j = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
-  [j writeToFile:path atomically:YES];
+  NSMutableDictionary *d = KKReadMutableViewerRequest(path);
+  d[@"frac"] = @(frac);
+  d[@"fracs"] = @[ @(frac) ];
+  d[@"active"] = @(active);
+  d[@"gen"] = @((long long)(CACurrentMediaTime() * 1000.0));
+  KKWriteViewerRequest(path, d);
 }
 
 // Multi-time variant - writes the list of clip fractions the onion-skin
@@ -78,14 +93,22 @@ void KKWriteBoundaryRequestMulti(NSString *path, NSArray<NSNumber *> *fracs,
     KKWriteBoundaryRequest(path, 0.0, active);
     return;
   }
-  NSDictionary *d = @{
-    @"frac" : fracs.firstObject, // legacy field = slot 0's frac
-    @"fracs" : fracs,
-    @"active" : @(active ? 1 : 0),
-    @"gen" : @((long long)(CACurrentMediaTime() * 1000.0))
-  };
-  NSData *j = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
-  [j writeToFile:path atomically:YES];
+  NSMutableDictionary *d = KKReadMutableViewerRequest(path);
+  d[@"frac"] = fracs.firstObject; // legacy field = slot 0's frac
+  d[@"fracs"] = fracs;
+  d[@"active"] = @(active);
+  d[@"gen"] = @((long long)(CACurrentMediaTime() * 1000.0));
+  KKWriteViewerRequest(path, d);
+}
+
+static void KKWriteMiniViewerFeedActive(NSString *path, BOOL active) {
+  if (!path.length)
+    return;
+  NSMutableDictionary *d = KKReadMutableViewerRequest(path);
+  d[@"viewerActive"] = @(active);
+  d[@"viewerProcessID"] = @((int)getpid());
+  d[@"viewerGen"] = @((long long)(CACurrentMediaTime() * 1000.0));
+  KKWriteViewerRequest(path, d);
 }
 
 KKMiniViewerView *KKFindMiniViewer(NSView *root) {
@@ -421,6 +444,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   _openEditorSidebarFraction = 0.0;
   _openEditorSidebarIsBoundary = NO;
   _editorHostPID = 0;
+  [self _syncMiniViewerFeedActivity];
   [panel hidePanel];
 
   // Run mode cleanup after the panel is no longer interactive but before its
@@ -432,6 +456,22 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
     if ([closing respondsToSelector:@selector(releaseMiniViewer)])
       [(id)closing releaseMiniViewer];
   });
+}
+
+- (void)_syncMiniViewerFeedActivity {
+  BOOL active = ([self _editorPanelIsVisible] && _openEditorIsStaticFamily &&
+                 !_editorCompactMode);
+  if (_publishedMiniViewerFeedActiveValid &&
+      _publishedMiniViewerFeedActive == active)
+    return;
+  NSString *path = self.miniViewerRequestPath;
+  if (!path.length)
+    return;
+  KKWriteMiniViewerFeedActive(path, active);
+  _publishedMiniViewerFeedActive = active;
+  _publishedMiniViewerFeedActiveValid = YES;
+  if (self.onBoundaryPreviewNeedsRender)
+    self.onBoundaryPreviewNeedsRender();
 }
 
 - (void)_installEditorKeyMonitors {
@@ -791,6 +831,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   // Nonactivating style means Final Cut itself remains the active app.
   [panel makeKeyWindow];
   [self _installEditorKeyMonitors];
+  [self _syncMiniViewerFeedActivity];
   return panel;
 }
 

@@ -250,44 +250,21 @@ static const double kKKLinkRepublishSeconds = 10.0;
 // becomes part of the document - on ADD and on every document LOAD, once per
 // existing instance as it deserializes. There is NO removal counterpart in the
 // SDK (verified: FCP never tells a plugin an effect was deleted, and pins the
-// instance for undo so no teardown fires either). We lean on the ADD signal two
-// ways: register the manifest here (not only on render) so idle effects still
-// advertise themselves, and treat the load-time burst of uuids as the set of
-// LIVE effects - anything on the bus that isn't in it was deleted before this
-// load, so reconcile drops it. In-session deletes can't be caught (no signal);
-// they clear on the next reopen, or via the manual "Remove from list".
+// instance for undo so no teardown fires either). Treat the load-time burst of
+// uuids as the set of LIVE effects - anything on the bus that isn't in it was
+// deleted before this load, so reconcile drops it. In-session deletes can't be
+// caught (no signal); they clear on the next reopen, or via the manual "Remove
+// from list".
+//
+// Do NOT publish a manifest from this callback, including from a deferred main
+// queue block. Publishing resolves FxProjectAPI -documentID: synchronously.
+// During a long document load FCP can begin waiting for this XPC instance while
+// still holding the project lock needed to answer that call, deadlocking both
+// processes. A next-turn or fixed-delay dispatch only makes the race rarer.
+// Mirage and Canvas publish from their render callbacks instead, where the host
+// has established the FxPlug transaction that permits the synchronous query.
 - (void)pluginInstanceAddedToDocument {
   NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
-  // Deferred, NEVER inline: -writeLinkManifest re-enters the host synchronously
-  // (KKLinkDocumentIDForAPI -> FxProjectAPI documentID:), and this callback
-  // fires DURING a document load, while FCP holds its own locks. Called inline
-  // that deadlocks outright - FCP's main thread sits in FFSharedLock's
-  // _writeLock while this thread waits on the host, and neither ever moves.
-  // What matters is that this callback RETURNS, so the load can finish and the
-  // locks drop; the manifest landing a beat later costs nothing, since its
-  // whole job is to advertise an idle effect that isn't rendering anyway.
-  //
-  // It runs on MAIN inside an ACTION SCOPE, not on a background queue: off the
-  // FxPlug callback the parameter APIs stop resolving, so -writeLinkManifest
-  // read no lanes and silently registered nothing ("link manifest skipped, no
-  // lanes/layers"). FxCustomParameterActionAPI_v4 is the only API that resolves
-  // before -startAction:, and the retrieval API resolves inside the scope. The
-  // scope only READS, so it adds no undo entry.
-  __weak typeof(self) weakSelf = self;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    __strong typeof(weakSelf) s = weakSelf;
-    if (!s)
-      return;
-    id<FxCustomParameterActionAPI_v4> actionAPI =
-        [s.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!actionAPI) {
-      KKLogWarn(@"KKPlugin: link manifest skipped, no action API");
-      return;
-    }
-    [actionAPI startAction:s];
-    [s writeLinkManifest];
-    [actionAPI endAction:s];
-  });
   if (uuid.length == 0)
     return;
 

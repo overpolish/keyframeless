@@ -148,7 +148,6 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   // built from, and two entries running the same template have the same source
   // while meaning different lanes.
   _lastSpecSource = nil;
-  KKLogInfo(@"[Surface] selected shader -> %@", next);
   // Through the setter, so an entry with no `#color-surface` hides the panel
   // and one that has it shows it - the same two branches a recompile takes.
   self.surfaceEnabled = [self _resolveSurfaceEnabledFromLanes];
@@ -415,8 +414,6 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   NSString *kind = note.userInfo[@"kind"];
   if ([kind isEqualToString:@"manage"] || [kind isEqualToString:@"filter"] ||
       [kind isEqualToString:@"osc"] || [kind isEqualToString:@"appliesTo"]) {
-    KKLogDebug(@"[Panel] color attach kind=%@ -> skipped(structural popover)",
-               kind);
     return;
   }
   NSWindow *popoverWindow = note.userInfo[@"window"];
@@ -428,9 +425,6 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   // window-less open as "no popover" - that was why the first popover after
   // launch never got its panel.
   if (!popoverWindow && !_popoverContentView) {
-    KKLogDebug(@"[Panel] color attach kind=%@ -> skipped(no window and no "
-               @"content view to wait on)",
-               kind);
     return;
   }
   NSValue *cardVal = note.userInfo[@"contentRect"];
@@ -463,9 +457,6 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
   _surfaceEnabled = [self _resolveSurfaceEnabledFromLanes];
   if (self.onSurfaceAvailabilityChanged)
     self.onSurfaceAvailabilityChanged(_surfaceEnabled);
-  KKLogDebug(@"[Panel] color attach kind=%@ -> %@", kind,
-             _surfaceEnabled ? @"shown"
-                             : @"skipped(shader declares no #color-surface)");
   [self _showIfPopoverOpen];
 }
 
