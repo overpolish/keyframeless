@@ -15,6 +15,7 @@ Distribution/*.pkgproj
 !Distribution/Keyframeless.pkgproj
 Distribution/scripts/uninstall-*
 !Distribution/scripts/uninstall-motionblur
+!Distribution/scripts/uninstall-legacy-plugins
 
 # Staged kk-ai-helper binary + metallib (built by build-and-sign.sh keyframelessai;
 # the plist/uninstaller/postinstall/entitlements alongside them ARE committed source).
@@ -24,3 +25,7 @@ Distribution/helper/staging/
 CLAUDE.md
 .compile
 .cache
+# Vendored transpiler build artifacts (run ThirdParty/build-transpiler.sh)
+ThirdParty/build/
+
+.wrangler

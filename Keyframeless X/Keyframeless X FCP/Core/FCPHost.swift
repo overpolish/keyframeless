@@ -13,7 +13,7 @@ enum FCPHost {
 	}
 
 	/// Host FCP version as (major, minor), parsed from the host's version string
-	/// (e.g. "12.3" or "12.3.1"). nil when the host isn't ready yet — `versionString` is an
+	/// (e.g. "12.3" or "12.3.1"). nil when the host isn't ready yet - `versionString` is an
 	/// implicitly-unwrapped ObjC `String!` that is nil early in launch, so bind it through an
 	/// Optional (never force-unwrap) before splitting.
 	static var version: (major: Int, minor: Int)? {

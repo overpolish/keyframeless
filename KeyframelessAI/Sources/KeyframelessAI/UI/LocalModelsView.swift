@@ -54,14 +54,14 @@ struct LocalModelsView: View {
 }
 
 /// Shown when the shared local-inference engine isn't installed: local models can be
-/// browsed but need the one-time "Keyframeless AI" install before they'll run.
+/// browsed but need the one-time Kai install before they'll run.
 private struct KKAIEngineNotice: View {
 	var body: some View {
 		HStack(alignment: .top, spacing: 8) {
 			Image(systemName: "shippingbox.fill")
 				.font(.system(size: 12))
 			VStack(alignment: .leading, spacing: 1) {
-				Text(AILoc("Install Keyframeless AI to run local models"))
+				Text(AILoc("Install Kai to run local models"))
 					.font(.system(size: 11, weight: .medium))
 					.fixedSize(horizontal: false, vertical: true)
 				Text(
@@ -185,11 +185,21 @@ private struct DownloadProgress: View {
 
 	var body: some View {
 		HStack(spacing: 5) {
-			ProgressView(value: progress)
-				.progressViewStyle(.linear)
-				.tint(accent)
-				.frame(width: 56)
-			Text("\(Int(progress * 100))%")
+			// The poll caps at 0.99 while HuggingFace verifies + commits the
+			// downloaded blobs (a slow tail on a multi-GB model). During that,
+			// swap to an INDETERMINATE bar + "Finalizing" so it animates instead
+			// of a determinate bar sitting frozen at 99%.
+			Group {
+				if progress >= 0.99 {
+					ProgressView()
+				} else {
+					ProgressView(value: progress)
+				}
+			}
+			.progressViewStyle(.linear)
+			.tint(accent)
+			.frame(width: 56)
+			Text(progress >= 0.99 ? AILoc("Finalizing") : "\(Int(progress * 100))%")
 				.font(.system(size: 9))
 				.foregroundStyle(Color.aiSecondaryText)
 				.monospacedDigit()

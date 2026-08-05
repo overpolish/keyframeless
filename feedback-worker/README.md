@@ -1,6 +1,6 @@
 # keyframeless-feedback
 
-Cloudflare Worker behind the in-app "Send feedback" button. It serves the form (`public/index.html`) as a static asset and exposes `POST /submit`, which verifies a Cloudflare Turnstile token, uploads any screenshots to R2, and opens a GitHub issue in `overpolish/keyframeless`. A second route (`/github-webhook`) deletes an issue's screenshots from R2 when it's closed. The GitHub token, Turnstile secret, and webhook secret live only in Worker secrets - they never reach the client.
+Cloudflare Worker behind the in-app "Send feedback" button. It is an API only: the form is a page on the site (`docs/feedback/index.html`, live at keyframeless.com/feedback) and this Worker exposes `POST /feedback/submit`, which verifies a Cloudflare Turnstile token, uploads any screenshots to R2, and opens a GitHub issue in `overpolish/keyframeless`. A second route (`/feedback/github-webhook`) deletes an issue's screenshots from R2 when it's closed. The GitHub token, Turnstile secret, and webhook secret live only in Worker secrets - they never reach the client.
 
 ## Architecture
 
@@ -9,9 +9,9 @@ flowchart TD
   Btn["in-app Send feedback button"] -->|"GET / (plugin + version)"| Form["Feedback form<br/>(static asset)"]
   Form -->|"POST /submit (multipart)"| Submit
 
-  subgraph Worker["Worker · feedback.keyframeless.overpolish.co"]
-    Submit["/submit"]
-    Hook["/github-webhook"]
+  subgraph Worker["Worker (API only) · keyframeless.com/feedback/*"]
+    Submit["/feedback/submit"]
+    Hook["/feedback/github-webhook"]
   end
 
   Submit -->|"verify token"| TS["Turnstile siteverify"]
@@ -22,18 +22,18 @@ flowchart TD
   Hook -->|"verify signature + delete"| R2
 ```
 
-Static assets are matched first; only `/submit` and `/github-webhook` reach the
+Only `/feedback/submit` and `/feedback/github-webhook` are routed to the
 Worker code.
 
 ## One-time setup
 
 1. **Cloudflare account** + wrangler: `npm i -g wrangler && wrangler login`.
-2. **Turnstile widget** (dashboard → Turnstile). Add domains `feedback.keyframeless.overpolish.co` and `localhost`. Note the **site key** and **secret key**.
-3. Put the **site key** into `public/index.html` (replace `TURNSTILE_SITE_KEY` in the `data-sitekey` attribute).
+2. **Turnstile widget** (dashboard → Turnstile). Add domains `keyframeless.com` and `localhost`. Note the **site key** and **secret key**.
+3. Put the **site key** into `docs/feedback/index.html` (replace `TURNSTILE_SITE_KEY` in the `data-sitekey` attribute).
 4. **GitHub PAT**: fine-grained, scoped to `overpolish/keyframeless` only, permission **Issues: Read and write**.
 5. **Labels**: create these in the repo so they can be applied - `feedback`, `bug`, `idea`, `rounded`, `magicmove`, `canvas`, `glow`, `keyframelessx`. (Missing labels are tolerated: the Worker retries without them, but the issue then lands unlabelled.)
 6. **R2 bucket** for screenshots: `wrangler r2 bucket create keyframeless-feedback`, then enable the public **r2.dev** URL (dashboard → R2 → bucket → Settings) and set it as `R2_PUBLIC_URL` in `wrangler.jsonc`. Uploads cap at 5 images, 10MB each.
-7. **Webhook** (screenshot cleanup): repo → Settings → Webhooks → Add. Payload URL `https://<worker-domain>/github-webhook`, content type `application/json`, secret = `GITHUB_WEBHOOK_SECRET`, events: **Issues** only. As a TTL backstop, add a bucket lifecycle rule deleting the `feedback/` prefix after ~180 days.
+7. **Webhook** (screenshot cleanup): repo → Settings → Webhooks → Add. Payload URL `https://keyframeless.com/feedback/github-webhook`, content type `application/json`, secret = `GITHUB_WEBHOOK_SECRET`, events: **Issues** only. As a TTL backstop, add a bucket lifecycle rule deleting the `feedback/` prefix after ~180 days.
 
 ## Secrets
 
@@ -64,4 +64,4 @@ The in-app DEBUG build points the feedback button at `http://localhost:8787/`, s
 npm run deploy
 ```
 
-To serve at `feedback.keyframeless.overpolish.co`, the `overpolish.co` zone must be on Cloudflare; then uncomment the `routes` custom-domain block in `wrangler.jsonc`. Until then the Worker is reachable at its `*.workers.dev` URL (update the prod URL in `KKUpdateChecker.m` to match if you ship before the custom domain is live).
+The Worker is mounted on the site's own domain via routes, so `keyframeless.com` must be on Cloudflare AND proxied (orange cloud) in front of GitHub Pages, with SSL mode Full. Same origin as the form, so no CORS. Uncomment the `routes` custom-domain block in `wrangler.jsonc`. Until then the Worker is reachable at its `*.workers.dev` URL (update the prod URL in `KKUpdateChecker.m` to match if you ship before the custom domain is live).

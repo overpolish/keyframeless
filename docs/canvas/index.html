@@ -9,20 +9,65 @@
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png" />
     <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
-    <meta name="kk-version" content="2.0.1" />
+    <meta name="kk-version" content="3.0.0" />
   </head>
   <body>
     <main class="wrap">
       <header class="topbar">
-        <div class="brand">
+        <a class="brand" href="https://keyframeless.com">
           <img class="logo" src="../assets/apple-touch-icon.png" alt="" />
           <div class="title">
             <h1>Canvas</h1>
             <span class="sub">What's New</span>
           </div>
-        </div>
-        <a class="cta" href="https://store.overpolish.co/b/aWpXq">Get it on Payhip →</a>
+        </a>
+        <a class="cta cta-shine" href="https://dl.keyframeless.com/Keyframeless.pkg">Download →</a>
       </header>
+      <section class="release">
+        <div class="release-head">
+          <h2>3.0.0</h2>
+          <span class="date">2026-08-05</span>
+        </div>
+        <div class="group">
+          <span class="tag feature">New</span>
+          <ul class="bullets">
+            <li>Expressions: drive any property from a formula instead of a value or keyframes. Right-click a property label and choose Add Expression</li>
+            <li>Live preview: play or scrub the timeline with a keypose or Constants editor open and its preview follows the playhead, then snaps back to the frame you're editing</li>
+            <li>The keypose and Constants editors can now be moved and resized, and remember their position and size the next time you open them</li>
+            <li>Lock individual timeline gaps to a fixed duration: right-click a gap and choose Lock, and it keeps its timing when the clip is resized while unlocked gaps absorb the change</li>
+            <li><strong>Trial and licensing</strong> - Canvas can now be tried before buying: unlicensed, everything works but rendered output carries a watermark</li>
+            <li>Activating is one time: click Trial in the inspector, paste the license key from your Payhip receipt, and the watermark is gone - no subscription, no re-activation</li>
+          </ul>
+        </div>
+        <div class="group">
+          <span class="tag improvement">Improved</span>
+          <ul class="bullets">
+            <li>The timeline ruler is always available now, even before anything is animated, so you can scrub the playhead straight from the inspector (and preview it in an open editor) without leaving it</li>
+            <li>The keypose or interval you're editing now highlights in the timeline, and the Constants button lights up while its panel is open, so it's always clear what the editor is controlling</li>
+            <li>The keypose, Constants, and interval editors now open in one consistent spot beside the inspector instead of jumping around as you move between them, and each has a close button</li>
+            <li>The curve and modulation editors now lay out like the Keypose and Constants editors</li>
+            <li>Press Escape to close an open editor (keypose, Constants, or interval) instead of reaching for its close button, and a search box inside an editor now releases focus on Escape, Return, or a click away, so the Spacebar keeps controlling playback</li>
+          </ul>
+        </div>
+        <div class="group">
+          <span class="tag fix">Fixed</span>
+          <ul class="bullets">
+            <li>Fixed Final Cut crashing when Canvas was applied by double-clicking it in the Effects browser</li>
+            <li>Keyframeless plugins now group together under one Keyframeless category in Motion instead of each getting its own</li>
+            <li>Fixed an on-screen control in an editor's preview sometimes sticking to the cursor when a keypose editor was open over the Constants panel: the drag could stop responding partway through, and the undo that followed could crash Final Cut</li>
+            <li>Fixed the inspector using a whole CPU core while simply sitting open, which made the interface sluggish</li>
+            <li>Fixed the layers panel occasionally not appearing beside an editor the first time one was opened after launching Final Cut, where it took closing and reopening the editor to bring it back</li>
+            <li>Fixed a crash that could occur when opening a keypose editor from the Constants panel</li>
+            <li>The inspector's option menus (on-screen controls, parameter order, and so on) now close when you click anywhere off them</li>
+            <li>Fixed hidden on-screen controls not reappearing when holding Option in Motion</li>
+            <li>Fixed the inspector preview occasionally rendering blurry with an oversized on-screen control</li>
+            <li>Fixed a crash when pressing Escape while renaming a layer in the layers list</li>
+            <li>Fixed renaming a layer: typing now registers reliably, Enter confirms, Escape cancels, and clicking away commits the new name</li>
+            <li>Fixed a keypose dot on the motion path occasionally missing from the inspector preview when the current frame sat between or past the keyposes</li>
+            <li>Fixed a potential rendering failure with dashed and draw-on strokes</li>
+          </ul>
+        </div>
+      </section>
       <section class="release">
         <div class="release-head">
           <h2>2.0.1</h2>
@@ -70,7 +115,7 @@
         </div>
       </section>
       <div class="changelog-start">
-        Changelog begins at 2.0.0. Earlier releases are <a href="https://github.com/overpolish/keyframeless/releases">on GitHub</a>.
+        Changelog begins at 2.0.0.
       </div>
       <footer class="foot">
         Canvas is a Final Cut Pro FxPlug effect, part of the <a href="../">Keyframeless suite</a>.

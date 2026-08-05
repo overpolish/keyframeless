@@ -9,11 +9,11 @@
 #import "KKShaderTypes.h"
 
 static NSString *const kKKMBRTileMaxID =
-    @"co.overpolish.keyframeless.kit.mbreconstruct.tilemax";
+    @"com.keyframeless.kit.mbreconstruct.tilemax";
 static NSString *const kKKMBRNeighborMaxID =
-    @"co.overpolish.keyframeless.kit.mbreconstruct.neighbormax";
+    @"com.keyframeless.kit.mbreconstruct.neighbormax";
 static NSString *const kKKMBRGatherID =
-    @"co.overpolish.keyframeless.kit.mbreconstruct.gather";
+    @"com.keyframeless.kit.mbreconstruct.gather";
 
 @implementation KKMotionBlurReconstruct
 

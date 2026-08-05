@@ -5,17 +5,28 @@
 
 #import "KKPluginHost.h"
 #import "KKDataBlob.h"
+#import "KKHostInfo.h"
+#import "KKLinkBus.h"
+#import "KKLog.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKTimelineInspectorView.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <errno.h>
+#import <signal.h>
 
 @implementation KKRenderCache
 - (instancetype)init {
   if ((self = [super init])) {
     _lastPushedClipDuration = -1.0;
+    _lastPushedClipProjectStart = -999.0; // sentinel: force first push
     _frameDurSec = 1.0 / 60.0;
   }
   return self;
+}
+- (double)clipFractionAtSeconds:(double)sec {
+  if (_effectDurSec <= 0.0)
+    return 0.0;
+  return MAX(0.0, MIN(1.0, (sec - _effectStartSec) / _effectDurSec));
 }
 @end
 
@@ -37,6 +48,22 @@ NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   if (frac)
     return @[ frac ];
   return nil;
+}
+
+BOOL KKReadMiniViewerFeedActive(NSString *path) {
+  if (path.length == 0)
+    return NO;
+  NSData *data = [NSData dataWithContentsOfFile:path];
+  NSDictionary *json =
+      data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil]
+           : nil;
+  if (![json isKindOfClass:[NSDictionary class]] ||
+      ![json[@"viewerActive"] boolValue])
+    return NO;
+  pid_t pid = (pid_t)[json[@"viewerProcessID"] intValue];
+  if (pid <= 0)
+    return NO;
+  return kill(pid, 0) == 0 || errno == EPERM;
 }
 
 static KKTimeline *sProcessTimelineSnapshot = nil;
@@ -97,7 +124,10 @@ NSArray *KKBuildSourceRequests(CMTime renderTime, NSString *boundaryRequestPath,
   // animation over a single source frame (see the header). A footage-smear
   // effect would call +[KKMotionBlur appendSourceRequestsForState:...] itself.
 
-  NSArray<NSNumber *> *fracs = KKReadBoundaryRequestFracs(boundaryRequestPath);
+  BOOL viewerActive = KKReadMiniViewerFeedActive(boundaryRequestPath);
+  cache.miniViewerFeedActive = viewerActive;
+  NSArray<NSNumber *> *fracs =
+      viewerActive ? KKReadBoundaryRequestFracs(boundaryRequestPath) : nil;
   BOOL boundaryActive = fracs.count > 0;
   cache.boundaryFeedActive = boundaryActive;
   if (boundaryActive) {
@@ -189,5 +219,32 @@ BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
     });
   }
 
+  // Push this clip's absolute project-start time (fraction 0 in timeline
+  // seconds) so the inspector can feed-lock parameter-link resolution in the
+  // mini-viewer. Uses timelineTime(effectStart) - the effect's own start mapped
+  // to the timeline, NOT the source-in-based timelineStartSec above. Generic
+  // for every plugin (the inspector + mini renderer base handle the rest), so a
+  // new plugin gets linked-clip playback parity for free with no per-plugin
+  // wiring.
+  CMTime effStartTL = kCMTimeZero;
+  [timingAPI timelineTime:&effStartTL
+            fromInputTime:CMTimeMakeWithSeconds(cache.effectStartSec, 600)];
+  double clipProjectStart = CMTimeGetSeconds(effStartTL);
+  cache.clipProjectStartSec = clipProjectStart;
+  if (fabs(clipProjectStart - cache.lastPushedClipProjectStart) > 0.0005 &&
+      inspectorView) {
+    cache.lastPushedClipProjectStart = clipProjectStart;
+    KKTimelineInspectorView *iv = inspectorView;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [iv setClipProjectStartSec:clipProjectStart];
+    });
+  }
+
+  // NB: the FCP document (project) id is resolved during render
+  // (KKLinkWriteManifest stamps each manifest with it, sticky per uuid). We do
+  // NOT push it to the inspector from here: this runs in the RENDER process
+  // where `inspectorView` is nil, so the call wouldn't cross to the
+  // ViewBridge-hosted popover. The view side reads the id back off its own
+  // manifest instead (KKTimelineLanesView linkSelfUUID -> KKLinkBus).
   return YES;
 }

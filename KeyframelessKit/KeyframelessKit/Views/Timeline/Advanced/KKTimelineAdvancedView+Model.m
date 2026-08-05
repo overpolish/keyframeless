@@ -8,22 +8,75 @@
 #import "KKTimelineScrubMath.h"
 #import "KKTokens.h"
 
+@implementation KKAdvancedRow {
+  KKAdvancedRowKind _kind;
+  KKLane *_lane;
+  NSString *_collapseKey;
+  NSString *_headerTitle;
+  NSString *_headerSymbol;
+  BOOL _headerLocked;
+  BOOL _headerIndented;
+}
+
+@synthesize kind = _kind, lane = _lane, collapseKey = _collapseKey,
+            headerTitle = _headerTitle, headerSymbol = _headerSymbol,
+            headerLocked = _headerLocked, headerIndented = _headerIndented;
+
+- (BOOL)isHeader {
+  return _kind != KKAdvancedRowLane;
+}
+
++ (instancetype)rowWithLane:(KKLane *)lane {
+  KKAdvancedRow *r = [[KKAdvancedRow alloc] init];
+  r->_kind = KKAdvancedRowLane;
+  r->_lane = lane;
+  return r;
+}
+
++ (instancetype)layerHeaderWithKey:(NSString *)layerKey
+                             title:(NSString *)title
+                            symbol:(NSString *)symbol
+                            locked:(BOOL)locked {
+  KKAdvancedRow *r = [[KKAdvancedRow alloc] init];
+  r->_kind = KKAdvancedRowLayerHeader;
+  r->_collapseKey = [layerKey copy];
+  r->_headerTitle = [title copy];
+  r->_headerSymbol = [symbol copy];
+  r->_headerLocked = locked;
+  return r;
+}
+
++ (instancetype)categoryHeaderWithKey:(NSString *)collapseKey
+                                title:(NSString *)title
+                               symbol:(NSString *)symbol
+                             indented:(BOOL)indented {
+  KKAdvancedRow *r = [[KKAdvancedRow alloc] init];
+  r->_kind = KKAdvancedRowCategoryHeader;
+  r->_collapseKey = [collapseKey copy];
+  r->_headerTitle = [title copy];
+  r->_headerSymbol = [symbol copy];
+  r->_headerIndented = indented;
+  return r;
+}
+
+@end
+
 @implementation KKTimelineAdvancedView (Model)
 
-- (NSArray<KKLane *> *)_animatableLanes {
+- (NSArray<KKAdvancedRow *> *)_rows {
   // Mode-gated lanes (visibleWhen) drop out of the graph when their
   // controller's current value doesn't match - e.g. an animated Gradient lane
   // is hidden while Mode = Solid. Computed over the full lane set so the
   // controller resolves; display-only, the blob keeps every lane.
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   NSMutableArray<KKLane *> *out = [NSMutableArray array];
   for (KKLane *l in _timeline.lanes)
-    if (l.enabled && ![_hiddenLaneLabels containsObject:l.label] &&
-        [condVisible containsObject:l.label])
+    if (l.enabled && ![_hiddenLaneLabels containsObject:l.key] &&
+        [condVisible containsObject:l.key])
       [out addObject:l];
 
-  NSMutableArray<KKLane *> *result = [NSMutableArray array];
+  NSMutableArray<KKAdvancedRow *> *result = [NSMutableArray array];
 
   // Single-owner plugins (no layerKey on any lane): no layer level, so the
   // category headers (if any) sit at the top level. Plugins without categories
@@ -39,8 +92,8 @@
     return result;
   }
 
-  // Multi-owner: emit, per layer in stack order, a synthetic layer HEADER row
-  // then (unless collapsed) that layer's lanes - themselves grouped under
+  // Multi-owner: emit, per layer in stack order, a layer HEADER row then
+  // (unless collapsed) that layer's lanes - themselves grouped under
   // collapsible category headers. The layer header is always present so a
   // collapsed layer stays visible + re-expandable.
   for (NSString *lk in [self _orderedLayerKeysForLanes:out]) {
@@ -50,14 +103,10 @@
         sample = l;
         break;
       }
-    KKLane *header = [sample copy];
-    header.headerPlaceholder = YES;
-    header.categoryHeader = NO;
-    header.label = lk; // unique, never matches a real lane label
-    header.categoryKey = nil;
-    header.categorySymbol = nil;
-    header.keyposes = @[];
-    [result addObject:header];
+    [result addObject:[KKAdvancedRow layerHeaderWithKey:lk
+                                                  title:sample.layerLabel ?: @""
+                                                 symbol:sample.layerSymbol
+                                                 locked:sample.locked]];
     if ([_collapsedLayerKeys containsObject:lk])
       continue;
     NSMutableArray<KKLane *> *layerLanes = [NSMutableArray array];
@@ -84,7 +133,7 @@
 // plugin that sets no categoryKey keeps the flat layout.
 - (void)_appendCategoryGroupedLanes:(NSArray<KKLane *> *)lanes
                            layerKey:(nullable NSString *)layerKey
-                               into:(NSMutableArray<KKLane *> *)result {
+                               into:(NSMutableArray<KKAdvancedRow *> *)result {
   NSString *prevCat = nil;
   BOOL collapsedRun = NO;
   for (KKLane *l in lanes) {
@@ -92,13 +141,11 @@
     if (cat && ![cat isEqualToString:prevCat]) {
       NSString *collapseKey = [self _categoryCollapseKeyForLayer:layerKey
                                                         category:cat];
-      KKLane *header = [l copy];
-      header.headerPlaceholder = YES;
-      header.categoryHeader = YES;
-      header.label = collapseKey; // unique, never matches a real lane label
-      header.keyposes = @[];
-      header.locked = NO;
-      [result addObject:header];
+      [result
+          addObject:[KKAdvancedRow categoryHeaderWithKey:collapseKey
+                                                   title:cat
+                                                  symbol:l.categorySymbol
+                                                indented:layerKey.length > 0]];
       collapsedRun = [_collapsedCategoryKeys containsObject:collapseKey];
     } else if (!cat) {
       collapsedRun = NO;
@@ -106,7 +153,7 @@
     prevCat = cat;
     if (cat && collapsedRun)
       continue;
-    [result addObject:l];
+    [result addObject:[KKAdvancedRow rowWithLane:l]];
   }
 }
 
@@ -177,10 +224,10 @@
                                             weight:NSFontWeightMedium]
   };
   CGFloat maxW = 0.0;
-  for (KKLane *lane in [self _animatableLanes]) {
-    if (lane.headerPlaceholder)
+  for (KKAdvancedRow *r in [self _rows]) {
+    if (r.isHeader)
       continue; // header rows draw a full-width name, not a gutter label
-    NSString *label = KKLocalizedParamName(lane.label ?: @"");
+    NSString *label = KKLocalizedParamName(r.lane.displayName ?: @"");
     maxW = MAX(maxW, ceil([label sizeWithAttributes:attrs].width));
   }
   // inset (left) + label + inset (gap before tracks)
@@ -256,10 +303,10 @@
 - (CGFloat)_rowHeightForCount:(NSInteger)n {
   if (n <= 0)
     return 0.0;
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
   NSInteger headers = 0;
-  for (KKLane *l in lanes)
-    if (l.headerPlaceholder)
+  for (KKAdvancedRow *r in rows)
+    if (r.isHeader)
       headers++;
   NSInteger laneRows = n - headers;
   if (laneRows <= 0)
@@ -279,16 +326,16 @@
 // Own height of row `i`: fixed for a layer-header row, the shared lane height
 // otherwise.
 - (CGFloat)_ownHeightForRow:(NSInteger)i
-                    inLanes:(NSArray<KKLane *> *)lanes
+                     inRows:(NSArray<KKAdvancedRow *> *)rows
                    laneRowH:(CGFloat)laneRowH {
-  if (i >= 0 && i < (NSInteger)lanes.count && lanes[i].headerPlaceholder)
+  if (i >= 0 && i < (NSInteger)rows.count && rows[i].isHeader)
     return kLayerHeaderRowH;
   return laneRowH;
 }
 
 - (NSRect)_rowRectForIndex:(NSInteger)i count:(NSInteger)n {
   NSRect t = [self _tracksRect];
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
   CGFloat laneRowH = [self _rowHeightForCount:n];
   // Sum the own-heights of rows 0..i (headers fixed, lanes shared) plus the
   // dividers + gaps stacked above this row's top (the row's own leading divider
@@ -296,9 +343,9 @@
   // strip instead). +_scrollY raises the rows (y-up). Single funnel: drawing,
   // hit-testing and popover anchors all read row positions from here.
   CGFloat rowsAbove = 0.0;
-  for (NSInteger j = 0; j <= i && j < (NSInteger)lanes.count; j++)
-    rowsAbove += [self _ownHeightForRow:j inLanes:lanes laneRowH:laneRowH];
-  CGFloat ownH = [self _ownHeightForRow:i inLanes:lanes laneRowH:laneRowH];
+  for (NSInteger j = 0; j <= i && j < (NSInteger)rows.count; j++)
+    rowsAbove += [self _ownHeightForRow:j inRows:rows laneRowH:laneRowH];
+  CGFloat ownH = [self _ownHeightForRow:i inRows:rows laneRowH:laneRowH];
   NSInteger dAbove = 0, gAbove = 0;
   [self _dividerCount:&dAbove gapCount:&gAbove through:i + 1];
   CGFloat y = NSMaxY(t) + _scrollY -
@@ -311,13 +358,13 @@
   NSInteger n = [self _animatableCount];
   if (n <= 0)
     return 0.0;
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
   CGFloat laneRowH = [self _rowHeightForCount:n];
   NSInteger dividers = 0, gaps = 0;
   [self _dividerCount:&dividers gapCount:&gaps through:n];
   CGFloat rowsH = 0.0;
-  for (NSInteger j = 0; j < (NSInteger)lanes.count; j++)
-    rowsH += [self _ownHeightForRow:j inLanes:lanes laneRowH:laneRowH];
+  for (NSInteger j = 0; j < (NSInteger)rows.count; j++)
+    rowsH += [self _ownHeightForRow:j inRows:rows laneRowH:laneRowH];
   CGFloat contentH =
       rowsH + kRowGap * (CGFloat)gaps + kGroupDividerH * (CGFloat)dividers;
   CGFloat avail = NSHeight([self _tracksRect]);
@@ -385,27 +432,27 @@
 }
 
 - (NSInteger)_animatableIndexForLabel:(NSString *)label {
-  // Index into the DISPLAYED row list (-_animatableLanes), which injects layer/
+  // Index into the DISPLAYED row list (-_rows), which injects layer/
   // category header rows and drops hidden/collapsed/mode-gated lanes - the same
   // list -_rowRectForIndex:count: walks. Walking _timeline.lanes instead
-  // mis-mapped every row below a category header (e.g. Glow's Core/Noise), so a
+  // mis-mapped every row below a category header (e.g. Core/Noise), so a
   // guide cutout for a lane/keypose landed on the wrong row. Returns -1 when
   // the lane isn't currently a visible row (collapsed/hidden), so the guide
   // rect methods yield NSZeroRect.
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-    if (!lanes[i].headerPlaceholder && [lanes[i].label isEqualToString:label])
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
+  for (NSInteger i = 0; i < (NSInteger)rows.count; i++)
+    if (!rows[i].isHeader && [rows[i].lane.key isEqualToString:label])
       return i;
   return -1;
 }
 
 - (NSInteger)_animatableCount {
-  return (NSInteger)[self _animatableLanes].count;
+  return (NSInteger)[self _rows].count;
 }
 
 - (KKLane *)_animatableLaneForLabel:(NSString *)label {
   for (KKLane *lane in _timeline.lanes)
-    if (lane.enabled && [lane.label isEqualToString:label])
+    if (lane.enabled && [lane.key isEqualToString:label])
       return lane;
   return nil;
 }
@@ -415,7 +462,7 @@
 - (NSArray<NSNumber *> *)_templateDefaultValuesForLabel:(NSString *)label {
   KKLane *tmpl = nil;
   for (KKLane *l in _availableLanes)
-    if ([l.label isEqualToString:label]) {
+    if ([l.key isEqualToString:label]) {
       tmpl = l;
       break;
     }
@@ -449,7 +496,7 @@
 }
 
 - (BOOL)_pillSelected:(KKLane *)lane atIdx:(NSInteger)idx {
-  return [_selection containsObject:[self _selectionKeyForLabel:lane.label
+  return [_selection containsObject:[self _selectionKeyForLabel:lane.key
                                                           kpIdx:idx]];
 }
 
@@ -458,31 +505,32 @@
 }
 
 - (BOOL)_gapSelected:(KKLane *)lane aIdx:(NSInteger)aIdx {
-  return [_selectedGaps containsObject:[self _gapKeyForLabel:lane.label
+  return [_selectedGaps containsObject:[self _gapKeyForLabel:lane.key
                                                         aIdx:aIdx]];
 }
 
-// Find a pill under `pt`: returns the lane index in _animatableLanes and the
+// Find a pill under `pt`: returns the lane index in _rows and the
 // keypose index within that lane, or both -1 if no pill is hit. Last-touched
 // pill gets first refusal - when two pills overlap, the one the user just
 // dragged into the stack draws on top and stays the click target.
 - (BOOL)_pillAtPoint:(NSPoint)pt
                 lane:(NSInteger *)outLaneIdx
                   kp:(NSInteger *)outKPIdx {
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
   NSRect tracks = [self _tracksRect];
   CGFloat halfHit = kPillW * 0.5 + 3.0;
   if (_topLaneLabel) {
-    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      if (![lanes[i].label isEqualToString:_topLaneLabel])
+    for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
+      KKLane *top = rows[i].lane;
+      if (![top.key isEqualToString:_topLaneLabel])
         continue;
-      NSRect row = [self _rowRectForIndex:i count:lanes.count];
+      NSRect row = [self _rowRectForIndex:i count:rows.count];
       if (pt.y < NSMinY(row) || pt.y > NSMaxY(row))
         break;
-      if (_topKPIdx < 0 || _topKPIdx >= (NSInteger)lanes[i].keyposes.count)
+      if (_topKPIdx < 0 || _topKPIdx >= (NSInteger)top.keyposes.count)
         break;
-      CGFloat x = [self _xForFrac:lanes[i].keyposes[_topKPIdx].time
-                           inLane:lanes[i]
+      CGFloat x = [self _xForFrac:top.keyposes[_topKPIdx].time
+                           inLane:top
                          inTracks:tracks];
       if (fabs(pt.x - x) <= halfHit) {
         *outLaneIdx = i;
@@ -492,11 +540,11 @@
       break;
     }
   }
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    NSRect row = [self _rowRectForIndex:i count:lanes.count];
+  for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
+    NSRect row = [self _rowRectForIndex:i count:rows.count];
     if (pt.y < NSMinY(row) || pt.y > NSMaxY(row))
       continue;
-    KKLane *lane = lanes[i];
+    KKLane *lane = rows[i].lane;
     for (NSInteger j = (NSInteger)lane.keyposes.count - 1; j >= 0; j--) {
       CGFloat x = [self _xForFrac:lane.keyposes[j].time
                            inLane:lane
@@ -519,9 +567,9 @@
   NSRect g = [self _graphRect];
   if (pt.y < NSMinY(g) || pt.y > NSMaxY(g))
     return -1;
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    NSRect row = [self _rowRectForIndex:i count:lanes.count];
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
+  for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
+    NSRect row = [self _rowRectForIndex:i count:rows.count];
     if (pt.y >= NSMinY(row) && pt.y <= NSMaxY(row))
       return i;
   }

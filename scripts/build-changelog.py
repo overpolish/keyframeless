@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Build the changelog site (docs/) from Markdown release notes.
+"""Build the site's release-notes pages (docs/) from Markdown release notes.
 
 Source of truth:
-  docs/changelog/plugins.json          metadata (name, kind, payhip)
+  docs/changelog/plugins.json           metadata (name, kind) + the download URL
   docs/changelog/<plugin>/<version>.md  one file per release (= a GitHub Release body)
 
 Each release .md:
@@ -19,7 +19,10 @@ Each release .md:
   on GitHub and on the site.
 
 Output (generated - do not hand-edit):
-  docs/index.html, docs/<plugin>/index.html
+  docs/<plugin>/index.html
+  docs/index.html is the hand-written landing page and is NOT touched.
+  There is no hub page: the notes pages exist for the in-app update check
+  (KKUpdateChecker reads their kk-version meta) and for direct links.
 
 Run:  python3 scripts/build-changelog.py
 No dependencies (stdlib only).
@@ -174,17 +177,17 @@ def load_plugin_releases(plugin_id):
     return releases
 
 
-def render_topbar(title, sub, href, logo):
+def render_topbar(title, sub, href, logo, label="Download →"):
     return (
         '      <header class="topbar">\n'
-        '        <div class="brand">\n'
+        '        <a class="brand" href="https://keyframeless.com">\n'
         f'          <img class="logo" src="{html.escape(logo)}" alt="" />\n'
         '          <div class="title">\n'
         f"            <h1>{esc(title)}</h1>\n"
         f'            <span class="sub">{esc(sub)}</span>\n'
         "          </div>\n"
-        "        </div>\n"
-        f'        <a class="cta" href="{html.escape(href)}">Get it on Payhip →</a>\n'
+        "        </a>\n"
+        f'        <a class="cta cta-shine" href="{html.escape(href)}">{esc(label)}</a>\n'
         "      </header>"
     )
 
@@ -268,34 +271,52 @@ def write_page(path, title, css, content, version=None):
 
 def build():
     meta = json.loads((SRC / "plugins.json").read_text(encoding="utf-8"))
-    site_payhip = meta.get("payhip", "#")
     site_releases = meta.get("releases", "")
+    # The notes pages sell nothing: everything is free to download and runs in
+    # trial until a license is activated, so the CTA is always the installer.
+    site_download = meta.get("download", "../")
     plugins = meta.get("plugins", {})
 
     # plugin pages
     for pid, info in plugins.items():
         releases = load_plugin_releases(pid)
         latest = releases[0]["version"] if releases else None
-        payhip = info.get("payhip", site_payhip)
-        parts = [render_topbar(info["name"], "What's New", payhip, "../assets/apple-touch-icon.png")]
+        parts = [
+            render_topbar(
+                info["name"], "What's New", site_download,
+                "../assets/apple-touch-icon.png",
+            )
+        ]
         parts += [render_release(r) for r in releases]
         if releases:
             oldest = releases[-1]["version"]
+            # Only mention where earlier releases live if a URL is configured.
+            # The installer is hosted privately now, so there is no public
+            # archive to point at by default.
             rel_url = info.get("releases", site_releases)
             tail = (
-                f'Earlier releases are <a href="{html.escape(rel_url)}">on GitHub</a>.'
+                f' Earlier releases are <a href="{html.escape(rel_url)}">here</a>.'
                 if rel_url
-                else "Earlier releases are on GitHub."
+                else ""
             )
             parts.append(
                 '      <div class="changelog-start">\n'
-                f"        Changelog begins at {esc(oldest)}. {tail}\n"
+                f"        Changelog begins at {esc(oldest)}.{tail}\n"
                 "      </div>"
+            )
+        if "helper" in info["kind"].lower():
+            foot = (
+                f'{esc(info["name"])} is the {esc(info["kind"])} for the '
+                '<a href="../">Keyframeless suite</a>.'
+            )
+        else:
+            foot = (
+                f'{esc(info["name"])} is a Final Cut Pro {esc(info["kind"])}, '
+                'part of the <a href="../">Keyframeless suite</a>.'
             )
         parts.append(
             '      <footer class="foot">\n'
-            f'        {esc(info["name"])} is a Final Cut Pro {esc(info["kind"])}, '
-            'part of the <a href="../">Keyframeless suite</a>.\n'
+            f"        {foot}\n"
             "      </footer>"
         )
         write_page(
@@ -307,25 +328,7 @@ def build():
         )
         print(f"  {pid}: {len(releases)} release(s) (latest {latest})")
 
-    # root index
-    rows = [render_topbar(meta.get("siteTitle", "Keyframeless"), "Release notes", site_payhip, "assets/apple-touch-icon.png")]
-    rows.append('      <ul class="entries">')
-    for pid, info in plugins.items():
-        kind = "Extension" if "extension" in info["kind"].lower() else "Plugin"
-        rows.append("        <li>")
-        rows.append(f'          <span class="tag kind">{kind}</span>')
-        rows.append(
-            f'          <span><a href="{pid}/">{esc(info["name"])} - What\'s New</a></span>'
-        )
-        rows.append("        </li>")
-    rows.append("      </ul>")
-    rows.append(
-        '      <footer class="foot">\n'
-        "        Changelogs for the Keyframeless suite for Final Cut Pro.\n"
-        "      </footer>"
-    )
-    write_page(DOCS / "index.html", "Keyframeless - Release notes", "assets/style.css", "\n".join(rows))
-    print("  index: done")
+
 
 
 if __name__ == "__main__":

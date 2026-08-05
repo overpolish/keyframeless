@@ -11,7 +11,13 @@
 - (CGPoint)canvasPointFromObjectPoint:(simd_float2)objectPoint {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  CGPoint canvas;
+  // oscAPI can be nil transiently (e.g. mid-undo rebuild). A message to nil
+  // leaves `canvas` as uninitialized stack garbage, which then feeds Metal
+  // vertices and aborts ProOSC at command-buffer commit. Initialize + bail so a
+  // missing API yields a benign (0,0) for that tick instead of a crash.
+  CGPoint canvas = CGPointZero;
+  if (!oscAPI)
+    return canvas;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:objectPoint.x
                           fromY:objectPoint.y
@@ -24,7 +30,9 @@
 - (simd_float2)objectPointFromCanvasPoint:(CGPoint)canvasPoint {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  double objX, objY;
+  double objX = 0.0, objY = 0.0;
+  if (!oscAPI)
+    return (simd_float2){0.0f, 0.0f};
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
                           fromX:canvasPoint.x
                           fromY:canvasPoint.y

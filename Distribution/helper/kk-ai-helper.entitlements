@@ -8,7 +8,7 @@
 	     lookup. The helper itself is NOT sandboxed (it needs full Metal/GPU). -->
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.co.overpolish.keyframeless</string>
+		<string>group.com.keyframeless</string>
 	</array>
 </dict>
 </plist>

@@ -47,7 +47,7 @@ static double KKMotionLeanRunStartFraction(NSArray<KKKeyPose *> *kps,
 // visible motion. Falls back to `fallback` if the lane has no value there.
 static double KKMotionLeanSampleX(KKLane *lane, double frac, double fallback) {
   NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      KKLaneDisplayValueAtFraction(lane, frac);
   return v.count > 0 ? v[0].doubleValue : fallback;
 }
 

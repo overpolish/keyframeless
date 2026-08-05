@@ -89,7 +89,7 @@ static CanvasCornerBasis CanvasCornerBasisPx(simd_float2 Ppx, simd_float2 Apx,
 }
 
 // Resting offset of the widget from the corner (radius 0), as a fraction of the
-// canvas height (object pixel space). ~Rounded's minDim*0.05 inset - a fixed
+// canvas height (object pixel space). ~minDim*0.05 inset - a fixed
 // canvas-relative gap, so the handle doesn't creep as the shape scales.
 static const float kCornerWidgetBaseOffsetObjPx = 0.05f;
 // A corner only surfaces a (resting) radius widget when it's a genuine sharp

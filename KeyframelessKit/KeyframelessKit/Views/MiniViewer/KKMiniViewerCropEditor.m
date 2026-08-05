@@ -133,12 +133,15 @@ static inline CGFloat KKClampF(CGFloat v, CGFloat lo, CGFloat hi) {
   CGFloat minX, maxX, minY, maxY;
 
   if (_part == 0) {
-    // Rect body: translate the grab-time rect, clamped within the image.
+    // Rect body: a normal crop remains inside the image; an authored layout
+    // box can be moved freely beyond it.
     CGRect R = _rectAtGrab;
     R.origin.x += p.x - _grabPoint.x;
     R.origin.y += p.y - _grabPoint.y;
-    R.origin.x = KKClampF(R.origin.x, crMinX, crMaxX - R.size.width);
-    R.origin.y = KKClampF(R.origin.y, crMinY, crMaxY - R.size.height);
+    if (!self.allowsOutsideCanvas) {
+      R.origin.x = KKClampF(R.origin.x, crMinX, crMaxX - R.size.width);
+      R.origin.y = KKClampF(R.origin.y, crMinY, crMaxY - R.size.height);
+    }
     minX = CGRectGetMinX(R);
     maxX = CGRectGetMaxX(R);
     minY = CGRectGetMinY(R);
@@ -150,8 +153,8 @@ static inline CGFloat KKClampF(CGFloat v, CGFloat lo, CGFloat hi) {
     maxX = CGRectGetMaxX(_rectAtGrab);
     minY = _rectAtGrab.origin.y;
     maxY = CGRectGetMaxY(_rectAtGrab);
-    CGFloat px = KKClampF(p.x, crMinX, crMaxX);
-    CGFloat py = KKClampF(p.y, crMinY, crMaxY);
+    CGFloat px = self.allowsOutsideCanvas ? p.x : KKClampF(p.x, crMinX, crMaxX);
+    CGFloat py = self.allowsOutsideCanvas ? p.y : KKClampF(p.y, crMinY, crMaxY);
     NSInteger idx = _part - 1;
     BOOL movedMinX = (idx == KKCropPt_TopLeft || idx == KKCropPt_BottomLeft ||
                       idx == KKCropPt_LeftCenter);
@@ -185,13 +188,17 @@ static inline CGFloat KKClampF(CGFloat v, CGFloat lo, CGFloat hi) {
     }
   }
 
-  double w = KKClampF((maxX - minX) / cr.size.width, kMinCropFrac, 1.0);
-  double h = KKClampF((maxY - minY) / cr.size.height, kMinCropFrac, 1.0);
-  double x = KKClampF(((minX + maxX) * 0.5 - CGRectGetMidX(cr)) / cr.size.width,
-                      -0.5, 0.5);
+  double w = MAX((maxX - minX) / cr.size.width, kMinCropFrac);
+  double h = MAX((maxY - minY) / cr.size.height, kMinCropFrac);
+  double x = ((minX + maxX) * 0.5 - CGRectGetMidX(cr)) / cr.size.width;
   // Inverse of cropRectForValues' flipped Y term.
-  double y = KKClampF(
-      (CGRectGetMidY(cr) - (minY + maxY) * 0.5) / cr.size.height, -0.5, 0.5);
+  double y = (CGRectGetMidY(cr) - (minY + maxY) * 0.5) / cr.size.height;
+  if (!self.allowsOutsideCanvas) {
+    w = MIN(w, 1.0);
+    h = MIN(h, 1.0);
+    x = KKClampF(x, -0.5, 0.5);
+    y = KKClampF(y, -0.5, 0.5);
+  }
   return @[ @(w), @(h), @(x), @(y) ];
 }
 

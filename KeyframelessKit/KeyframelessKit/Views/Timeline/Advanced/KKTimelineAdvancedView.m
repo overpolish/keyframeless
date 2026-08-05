@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLaneCategoryNav.h" // KKLaneLayerKeysWithKeyposeNearFraction
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineAdvancedView_Private.h"
+#import "KKViewHelpers.h" // KKTrackingAreaMatches
+#import <KeyframelessKit/KKLog.h>
 
 // Global user preference (not per-clip): the Dynamic display warp is a viewing
 // aid, so it persists across sessions and clips like a UI setting, never in the
@@ -12,6 +16,11 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
     @"KKAdvancedDynamicDisplay";
 
 @implementation KKTimelineAdvancedView
+
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes {
+  _availableLanes = [availableLanes copy];
+  [self setNeedsDisplay:YES];
+}
 
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
                               timeline:(KKTimeline *)timeline {
@@ -32,8 +41,30 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
     _zp = [[KKTimelineZoomPan alloc] init];
     _dynamicDisplay = [[NSUserDefaults standardUserDefaults]
         boolForKey:kKKAdvancedDynamicDisplayDefaultsKey];
+    // Clear the active-keypose highlight when the shared value popover closes.
+    [NSNotificationCenter.defaultCenter
+        addObserver:self
+           selector:@selector(_valuePopoverDidClose:)
+               name:KKStaticValuesPopoverDidCloseNotification
+             object:nil];
   }
   return self;
+}
+
+- (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)_valuePopoverDidClose:(NSNotification *)note {
+  [self clearPopoverHighlights];
+}
+
+- (void)clearPopoverHighlights {
+  if (!_valuePopoverShowing && !_gapPopoverShowing)
+    return;
+  _valuePopoverShowing = NO;
+  _gapPopoverShowing = NO;
+  [self setNeedsDisplay:YES];
 }
 
 - (void)setActiveLayerKey:(NSString *)activeLayerKey {
@@ -47,6 +78,18 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
 - (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
   if (layerKey == _activeLayerKey || [layerKey isEqualToString:_activeLayerKey])
     return;
+  // An owner with no keypose at the open time has nothing for this popover to
+  // edit, so the popover stays where it is rather than re-scoping to an empty
+  // editor. The host's own switcher is expected to gray that owner
+  // (KKLaneLayerKeysWithKeyposeNearFraction, the set Canvas grays its layer
+  // list with); this is the backstop for the paths that reach us anyway.
+  if (layerKey.length &&
+      ![KKLaneLayerKeysWithKeyposeNearFraction(
+          _timeline.lanes, _currentPopoverFrac) containsObject:layerKey]) {
+    KKLogDebug(@"[Keypose] retarget to %@ refused: no keypose at %.4f",
+               layerKey, _currentPopoverFrac);
+    return;
+  }
   _activeLayerKey = [layerKey copy];
   // Re-point the open keypose popover at this layer's keypose at the same time.
   // Selection already moved here (this IS the response to it), so don't fire
@@ -139,6 +182,9 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
 
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
+  if (!_interactionsBlocked &&
+      KKTrackingAreaMatches(_hoverTrackingArea, self.bounds))
+    return;
   if (_hoverTrackingArea) {
     [self removeTrackingArea:_hoverTrackingArea];
     _hoverTrackingArea = nil;
@@ -178,26 +224,26 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   NSString *edgeLabel = nil;
   BOOL edgeLeading = NO;
   if (row >= 0) {
-    NSArray<KKLane *> *anim = [self _animatableLanes];
+    NSArray<KKAdvancedRow *> *anim = [self _rows];
     NSRect tracks = [self _tracksRect];
     // Gate on the cursor being inside the tracks rect - left of it is the
     // lane-label gutter (frac would clamp to 0 and falsely register a hit
     // on the first interval).
     if (row < (NSInteger)anim.count && pt.x >= NSMinX(tracks) &&
         pt.x <= NSMaxX(tracks)) {
-      KKLane *lane = anim[row];
+      KKLane *lane = anim[row].lane;
       double frac = [self _fracForX:pt.x inLane:lane inTracks:tracks];
       NSInteger aIdx = [self _intervalStartKPIdxInLane:lane atFrac:frac];
       if (aIdx >= 0) {
-        gapLabel = lane.label;
+        gapLabel = lane.key;
         gapAIdx = aIdx;
       } else if (lane.keyposes.count >= 1) {
         // Before the first / after the last pill: a non-editable hold region.
         if (frac < lane.keyposes.firstObject.time) {
-          edgeLabel = lane.label;
+          edgeLabel = lane.key;
           edgeLeading = YES;
         } else if (frac > lane.keyposes.lastObject.time) {
-          edgeLabel = lane.label;
+          edgeLabel = lane.key;
           edgeLeading = NO;
         }
       }
@@ -319,6 +365,13 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   if (_playheadFraction == frac)
     return;
   _playheadFraction = frac;
+  [self setNeedsDisplay:YES];
+}
+
+- (void)setEmptyMessage:(NSString *)emptyMessage {
+  if (_emptyMessage == emptyMessage || [_emptyMessage isEqual:emptyMessage])
+    return;
+  _emptyMessage = [emptyMessage copy];
   [self setNeedsDisplay:YES];
 }
 

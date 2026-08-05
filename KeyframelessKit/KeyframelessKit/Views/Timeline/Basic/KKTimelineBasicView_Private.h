@@ -10,7 +10,8 @@
 #import "KKCheckboxView.h"
 #import "KKTimelineZoomPan.h"
 #import <KeyframelessKit/KKEasing.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKHoldShape / KKShapeOfLane
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -80,16 +81,11 @@ typedef struct {
   double panOffset; // visible start in warped-u space [0, 1-1/zoom]
 } KKBasicProj;
 
-typedef struct {
-  BOOL inEnabled;
-  BOOL outEnabled;
-  NSInteger holdStart;
-  NSInteger holdEnd;
-} KKHoldShape;
+// KKHoldShape + KKShapeOfLane live in KKTimingEvaluation.h (Math layer) -
+// shared with the evaluator and keypose visibility.
 
 // Pure timeline/projection helpers - definitions live in the core .m and are
 // reused across the categories below.
-FOUNDATION_EXPORT KKHoldShape KKShapeOfLane(KKLane *lane);
 FOUNDATION_EXPORT BOOL KKValuesEqual(NSArray<NSNumber *> *a,
                                      NSArray<NSNumber *> *b);
 FOUNDATION_EXPORT KKHoldEffect KKBasicHoldEffect(KKIntervalModulation m);
@@ -157,6 +153,20 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   double _curBoundaryHoldFrac;
   KKBasicSection _curAnimateSec;
   NSInteger _curDiamond;
+  // The clip fraction the last boundary (keypose) popover opened at, so a
+  // retarget can ask which owners have a keypose there. Diamond-derived, so it
+  // can't be recovered from _curDiamond without redoing the projection.
+  double _lastBoundaryFraction;
+  // YES while the boundary (keypose) popover is open for _curDiamond, so the
+  // drawing highlights that pill in the accent selection colour. Cleared when
+  // the popover closes (KKStaticValuesPopoverDidCloseNotification observer).
+  BOOL _boundaryPopoverShowing;
+  // YES while a gap (curve / modulation) popover is open, so the drawing tints
+  // _activeGapSection's span in the gap-selection style - the fixed-position
+  // popover no longer points at the gap it edits. Cleared on the same close
+  // notification.
+  BOOL _gapPopoverShowing;
+  KKBasicSection _activeGapSection;
   // Which pill (1-4 diamond model) the right-click context menu targets, so
   // the copy/paste actions know the boundary column to read/write.
   NSInteger _menuDiamond;
@@ -203,6 +213,8 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 /// (in-start == hold) In reads accent, not warning.
 - (BOOL)_inIsTransition;
 - (BOOL)_outIsTransition;
+- (BOOL)_sectionHasDurationLock:(KKBasicSection)section;
+- (BOOL)_sectionDurationLocked:(KKBasicSection)section;
 - (void)_toggleHoldLink;
 - (KKLane *)_rebuiltLane:(KKLane *)lane
                     inOn:(BOOL)inOn
@@ -243,6 +255,8 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
                             dur:(double)dur
                          rulerY:(CGFloat)rulerY;
 - (void)_drawRulerInRect:(NSRect)g proj:(KKBasicProj)p xproj:(KKBasicProj)xp;
+- (void)_drawPlayheadInRect:(NSRect)g proj:(KKBasicProj)p;
+- (void)_drawEmptyStateInRect:(NSRect)g proj:(KKBasicProj)p;
 - (void)_placeSection:(NSTextField *)label
              checkbox:(nullable KKCheckboxView *)check
               centerX:(CGFloat)cx

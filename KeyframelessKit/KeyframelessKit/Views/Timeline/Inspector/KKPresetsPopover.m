@@ -6,6 +6,7 @@
 #import "KKPresetsPopover.h"
 
 #import "KKLocalized.h"
+#import "KKPopoverBackground.h"
 #import "KKPopoverHeaderView.h"
 #import "KKPresetRowView.h"
 #import "KKPresets.h"
@@ -15,39 +16,6 @@
 static const CGFloat kSaveRowHeight = 32.0;
 static const CGFloat kEmptyRowHeight = 28.0;
 static const CGFloat kMaxVisibleRows = 7;
-
-// Same macOS 26 liquid-glass double-border fix the gradient/curve popovers use.
-static void _clearPopoverBackground(NSView *view) {
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        NSView *current = view;
-        NSView *popoverFrame = nil;
-        while (current) {
-          if ([NSStringFromClass([current class])
-                  hasPrefix:@"NSPopoverFrame"]) {
-            popoverFrame = current;
-            break;
-          }
-          current = current.superview;
-        }
-        if (!popoverFrame)
-          return;
-        for (NSView *sub in popoverFrame.subviews) {
-          if (![NSStringFromClass([sub class]) containsString:@"GlassView"])
-            continue;
-          for (NSView *glassSub in sub.subviews) {
-            glassSub.wantsLayer = YES;
-            NSString *name = NSStringFromClass([glassSub class]);
-            if ([name containsString:@"CoreHostingView"])
-              glassSub.layer.opacity = 0;
-            else if ([name containsString:@"ContentHolderView"])
-              glassSub.layer.backgroundColor = NSColor.clearColor.CGColor;
-          }
-          break;
-        }
-      });
-}
 
 @interface KKPresetsContentView : NSView
 @end
@@ -61,7 +29,7 @@ static void _clearPopoverBackground(NSView *view) {
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (self.window)
-    _clearPopoverBackground(self);
+    KKApplyPopoverBackground(self);
 }
 
 @end
@@ -99,8 +67,8 @@ static void _clearPopoverBackground(NSView *view) {
   vc.view = _contentView;
 
   // Reuse one NSPopover instance (and its backing window) across opens. In an
-  // FxPlug custom-UI XPC, FCP remote-hosts each popover window and only releases
-  // it on inspector teardown, so a NEW popover per open strands its CA
+  // FxPlug custom-UI XPC, FCP remote-hosts each popover window and only
+  // releases it on inspector teardown, so a NEW popover per open strands its CA
   // layer-hosting surfaces (~MBs) every time - worst with ApplicationDefined
   // (guide mode), where we own dismissal so FCP never even learns it closed.
   // Reusing the instance bounds it regardless of behavior. (See the same fix on
@@ -262,8 +230,8 @@ static void _clearPopoverBackground(NSView *view) {
         return;
       // Defer the close: closing an NSPopover from inside its own click handler
       // in an XPC view service crashes via ViewBridge re-entrancy.
-      // A content preset (payloadKind set) inserts plugin content; otherwise it's
-      // a timeline-curve preset.
+      // A content preset (payloadKind set) inserts plugin content; otherwise
+      // it's a timeline-curve preset.
       if (p.payloadKind.length) {
         if (strongSelf.onApplyPresetPayload && p.payloadJSON.length)
           strongSelf.onApplyPresetPayload(p.payloadKind, p.payloadJSON,
@@ -384,9 +352,9 @@ static void _clearPopoverBackground(NSView *view) {
 }
 
 - (void)popoverDidClose:(NSNotification *)notification {
-  // Keep _popover (and its backing window) alive for reuse - see -showRelative...
-  // The next open swaps in fresh content; the toggle/close paths gate on
-  // -isShown, not nil-ness.
+  // Keep _popover (and its backing window) alive for reuse - see
+  // -showRelative... The next open swaps in fresh content; the toggle/close
+  // paths gate on -isShown, not nil-ness.
 }
 
 #pragma mark - Guide support

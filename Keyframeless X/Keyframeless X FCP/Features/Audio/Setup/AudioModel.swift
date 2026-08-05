@@ -6,6 +6,7 @@
 import AppKit
 import Combine
 import Foundation
+import KeyframelessAI
 import UniformTypeIdentifiers
 
 class AudioModel: ObservableObject {
@@ -20,6 +21,72 @@ class AudioModel: ObservableObject {
 	@Published var isDraggingToFCP: Bool = false
 	@Published var projectFormat: FCPXMLParser.ProjectFormat?
 	@Published var audioClips: [FCPXMLParser.AudioClip] = []
+	/// Every audio clip regardless of role (music / effects / dialogue), parsed
+	/// alongside `audioClips` at import so the spectrogram analyzer sees the full
+	/// mix with the same media access. Not used by transcription.
+	@Published var allAudioClips: [FCPXMLParser.AudioClip] = []
+	/// Sonar's own clip selection - indexes into `allAudioClips`, so it can't
+	/// share Steno's `selectedClips` (which indexes into dialogue-only
+	/// `audioClips`). Drives which audio gets analyzed, letting users visualize
+	/// just the music, just the voice, etc.
+	@Published var sonarSelectedClips: Set<Int> = []
+	/// Clips dropped from `allAudioClips` because their media isn't on disk.
+	/// Kept by name so Sonar can say what it left out.
+	@Published var excludedClipNames: [String] = []
+	/// Identity of `allAudioClips`, recomputed only here - the one place the
+	/// clips change. Fingerprinting is far too expensive to do inside a SwiftUI
+	/// body, which re-evaluates on every unrelated state change.
+	@Published var allClipsSignature: String = ""
+	/// The tab that was open, restored with everything else so reopening the
+	/// extension lands where you left it rather than always on Steno.
+	@Published var selectedTab: AppTab = .audio
+
+	/// Populates the model from a dropped FCPXML. Shared by the Steno setup drop
+	/// and the Sonar drop so both tabs load the same project (the model is shared
+	/// across tabs, so a drop in either updates both).
+	func load(from doc: XMLDocument) {
+		audioClips = FCPXMLParser.audioClips(in: doc)
+		let all = FCPXMLParser.audioClips(in: doc, dialogueOnly: false)
+		// Media that isn't there can't be analyzed, so it has no business on the
+		// timeline taking up a row and a selection slot. Caught here with a stat
+		// rather than at decode time, so these clips never reach the analyzer.
+		allAudioClips = all.filter(Self.mediaExists)
+		excludedClipNames = all.filter { !Self.mediaExists($0) }.map(\.name)
+		allClipsSignature = allAudioClips.map(AudioClipFingerprint.of).joined(separator: "\n")
+		// Sonar defaults to the whole project; users narrow it down by role.
+		sonarSelectedClips = Set(allAudioClips.indices)
+		selectedClips = []
+		editSelectedClips = nil
+		dropItems = FCPXMLParser.topLevelItems(in: doc)
+		// A plugin in this project may be bound to a source that was never
+		// published on this Mac, in which case it has left a note saying which
+		// clips it needs. Restoring that selection is the whole point: the user
+		// can't be expected to remember picks they made on another machine, and
+		// only an exact match reproduces the hash the plugin is looking for.
+		//
+		// After `dropItems`, because the note is matched on the project's name
+		// and that's where it comes from.
+		if let requested = SonarRepublishRequests.pendingSelection(
+			project: dropItems.first?.name, clips: allAudioClips)
+		{
+			sonarSelectedClips = requested
+		}
+		let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
+		projectFormat = fmt
+		exportWidth = "\(fmt.width)"
+		exportHeight = "\(fmt.height)"
+		exportFramerate = Framerate.from(frameDuration: fmt.frameDuration)
+		exportSettingsInitialized = true
+		useTimecode = !fmt.fpsDisplay.isEmpty
+	}
+
+	/// A clip with no resolvable URL, or one whose file has moved since the edit,
+	/// can never be read - FCP resolves such media internally, but we only have
+	/// the FCPXML's path.
+	private static func mediaExists(_ clip: FCPXMLParser.AudioClip) -> Bool {
+		guard let url = clip.url else { return false }
+		return FileManager.default.fileExists(atPath: url.path)
+	}
 	@Published var selectedClips: Set<Int> = []
 	@Published var editSelectedClips: Set<Int>?
 	@Published var dropItems: [FCPXMLParser.DropItem] = []
@@ -168,10 +235,15 @@ class AudioModel: ObservableObject {
 		paramsModalTemplate = added
 	}
 
+	/// Unactivated Steno exports the first few captions/titles so the full flow
+	/// stays testable. Every export path (pasteboard, FCPXML, SRT) funnels
+	/// through buildCaptionSegments, so the cap lives there.
+	static let unactivatedSegmentLimit = 5
+
 	func buildCaptionSegments(from rows: [AudioEditRow]) -> [CaptionSegment] {
 		let selected = editSelectedClips ?? Set(audioClips.indices)
 		let (filtered, clipsForBuild) = preparePWForCaptions(rows: rows, selected: selected)
-		return CaptionBuilder.build(
+		let segments = CaptionBuilder.build(
 			rows: filtered,
 			clips: clipsForBuild,
 			style: captionStyle,
@@ -180,6 +252,10 @@ class AudioModel: ObservableObject {
 			exportHeight: Int(exportHeight) ?? projectFormat?.height ?? 1080,
 			language: AudioSetupSettings.shared.selectedLanguage
 		)
+		guard LicenseManager.isActivated(LicenseProduct.steno) else {
+			return Array(segments.prefix(AudioModel.unactivatedSegmentLimit))
+		}
+		return segments
 	}
 
 	/// Retags project-wide rows so CaptionBuilder can render them against a synthetic clip
@@ -336,6 +412,13 @@ class AudioModel: ObservableObject {
 		var projectFormat: FCPXMLParser.ProjectFormat?
 		var audioClips: [FCPXMLParser.AudioClip]
 		var selectedClips: [Int]
+		/// Sonar's half of the drop. Optional so a state file written before Sonar
+		/// existed still decodes - a non-optional field would throw and silently
+		/// wipe Steno's restored project too.
+		var allAudioClips: [FCPXMLParser.AudioClip]?
+		var sonarSelectedClips: [Int]?
+		var excludedClipNames: [String]?
+		var selectedTab: AppTab?
 		var editSelectedClips: [Int]?
 		var dropItems: [FCPXMLParser.DropItem]
 		var useTimecode: Bool
@@ -371,6 +454,13 @@ class AudioModel: ObservableObject {
 		projectFormat = state.projectFormat
 		audioClips = state.audioClips
 		selectedClips = Set(state.selectedClips)
+		allAudioClips = state.allAudioClips ?? []
+		sonarSelectedClips = Set(state.sonarSelectedClips ?? [])
+		excludedClipNames = state.excludedClipNames ?? []
+		selectedTab = state.selectedTab ?? .audio
+		// Recomputed rather than stored: it's derived from the clips, and a
+		// persisted copy could disagree with them after a decode.
+		allClipsSignature = allAudioClips.map(AudioClipFingerprint.of).joined(separator: "\n")
 		editSelectedClips = state.editSelectedClips.map(Set.init)
 		dropItems = state.dropItems
 		useTimecode = state.useTimecode
@@ -404,6 +494,10 @@ class AudioModel: ObservableObject {
 			projectFormat: projectFormat,
 			audioClips: audioClips,
 			selectedClips: Array(selectedClips),
+			allAudioClips: allAudioClips,
+			sonarSelectedClips: Array(sonarSelectedClips),
+			excludedClipNames: excludedClipNames,
+			selectedTab: selectedTab,
 			editSelectedClips: editSelectedClips.map(Array.init),
 			dropItems: dropItems,
 			useTimecode: useTimecode,

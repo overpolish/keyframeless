@@ -50,6 +50,54 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
       dest.height == 0)
     return YES;
 
+  // Link-expression scope for the mini's OWN composite (the ViewBridge never
+  // runs -renderDestinationImage, so without this the mini encoded expression
+  // lanes unresolved and diverged from the main render). Timing comes from
+  // this clip's manifest on the bus; the cleanup token pops on every exit.
+  __attribute__((cleanup(CanvasLinkScopeCleanup))) BOOL linkScopeToken = YES;
+  (void)linkScopeToken;
+  double linkStart = 0.0, linkDur = 0.0;
+  if ([self linkTimingStart:&linkStart duration:&linkDur]) {
+    // SAME-clip refs resolve from the live in-memory stack, not the bus: the
+    // inspector commits the param blob on mouse-up, so mid-drag the bus curve
+    // is one edit behind and the mini would freeze until release. The selected
+    // layer's lanes come from the live edit timeline (mid-drag values); other
+    // layers from their stored (template-seeded) timelines. Cross-clip refs
+    // return nil and fall through to the bus.
+    CanvasLinkLaneOverride live = nil;
+    NSString *selfUUID = self.instanceUUID;
+    if (selfUUID.length) {
+      NSString *selfPrefix = [selfUUID stringByAppendingString:@"."];
+      NSArray<KKBezierPath *> *stack = self.layers ?: @[];
+      NSArray<KKLane *> *templates = self.laneTemplates ?: @[];
+      NSString *selLayerID = self.selectedLayerID;
+      KKTimeline *selTimeline = self.timeline;
+      live = ^NSArray<NSNumber *> *(NSString *refName, double frac) {
+        if (![refName hasPrefix:selfPrefix])
+          return nil;
+        NSString *tail = [refName substringFromIndex:selfPrefix.length];
+        for (KKBezierPath *p in stack) {
+          if (p.layerID.length == 0)
+            continue;
+          NSString *layerPrefix = [p.layerID stringByAppendingString:@"."];
+          if (![tail hasPrefix:layerPrefix])
+            continue;
+          NSString *label = [tail substringFromIndex:layerPrefix.length];
+          if ([p.layerID isEqualToString:selLayerID])
+            for (KKLane *l in selTimeline.lanes)
+              if ([l.key isEqualToString:label])
+                return KKLaneDisplayValueAtFraction(l, frac);
+          for (KKLane *l in CanvasLayerTimelineForPath(p, templates).lanes)
+            if ([l.key isEqualToString:label])
+              return KKLaneDisplayValueAtFraction(l, frac);
+          return nil;
+        }
+        return nil;
+      };
+    }
+    CanvasLinkScopePushWithOverride(linkStart, linkDur, live);
+  }
+
   MTLPixelFormat fmt = CanvasSRGBVariant(dest.pixelFormat);
   if (![self _ensurePipelinesForDevice:cb.device pixelFormat:fmt]) {
     // Fallback blit (same-format only) so a transient PSO failure doesn't show
@@ -219,9 +267,11 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
                                       self.timeline) &&
         _strokePipeline) {
       id<MTLRenderCommandEncoder> senc = miniLoadEnc(_strokePipeline);
+      float sScale =
+          self.strokeScaleOverride > 0.0f ? self.strokeScaleOverride : 1.0f;
       CanvasEncodeVectorLayers(
           one, senc, cb.device, w, h, 0.0f, 0.0f, self.editFraction,
-          self.selectedLayerID, self.timeline, 1.0f, miniElapsed, -1.0,
+          self.selectedLayerID, self.timeline, sScale, miniElapsed, -1.0,
           _strokePipeline, _strokeGradientPipeline, _strokeDashPipeline);
       [senc endEncoding];
     }

@@ -1,0 +1,623 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "MirageShaderModel.h"
+
+#import "MirageScalarParse.h"
+
+#import <KeyframelessKit/KKSlotInstances.h>
+
+// An editing session churns many one-off source variants; past this many the
+// least-recently-used model is dropped.
+#define KK_SHADER_MODEL_CACHE_CAP 32
+
+// Every inline `osc=` directive expands to a standard `@osc` block over the
+// same primitives - the sugar the easy path rides, so ONE runtime handles both
+// authored blocks and directive opt-ins. `explicitBinds` = uniforms an
+// authored block already binds (the author's block wins). Returns the count
+// written to `out`.
+static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
+                                     NSSet<NSString *> *explicitBinds,
+                                     MirageOSCBlock *out, int max) {
+  int n = 0;
+  for (int i = 0; i < np && n < max; i++) {
+    const MirageScalarProp *p = &props[i];
+    if (p->oscKind[0] == '\0')
+      continue;
+    NSString *nm = @(p->name);
+    if (!nm.length || [explicitBinds containsObject:nm])
+      continue;
+    MirageOSCBlock *b = &out[n];
+    memset(b, 0, sizeof(*b));
+    MirageOSCSetField(b->name, sizeof(b->name), nm);
+    MirageOSCSetField(b->binds, sizeof(b->binds), nm);
+    // Glyph word off the directive. Set for every primitive rather than just
+    // `point`, so the renderers keep deciding which styles mean anything to
+    // them - the sugar's job is only to carry the word through.
+    if (p->oscStyle[0])
+      MirageOSCSetField(b->style, sizeof(b->style), @(p->oscStyle));
+    b->skipSnapping = p->skipSnapping; // `skipsnapping` on the sugar directive
+    NSString *center =
+        strlen(p->linkName)
+            ? @(p->linkName)
+            : [NSString
+                  stringWithFormat:@"vec2(%g, %g)", p->rcenterx, p->rcentery];
+    if (p->isPoint && strcmp(p->oscKind, "position") == 0) {
+      // The position primitive (KKPositionOSC / KKPointOSCSet backing: full
+      // editable motion path + tangents) is self-contained - the block only
+      // declares.
+      MirageOSCSetField(b->primitive, sizeof(b->primitive), @"position");
+      n++;
+      continue;
+    }
+    if (p->isPoint && strcmp(p->oscKind, "point") == 0) {
+      // A PLAIN point handle (a centre, an offset): the glyph sits AT the
+      // lane value and a drag writes the cursor back - the identity bijection
+      // over the point primitive. No motion path.
+      MirageOSCSetField(b->primitive, sizeof(b->primitive), @"point");
+      MirageOSCSetField(b->forward, sizeof(b->forward), nm);
+      MirageOSCSetField(b->inverse, sizeof(b->inverse), @"pos");
+      n++;
+      continue;
+    }
+    if (MirageScalarOSCIsRotate(p)) {
+      MirageOSCSetField(b->primitive, sizeof(b->primitive), @"rotate");
+      NSMutableString *ax = [NSMutableString string];
+      for (int k = 0; k < p->oscAxisCount; k++)
+        [ax appendFormat:@"%s%c", ax.length ? " " : "",
+                         (char)tolower(p->oscAxes[k])];
+      MirageOSCSetField(b->axes, sizeof(b->axes), ax);
+      MirageOSCSetField(b->center, sizeof(b->center), center);
+      n++;
+      continue;
+    }
+    if (!MirageScalarRingEligible(p))
+      continue;
+    BOOL isRing = strcmp(p->oscKind, "ring") == 0;
+    BOOL isBox = MirageScalarOSCIsBox(p);
+    if (!isRing && !isBox)
+      continue;
+    // The value <-> geometry bijection in EXPR units (a percent lane's 0..100
+    // arrives /100), through the shared radius-ring curve.
+    double div = p->isPercent ? 100.0 : 1.0;
+    // A #multi bounded the braced way (`min={1,1} max={800,800}`) never sets
+    // the SCALAR fmin/fmax - the scalar regex can't match `min={`, so they keep
+    // their defaults (0, and 100 for a percent). Reading them here collapsed
+    // span to 1.0, so the control drew at ringExtent(value) instead of
+    // ringExtent((value - min) / span): Magic Move's Scale filled the frame at
+    // 100%. Component 0 is the reference axis (a linked box holds the ratio).
+    double lo = p->isMulti ? p->mmin[0] : p->fmin;
+    double hi = p->isMulti ? p->mmax[0] : p->fmax;
+    double mn = lo / div;
+    double span = (hi - lo) / div;
+    if (span <= 0)
+      span = 1.0;
+    b->linked = p->aspectLinked != 0;
+    MirageOSCSetField(b->center, sizeof(b->center), center);
+    if (isRing) {
+      MirageOSCSetField(b->primitive, sizeof(b->primitive), @"ring");
+      MirageOSCSetField(
+          b->forward, sizeof(b->forward),
+          [NSString
+              stringWithFormat:@"ringExtent((%@ - %g) / %g)", nm, mn, span]);
+      MirageOSCSetField(
+          b->inverse, sizeof(b->inverse),
+          [NSString stringWithFormat:@"%g + ringNorm(r) * %g", mn, span]);
+      n++;
+      continue;
+    }
+    // Centred box: half-extents through the same curve, per-axis. The extent
+    // is a MIN-DIMENSION fraction; the rect lives in per-axis object units, so
+    // `e`/`d` convert through the aspect (a scalar box stays square on
+    // screen). The interior is inert (a centred box has no position to write);
+    // the centred drag mechanic (shrink, aspect lock, fine mode) is
+    // boxCenteredBoundForObjectMouse:, with fromRect as the bijection.
+    MirageOSCSetField(b->primitive, sizeof(b->primitive), @"box");
+    b->bodyDisabled = 1;
+    int li = 0;
+    MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"c");
+    MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]), center);
+    li++;
+    MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"h");
+    MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]),
+                      [NSString stringWithFormat:@"ringExtent((%@ - %g) / %g)",
+                                                 nm, mn, span]);
+    li++;
+    // NOTE: local names must dodge the expression constants (`e` is Euler).
+    MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"ext");
+    MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]),
+                      @"h * vec2(min(1.0, 1.0 / aspect), min(1.0, aspect))");
+    li++;
+    MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"d");
+    MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]),
+                      @"max(c - rect.min, rect.max - c) * "
+                      @"vec2(max(1.0, aspect), max(1.0, 1.0 / aspect))");
+    li++;
+    // `anchor=`: grow FROM the anchor instead of symmetrically about `c`. The
+    // anchor's normalised position inside the content (-1..1 per axis, 0 =
+    // centred) offsets the box by -ext * af, so the anchor side stays put and
+    // the opposite one grows - the same geometry KKScaleHandlePositions uses
+    // for the transform gizmo. The inverse divides by (1 + |af|) because the
+    // far side is that much further from the anchor than a centred box's edge.
+    BOOL anchored = p->anchorName[0] != 0;
+    if (anchored) {
+      MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"af");
+      MirageOSCSetField(
+          b->localExprs[li], sizeof(b->localExprs[li]),
+          [NSString
+              stringWithFormat:@"clamp((%s - vec2(0.5)) * 2.0, -1.0, 1.0)",
+                               p->anchorName]);
+      li++;
+      MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"bc");
+      MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]),
+                        @"c - ext * af");
+      li++;
+    }
+    b->localCount = li;
+    MirageOSCSetField(b->forward, sizeof(b->forward),
+                      anchored ? @"rect(bc - ext, bc + ext)"
+                               : @"rect(c - ext, c + ext)");
+    BOOL vec = p->isMulti && p->fieldCount != 1;
+    NSString *dExpr = anchored ? @"(d / (1.0 + abs(af)))" : @"d";
+    NSString *inverse =
+        vec ? [NSString
+                  stringWithFormat:@"%g + ringNorm(%@) * %g", mn, dExpr, span]
+            : [NSString stringWithFormat:@"%g + ringNorm(max(%@.x, %@.y)) * %g",
+                                         mn, dExpr, dExpr, span];
+    MirageOSCSetField(b->inverse, sizeof(b->inverse), inverse);
+    n++;
+  }
+  return n;
+}
+
+// Every parse runs into a scratch buffer sized to the cap, then the model keeps
+// a copy sized to what the source ACTUALLY declared. The caps are big and the
+// structs are fat (an OSC block carries its expression strings inline, ~4.4KB
+// each), so a fixed-array model charged every shader for the maximum: a
+// three-slider shader cost the same ~144KB as a twenty-control one, times the
+// LRU cache. Models are immutable and built once, so the exact size is known by
+// the time it matters. NULL for a zero count is fine - every consumer loops to
+// the matching count.
+static void *MirageShrinkCopy(const void *scratch, size_t stride, int count) {
+  if (count <= 0)
+    return NULL;
+  void *kept = malloc(stride * (size_t)count);
+  memcpy(kept, scratch, stride * (size_t)count);
+  return kept;
+}
+
+// The instances of one group that the pool has room for, in registry order.
+// Anything past `maxCount` is a group the user grew beyond the ceiling its
+// author declared - it has no array element to land in, so it is dropped here
+// rather than overwriting the prop that follows.
+static NSArray<NSString *> *MirageSlotLiveIDs(MirageSlotInstancesBlock block,
+                                              const char *group, int maxCount) {
+  if (!block || !group || !group[0] || maxCount <= 0)
+    return @[];
+  NSArray<NSString *> *ids = block(@(group)) ?: @[];
+  if ((int)ids.count > maxCount)
+    ids = [ids subarrayWithRange:NSMakeRange(0, (NSUInteger)maxCount)];
+  return ids;
+}
+
+// The lane key one instance uses for one uniform. The CONTROL part of the key
+// is the GLSL uniform name, exactly as a non-repeatable Mirage lane is keyed,
+// so the panel that stamps the lanes and the fill that reads them share one
+// naming scheme instead of two that have to be kept in step.
+static NSString *MirageSlotLaneKeyForUniform(const char *group,
+                                             NSString *instanceID,
+                                             const char *uniformName) {
+  return KKSlotLaneKey(@(group), instanceID, @(uniformName));
+}
+
+@implementation MirageShaderModel {
+  MirageColorProp *_colors;
+  MirageScalarProp *_scalars;
+  MirageAudioProp *_audio;
+  MirageGradientProp *_gradients;
+  MirageOSCBlock *_oscBlocks;
+}
+
+- (instancetype)initWithSource:(NSString *)source {
+  if (!(self = [super init]))
+    return nil;
+  _source = [source copy];
+  // Scratch, not ivars - the scalar and OSC buffers are far too big to sit on
+  // the stack at the cap.
+  MirageColorProp *cTmp =
+      calloc(KK_SHADER_MAX_COLOR_PROPS, sizeof(MirageColorProp));
+  MirageScalarProp *sTmp =
+      calloc(KK_SHADER_MAX_SCALAR_PROPS, sizeof(MirageScalarProp));
+  MirageAudioProp *aTmp =
+      calloc(KK_SHADER_MAX_AUDIO_PROPS, sizeof(MirageAudioProp));
+  MirageGradientProp *gTmp =
+      calloc(KK_SHADER_MAX_GRADIENT_PROPS, sizeof(MirageGradientProp));
+  MirageOSCBlock *oTmp =
+      calloc(KK_SHADER_MAX_SCALAR_PROPS + KK_SHADER_MAX_OSC_BLOCKS,
+             sizeof(MirageOSCBlock));
+
+  int cUsed = 0, sUsed = 0, aUsed = 0, gUsed = 0;
+  _colorCount =
+      MirageParseColorProps(source, cTmp, KK_SHADER_MAX_COLOR_PROPS, &cUsed);
+  _colorPoolUsed = cUsed;
+  int sTrunc = 0;
+  _scalarCount = MirageParseScalarProps(
+      source, sTmp, KK_SHADER_MAX_SCALAR_PROPS, cUsed, &sUsed, &sTrunc);
+  _scalarTruncated = sTrunc != 0;
+  _scalarPoolUsed = sUsed;
+  _audioCount = MirageParseAudioProps(source, aTmp, KK_SHADER_MAX_AUDIO_PROPS,
+                                      cUsed + sUsed, &aUsed);
+  _audioPoolUsed = aUsed;
+  _gradientCount =
+      MirageParseGradientProps(source, gTmp, KK_SHADER_MAX_GRADIENT_PROPS,
+                               cUsed + sUsed + aUsed, &gUsed);
+  _gradientPoolUsed = gUsed;
+  // One vec4 per `// #slots` group holds that group's live instance count.
+  // LAST in the pool: a shader gaining a group must not shift an offset any
+  // earlier prop already published.
+  _slotGroups = MirageSlotGroupsForSource(source, NULL, NULL);
+  _slotCountPoolBase = cUsed + sUsed + aUsed + gUsed;
+  _slotCountPoolUsed = (int)_slotGroups.count;
+  if (_slotCountPoolBase + _slotCountPoolUsed > KK_SHADER_COLOR_POOL) {
+    _slotCountPoolUsed = KK_SHADER_COLOR_POOL - _slotCountPoolBase;
+    // A group with nowhere to put its count is a group whose controls the
+    // shader can't bound a loop over. Same answer as a dropped control: say so
+    // rather than compiling something that quietly renders wrong.
+    _scalarTruncated = YES;
+  }
+  if (_slotCountPoolUsed < 0)
+    _slotCountPoolUsed = 0;
+  // The opt-in built-ins. No pool slots: they drive the shared uniforms, so
+  // they take no offset and don't shift anything after them.
+  _builtins = MirageParseBuiltins(source);
+
+  // Unified OSC declarations: directive sugar first (mirroring the
+  // checklist's source order), then authored blocks; an authored block
+  // binding a uniform suppresses that uniform's sugar.
+  MirageOSCBlock *explicitBlocks =
+      calloc(KK_SHADER_MAX_OSC_BLOCKS, sizeof(MirageOSCBlock));
+  int ne =
+      MirageParseOSCBlocks(source, explicitBlocks, KK_SHADER_MAX_OSC_BLOCKS);
+  NSMutableSet<NSString *> *explicitBinds = [NSMutableSet set];
+  for (int i = 0; i < ne; i++)
+    if (strlen(explicitBlocks[i].binds))
+      [explicitBinds addObject:@(explicitBlocks[i].binds)];
+  int ns = MirageSynthesizeOSCBlocks(sTmp, _scalarCount, explicitBinds, oTmp,
+                                     KK_SHADER_MAX_SCALAR_PROPS);
+  memcpy(oTmp + ns, explicitBlocks, (size_t)ne * sizeof(MirageOSCBlock));
+  _oscBlockCount = ns + ne;
+  free(explicitBlocks);
+
+  _colors = MirageShrinkCopy(cTmp, sizeof(MirageColorProp), _colorCount);
+  _scalars = MirageShrinkCopy(sTmp, sizeof(MirageScalarProp), _scalarCount);
+  _audio = MirageShrinkCopy(aTmp, sizeof(MirageAudioProp), _audioCount);
+  _gradients =
+      MirageShrinkCopy(gTmp, sizeof(MirageGradientProp), _gradientCount);
+  _oscBlocks = MirageShrinkCopy(oTmp, sizeof(MirageOSCBlock), _oscBlockCount);
+  free(cTmp);
+  free(sTmp);
+  free(aTmp);
+  free(gTmp);
+  free(oTmp);
+  return self;
+}
+
+- (void)dealloc {
+  free(_colors);
+  free(_scalars);
+  free(_audio);
+  free(_gradients);
+  free(_oscBlocks);
+}
+
++ (instancetype)modelForSource:(NSString *)source {
+  static NSMutableDictionary<NSString *, MirageShaderModel *> *cache;
+  static NSMutableOrderedSet<NSString *> *recency;
+  static NSLock *lock;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    cache = [NSMutableDictionary dictionary];
+    recency = [NSMutableOrderedSet orderedSet];
+    lock = [NSLock new];
+  });
+  NSString *key = source ?: @"";
+  [lock lock];
+  MirageShaderModel *hit = cache[key];
+  if (hit) {
+    [recency removeObject:key];
+    [recency addObject:key];
+  }
+  [lock unlock];
+  if (hit)
+    return hit;
+  MirageShaderModel *m = [[self alloc] initWithSource:key];
+  [lock lock];
+  cache[key] = m;
+  [recency removeObject:key];
+  [recency addObject:key];
+  while (recency.count > KK_SHADER_MODEL_CACHE_CAP) {
+    [cache removeObjectForKey:recency.firstObject];
+    [recency removeObjectAtIndex:0];
+  }
+  [lock unlock];
+  return m;
+}
+
+- (const MirageOSCBlock *)oscBlocks {
+  return _oscBlocks;
+}
+
+- (const MirageOSCBlock *)oscBlockForUniform:(const char *)uniformName {
+  if (!uniformName || !uniformName[0])
+    return NULL;
+  for (int i = 0; i < _oscBlockCount; i++)
+    if (strcmp(_oscBlocks[i].binds, uniformName) == 0)
+      return &_oscBlocks[i];
+  return NULL;
+}
+
+- (const MirageColorProp *)colorProps {
+  return _colors;
+}
+
+// One swatch per live instance of a repeatable colour, in registry order. The
+// pool is already zeroed, so the slots past the count need no second pass.
+static void
+MirageFillColorSlots(const MirageColorProp *p, vector_float4 *pool,
+                     NSArray<NSNumber *> * (^valuesForLabel)(NSString *),
+                     MirageSlotInstancesBlock slotInstances) {
+  NSArray<NSString *> *ids =
+      MirageSlotLiveIDs(slotInstances, p->slotGroup, p->slotMax);
+  for (NSUInteger i = 0; i < ids.count; i++) {
+    NSArray<NSNumber *> *cv = valuesForLabel(
+        MirageSlotLaneKeyForUniform(p->slotGroup, ids[i], p->name));
+    if (cv.count >= 4) {
+      pool[p->poolOffset + (int)i] =
+          (vector_float4){cv[0].floatValue, cv[1].floatValue, cv[2].floatValue,
+                          cv[3].floatValue};
+      continue;
+    }
+    // An instance whose lane isn't stamped yet resolves exactly as a single
+    // colour does: the shader's authored default, else the shared palette
+    // walked by INSTANCE so a fresh set isn't all one colour.
+    const float *d =
+        p->hasDefColors ? p->defColors[0] : kMirageDefaultPalette[i % 10];
+    pool[p->poolOffset + (int)i] = (vector_float4){d[0], d[1], d[2], d[3]};
+  }
+}
+
+- (int)fillColorPool:(vector_float4 *)pool
+      valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel
+       slotInstances:(MirageSlotInstancesBlock)slotInstances {
+  for (int i = 0; i < KK_SHADER_COLOR_POOL; i++)
+    pool[i] = (vector_float4){0, 0, 0, 0};
+  for (int pi = 0; pi < _colorCount; pi++) {
+    const MirageColorProp *p = &_colors[pi];
+    if (p->slotMax > 0) {
+      MirageFillColorSlots(p, pool, valuesForLabel, slotInstances);
+      continue;
+    }
+    if (p->isArray) {
+      // An options-linked array has a fixed slot per multiple-choice option;
+      // regular palettes retain their editable count lane.
+      NSArray<NSNumber *> *ccV =
+          p->optionsByName[0] ? nil
+                              : valuesForLabel([NSString
+                                    stringWithFormat:@"%s Count", p->name]);
+      int cc =
+          p->optionsByName[0]
+              ? p->count
+              : (ccV.count ? (int)lround(ccV[0].doubleValue) : p->defaultCount);
+      if (cc < 0)
+        cc = 0;
+      if (cc > p->count)
+        cc = p->count;
+      for (int i = 0; i < p->count; i++) {
+        NSArray<NSNumber *> *cv = valuesForLabel(
+            [NSString stringWithFormat:@"%s %d", p->name, i + 1]);
+        if (cv.count >= 4)
+          pool[p->poolOffset + i] =
+              (vector_float4){cv[0].floatValue, cv[1].floatValue,
+                              cv[2].floatValue, cv[3].floatValue};
+        else if (p->hasDefColors && i < p->defColorCount) {
+          const float *d = p->defColors[i];
+          pool[p->poolOffset + i] = (vector_float4){d[0], d[1], d[2], d[3]};
+        } else {
+          const float *d = kMirageDefaultPalette[i % 10];
+          pool[p->poolOffset + i] = (vector_float4){d[0], d[1], d[2], d[3]};
+        }
+      }
+      pool[p->poolOffset + p->count] = (vector_float4){(float)cc, 0, 0, 0};
+    } else {
+      NSArray<NSNumber *> *cv = valuesForLabel(@(p->name));
+      if (cv.count >= 4)
+        pool[p->poolOffset] =
+            (vector_float4){cv[0].floatValue, cv[1].floatValue,
+                            cv[2].floatValue, cv[3].floatValue};
+      else if (p->hasDefColors) {
+        const float *d = p->defColors[0];
+        pool[p->poolOffset] = (vector_float4){d[0], d[1], d[2], d[3]};
+      } else {
+        // Fall back to the SAME per-index palette colour the catalog seeds the
+        // lane with (pal[pi % 10]); using pal[0] for every single colour made
+        // an un-seeded first render collapse all colours to one (purple).
+        const float *d = kMirageDefaultPalette[pi % 10];
+        pool[p->poolOffset] = (vector_float4){d[0], d[1], d[2], d[3]};
+      }
+    }
+  }
+  return _colorPoolUsed;
+}
+
+// One scalar prop's pool vec4, given the lane values behind it (nil = fall back
+// to the directive's default). Split out because a `// #slots` member resolves
+// the SAME way per instance, only from a different lane key - a second copy of
+// this would be a second set of unit rules to keep in step.
+static vector_float4
+MirageScalarPoolValue(const MirageScalarProp *p, NSArray<NSNumber *> *v,
+                      NSArray<NSNumber *> * (^valuesForLabel)(NSString *)) {
+  switch (p->kind) {
+  case MirageScalarKindPoint: {
+    double x = v.count >= 1 ? v[0].doubleValue : p->pdefx;
+    double y = v.count >= 2 ? v[1].doubleValue : p->pdefy;
+    return (vector_float4){(float)x, (float)y, 0, 0};
+  }
+  case MirageScalarKindMulti: {
+    // N components packed into .xyz (one pool vec4). Missing components fall
+    // back to the per-component default.
+    float c[4] = {0, 0, 0, 0};
+    for (int k = 0; k < p->fieldCount && k < 4; k++)
+      c[k] = (float)(v.count > k ? v[k].doubleValue : p->mdef[k]);
+    // Deliberately NOT rounded, for rotation or anything else: this value is
+    // resolved per RENDERED FRAME, so quantizing here strands an animated
+    // rotation on whole degrees - a slow spin then only moves every Nth
+    // frame and reads as stutter. Whole degrees belong in the inspector
+    // (`integerValued` on the lane), not in what reaches the shader.
+    if (p->isPercent)
+      for (int k = 0; k < 4; k++)
+        c[k] /= 100.0f; // lane is 0..100 %, shader wants 0..1
+    return (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  case MirageScalarKindFloat:
+  case MirageScalarKindPercent:
+  case MirageScalarKindProgress:
+  case MirageScalarKindRandom:
+  case MirageScalarKindInt:
+  case MirageScalarKindAngle:
+  case MirageScalarKindBool:
+  case MirageScalarKindChoice: {
+    double val = v.count ? v[0].doubleValue
+                         : (p->isChoice ? (double)p->cdefault : p->fdefault);
+    if (p->maxByName[0] && p->maxByValueCount > 0) {
+      NSArray<NSNumber *> *controller = valuesForLabel(@(p->maxByName));
+      if (controller.count) {
+        NSInteger index = (NSInteger)llround(controller[0].doubleValue);
+        if (index >= 0 && index < p->maxByValueCount) {
+          double cap = p->maxByValues[index];
+          if (p->hasMin)
+            cap = fmax(cap, p->fmin);
+          val = fmin(val, cap);
+        }
+      }
+    }
+    if (p->isPercent)
+      val /= 100.0; // lane is 0..100 %, shader wants 0..1
+    return (vector_float4){(float)val, 0, 0, 0};
+  }
+  }
+}
+
+// One element per live instance of a repeatable scalar, in registry order; the
+// rest were zeroed by the colour fill and stay that way.
+static void
+MirageFillScalarSlots(const MirageScalarProp *p, vector_float4 *pool,
+                      NSArray<NSNumber *> * (^valuesForLabel)(NSString *),
+                      MirageSlotInstancesBlock slotInstances) {
+  NSArray<NSString *> *ids =
+      MirageSlotLiveIDs(slotInstances, p->slotGroup, p->slotMax);
+  for (NSUInteger i = 0; i < ids.count; i++) {
+    NSString *key = MirageSlotLaneKeyForUniform(p->slotGroup, ids[i], p->name);
+    pool[p->poolOffset + (int)i] =
+        MirageScalarPoolValue(p, valuesForLabel(key), valuesForLabel);
+  }
+}
+
+- (int)fillScalarPool:(vector_float4 *)pool
+       valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel
+        slotInstances:(MirageSlotInstancesBlock)slotInstances {
+  for (int pi = 0; pi < _scalarCount; pi++) {
+    const MirageScalarProp *p = &_scalars[pi];
+    if (p->slotMax > 0) {
+      MirageFillScalarSlots(p, pool, valuesForLabel, slotInstances);
+      continue;
+    }
+    // Look up by the uniform NAME (the lane identity), not the display label.
+    pool[p->poolOffset] =
+        MirageScalarPoolValue(p, valuesForLabel(@(p->name)), valuesForLabel);
+  }
+  return _colorPoolUsed + _scalarPoolUsed;
+}
+
+- (int)fillSlotCountPool:(vector_float4 *)pool
+           slotInstances:(MirageSlotInstancesBlock)slotInstances {
+  for (int g = 0; g < _slotCountPoolUsed; g++) {
+    MirageSlotsGroup group = MirageSlotsGroupValue(_slotGroups[g]);
+    NSArray<NSString *> *ids =
+        MirageSlotLiveIDs(slotInstances, group.name, group.maxCount);
+    pool[_slotCountPoolBase + g] = (vector_float4){(float)ids.count, 0, 0, 0};
+  }
+  return _slotCountPoolBase + _slotCountPoolUsed;
+}
+
+- (const MirageScalarProp *)scalarProps {
+  return _scalars;
+}
+
+- (const MirageAudioProp *)audioProps {
+  return _audio;
+}
+
+- (const MirageGradientProp *)gradientProps {
+  return _gradients;
+}
+
+- (int)fillGradientPool:(vector_float4 *)pool
+         valuesForLabel:(NSArray<NSNumber *> * (^)(NSString *))valuesForLabel {
+  for (int pi = 0; pi < _gradientCount; pi++) {
+    const MirageGradientProp *p = &_gradients[pi];
+    // Look up by the uniform NAME (lane identity), not the display label.
+    NSArray<NSNumber *> *v = valuesForLabel(@(p->name));
+    // The lane's flat stop array, or the directive's defaults when the lane
+    // isn't there yet (a fresh instance, or a shader edited to add a gradient
+    // before the lanes rebuild).
+    float stops[KK_SHADER_MAX_GRADIENT_STOPS][KK_GRADIENT_STOP_STRIDE];
+    int count = 0;
+    if (v.count >= 2 * KK_GRADIENT_STOP_STRIDE) {
+      count = (int)(v.count / KK_GRADIENT_STOP_STRIDE);
+      if (count > p->maxStops)
+        count = p->maxStops;
+      for (int i = 0; i < count; i++)
+        for (int k = 0; k < KK_GRADIENT_STOP_STRIDE; k++)
+          stops[i][k] = v[i * KK_GRADIENT_STOP_STRIDE + k].floatValue;
+    } else {
+      count = p->defStopCount;
+      if (count > p->maxStops)
+        count = p->maxStops;
+      memcpy(stops, p->defStops,
+             sizeof(float) * (size_t)count * KK_GRADIENT_STOP_STRIDE);
+    }
+    // The sampler walks segments in order and saturates each one, so a stop
+    // that sorts out of place would blend backwards. Interpolating between two
+    // keyposes CAN reorder them (a stop dragged past its neighbour), so sort
+    // here rather than trusting the editor. Insertion sort: at most 16 stops.
+    for (int i = 1; i < count; i++) {
+      float key[KK_GRADIENT_STOP_STRIDE];
+      memcpy(key, stops[i], sizeof(key));
+      int j = i - 1;
+      while (j >= 0 && stops[j][0] > key[0]) {
+        memcpy(stops[j + 1], stops[j], sizeof(key));
+        j--;
+      }
+      memcpy(stops[j + 1], key, sizeof(key));
+    }
+
+    int mid = p->poolOffset + p->maxStops; // packed midpoints follow the stops
+    for (int i = 0; i < p->maxStops; i++)
+      pool[p->poolOffset + i] = (vector_float4){0, 0, 0, 0};
+    for (int i = 0; i < (p->maxStops + 3) / 4; i++)
+      pool[mid + i] = (vector_float4){0.5f, 0.5f, 0.5f, 0.5f};
+    for (int i = 0; i < count; i++) {
+      // rgb in .xyz, position in .w - the sampler needs both per stop, and
+      // pairing them saves the pool a second array.
+      pool[p->poolOffset + i] =
+          (vector_float4){stops[i][1], stops[i][2], stops[i][3], stops[i][0]};
+      pool[mid + (i >> 2)][i & 3] = stops[i][4];
+    }
+    pool[mid + (p->maxStops + 3) / 4] = (vector_float4){(float)count, 0, 0, 0};
+  }
+  return _colorPoolUsed + _scalarPoolUsed + _audioPoolUsed + _gradientPoolUsed;
+}
+
+@end

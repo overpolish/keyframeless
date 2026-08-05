@@ -28,6 +28,10 @@ enum {
 
 @interface KKCropOSC : KKBoxOSC
 
+/// Allow a layout box to move and resize beyond the source canvas. Ordinary
+/// destructive crop controls keep the traditional constrained behaviour.
+@property(nonatomic) BOOL allowsOutsideCanvas;
+
 /// Returns the current crop as `[w, h, x, y]` (KKCropModel semantics) at
 /// the given clip time. May return nil → treated as full image. Plugins
 /// typically read from their timeline snapshot or other data source - the

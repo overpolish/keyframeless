@@ -10,7 +10,7 @@ import KeyframelessAI
 import MLX
 import os
 
-private let helperLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.helper")
+private let helperLog = Logger(subsystem: "com.keyframeless", category: "ai.helper")
 
 /// Entry point for the bundled `kk-ai-helper` executable: a shared, singleton
 /// child process that runs MLX local inference out-of-process for ALL clients
@@ -460,6 +460,7 @@ public enum LocalAIHelperServer {
 					let stream = await runner.completeStreaming(
 						modelID: req.modelID, system: req.system, user: req.user)
 					for try await chunk in stream {
+						guard !chunk.isEmpty else { continue }
 						if !send(HelperResponse(result: nil, error: nil, chunk: chunk)) { break }
 					}
 					if writeOK.value {
@@ -631,7 +632,7 @@ public enum LocalAIHelperServer {
 		// regardless. The model is ~16 GB resident while warm, so this trades that
 		// memory for responsiveness; 30 min covers typical step-away gaps.
 		private let grace: TimeInterval = 1800
-		private let queue = DispatchQueue(label: "co.overpolish.ai.helper.idle")
+		private let queue = DispatchQueue(label: "com.keyframeless.ai.helper.idle")
 
 		init() {
 			armIdleCheck()  // exit if no one connects within `grace`

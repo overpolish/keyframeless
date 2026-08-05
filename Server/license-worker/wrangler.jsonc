@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "keyframeless-license",
+  "main": "src/index.js",
+  "compatibility_date": "2026-05-28",
+  "observability": { "enabled": true },
+  "routes": [{ "pattern": "license.keyframeless.com", "custom_domain": true }]
+  // Secrets are set out of band, never in this file:
+  //   wrangler secret put LICENSE_PRIVATE_KEY_PKCS8
+  //   wrangler secret put PAYHIP_SECRET_MIRAGE
+  //   wrangler secret put PAYHIP_SECRET_CANVAS
+  //   wrangler secret put PAYHIP_SECRET_STENO
+  //
+  // The route above must match `activationURL` in LicenseManager.swift. The
+  // custom domain is provisioned by `wrangler deploy`, which needs the
+  // keyframeless.com zone on the same Cloudflare account.
+}

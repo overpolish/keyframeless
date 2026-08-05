@@ -5,17 +5,24 @@
 
 #pragma once
 
+#import "KKLog.h"
 #import "KKMiniViewerView.h"
+#import "KKOSCGlyphStyle.h"
 #import <IOSurface/IOSurface.h>
 #import <KeyframelessKit/KKShaderTypes.h> // KKVertex2D
 #import <MetalKit/MetalKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <simd/simd.h>
 
 // Outer radius (points) of the shared KKPointOSC handle glyph. Smaller than
 // the viewer OSC's oscSize - the mini viewer is a compact preview. Must stay
-// in sync with RoundedMiniViewerRenderer's MiniOscSize() (placement/hit).
+// in sync with a plugin renderer's mini-OSC size (placement/hit).
 // Shared by the main file's interaction code and the +Rendering encoders.
-static const CGFloat kKKMiniHandleOuterPt = 4.5;
+// The mini's standard handle-glyph outer radius DERIVES from the viewer's
+// (KKOSCGlyphStyle.h): viewer outer x the mini's half-size proportion rule.
+// It was a bare 4.5 that happened to equal 9 x 0.5 - now the relationship is
+// the code.
+#define kKKMiniHandleOuterPt (KKOSCPointOuterPx * KKOSCMiniGlyphRatio)
 
 // Initial / double-click-reset zoom. Slightly < 1 (aspect-fit) so there's a
 // margin around the image and the corner handles are clear of the view edge
@@ -28,6 +35,12 @@ static const CGFloat kKKMiniInitialZoom = 0.85;
 // the gesture is a pan and the pending swap is dropped.
 static const CGFloat kKKMiniFilmstripClickSlopPt = 3.0;
 
+// Grab reach (view points) either side of the compare divider. Deliberately
+// narrow, and the divider LOSES every tie to a parameter OSC handle under the
+// same press (see the overlay's mouseDown) - a point handle parked near frame
+// centre has to stay grabbable with the split turned on.
+static const CGFloat kKKMiniCompareGrabPt = 5.0;
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// Transparent AppKit layer over the Metal content. Draws plugin handles and
@@ -35,6 +48,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// canvas (so pan/zoom/double-click-reset still work).
 @interface _KKMiniViewerOverlay : NSView
 @property(nonatomic, weak) KKMiniViewerView *canvas;
+/// Live playback just started: finish any in-flight handle / divider drag as if
+/// the mouse had come up, so the controls the user can no longer see stop
+/// following the pointer and the plugin's drag undo group closes balanced.
+- (void)endInteractionForLivePlayback;
 @end
 
 // One filmstrip slot: a resolved IOSurface from the feed's `slots[]` array,
@@ -43,8 +60,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface _KKMiniFilmSlot : NSObject
 @property(nonatomic) uint32_t sid;
 @property(nonatomic) uint64_t generation;
-@property(nonatomic) IOSurfaceRef surface;
-@property(nonatomic, strong) id<MTLTexture> sourceTexture;
+@property(nonatomic, nullable) IOSurfaceRef surface;
+@property(nonatomic, strong, nullable) id<MTLTexture> sourceTexture;
 @property(nonatomic, strong, nullable) id<MTLTexture> processedTexture;
 @property(nonatomic) double tag; // the slot's clip fraction
 @end
@@ -56,6 +73,11 @@ NS_ASSUME_NONNULL_BEGIN
   // threshold so a zoomed-in preview shows crisp texels instead of bilinear
   // blur.
   id<MTLRenderPipelineState> _pipelineNearest;
+  // Raw RGBA16F feed frames are linear/premultiplied. These encode them for
+  // display when Before/Split draws the source directly instead of through a
+  // plugin renderer.
+  id<MTLRenderPipelineState> _pipelineLinearSource;
+  id<MTLRenderPipelineState> _pipelineLinearSourceNearest;
   id<MTLRenderPipelineState> _onionPipeline;
   id<MTLCommandQueue> _queue;
   // Slot 0 aliases - keep the existing names so the handle/border/OSC code
@@ -69,7 +91,21 @@ NS_ASSUME_NONNULL_BEGIN
   // Multi-slot bookkeeping. Always has at least 1 entry (slot 0); onion-skin
   // grows it to N when the descriptor's `slots[]` is published with N>1.
   NSMutableArray<_KKMiniFilmSlot *> *_filmstripSlots;
+  // A SECOND texture (not a second time), from the descriptor's optional
+  // `channel1`. Outside _filmstripSlots on purpose: that array's count tracks
+  // the onion/filmstrip fan-out, so an index into it would move. nil unless the
+  // feed publishes one. Exposed to renderers as -channel1Texture.
+  _KKMiniFilmSlot *_channel1Slot;
+  // Optional AUXILIARY textures from the descriptor's `aux` array, indexed
+  // positionally by the renderer (Mirage's `// #frames` neighbour frames).
+  // Empty unless the feed publishes them. Exposed as -auxTextureCount /
+  // -auxTextureAtIndex:.
+  NSMutableArray<_KKMiniFilmSlot *> *_auxSlots;
   NSTimer *_pollTimer;
+  BOOL _activitySuspended;
+  BOOL _pixelConsumerActive;
+  BOOL _pixelConsumerRenderPending;
+  BOOL _pixelConsumerRenderAgain;
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
                     // arrive global, like scroll/magnify)
@@ -85,6 +121,8 @@ NS_ASSUME_NONNULL_BEGIN
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset
   CGSize _sourceMediaSize; // original media px (from descriptor srcW/H)
+  CGSize _sourcePixelReferenceSize; // canonical px for units="px" scaling
+  CGSize _sourceRenderPixelSize; // active host output raster for pixel parity
   // Deferred filmstrip cell activation: mouseDown records the candidate cell
   // but waits for mouseUp so a click-drag pan doesn't swap the active cell.
   // Cancelled in mouseDragged once the gesture moves past the click threshold.
@@ -122,8 +160,16 @@ NS_ASSUME_NONNULL_BEGIN
   // recent (a scroll/pinch never targets a handle), so a dense path doesn't pay
   // ~35ms of hit-testing per scroll event - that was the real pan throttle.
   NSTimeInterval _lastPanZoomTime;
+  // Playhead fraction from the feed descriptor, < 0 when the publisher had no
+  // fresh sample. Live playback evaluates the effect here instead of at the
+  // frame's own tag (FCP renders a constant ~0.27s ahead of the playhead).
+  double _feedPlayheadFrac;
+  // Last availability the host was told about, so the change callback fires
+  // once when the feed's first frame resolves rather than every drawn frame.
+  BOOL _compareWasAvailable;
 }
-- (CGRect)contentRectInViewPoints;
+// contentRectInViewPoints is declared PUBLICLY (KKMiniViewerView.h): a host
+// that samples the preview needs to map a click to an image position.
 - (CGSize)sourceMediaSize;
 
 // Slot/texture resolution + filmstrip geometry (main file); called by the
@@ -131,21 +177,59 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot
                  sid:(uint32_t)sid
                  gen:(uint64_t)gen
-                 tag:(double)tag;
+                 tag:(double)tag
+         pixelFormat:(nullable NSString *)format;
 - (NSUInteger)_activeSlotIndex;
 - (void)_syncSlot0Aliases;
 - (CGRect)_contentRectInDrawable;
 - (CGRect)_filmstripCellRectInDrawable:(NSUInteger)i ofTotal:(NSUInteger)n;
-- (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot;
+// Returns YES if it (re)created the slot's processed texture this call (size
+// changed / first use), NO if it reused the existing one. Callers that skip the
+// effect/generate pass during an interaction frame must still run it when a new
+// (blank) texture was just made, or a resized slot draws black.
+- (BOOL)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot;
 - (void)_ensureProcessedTexture;
+// A source-less generator delegate: implements generateIntoTexture: and NOT
+// processSourceTexture:. Such a delegate publishes no feed slots, so filmstrip/
+// onion slots are built from its keypose fractions instead of the descriptor.
+- (BOOL)_isGeneratorDelegate;
+// Rebuild _filmstripSlots as one surfaceless slot per keypose fraction (from
+// the generator delegate) when renderMode != Off, else a single slot. Returns
+// YES if the slot set changed. No-op for non-generator delegates.
+- (BOOL)_rebuildGeneratorSlots;
 - (void)_installKeyMonitor;
 
+@end
+
+// Before/after compare. Geometry + the divider drag live in
+// KKMiniViewerView+Interaction.m (with the rest of the hit geometry); the
+// composite and the divider's own drawing live in KKMiniViewerView+Draw.m.
+@interface KKMiniViewerView (Compare)
+/// The two modes, already gated on availability: bypass wins over the split, so
+/// holding "before" with a split armed shows a whole ungraded frame.
+- (BOOL)_compareBypassActive;
+- (BOOL)_compareSplitActive;
+/// Divider x in view points, or -1 when no divider is drawable right now.
+- (CGFloat)_compareDividerXInViewPoints;
+/// YES if `point` (overlay view points, y-up) is inside the divider's narrow
+/// grab band. Pure hit-test - the caller arbitrates against the delegate's
+/// handles first.
+- (BOOL)_compareDividerGrabbableAtPoint:(CGPoint)point;
+- (void)_dragCompareDividerToPoint:(CGPoint)point;
+/// Fire `onCompareStateChanged` (nil-safe). Called by the setters and by the
+/// draw path when availability flips.
+- (void)_compareStateChanged;
 @end
 
 // Drawing / MTKViewDelegate. The protocol is adopted on this category (not the
 // () extension) so the primary @implementation isn't expected to provide the
 // required delegate methods - they live in KKMiniViewerView+Draw.m.
 @interface KKMiniViewerView (Draw) <MTKViewDelegate>
+- (void)_requestPixelConsumerRender;
+/// Stroke the compare divider across the content rect. No-op unless the split
+/// is active and there's an ungraded frame to split against.
+- (void)_encodeCompareDividerInContentRect:(CGRect)contentRect
+                                   encoder:(id<MTLRenderCommandEncoder>)encoder;
 @end
 
 // Tool-overlay primitive batching. Implemented in KKMiniViewerView+ToolBatch.m

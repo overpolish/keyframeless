@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import "KKBoundaryEditingGraph.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
 #import <KeyframelessKit/KKTimelineLanesView.h>
@@ -12,6 +13,8 @@
 @class KKTimelineBasicView;
 @class KKTimelineAdvancedView;
 @class KKLaneFilterBar;
+@class KKMiniViewerView;
+@class KKFloatingPanel;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -35,24 +38,115 @@ NS_ASSUME_NONNULL_BEGIN
   NSView *_centeredArea;
   KKTimelineBasicView *_basicGraph;
   KKTimelineAdvancedView *_advancedGraph;
-  NSTextField *_hintLabel;
   _KKDropdownTrigger *_dropdownTrigger;
   NSView *_footerRow;
 
   __weak _KKManagePopoverView *_openManageView;
   __weak NSPopover *_openManagePopover;
-  // The reused popover shown via _showPopoverWithContent: (gap/hold/boundary).
-  // STRONG + reused across opens: a ViewBridge XPC remote-hosts each NSPopover's
-  // backing window and FCP never releases it until inspector teardown, so a NEW
-  // popover per open leaks its CA layer-hosting IOSurfaces (~13 MB each) every
-  // time. Reusing one instance reuses its backing window (and surfaces), bounding
-  // it. Closed (not destroyed) before a new one opens.
+  // The reused popover shown via _showPopoverWithContent: for temporary option
+  // pickers and structural companions (Animated/filter/OSC/etc.). Primary
+  // value/curve editors use the persistent panels below.
+  // STRONG + reused across opens: a ViewBridge XPC remote-hosts each
+  // NSPopover's backing window and FCP never releases it until inspector
+  // teardown, so a NEW popover per open leaks its CA layer-hosting IOSurfaces
+  // (~13 MB each) every time. Reusing one instance reuses its backing window
+  // (and surfaces), bounding it. Closed (not destroyed) before a new one opens.
   NSPopover *_openContentPopover;
+  // The four primary editors (constants/keypose and curve/modulation) are
+  // persistent panels rather than dismiss-on-click NSPopovers. Two panel
+  // instances preserve the two very different family sizes and, in the next
+  // phase, their independent remembered origins. Only one is visible at once.
+  KKFloatingPanel *_staticEditorPanel;
+  KKFloatingPanel *_segmentEditorPanel;
+  __weak KKFloatingPanel *_openEditorPanel;
+  BOOL _openEditorIsStaticFamily;
+  __weak NSView *_openEditorContentView;
+  __weak KKMiniViewerView *_openEditorMiniViewer;
+  void (^_openEditorOnClose)(void);
+  id _editorKeyMonitor;
+  id _editorGlobalKeyDownMonitor;
+  id _editorGlobalKeyUpMonitor;
+  id _editorGlobalShortcutCapture;
+  pid_t _editorHostPID;
+  // Transient one-shot: set just before -_showPopoverWithContent: to mark the
+  // next popover as an "option picker" (OSC / filter / param-order / motion
+  // blur) rather than a structural companion. Option popovers dismiss on ANY
+  // outside click, including elsewhere in the inspector chrome/timeline.
+  // Consumed (reset) inside the show.
+  BOOL _nextPopoverIsOptionType;
+  // Live state for the ONE persistent set of dismiss/scroll monitors installed
+  // on the first temporary-popover show. Every transition SWAPS content in
+  // place (never
+  // close+reopen - FCP stops forwarding mouseUp to a reused popover window once
+  // it's been closed and reopened, killing the buttons inside), so the monitors
+  // must read the CURRENT popover's state from here, not from a per-open
+  // capture. Updated on every show/swap; the monitors reach them via weak self.
+  BOOL _openPopoverIsOptionType;
+  CFTimeInterval _openPopoverShownAt;
+  __weak NSView *_openContentView;
+  __weak KKMiniViewerView *_openContentMiniViewer;
+  // Last play state the inspector pushed down. The push is EDGE-triggered (the
+  // poller only calls through when playing flips), so a mini-viewer built while
+  // the clip is already rolling would never hear about it and would draw its
+  // whole handle overlay over the moving preview. Remembered here and seeded
+  // into every mini as it is presented.
+  BOOL _openPopoverLivePlaying;
+  // Momentary full-composition peek. The editor remains open and fully
+  // configured; only its window is parked off-screen until every hold
+  // source (header button / P key) releases.
+  BOOL _compositionPeekMouseHeld;
+  BOOL _compositionPeekKeyHeld;
+  __weak NSWindow *_compositionPeekWindow;
+  NSRect _compositionPeekSavedFrame;
+  BOOL _compositionPeekSuspendedFrameClamp;
+  // Primary companion browser visibility (Mirage templates / Canvas layers),
+  // shared across editor opens. The current attachment metadata lets the L key
+  // restore a hidden sidebar without rebuilding or reopening the editor.
+  BOOL _editorSidebarVisible;
+  BOOL _editorRightPanelVisible;
+  BOOL _editorCompactMode;
+  BOOL _editorMiniViewerFramesRequired;
+  NSString *_editorStatePersistenceKey;
+  NSSize _editorExpandedSizeBeforeCompact;
+  BOOL _publishedMiniViewerFeedActive;
+  BOOL _publishedMiniViewerFeedActiveValid;
+  // Joyride temporarily owns the editor layout. The guide always uses the
+  // expanded mini-viewer at its natural size beside the inspector, while the
+  // user's exact frames + compact state remain untouched and are restored at
+  // teardown.
+  BOOL _guideEditorLayoutOverrideActive;
+  BOOL _guideSavedEditorCompactMode;
+  NSSize _guideSavedExpandedSizeBeforeCompact;
+  BOOL _guideSavedStaticEditorFrameValid;
+  NSRect _guideSavedStaticEditorFrame;
+  BOOL _guideSavedSegmentEditorFrameValid;
+  NSRect _guideSavedSegmentEditorFrame;
+  NSString *_openEditorSidebarKind;
+  double _openEditorSidebarFraction;
+  BOOL _openEditorSidebarIsBoundary;
+  void (^_openContentOnClose)(void);
+  // The anchor view + edge the open popover was shown against. A new show
+  // reuses the live window (swap in place) ONLY when it targets the SAME
+  // anchor+edge (same family / position, e.g. keypose<->gap<->constants beside
+  // the inspector). A different anchor (a cog popover at its button, or the
+  // reverse) needs a real close+reopen to re-position - the close buttons fire
+  // on mouseDown so they survive that reopen.
+  NSRectEdge _openPopoverPreferredEdge;
+  // The view _openContentPopover was anchored to at show time. Kept so an
+  // in-place mode switch (constants -> boundary) can re-anchor the popover to
+  // the clicked keypose marker by updating positioningRect, moving it without a
+  // close+reopen (which would rebuild - and break - the mini-viewer overlay).
+  __weak NSView *_openPopoverAnchorView;
   __weak _KKStaticValuesPopoverView *_openStaticView;
   // YES when _openStaticView is a boundary-value popover (caller-supplied
   // display lanes) - its rows must NOT be clobbered by _refresh's
   // updateUnoptedLanes:, which is only for the constants popover.
   BOOL _openStaticIsBoundary;
+  // This clip's instance uuid. At popover creation the lanes view reads the
+  // clip's own manifest off the bus to learn its project id, then scopes the
+  // expression reference picker to that project. Empty / nil = unknown (picker
+  // stays library-wide).
+  NSString *_linkSelfUUID;
 
   // Guide-only callbacks (set via KKTimelineLanesView+Guide). Fired
   // alongside the existing host plumbing so production behaviour is
@@ -77,11 +171,23 @@ NS_ASSUME_NONNULL_BEGIN
   double _openStaticBoundaryFraction;
   NSArray<KKLane *> *_openStaticBoundaryLanes;
   NSArray<NSString *> *_openStaticBoundaryExcluded;
+  // The slot fractions of the last published boundary request. An in-place
+  // retarget to another lane's keypose at the SAME time leaves the fraction
+  // untouched but changes the scoped keypose set, so the fraction alone can't
+  // tell whether the filmstrip still matches what's on screen.
+  NSArray<NSNumber *> *_lastPublishedBoundarySlots;
   // Suppress the _refresh-driven boundary-popover re-drive briefly after a
   // popover-originated edit, so the host's echo write doesn't rebuild rows
   // mid-interaction (add/remove already refresh themselves). External changes
   // (cmd-Z) land outside the window → they refresh.
   NSTimeInterval _boundaryRedriveSuppressUntil;
+  // Ping-back after the playhead settles with a keypose popover open. Playhead
+  // renders rightly take over the mini viewer while the user scrubs or plays;
+  // once the pushes stop, the LAST scheduled debounce fires and re-requests the
+  // keypose frame. The generation counter is the debounce: every push
+  // supersedes the pending one.
+  NSInteger _boundaryPingBackGeneration;
+  double _boundaryPingBackLastFrac;
   // Open hold-modulation popover plumbing: weak editor + a rebuilder
   // closure supplied by the host (Basic/Advanced) so external timeline
   // changes (e.g. cmd-Z) can push fresh participation states into the
@@ -151,6 +257,17 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_refresh;
 - (KKTimeline *)_graphTimeline;
 - (void)_graphDidMutateTimeline:(KKTimeline *)updated;
+/// Keep an open constants preview at the live playhead. Keypose popovers are
+/// deliberately excluded so they can return to their edited keypose.
+- (void)_previewOpenConstantsAtFraction:(double)fraction;
+
+/// Mouse and keyboard halves of the composition-peek gesture. Shared by the
+/// curve/modulation header and constants/keypose header.
+- (void)_setCompositionPeekHeld:(BOOL)held keyboard:(BOOL)keyboard;
+- (void)_cancelCompositionPeek;
+- (void)_setEditorSidebarVisible:(BOOL)visible;
+- (void)_setEditorRightPanelVisible:(BOOL)visible;
+- (void)_setEditorCompactMode:(BOOL)compact;
 @end
 
 /// Lane add/remove/animatable mutations. Declared in a named category so the
@@ -160,7 +277,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label;
 - (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label;
 - (void)_setLaneValues:(NSArray<NSNumber *> *)values forLabel:(NSString *)label;
+- (void)_setLaneCode:(NSString *)code forLabel:(NSString *)label;
+- (void)_setLaneCodeSections:
+            (NSArray<NSDictionary<NSString *, NSString *> *> *)sections
+                    forLabel:(NSString *)label;
+- (void)_setLaneCodeSaveName:(nullable NSString *)name
+                    forLabel:(NSString *)label;
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label;
+- (void)_setLaneLinkExpression:(nullable NSString *)expr
+                      forLabel:(NSString *)label;
 @end
 
 /// Internal popover plumbing - the manage-popover presenter and the generic
@@ -169,7 +294,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// (Popovers) category in KKTimelineLanesView.h. Both are implemented in
 /// KKTimelineLanesView+Popovers.m.
 @interface KKTimelineLanesView (PopoversInternal)
+- (void)_syncMiniViewerFeedActivity;
 - (void)_showManagePopoverFromView:(NSView *)anchorView;
+/// The owner a layer-navigable dropdown should open on, resolved against
+/// `lanes`: the host's LIVE selection (`constantsLaneFilter`) when it supplies
+/// one, else our stored `activeLayerKey`. nil = no owner resolved (every
+/// single-owner plugin), which leaves the nav on its first layer.
+- (nullable NSString *)_hostSelectedLayerKeyIn:(NSArray<KKLane *> *)lanes;
 /// The owner-scoped, mode-gated lane set the Animated dropdown shows; re-pulled
 /// on refresh so a companion-panel layer switch re-scopes the open dropdown.
 - (NSArray<KKLane *> *)_manageVisibleLanes;
@@ -198,6 +329,22 @@ NS_ASSUME_NONNULL_BEGIN
                               fromView:(NSView *)anchor
                          preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose;
+
+/// Present one of the four persistent primary editors. `staticFamily` selects
+/// constants/keypose versus curve/modulation, giving each family its own panel
+/// identity and eventual remembered position.
+- (KKFloatingPanel *)_showEditorPanelWithContent:(NSView *)content
+                                        fromView:(NSView *)anchor
+                                    staticFamily:(BOOL)staticFamily
+                                         onClose:(void (^)(void))onClose;
+- (BOOL)_editorPanelIsVisible;
+- (void)_closeEditorPanel;
+- (void)_setOpenEditorContentSize:(NSSize)size;
+/// The screen edge (MinX / MaxX) of the inspector's timeline area that has more
+/// free screen space. Companion popovers (static values, gap/hold) anchor there
+/// via `fromView:self` so they sit in one consistent spot beside the work area
+/// instead of jumping around / covering the keyframes.
+- (NSRectEdge)_inspectorSidePreferredEdge;
 // Defined in +Popovers.m (PopoversInternal @implementation); called back from
 // the +BoundaryNav navigation methods.
 - (double)_kpDedupEps;
@@ -253,6 +400,8 @@ NS_ASSUME_NONNULL_BEGIN
                                                 partCompoundLabels
                                  partStates:(NSArray<NSArray<NSNumber *> *> *)
                                                 partCompoundStates
+                                  partLanes:(nullable NSArray<KKLane *> *)
+                                                partCompoundLanes
                               partRebuilder:
                                   (NSArray<NSArray<NSNumber *> *> *_Nullable (
                                       ^_Nullable)(void))partRebuilder
@@ -274,8 +423,6 @@ NS_ASSUME_NONNULL_BEGIN
                                 (KKGapIntervalMutator)intervalMutator;
 @end
 
-FOUNDATION_EXPORT NSInteger KKModulationToPill(KKIntervalModulation m);
-
 // Boundary-request statics (defined in +Popovers.m) + the per-frame boundary
 // navigation methods (defined in +BoundaryNav.m), shared across both.
 @class KKMiniViewerView;
@@ -294,12 +441,45 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                                               NSArray<NSNumber *> *b);
 
 @interface KKTimelineLanesView (BoundaryNav)
+/// The graph behind the active tab (Advanced or Basic), typed as the shared
+/// popover write surface. Every popover-originated graph write and nav goes
+/// through this so the two tabs can't drift apart.
+- (id<KKBoundaryEditingGraph>)_activeGraph;
+/// Suppress the boundary-popover rebuild echo for ~0.4s after a write the
+/// open popover already reflects (smooth / aspect-link / expression / value
+/// commits) - the FCP echo would otherwise tear down focused rows mid-edit.
+- (void)_suppressBoundaryRedrive;
+/// THE single enter path for keypose (boundary) edit state: mini delegate
+/// boundary editing + suppressed handles + the open-popover stash ivars.
+/// Publishing the boundary request stays with the caller (fresh open always
+/// publishes, in-place update only on a fraction change).
+- (void)_applyKeyposeEditStateWithLanes:(NSArray<KKLane *> *)lanes
+                               fraction:(double)fraction
+                         excludedLabels:(NSArray<NSString *> *)excludedLabels;
+/// THE single exit path for keypose edit state: boundary editing off,
+/// suppressed handles cleared, AND the render-side request file written
+/// inactive. Every keypose-mode teardown (popover close, keypose->constants
+/// in-place switch) must call this - a partial reset leaves the render
+/// publishing stale boundary slots (visible as a corrupted/noisy preview).
+- (void)_exitKeyposeEditState;
+/// The ONE in-place refresh entry for an open static-values popover after a
+/// timeline change (selection re-feed, external undo/redo echo, lane opt-in
+/// flip). Dispatches per mode: constants re-scopes the un-opted rows and
+/// rebinds per-lane state; keypose re-drives the popover from the active
+/// graph at its open fraction (briefly suppressed after a popover edit).
+- (void)_refreshOpenStaticPopoverAnyOptedIn:(BOOL)anyOptedIn;
 - (void)_publishBoundaryRequestForFraction:(double)fraction;
+/// The slot fractions a boundary request for `fraction` would publish: the
+/// scoped keypose times, tie-collapsed, with the clicked keypose ALWAYS kept.
+- (NSArray<NSNumber *> *)_boundarySlotFractionsForFraction:(double)fraction;
 - (NSArray<NSNumber *> *)_animatableKPFractions;
+/// Every scoped keypose fraction, time-sorted and eps-deduped, WITHOUT the
+/// tie-collapse - the set a clicked keypose is resolved against.
+- (NSArray<NSNumber *> *)_allKPFractions;
+- (double)_snapEditFractionToKeypose:(double)fraction;
 - (void)_refreshBoundaryPopoverNavEnabled;
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction;
 - (void)_renderModeDidChange:(KKMiniViewerRenderMode)mode;
-- (void)_miniViewerSizeDidChange:(NSInteger)sizeIndex;
 /// In-place re-bind for an already-open boundary popover. Used by the
 /// onion-skin filmstrip when the user clicks an inactive cell - the popover
 /// stays open (no close/reopen blink), the value rows re-display the new
@@ -317,6 +497,7 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 /// updates live instead of waiting for a close/reopen or a nav. No-op when no
 /// boundary popover is open or render mode is Off.
 - (void)_republishBoundaryRequestIfOpen;
+- (void)_scheduleBoundaryPingBackForPlayheadFraction:(double)frac;
 @end
 
 // Config + presenter for the unified static-values popover (the constants

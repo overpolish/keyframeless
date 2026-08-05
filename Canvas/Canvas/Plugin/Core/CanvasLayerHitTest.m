@@ -16,8 +16,8 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKPluginHost.h>
 #import <KeyframelessKit/KKShape.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
 #import <simd/simd.h>
 
 // The pixel scale every object-space projection feeds
@@ -473,8 +473,8 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
 }
 
 typedef struct {
-  NSInteger index;          // original layer-stack index (0 = topmost)
-  CanvasLayerDrawKey key;   // depth + facing, the SAME key the render sorts by
+  NSInteger index;        // original layer-stack index (0 = topmost)
+  CanvasLayerDrawKey key; // depth + facing, the SAME key the render sorts by
 } CanvasHitCandidate;
 
 NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,

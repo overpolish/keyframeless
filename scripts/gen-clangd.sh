@@ -48,7 +48,7 @@ incdirs() {  # $1 = source root -> emit "    - -I<dir>" for every dir holding a 
   incdirs "$REPO/KeyframelessKit/KeyframelessKit"
   echo "    - -ferror-limit=0"
 
-  for plug in MagicMove Rounded Glow Canvas; do
+  for plug in Canvas; do
     [ -d "$REPO/$plug/$plug" ] || continue
     echo ""
     echo "---"

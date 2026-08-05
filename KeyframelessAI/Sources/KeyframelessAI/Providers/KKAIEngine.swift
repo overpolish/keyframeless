@@ -5,7 +5,7 @@
 
 import Foundation
 
-/// Presence of the shared local-inference engine ("Keyframeless AI"). The engine
+/// Presence of the shared local-inference engine (Kai). The engine
 /// ships as a SEPARATE install (a launchd-managed `kk-ai-helper` in
 /// /Library/Application Support/Keyframeless) so the plugins stay small. When it's
 /// absent, the on-device-models UI shows an install note instead of failing silently
@@ -23,7 +23,7 @@ public enum KKAIEngine {
 		FileManager.default.fileExists(atPath: installedHelperPath)
 	}
 
-	/// Whether to surface the "Install Keyframeless AI" note in the local-models UI.
+	/// Whether to surface the "Install Kai" note in the local-models UI.
 	public static var showInstallNotice: Bool {
 		forceShowInstallNotice || !isInstalled
 	}

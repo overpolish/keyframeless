@@ -25,7 +25,7 @@ scripts/bump-version.sh magicmove alpha    # 1.0.1 -> 1.0.1-v0, then 1.0.1-v1, e
 scripts/bump-version.sh magicmove release  # 1.0.1-v2 -> 1.0.1
 ```
 
-`alpha` adds or increments a `-vN` suffix and creates no changelog entry. `release` strips the suffix and creates the prefilled `docs/changelog/<component>/<version>.md`. Users running `1.0.1-v0` will see the update banner when the official `1.0.1` ships because a release version is always considered newer than a pre-release with the same base version.
+`alpha` adds or increments a `-vN` suffix and creates no changelog entry. `release` strips the suffix and creates the prefilled `docs/changelog/<product>/<version>.md`. Users running `1.0.1-v0` will see the update banner when the official `1.0.1` ships because a release version is always considered newer than a pre-release with the same base version.
 
 ### How update checking works
 
@@ -34,12 +34,12 @@ On app launch, `KKUpdateChecker` GETs the component's release-notes page (`<base
 ### Releasing
 
 1. Bump the component(s) that changed using the script above.
-2. Fill in `docs/changelog/<component>/<version>.md`.
+2. Fill in `docs/changelog/<product>/<version>.md`.
 3. Run `scripts/build-changelog.py`.
 4. Build, sign, and notarize the per-product `.pkg` (see below).
 5. Upload the signed `.pkg` to its Payhip product - buyers re-download the new file from there.
 6. Publish the docs (commit + push) so the `kk-version` meta tag advertises the new version to installed builds.
-7. Feedback (first release that ships the button, or after any Worker change): deploy the Worker (`cd feedback-worker && npm run deploy`) and make sure `KKFeedbackBaseURL()` in `KKUpdateChecker.m` points at a URL that resolves - the `feedback.keyframeless.overpolish.co` custom domain (needs the zone on Cloudflare) or the `*.workers.dev` URL. Confirm the Turnstile widget allows that host and the GitHub webhook points at it. See [Feedback Worker](#feedback-worker).
+7. Feedback (first release that ships the button, or after any Worker change): deploy the Worker (`cd feedback-worker && npm run deploy`) and make sure `KKFeedbackBaseURL()` in `KKUpdateChecker.m` points at a URL that resolves - `keyframeless.com/feedback/`, which needs the zone proxied through Cloudflare so the `/feedback/submit` route fires. Confirm the Turnstile widget allows `keyframeless.com` and the GitHub webhook points at `keyframeless.com/feedback/github-webhook`. See [Feedback Worker](#feedback-worker).
 
 ### KeyframelessKit
 
@@ -47,14 +47,14 @@ On app launch, `KKUpdateChecker` GETs the component's release-notes page (`<base
 
 ### Adding a new component
 
-The component key is the project name lowercased with no spaces or separators (e.g. `MagicMove` → `magicmove`, `Keyframeless X` → `keyframelessx`).
+The component key is the project name lowercased with no spaces or separators (e.g. `Keyframeless X` → `keyframelessx`, `Canvas` → `canvas`).
 
 1. Add the key to `KKBundleIDToComponent()` in `KKUpdateChecker.m` - map both the wrapper app and XPC service bundle IDs.
 2. Add a case to `scripts/bump-version.sh` that updates the relevant `Info.plist` / `.pbxproj` files.
 3. Call `addUpdateBannerParameterWithAPI:error:` at the start of `addParametersWithError:` and pass `[KKPlugin servicePrincipalDelegate]` to `startServicePrincipalWithDelegate:` in `main()` to wire up update checking.
 4. Add the component to the combined `Distribution/Keyframeless.pkgproj` in Packages.app, and add its `key -> package identifier` to `COMPONENT_ID` in `scripts/split-pkgproj.py`. The per-product `.pkgproj` and per-plugin uninstaller are then generated automatically by `build-and-sign.sh`.
 5. Add it to `docs/changelog/plugins.json` (name, kind, payhip) so it gets a changelog page + meta tag.
-6. (Optional) Add the component's display name to `PLUGIN_NAMES` in `feedback-worker/src/index.js` and `feedback-worker/public/index.html`, and create a matching issue label, so feedback from it is attributed nicely. The feedback URL is derived from the component key automatically (step 1).
+6. (Optional) Add the component's display name to `PLUGIN_NAMES` in `feedback-worker/src/index.js` and `docs/feedback/index.html`, and create a matching issue label, so feedback from it is attributed nicely. The feedback URL is derived from the component key automatically (step 1).
 
 ## Feedback Worker
 
@@ -63,7 +63,7 @@ The "Send feedback" button opens a form served by the Cloudflare Worker in `feed
 ### First-time setup
 
 1. `cd feedback-worker && npm install`, then `wrangler login`.
-2. Create a Turnstile widget (Cloudflare dashboard → Turnstile). Add the production hostname (the `workers.dev` URL or `feedback.keyframeless.overpolish.co`) **and** `localhost`. Put the **site key** into `public/index.html` (`data-sitekey`).
+2. Create a Turnstile widget (Cloudflare dashboard → Turnstile). Add `keyframeless.com` (where the form is served) **and** `localhost`. Put the **site key** into `docs/feedback/index.html` (`data-sitekey`).
 3. Set the secrets (never committed):
    ```sh
    wrangler secret put TURNSTILE_SECRET       # the widget's secret key
@@ -87,13 +87,13 @@ cd feedback-worker && npm run deploy
 
 ### Custom domain
 
-To serve at `feedback.keyframeless.overpolish.co`, the `overpolish.co` zone must be on Cloudflare; uncomment the `routes` block in `wrangler.jsonc` and redeploy. Otherwise the Worker lives at `keyframeless-feedback.<account>.workers.dev` - set that URL as the production base in `KKFeedbackBaseURL()` in `KKUpdateChecker.m`.
+The Worker answers `keyframeless.com/feedback/submit` via Cloudflare routes, so the zone must be proxied (orange cloud) in front of GitHub Pages. Otherwise the Worker lives at `keyframeless-feedback.<account>.workers.dev` - set that URL as the production base in `KKFeedbackBaseURL()` in `KKUpdateChecker.m`.
 
 ### Screenshot cleanup
 
 Uploaded screenshots are removed two ways:
 
-- **On issue close (webhook).** In the repo: Settings → Webhooks → Add webhook. Payload URL `https://<your-worker-domain>/github-webhook`, content type `application/json`, secret = the `GITHUB_WEBHOOK_SECRET` set above, events: **Issues** only. When an issue is closed or deleted, the Worker parses its body for R2 URLs and deletes them. (Reopening a closed issue won't restore its images.)
+- **On issue close (webhook).** In the repo: Settings → Webhooks → Add webhook. Payload URL `https://keyframeless.com/feedback/github-webhook`, content type `application/json`, secret = the `GITHUB_WEBHOOK_SECRET` set above, events: **Issues** only. When an issue is closed or deleted, the Worker parses its body for R2 URLs and deletes them. (Reopening a closed issue won't restore its images.)
 - **TTL backstop.** In the dashboard (R2 → the bucket → Settings → Object lifecycle rules), add a rule to delete objects under the `feedback/` prefix after e.g. 180 days, to sweep anything the webhook misses (issues never formally closed, edited-out URLs).
 
 ## Code Signing & Notarization
@@ -126,9 +126,9 @@ Build an installer and sign it in one step. The first argument is the target:
 
 ```sh
 scripts/build-and-sign.sh combined       "<apple-id>" "<team-id>"   # all-in-one Keyframeless.pkg
-scripts/build-and-sign.sh rounded         "<apple-id>" "<team-id>"   # just Rounded.pkg
+scripts/build-and-sign.sh canvas          "<apple-id>" "<team-id>"   # just Canvas.pkg
 scripts/build-and-sign.sh all             "<apple-id>" "<team-id>"   # every plugin, one .pkg each
-scripts/build-and-sign.sh keyframelessai  "<apple-id>" "<team-id>"   # the local-AI helper .pkg
+scripts/build-and-sign.sh keyframelessai  "<apple-id>" "<team-id>"   # standalone Kai.pkg
 ```
 
 Per-product targets generate a single-product `.pkgproj` and a per-plugin uninstaller
@@ -137,9 +137,15 @@ from `Distribution/Keyframeless.pkgproj` + `scripts/uninstall.template` (via
 per-plugin is committed. `combined` builds the committed `Keyframeless.pkgproj`. Each
 runs `packagesbuild`, then signs, notarizes, staples, and verifies the resulting `.pkg`.
 
-Per-product installers are named with their version, e.g. `Rounded-v4.0.0.pkg` (the
+Per-product installers are named with their version, e.g. `Canvas-v2.0.0.pkg` (the
 version comes from the package's `.pkgproj` entry, the same one `bump-version.sh`
 maintains). `combined` still emits `Keyframeless.pkg`.
+
+Before packaging an app/plugin, the script verifies that the notarized app in
+`Distribution/release` exists and its `CFBundleShortVersionString` matches the package
+version. Re-archive and export after every version bump; the script will not package an
+older app under a newer installer version. The AI payload is built during packaging and
+its manifest and complete SwiftPM runtime-bundle set are validated separately.
 
 **Notarization credentials.** The scripts prefer a stored keychain profile named
 `keyframeless` so notarization is non-interactive. Create it once:
@@ -158,26 +164,27 @@ app-specific-password path, run with an empty profile name:
 KK_NOTARY_PROFILE= scripts/build-and-sign.sh all "<apple-id>" "<team-id>"
 ```
 
-**`keyframelessai` is a separate target and is NOT included in `all`.** Unlike the
-plugins (whose notarized `.app` is archived beforehand), its payload is the
-`kk-ai-helper` binary, so the target additionally runs `stage_ai_helper`: `xcodebuild`s
-the `kk-ai-helper` scheme in `KeyframelessAI/` (only the Metal toolchain compiles MLX's
-metallib), thins it to arm64 (MLX is Apple-Silicon only), Developer-ID signs it with the
-app-group + hardened-runtime entitlements, and stages it plus its SwiftPM resource
-bundles into `Distribution/helper/staging` where the `.pkgproj` payload points. Run it
-explicitly whenever the local-AI helper changes - `all` will not build it (and the
-`all` loop skips the staging step, so `keyframelessai` only builds correctly via its own
-target).
+The unified `combined` installer always runs `stage_ai_helper` before packaging, so
+Kai cannot be omitted or picked up from a stale staging directory.
+`stage_ai_helper` `xcodebuild`s the `kk-ai-helper` scheme in `KeyframelessAI/` (only the
+Metal toolchain compiles MLX's metallib), thins it to arm64 (MLX is Apple-Silicon only),
+Developer-ID signs it with the app-group + hardened-runtime entitlements, and stages it
+plus its SwiftPM resource bundles into `Distribution/helper/staging` where the
+`.pkgproj` payload points.
+
+**`keyframelessai` remains a separate target and is NOT included in `all`.** Use that
+target only when producing the standalone `Kai.pkg` installer. `all` means the standalone
+app/plugin packages; the supported suite installer is `combined`, which includes AI.
 
 To sign an already-built `.pkg` without rebuilding (base name, no `.pkg`):
 
 ```sh
-scripts/sign-pkg.sh "Rounded" "<apple-id>" "<team-id>"
+scripts/sign-pkg.sh "Canvas" "<apple-id>" "<team-id>"
 ```
 
 To just generate a per-product `.pkgproj` for an unsigned local build:
 
 ```sh
 python3 scripts/split-pkgproj.py rounded
-packagesbuild "Distribution/Rounded.pkgproj"
+packagesbuild "Distribution/Canvas.pkgproj"
 ```

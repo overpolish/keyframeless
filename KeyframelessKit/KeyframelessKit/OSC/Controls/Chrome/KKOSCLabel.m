@@ -11,7 +11,7 @@
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
 static NSString *const kLabelPipelineID =
-    @"co.overpolish.keyframelesskit.Label";
+    @"com.keyframeless.kit.Label";
 static const CGFloat kScale = 2.0;
 static const CGFloat kFontSize = 20.0;
 static const CGFloat kStrokePt = 3.0;
@@ -140,9 +140,7 @@ static NSColor *labelStrokeColor(void) {
       buildAndRegisterPipelineStateForPluginID:kLabelPipelineID
                                     registryID:registryID
                                    pixelFormat:pixelFormat
-                                      bundleID:@"co.overpolish"
-                                                ".keyframeless"
-                                                ".KeyframelessKit"
+                                      bundleID:@"com.keyframeless.KeyframelessKit"
                                   vertexShader:@"KKVertexShader"
                                 fragmentShader:@"KKLabelFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];

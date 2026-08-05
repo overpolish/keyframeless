@@ -5,17 +5,35 @@
 
 #import "KKTimelineLanesView.h"
 #import "KKCheckboxRowView.h"
+#import "KKCurveDefaults.h"
+#import "KKFloatingPanel.h"
 #import "KKLaneCategoryNav.h"
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKPopoverKeepAlive.h"
+#import "KKScopedDefaults.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineAdvancedView.h"
 #import "KKTimelineBasicView.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKTimingEvaluation.h" // KKLaneClampToComponentRange
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKLog.h>
+
+static NSString *const kEditorLayoutScope = @"ui";
+static NSString *const kEditorSidebarVisibleKey =
+    @"timeline.editor.sidebarVisible";
+static NSString *const kEditorRightPanelVisibleKey =
+    @"timeline.editor.rightPanelVisible";
+
+static BOOL KKEditorStoredBool(NSString *key, BOOL fallback) {
+  id stored = KKScopedDefaultRead(key, kEditorLayoutScope);
+  return [stored respondsToSelector:@selector(boolValue)] ? [stored boolValue]
+                                                          : fallback;
+}
 
 // Basic and Advanced graphs request the SAME shared popover presenters
 // (`_presentGapPopoverFromAnchor:` /
@@ -39,7 +57,7 @@ typedef void (^KKHoldForwardBlock)(
     KKIntervalModulation modulation, double intensity, double frequency,
     uint32_t seed, BOOL linked, BOOL showsLinked,
     NSArray<NSArray<NSString *> *> *partLabels,
-    NSArray<NSArray<NSNumber *> *> *partStates,
+    NSArray<NSArray<NSNumber *> *> *partStates, NSArray<KKLane *> *partLanes,
     NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
     void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
     void (^onFrequency)(double), void (^onSeed)(uint32_t),
@@ -90,19 +108,19 @@ static KKGapForwardBlock KKMakeGapForwarder(KKTimelineLanesView *owner,
 
 static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   __weak KKTimelineLanesView *weak = owner;
-  return ^(NSView *anchor, double startFraction, double endFraction,
-           KKIntervalModulation modulation, double intensity, double frequency,
-           uint32_t seed, BOOL linked, BOOL showsLinked,
-           NSArray<NSArray<NSString *> *> *partLabels,
-           NSArray<NSArray<NSNumber *> *> *partStates,
-           NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
-           void (^onModulation)(KKIntervalModulation),
-           void (^onIntensity)(double), void (^onFrequency)(double),
-           void (^onSeed)(uint32_t), void (^onLinked)(BOOL),
-           void (^onParticipation)(NSInteger, BOOL), void (^onDragBegin)(void),
-           void (^onDragEnd)(void), NSString *laneLabel,
-           KKInterval *representative, KKGapIntervalReader reader,
-           KKGapIntervalMutator mutator) {
+  return ^(
+      NSView *anchor, double startFraction, double endFraction,
+      KKIntervalModulation modulation, double intensity, double frequency,
+      uint32_t seed, BOOL linked, BOOL showsLinked,
+      NSArray<NSArray<NSString *> *> *partLabels,
+      NSArray<NSArray<NSNumber *> *> *partStates, NSArray<KKLane *> *partLanes,
+      NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
+      void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
+      void (^onFrequency)(double), void (^onSeed)(uint32_t),
+      void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
+      void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
+      KKInterval *representative, KKGapIntervalReader reader,
+      KKGapIntervalMutator mutator) {
     [weak
         _presentHoldModulationPopoverFromAnchor:anchor
                                   startFraction:startFraction
@@ -115,6 +133,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                                     showsLinked:showsLinked
                                      partLabels:partLabels
                                      partStates:partStates
+                                      partLanes:partLanes
                                   partRebuilder:partRebuilder
                                    onModulation:onModulation
                                     onIntensity:onIntensity
@@ -132,7 +151,33 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   };
 }
 
+// How many distinct owners `lanes` spans (lanes with no `layerKey` don't
+// count). >1 means this one lane set is multi-owner in its own right, which is
+// what the layer navs key off.
+static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
+  NSMutableSet<NSString *> *keys = [NSMutableSet set];
+  for (KKLane *l in lanes)
+    if (l.layerKey.length)
+      [keys addObject:l.layerKey];
+  return keys.count;
+}
+
 @implementation KKTimelineLanesView
+
+- (void)_previewOpenConstantsAtFraction:(double)fraction {
+  // Constants have no keypose time to return to: while their popover is open,
+  // its preview belongs to the live playhead. Keep editFraction following both
+  // the optimistic scrub callback and later host/poller pushes. A keypose
+  // popover deliberately does not enter here; it keeps its fixed editFraction
+  // so stopping playback can snap back to the keypose being edited.
+  if (!_openStaticView || _openStaticIsBoundary || fraction < 0.0 ||
+      fraction > 1.0)
+    return;
+  id del = self.miniViewerDelegate;
+  if ([del respondsToSelector:NSSelectorFromString(@"setEditFraction:")])
+    [del setValue:@(fraction) forKey:@"editFraction"];
+  [_openEditorMiniViewer setNeedsDisplay:YES];
+}
 
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
                               timeline:(KKTimeline *)timeline {
@@ -146,6 +191,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     _availableLanes = [availableLanes copy];
     _timeline = [self _timelineSeededFrom:timeline];
     _miniViewerClipAspect = 16.0 / 9.0;
+    _editorSidebarVisible = KKEditorStoredBool(kEditorSidebarVisibleKey, YES);
+    _editorRightPanelVisible =
+        KKEditorStoredBool(kEditorRightPanelVisibleKey, YES);
+    // Compact is an INSTANCE default, not a shared UI preference. The host
+    // supplies the instance UUID after constructing the view, at which point
+    // setEditorStatePersistenceKey: restores that instance's prior choice.
+    _editorCompactMode = YES;
     [self _buildUI];
     [self _refresh];
   }
@@ -258,16 +310,6 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _centeredArea.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:_centeredArea];
 
-  _hintLabel = [NSTextField
-      labelWithString:KKLoc(@"No animated properties",
-                            @"Empty state: no animated properties.")];
-  _hintLabel.translatesAutoresizingMaskIntoConstraints = NO;
-  _hintLabel.font = [NSFont systemFontOfSize:KKFontSizeSM
-                                      weight:NSFontWeightRegular];
-  _hintLabel.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.4];
-  _hintLabel.alignment = NSTextAlignmentCenter;
-  [_centeredArea addSubview:_hintLabel];
-
   [NSLayoutConstraint activateConstraints:@[
     [_laneStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_laneStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
@@ -297,11 +339,6 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     [_centeredArea.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
     [_centeredArea.topAnchor constraintEqualToAnchor:_laneStack.bottomAnchor],
     [_centeredArea.bottomAnchor constraintEqualToAnchor:footerRow.topAnchor],
-
-    [_hintLabel.centerXAnchor
-        constraintEqualToAnchor:_centeredArea.centerXAnchor],
-    [_hintLabel.centerYAnchor
-        constraintEqualToAnchor:_centeredArea.centerYAnchor],
   ]];
 
   _basicGraph =
@@ -309,9 +346,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                                                  timeline:_timeline];
   _basicGraph.translatesAutoresizingMaskIntoConstraints = NO;
   _basicGraph.hidden = YES;
-  [_centeredArea addSubview:_basicGraph
-                 positioned:NSWindowBelow
-                 relativeTo:_hintLabel];
+  [_centeredArea addSubview:_basicGraph];
   [NSLayoutConstraint activateConstraints:@[
     [_basicGraph.leadingAnchor
         constraintEqualToAnchor:_centeredArea.leadingAnchor],
@@ -341,7 +376,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   };
   _basicGraph.onScrub = ^(double frac) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onScrub)
+    if (!s)
+      return;
+    [s _previewOpenConstantsAtFraction:frac];
+    if (s->_onScrub)
       s->_onScrub(frac);
   };
   _basicGraph.onZoomChanged = ^(BOOL zoomed) {
@@ -373,6 +411,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       };
   _basicGraph.onRequestClosePopover = ^{
     __strong typeof(weakSelf) s = weakSelf;
+    [s _closeEditorPanel];
     if (s->_openContentPopover.isShown)
       [s->_openContentPopover close];
   };
@@ -385,12 +424,21 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _advancedGraph.hidden = YES;
   _advancedGraph.onKeyposeLayerActivated = ^(NSString *layerKey) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onKeyposeLayerActivated)
+    if (!s)
+      return;
+    // Landing on a keypose SELECTS its owner, kit-side: the dropdowns
+    // (Animated, filter) pre-select from `activeLayerKey`, so clicking entry
+    // 2's keypose and then opening a dropdown lands on entry 2's page. Stored
+    // before the host callback so a host that re-drives us mid-callback already
+    // sees the new owner.
+    [s setActiveLayerKey:layerKey];
+    KKLogDebug(@"[Keypose] activate layer %@ from lanes-view (advanced), "
+               @"host=%d",
+               layerKey, (int)(s->_onKeyposeLayerActivated != nil));
+    if (s->_onKeyposeLayerActivated)
       s->_onKeyposeLayerActivated(layerKey);
   };
-  [_centeredArea addSubview:_advancedGraph
-                 positioned:NSWindowBelow
-                 relativeTo:_hintLabel];
+  [_centeredArea addSubview:_advancedGraph];
   [NSLayoutConstraint activateConstraints:@[
     [_advancedGraph.leadingAnchor
         constraintEqualToAnchor:_centeredArea.leadingAnchor],
@@ -436,7 +484,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   };
   _advancedGraph.onScrub = ^(double frac) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onScrub)
+    if (!s)
+      return;
+    [s _previewOpenConstantsAtFraction:frac];
+    if (s->_onScrub)
       s->_onScrub(frac);
   };
   _advancedGraph.onGapPopover = KKMakeGapForwarder(
@@ -463,6 +514,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       };
   _advancedGraph.onRequestClosePopover = ^{
     __strong typeof(weakSelf) s = weakSelf;
+    [s _closeEditorPanel];
     if (s->_openContentPopover.isShown)
       [s->_openContentPopover close];
   };
@@ -470,7 +522,12 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _basicGraph.onHoldModulationPopover = KKMakeHoldForwarder(self);
   _basicGraph.onKeyposeLayerActivated = ^(NSString *layerKey) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onKeyposeLayerActivated)
+    if (!s)
+      return;
+    [s setActiveLayerKey:layerKey]; // see the Advanced forwarder above
+    KKLogDebug(@"[Keypose] activate layer %@ from lanes-view (basic), host=%d",
+               layerKey, (int)(s->_onKeyposeLayerActivated != nil));
+    if (s->_onKeyposeLayerActivated)
       s->_onKeyposeLayerActivated(layerKey);
   };
 }
@@ -482,25 +539,52 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 - (void)_applyLaneFilterHidden:(NSSet<NSString *> *)hidden {
   [_advancedGraph applyHiddenLaneLabels:hidden];
   KKTimeline *gt = [self _graphTimeline];
-  NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(gt.lanes, nil);
+  NSSet<NSString *> *condVisible = KKConditionalVisibleLaneKeys(gt.lanes, nil);
   NSInteger optedIn = 0;
   for (KKLane *l in gt.lanes)
-    if (l.enabled && [condVisible containsObject:l.label])
+    if (l.enabled && [condVisible containsObject:l.key])
       optedIn++;
   BOOL anyOptedIn = optedIn > 0;
-  BOOL showAdvanced = anyOptedIn && _activeTab == 1;
   BOOL allFiltered =
-      showAdvanced && optedIn >= 2 && (NSInteger)hidden.count >= optedIn;
-  _advancedGraph.hidden = !showAdvanced || allFiltered;
-  if (!anyOptedIn)
-    _hintLabel.stringValue = KKLoc(@"No animated properties",
-                                   @"Empty state: no animated properties.");
-  else if (allFiltered)
-    _hintLabel.stringValue =
-        KKLoc(@"All lanes hidden",
-              @"Empty state: every animated lane is hidden by the filter bar.");
-  _hintLabel.hidden = anyOptedIn && !allFiltered;
+      _activeTab == 1 && optedIn >= 2 && (NSInteger)hidden.count >= optedIn;
+  // The active tab's graph stays visible even when empty so its scrub ruler is
+  // always usable (drag the playhead with a popover open); the empty-state
+  // message is drawn inside the track area instead of a separate centered
+  // label. The inactive tab's graph hides.
+  _advancedGraph.hidden = _activeTab != 1;
+  _basicGraph.hidden = _activeTab != 0;
+  NSString *noAnim =
+      KKLoc(@"No animated properties", @"Empty state: no animated properties.");
+  _advancedGraph.emptyMessage =
+      !anyOptedIn
+          ? noAnim
+          : (allFiltered ? KKLoc(@"All lanes hidden",
+                                 @"Empty state: every animated lane is hidden "
+                                 @"by the filter bar.")
+                         : nil);
+  _basicGraph.emptyMessage = anyOptedIn ? nil : noAnim;
+}
+
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes {
+  _availableLanes = [availableLanes copy];
+  // Re-seed _timeline so a newly source-derived lane (e.g. a shader directive's
+  // lane) materializes as a constant carrying the template's build-time
+  // defaults
+  // - its aspect lock, auto-sized labels, etc. This restores the post-seed
+  // invariant that _timeline holds every available property; without it the new
+  // lane enters _timeline later via a route that drops those defaults, so e.g.
+  // an aspect-linkable lane reads UNLOCKED until the user first interacts.
+  // Present lanes keep their user state (the present branch preserves it).
+  _timeline = [self _timelineSeededFrom:_timeline];
+  // The graphs hold their own template copies (taken at init) for popover
+  // metadata / display-name resolution - push the fresh set down or a
+  // directive rename keeps showing the old name in the keypose / boundary
+  // popovers while every other surface has moved on.
+  [_basicGraph updateAvailableLanes:_availableLanes];
+  [_advancedGraph updateAvailableLanes:_availableLanes];
+  // Rebuild the visible rows from the new template set (same path the pill
+  // visibleWhen toggles use), so source-derived lanes appear/disappear live.
+  [self _refresh];
 }
 
 - (void)_refresh {
@@ -510,23 +594,23 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // one. The graph fills the content area whenever >=1 property is animated AND
   // visible.
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   // The graphs render/gate off the all-layers graphTimeline (when set), so the
   // graph fills the area whenever ANY layer animates a property - never empties
   // just because the selected layer (which drives the dropdown below) doesn't.
   KKTimeline *gt = [self _graphTimeline];
   NSSet<NSString *> *condVisibleGraph =
-      KKConditionalVisibleLaneLabels(gt.lanes, nil);
+      KKConditionalVisibleLaneKeys(gt.lanes, nil);
   NSMutableArray<KKLane *> *optedIn = [NSMutableArray array];
   for (KKLane *l in gt.lanes)
-    if (l.enabled && [condVisibleGraph containsObject:l.label])
+    if (l.enabled && [condVisibleGraph containsObject:l.key])
       [optedIn addObject:l];
   BOOL anyOptedIn = optedIn.count > 0;
-  BOOL showBasic = anyOptedIn && _activeTab == 0;
-  BOOL showAdvanced = anyOptedIn && _activeTab == 1;
-  _basicGraph.hidden = !showBasic;
   [_basicGraph applyTimeline:gt];
   [_advancedGraph applyTimeline:gt];
+  // Graph visibility (active tab always shown, even with no lanes, so its ruler
+  // stays scrubbable) and the empty-state messages are set in
+  // _applyLaneFilterHidden below.
 
   // Shown in Advanced when there are >=2 lanes worth filtering; the bar's
   // hidden set drives which rows the graph draws.
@@ -534,8 +618,23 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // Scope + size the filter checklist like the Animated dropdown: per active
   // layer (multi-owner), matching the companion layer panel's height.
   _laneFilterBar.minimumPopoverHeight = self.minimumManagePopoverHeight;
-  _laneFilterBar.activeLayerKey = _activeLayerKey;
-  BOOL showFilter = showAdvanced && optedIn.count >= 2;
+  // The checklist gets its own layer nav only when THIS view's timeline is the
+  // multi-owner one (Mirage's shader rack: every entry's lanes in `_timeline`).
+  // A host that hands us one owner's timeline and merges the rest into
+  // `graphTimeline` (Canvas) already drives owner selection from its own layer
+  // list, so it keeps the bar's external scoping and sees no extra nav. Set
+  // BEFORE activeLayerKey - that setter branches on it.
+  _laneFilterBar.layerNavEnabled =
+      !_graphTimeline && KKDistinctLayerKeyCount(_timeline.lanes) > 1;
+  // With its own nav the bar needs the owner the DROPDOWN should open on, which
+  // is the host's live selection when it publishes one - the same resolution
+  // the Animated dropdown uses, so the two open on the same entry. Without the
+  // nav it is the bar's external scope, which is our stored key.
+  _laneFilterBar.activeLayerKey =
+      _laneFilterBar.layerNavEnabled
+          ? ([self _hostSelectedLayerKeyIn:optedIn] ?: _activeLayerKey)
+          : _activeLayerKey;
+  BOOL showFilter = anyOptedIn && _activeTab == 1 && optedIn.count >= 2;
   _laneFilterBar.hidden = !showFilter;
   // Graph visibility + empty-state hint (also driven live by the bar's
   // onVisibilityChanged, which doesn't run a full _refresh).
@@ -591,11 +690,14 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       [(id<KKPopoverExtraRow>)row popoverDidRefresh];
   }
 
+  // Matched on `key` (identity) but shown by `displayName`: the trigger's text
+  // is display-only, so pushing keys here surfaced raw uniform names
+  // ("uRadius, uCrop") in the Animated summary.
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in [self _ownerScopedAvailableLanes])
-    if ([self _isAnimatableLabel:tmpl.label] &&
-        [condVisible containsObject:tmpl.label])
-      [opted addObject:tmpl.label];
+    if ([self _isAnimatableLabel:tmpl.key] &&
+        [condVisible containsObject:tmpl.key])
+      [opted addObject:tmpl.displayName.length ? tmpl.displayName : tmpl.key];
   _dropdownTrigger.selectedLabels = opted;
   // Hierarchical summary (layer > group > lane | …) from the opted-in KKLanes,
   // which carry the layerKey/categoryKey grouping; "All" only when nothing is
@@ -618,51 +720,22 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     // every refresh would flicker rows mid-toggle and is pure overhead for
     // single-owner plugins. The checked boxes always re-sync (cheap).
     NSArray<KKLane *> *scoped = [self _manageVisibleLanes];
-    NSArray<NSString *> *newLabels = [scoped valueForKey:@"label"];
+    // Keys, not labels: -currentLaneLabels returns keys, and a dynamic lane's
+    // label ("Ramp") never equals its key ("uRamp") - comparing the two kinds
+    // made this guard always miss, rebuilding on every refresh.
+    NSArray<NSString *> *newLabels = [scoped valueForKey:@"key"];
     if (![newLabels isEqualToArray:[_openManageView currentLaneLabels]])
       [_openManageView setLanes:scoped];
     [_openManageView updateCheckedLabels:[self _optedInLabelsSet]];
   }
-  // Only the constants popover tracks the un-opted set. A boundary-value
-  // popover has caller-supplied display lanes; clobbering them here is what
-  // made Radius (the un-opted lane) replace Crop after a crop edit.
-  if (_openStaticView && !_openStaticIsBoundary) {
-    [_openStaticView updateUnoptedLanes:[self _unoptedLanes]];
-    // Re-apply per-lane state (values + smooth + LINK) to the existing
-    // constants rows from the current selected-layer timeline. A same-structure
-    // selection change (e.g. drawing another constant-stroke path) reuses the
-    // rows and previously never re-read aspectLinked, so the link toggle + its
-    // coupling stayed stale from the prior layer. applyValues is focus-safe
-    // (skips an in-progress field edit), so this won't clobber active editing.
-    [_openStaticView rebindLanes:_timeline.lanes];
-  }
-
-  // A boundary/value popover is built from a snapshot at open; an external
-  // timeline change (cmd-Z / redo) reaches the graphs but not the popover, so
-  // re-drive it from the active graph at its open fraction - the active/Animate
-  // row split and values rebuild from the new state (e.g. cmd-Z re-adding a
-  // keypose flips its row from "+ No keypose here" back to editable).
-  // Suppressed briefly after a popover edit so the host's echo write doesn't
-  // rebuild rows mid-interaction (add/remove already refresh synchronously).
-  if (_openStaticView && _openStaticIsBoundary && _openContentPopover.isShown &&
-      anyOptedIn &&
-      [NSDate timeIntervalSinceReferenceDate] >=
-          _boundaryRedriveSuppressUntil) {
-    double f = _openStaticBoundaryFraction;
-    // A timeline re-feed re-scopes the open popover to the SAME layer it's
-    // already on - it must not fire the activation callback (which would drive
-    // the host selection back to that layer, ping-ponging against a selection
-    // the user just changed). Only a user graph-click/nav moves selection.
-    if (_activeTab == 1)
-      [_advancedGraph requestValuePopoverAtFraction:f fireActivation:NO];
-    else
-      [_basicGraph requestValuePopoverAtFraction:f fireActivation:NO];
-  }
+  // Refresh whichever static-values popover is open (constants OR keypose)
+  // through the single mode-dispatched entry point.
+  [self _refreshOpenStaticPopoverAnyOptedIn:anyOptedIn];
 }
 
 - (nullable KKLane *)_laneForLabel:(NSString *)label {
   for (KKLane *lane in _timeline.lanes)
-    if ([lane.label isEqualToString:label])
+    if ([lane.key isEqualToString:label])
       return lane;
   return nil;
 }
@@ -671,19 +744,19 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableSet<NSString *> *present =
       [NSMutableSet setWithCapacity:_timeline.lanes.count];
   for (KKLane *l in _timeline.lanes)
-    if (l.label)
-      [present addObject:l.label];
+    if (l.key)
+      [present addObject:l.key];
   NSMutableArray<KKLane *> *out =
       [NSMutableArray arrayWithCapacity:_availableLanes.count];
   for (KKLane *t in _availableLanes)
-    if ([present containsObject:t.label])
+    if ([present containsObject:t.key])
       [out addObject:t];
   return out;
 }
 
 - (nullable KKLane *)_templateForLabel:(NSString *)label {
   for (KKLane *tmpl in _availableLanes)
-    if ([tmpl.label isEqualToString:label])
+    if ([tmpl.key isEqualToString:label])
       return tmpl;
   return nil;
 }
@@ -700,7 +773,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   for (KKLane *tmpl in _availableLanes) {
     NSInteger presentIdx = NSNotFound;
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-      if ([lanes[i].label isEqualToString:tmpl.label]) {
+      if ([lanes[i].key isEqualToString:tmpl.key]) {
         presentIdx = i;
         break;
       }
@@ -709,14 +782,74 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       // template, not user-editable). Re-assert them so lanes from older
       // blobs that didn't serialize these still render correctly.
       KKLane *fixed = [lanes[presentIdx] copy];
-      fixed.valueType = tmpl.valueType;
-      fixed.componentMin = tmpl.componentMin;
-      fixed.componentMax = tmpl.componentMax;
-      fixed.componentUnits = tmpl.componentUnits;
-      fixed.componentLabels = tmpl.componentLabels;
-      fixed.componentLabelColors = tmpl.componentLabelColors;
-      fixed.componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
-      [fixed kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
+      // Capture the OLD shape before the template overwrites the metadata:
+      // arity comes from the stored values, which kkApplyTemplateCanonicalFrom
+      // does not touch, but valueType it does.
+      KKLaneValueType oldType = fixed.valueType;
+      NSUInteger oldArity = fixed.keyposes.firstObject.values.count;
+      // One call re-asserts every template-canonical + picker-metadata field
+      // (value type, bounds, labels/colors, aspect linkability, integer
+      // display, code-lane static config...) - the descriptor table's
+      // TemplateCanonical role IS the definition of "not user state".
+      [fixed kkApplyTemplateCanonicalFrom:tmpl];
+      // Layer identity (the Advanced view's outer grouping level) is ASSEMBLY
+      // metadata: which owner a lane was built for, decided by the plugin every
+      // time it derives its templates. It is serialized so a blob round-trip
+      // keeps it, but a blob written before the plugin grew a layer level - or
+      // by a lane the seeding path minted - carries none, so re-assert it from
+      // the template. Only when the template declares one: a plugin whose
+      // templates have no layerKey (every single-owner plugin) is untouched,
+      // and one whose timeline lanes carry a layer the templates don't know
+      // about (Canvas's per-layer minting) keeps its own.
+      if (tmpl.layerKey.length) {
+        fixed.layerKey = tmpl.layerKey;
+        fixed.layerLabel = tmpl.layerLabel;
+        fixed.layerSymbol = tmpl.layerSymbol;
+      }
+      // A lane is matched by KEY, and in Mirage the key is the shader's
+      // uniform name - so switching template can land a DIFFERENT control on
+      // the same name (Plasma's `Scale`, a 1-component float, onto Magic
+      // Move's `Scale`, a vec2). The metadata above is now the new template's
+      // while the keyposes are still the old control's, which is how a vec2
+      // Scale ended up reading "100%" with an empty second field.
+      //
+      // Reset only when the SHAPE changed - component count or value type.
+      // Anything else (a widened max, renamed labels, new units) keeps the
+      // user's animation: editing your own shader's `max=` must not silently
+      // destroy its keyframes. Values that no longer fit the new bounds are
+      // clamped rather than dropped.
+      NSUInteger newArity = tmpl.keyposes.firstObject.values.count;
+      BOOL shapeChanged =
+          (oldType != tmpl.valueType) ||
+          (oldArity > 0 && newArity > 0 && oldArity != newArity);
+      if (shapeChanged && tmpl.keyposes.count) {
+        fixed.keyposes = [[NSArray alloc] initWithArray:tmpl.keyposes
+                                              copyItems:YES];
+      } else if (fixed.keyposes.count) {
+        NSMutableArray<KKKeyPose *> *clamped =
+            [NSMutableArray arrayWithCapacity:fixed.keyposes.count];
+        for (KKKeyPose *kp in fixed.keyposes) {
+          NSArray<NSNumber *> *v =
+              KKLaneClampToComponentRange(fixed, kp.values);
+          if (v == kp.values || [v isEqualToArray:kp.values]) {
+            [clamped addObject:kp];
+            continue;
+          }
+          KKKeyPose *fixedKp = [kp copy];
+          fixedKp.values = v;
+          [clamped addObject:fixedKp];
+        }
+        fixed.keyposes = clamped;
+      }
+      // codeString is user data (a code lane's text), so keep the saved value;
+      // only fall back to the template default when it's missing (older blob).
+      if (!fixed.codeString.length)
+        fixed.codeString = tmpl.codeString;
+      // codeTabs (Common / Buffer A sections) are user data too; keep the saved
+      // sections, falling back to the template's tab scaffold for a blob that
+      // predates them.
+      if (fixed.codeTabs.count == 0)
+        fixed.codeTabs = tmpl.codeTabs;
       lanes[presentIdx] = fixed;
       continue;
     }
@@ -728,7 +861,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     // declare it explicitly with `ownerScoped`.
     if (tmpl.oscEditedOnly || tmpl.ownerScoped)
       continue;
-    KKLane *lane = [KKLane laneWithLabel:tmpl.label];
+    KKLane *lane = [KKLane laneWithKey:tmpl.key label:tmpl.label];
     lane.valueType = tmpl.valueType;
     lane.componentMin = tmpl.componentMin;
     lane.componentMax = tmpl.componentMax;
@@ -745,11 +878,40 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.spatialCurvable = tmpl.spatialCurvable;
     lane.integerValued = tmpl.integerValued;
     lane.isToggle = tmpl.isToggle;
+    lane.layerKey = tmpl.layerKey; // owner grouping (see the re-assert above)
+    lane.layerLabel = tmpl.layerLabel;
+    lane.layerSymbol = tmpl.layerSymbol;
+    lane.codeString = tmpl.codeString; // seed a code lane with its default text
+    lane.codeTabs = tmpl.codeTabs; // any added extra sections (empty default)
+    lane.codeTabCatalog = tmpl.codeTabCatalog; // the "+" menu catalog
+    lane.codeValidator = tmpl.codeValidator;
+    lane.codeValidationComposer = tmpl.codeValidationComposer;
+    lane.codeFormatter = tmpl.codeFormatter;
+    lane.codeSchemaProvider = tmpl.codeSchemaProvider;
+    lane.codeCompletionProvider = tmpl.codeCompletionProvider;
+    lane.codeDirectiveKeywords = tmpl.codeDirectiveKeywords;
+    lane.codeDirectiveKinds = tmpl.codeDirectiveKinds;
+    lane.codeSavable = tmpl.codeSavable;
+    lane.codeSaveCategories = tmpl.codeSaveCategories;
+    lane.codeSaveNamePlaceholder = tmpl.codeSaveNamePlaceholder;
+    lane.codeHidesTitle = tmpl.codeHidesTitle;
     [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
-    lane.enabled = NO; // constant until the dropdown makes it animatable
-    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                          values:[self _defaultValuesForLabel:
-                                                           tmpl.label]]];
+    // A template whose default MOVES - more than one keypose - is declaring a
+    // CURVE, not a constant, and Mirage's `// #progress` identity ramp is the
+    // whole reason the lane exists. Minting the usual single keypose from the
+    // template's first value flattens that curve to its start (0 for the ramp),
+    // so the shader reads 0 on every frame and never advances. Keep the whole
+    // template curve and start animatable, which is what a moving default is.
+    if (tmpl.keyposes.count > 1) {
+      lane.enabled = YES;
+      lane.keyposes = [[NSArray alloc] initWithArray:tmpl.keyposes
+                                           copyItems:YES];
+    } else {
+      lane.enabled = NO; // constant until the dropdown makes it animatable
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:[self _defaultValuesForLabel:
+                                                             tmpl.key]]];
+    }
     [lanes addObject:lane];
   }
   // Display order: the user's drag-to-reorder list if set, else the plugin's
@@ -766,19 +928,19 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableDictionary<NSString *, NSNumber *> *tmplRank =
       [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
   for (NSInteger i = 0; i < (NSInteger)_availableLanes.count; i++)
-    if (!tmplRank[_availableLanes[i].label])
-      tmplRank[_availableLanes[i].label] = @(i);
+    if (!tmplRank[_availableLanes[i].key])
+      tmplRank[_availableLanes[i].key] = @(i);
   [lanes sortUsingComparator:^NSComparisonResult(KKLane *a, KKLane *b) {
-    NSNumber *ra = rank[a.label];
-    NSNumber *rb = rank[b.label];
+    NSNumber *ra = rank[a.key];
+    NSNumber *rb = rank[b.key];
     if (ra && rb)
       return [ra compare:rb];
     if (ra)
       return NSOrderedAscending;
     if (rb)
       return NSOrderedDescending;
-    NSNumber *ta = tmplRank[a.label];
-    NSNumber *tb = tmplRank[b.label];
+    NSNumber *ta = tmplRank[a.key];
+    NSNumber *tb = tmplRank[b.key];
     if (ta && tb)
       return [ta compare:tb];
     if (ta)
@@ -801,7 +963,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableSet<NSString *> *set = [NSMutableSet set];
   for (KKLane *lane in _timeline.lanes)
     if (lane.enabled)
-      [set addObject:lane.label];
+      [set addObject:lane.key];
   return [set copy];
 }
 
@@ -812,29 +974,50 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableDictionary<NSString *, KKLane *> *tmplByLabel =
       [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
   for (KKLane *tmpl in _availableLanes)
-    tmplByLabel[tmpl.label] = tmpl;
+    tmplByLabel[tmpl.key] = tmpl;
   // Iterate _timeline.lanes, NOT _availableLanes: _timeline.lanes is already in
   // display order (sorted by paramOrder in _timelineSeededFrom:) and post-seed
   // contains every available property, so the constants popover inherits the
   // same parameter ordering as the timeline and reorder list.
   NSMutableArray<KKLane *> *result = [NSMutableArray array];
   for (KKLane *tlLane in _timeline.lanes) {
-    KKLane *tmpl = tmplByLabel[tlLane.label];
+    KKLane *tmpl = tmplByLabel[tlLane.key];
     if (!tmpl || tlLane.enabled)
       continue; // only available, non-animatable (constant) properties
-    KKLane *lane = tlLane;
-    // aspectLinkable is template metadata (an older persisted blob may lack
-    // it), so source it from the template like the keypose popover does -
-    // otherwise the constants popover hides the link glyph. aspectLinked is
-    // user state and stays the lane's own. Copy so the shared persisted lane
-    // isn't mutated.
-    if ((tmpl.aspectLinkable && !lane.aspectLinkable) ||
-        (tmpl.integerValued && !lane.integerValued)) {
-      KKLane *l = [lane copy];
-      l.aspectLinkable = tmpl.aspectLinkable;
-      l.integerValued = tmpl.integerValued;
-      lane = l;
-    }
+    // Host scoping (Mirage's shader rack): the timeline legitimately carries
+    // every chained shader's controls - the graphs show them all - but the
+    // constants editor is about the ONE the user has selected in the strip.
+    // Filtering here rather than at the presenter covers the in-place refresh
+    // (`updateUnoptedLanes:`) and the Constants button's own availability too.
+    // nil (every other plugin, and Mirage before it is racked) = no scoping.
+    if (_constantsLaneFilter && !_constantsLaneFilter(tlLane))
+      continue;
+    // Display metadata (paletteLockable / paletteGeneratorBar / decoupled
+    // sliderMax / visibleWhen gating / aspect / integer / component bounds) is
+    // template-defined and NOT persisted in the timeline blob, so re-inject it
+    // from the template here - otherwise a constant lane rebuilt from the blob
+    // (or a source-derived lane, e.g. a shader `// #color` swatch that appeared
+    // after a directive edit) loses its lock swatches, generator bar, decoupled
+    // slider cap, and its count-gated visibility. aspectLinked is user state
+    // and stays the lane's own. Copy so the shared persisted lane isn't
+    // mutated.
+    KKLane *lane = [tlLane copy];
+    [lane kkApplyPickerMetadataFrom:tmpl];
+    lane.aspectLinkable = tmpl.aspectLinkable;
+    // ...but a lane that was NOT linkable before has no user state to keep: it
+    // never had the toggle, so its stored NO is a leftover from whatever the
+    // key used to mean. Lanes are reused by key, so a shader edit that turns a
+    // float `uScale` into a vec2 lands here and would otherwise start unlocked
+    // however the template asks. Only re-inject in that case - a lane that was
+    // already linkable keeps whatever the user set.
+    if (tmpl.aspectLinkable && !tlLane.aspectLinkable)
+      lane.aspectLinked = tmpl.aspectLinked;
+    lane.autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
+    lane.integerValued = tmpl.integerValued;
+    if (tmpl.componentMin.count)
+      lane.componentMin = tmpl.componentMin;
+    if (tmpl.componentMax.count)
+      lane.componentMax = tmpl.componentMax;
     [result addObject:lane];
   }
   return result;
@@ -855,31 +1038,32 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 - (NSArray<NSString *> *)orderedParamLabels {
   NSMutableSet<NSString *> *avail = [NSMutableSet set];
   for (KKLane *l in _availableLanes)
-    [avail addObject:l.label];
+    [avail addObject:l.key];
   // Mode-gated lanes drop out of the reorder list too (e.g. no "Gradient" row
   // while Mode = Solid). Computed over the timeline so the controller resolves.
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   // _timeline.lanes is already in display order (sorted in
   // _timelineSeededFrom:) and - post-seed - contains every available property,
   // so its order is the source of truth for the reorder list.
   NSMutableArray<NSString *> *out = [NSMutableArray array];
   for (KKLane *l in _timeline.lanes)
-    if ([avail containsObject:l.label] && ![out containsObject:l.label] &&
-        [condVisible containsObject:l.label])
-      [out addObject:l.label];
+    if ([avail containsObject:l.key] && ![out containsObject:l.key] &&
+        [condVisible containsObject:l.key])
+      [out addObject:l.key];
   for (KKLane *l in _availableLanes)
-    if (![out containsObject:l.label] && [condVisible containsObject:l.label])
-      [out addObject:l.label];
+    if (![out containsObject:l.key] && [condVisible containsObject:l.key])
+      [out addObject:l.key];
   return out;
 }
 
 - (NSArray<NSString *> *)allOrderedParamLabels {
   // Every available lane label, sorted the same way _timelineSeededFrom: sorts
-  // lanes (paramOrder first, then template order, then alphabetical) but WITHOUT
-  // the per-timeline / conditional-visibility filtering orderedParamLabels does.
-  // The reorder popover edits one global ordering, so it must list the full
-  // parameter set even when the selected layer doesn't carry those lanes.
+  // lanes (paramOrder first, then template order, then alphabetical) but
+  // WITHOUT the per-timeline / conditional-visibility filtering
+  // orderedParamLabels does. The reorder popover edits one global ordering, so
+  // it must list the full parameter set even when the selected layer doesn't
+  // carry those lanes.
   NSArray<NSString *> *order = _timeline.paramOrder;
   NSMutableDictionary<NSString *, NSNumber *> *rank =
       [NSMutableDictionary dictionaryWithCapacity:order.count];
@@ -891,7 +1075,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableArray<NSString *> *labels =
       [NSMutableArray arrayWithCapacity:_availableLanes.count];
   for (NSInteger i = 0; i < (NSInteger)_availableLanes.count; i++) {
-    NSString *label = _availableLanes[i].label;
+    NSString *label = _availableLanes[i].key;
     if (!tmplRank[label])
       tmplRank[label] = @(i);
     if (![labels containsObject:label])
@@ -942,6 +1126,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   [self _refresh];
 }
 
+- (void)setLinkSelfUUID:(NSString *)uuid {
+  _linkSelfUUID = [uuid copy];
+}
+
 // A graph (Basic or Advanced) committed an edit. In multi-owner mode the edit
 // is on the all-layers graphTimeline, so route it to onGraphTimelineMutated and
 // let the host split it back per owner (then reload re-feeds both timelines);
@@ -963,7 +1151,34 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 // The lane set the GRAPHS render/edit: the multi-owner graphTimeline when set,
 // else the single-owner _timeline.
 - (KKTimeline *)_graphTimeline {
-  return _graphTimeline ?: _timeline;
+  KKTimeline *gt = _graphTimeline ?: _timeline;
+  // Single-owner: drop animated lanes the plugin no longer declares (e.g. a
+  // shader whose `// #color` directive was removed) so the timing graph, the
+  // opted-in count, the dropdown AND the "No animated properties" empty state
+  // all agree. A constant already hides via _unoptedLanes' template filter, but
+  // an animated lane lives in _timeline and would otherwise linger. Multi-owner
+  // (Canvas) merges OTHER owners' lanes into the `_graphTimeline` ivar, so skip
+  // it there; an empty template set is a transient pre-seed state.
+  if (!_graphTimeline && _availableLanes.count) {
+    // Keyed on `key`, NOT `label`: identity lives on the key, and a dynamic
+    // lane's key is its raw uniform name while its label is the display name.
+    // Collecting labels here and testing them against `l.key` matched only for
+    // lanes whose key happens to equal their label (Speed, Grain), so every
+    // shader-declared lane was filtered out of the graph timeline - taking the
+    // graph, the opted-in count, the dropdown and the empty state with it.
+    NSSet<NSString *> *declared =
+        [NSSet setWithArray:[_availableLanes valueForKey:@"key"]];
+    NSMutableArray<KKLane *> *kept = [NSMutableArray array];
+    for (KKLane *l in gt.lanes)
+      if ([declared containsObject:l.key])
+        [kept addObject:l];
+    if (kept.count != gt.lanes.count) {
+      KKTimeline *filtered = [gt copy];
+      filtered.lanes = kept;
+      gt = filtered;
+    }
+  }
+  return gt;
 }
 
 - (void)setGraphTimeline:(KKTimeline *)graphTimeline {
@@ -1002,6 +1217,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   return _activeLayerKey;
 }
 
+- (void)setKeyposeStrictCoTimed:(BOOL)keyposeStrictCoTimed {
+  _keyposeStrictCoTimed = keyposeStrictCoTimed;
+  // Both graphs open keypose popovers, so both need the host's rule.
+  _basicGraph.keyposeStrictCoTimed = keyposeStrictCoTimed;
+  _advancedGraph.keyposeStrictCoTimed = keyposeStrictCoTimed;
+}
+
 - (void)setDropdownLayerTitles:(NSArray<NSString *> *)dropdownLayerTitles {
   _dropdownTrigger.layerTitles = dropdownLayerTitles;
   [_dropdownTrigger setNeedsDisplay:YES];
@@ -1032,10 +1254,24 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 - (void)setPlayheadFraction:(double)frac {
   [_basicGraph setPlayheadFraction:frac];
   [_advancedGraph setPlayheadFraction:frac];
+  // Keypose popover open + playhead moving: re-request the keypose frame once
+  // the playhead settles, so the preview pings back to the keypose instead of
+  // staying on whatever frame the scrub or playback stopped at.
+  [self _scheduleBoundaryPingBackForPlayheadFraction:frac];
 }
 
 - (double)playheadFraction {
   return _basicGraph.playheadFraction;
+}
+
+- (double)staticPopoverEditFraction {
+  if (_openStaticIsBoundary)
+    return MAX(0.0, MIN(1.0, _openStaticBoundaryFraction));
+  // A constants popover previews at the live playhead, so that is the time its
+  // values are being read at. Negative means the render tick has not pushed a
+  // playhead yet, which reads as the start of the clip.
+  double frac = self.playheadFraction;
+  return frac < 0.0 ? 0.0 : MIN(1.0, frac);
 }
 
 - (void)resetZoom {
@@ -1050,6 +1286,12 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   if (_activeTab == tab)
     return;
   _activeTab = tab;
+  // Basic and Advanced are different timeline UIs - a value/gap popover opened
+  // against one doesn't map cleanly onto the other, so dismiss any open popover
+  // on the switch (which also clears its graph highlight) rather than trying to
+  // re-target it across the two representations.
+  [self _closeEditorPanel];
+  [_openContentPopover close];
   [self _refresh];
   if (_onAccessoryButtonsChanged)
     _onAccessoryButtonsChanged();
@@ -1126,8 +1368,214 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   [_advancedGraph setNeedsDisplay:YES];
 }
 
+// Momentarily reveal Final Cut's own viewer without ending the editing
+// session. Ordering an NSPopover window out triggers its private fade-away
+// presentation state under ViewBridge; ordering it front again reports visible
+// but leaves that presentation layer faded out. Keep it ordered and move the
+// unchanged window off-screen instead, then restore its exact frame.
+- (void)_setCompositionPeekHeld:(BOOL)held keyboard:(BOOL)keyboard {
+  if (keyboard)
+    _compositionPeekKeyHeld = held;
+  else
+    _compositionPeekMouseHeld = held;
+
+  BOOL shouldHide = _compositionPeekKeyHeld || _compositionPeekMouseHeld;
+  if (shouldHide) {
+    if (_compositionPeekWindow)
+      return;
+    NSWindow *window =
+        _openEditorPanel
+            ?: _openContentPopover.contentViewController.view.window;
+    if (!window)
+      return;
+    _compositionPeekWindow = window;
+    _compositionPeekSavedFrame = window.frame;
+    // Persistent editor panels normally clamp every move back inside a visible
+    // screen. Parking one for composition peek is the intentional exception:
+    // suspend that observer until the exact saved frame has been restored.
+    if ([window isKindOfClass:[KKFloatingPanel class]]) {
+      ((KKFloatingPanel *)window).keepsEntireFrameVisible = NO;
+      _compositionPeekSuspendedFrameClamp = YES;
+    }
+    NSRect parked = _compositionPeekSavedFrame;
+    parked.origin = NSMakePoint(-100000.0 - parked.size.width,
+                                -100000.0 - parked.size.height);
+    [window setFrame:parked display:NO animate:NO];
+    return;
+  }
+
+  NSWindow *window = _compositionPeekWindow;
+  if (window)
+    [window setFrame:_compositionPeekSavedFrame display:YES animate:NO];
+  if (_compositionPeekSuspendedFrameClamp &&
+      [window isKindOfClass:[KKFloatingPanel class]])
+    ((KKFloatingPanel *)window).keepsEntireFrameVisible = YES;
+  _compositionPeekSuspendedFrameClamp = NO;
+  _compositionPeekWindow = nil;
+  _compositionPeekSavedFrame = NSZeroRect;
+}
+
+- (void)_cancelCompositionPeek {
+  _compositionPeekMouseHeld = NO;
+  _compositionPeekKeyHeld = NO;
+  NSWindow *window = _compositionPeekWindow;
+  if (window)
+    [window setFrame:_compositionPeekSavedFrame display:YES animate:NO];
+  if (_compositionPeekSuspendedFrameClamp &&
+      [window isKindOfClass:[KKFloatingPanel class]])
+    ((KKFloatingPanel *)window).keepsEntireFrameVisible = YES;
+  _compositionPeekSuspendedFrameClamp = NO;
+  _compositionPeekWindow = nil;
+  _compositionPeekSavedFrame = NSZeroRect;
+}
+
+- (BOOL)editorSidebarVisible {
+  return _editorSidebarVisible;
+}
+
+- (void)_setEditorSidebarVisible:(BOOL)visible {
+  if (_editorSidebarVisible == visible)
+    return;
+  _editorSidebarVisible = visible;
+  KKScopedDefaultWrite(@(visible), kEditorSidebarVisibleKey,
+                       kEditorLayoutScope);
+  if (_openStaticView)
+    [_openStaticView setSidebarVisible:visible];
+  if (!_openEditorPanel || !_openEditorSidebarKind.length)
+    return;
+  KKPostStaticValuesSidebarVisibility(
+      _openEditorPanel, _openEditorContentView, self, _openEditorSidebarKind,
+      _openEditorSidebarIsBoundary, _openEditorSidebarFraction, visible);
+}
+
+- (BOOL)editorRightPanelVisible {
+  return _editorRightPanelVisible;
+}
+
+- (void)setEditorRightPanelToggleAvailable:(BOOL)available {
+  if (_editorRightPanelToggleAvailable == available)
+    return;
+  _editorRightPanelToggleAvailable = available;
+  [_openStaticView setRightPanelToggleVisible:available];
+}
+
+- (void)_setEditorRightPanelVisible:(BOOL)visible {
+  if (_editorRightPanelVisible == visible)
+    return;
+  _editorRightPanelVisible = visible;
+  KKScopedDefaultWrite(@(visible), kEditorRightPanelVisibleKey,
+                       kEditorLayoutScope);
+  if (_openStaticView)
+    [_openStaticView setRightPanelVisible:visible];
+  if (self.onEditorRightPanelVisibilityChanged)
+    self.onEditorRightPanelVisibilityChanged(visible);
+}
+
+- (void)_setEditorCompactMode:(BOOL)compact {
+  // Joyride deliberately demonstrates the full mini-viewer. Ignore its
+  // shortcut/button while a guide owns the layout, without touching the
+  // user's persisted compact choice.
+  if (_guideEditorLayoutOverrideActive && compact)
+    return;
+  BOOL changed = _editorCompactMode != compact;
+  _editorCompactMode = compact;
+  if (changed && _editorStatePersistenceKey.length) {
+    NSString *key = [@"timeline.editor.compactMode.instance."
+        stringByAppendingString:_editorStatePersistenceKey];
+    KKScopedDefaultWrite(@(compact), key, kEditorLayoutScope);
+  }
+  if (changed && self.onEditorCompactModeChanged)
+    self.onEditorCompactModeChanged(compact);
+  [self _syncMiniViewerFeedActivity];
+  if (!_openEditorPanel || !_openEditorIsStaticFamily || !_openStaticView)
+    return;
+
+  NSSize current = _openEditorPanel.frame.size;
+  CGFloat anchoredTop = NSMaxY(_openEditorPanel.frame);
+  if (compact && (_editorExpandedSizeBeforeCompact.width <= 0.0 ||
+                  _editorExpandedSizeBeforeCompact.height <= 0.0))
+    _editorExpandedSizeBeforeCompact = current;
+
+  [_openStaticView setCompactMode:compact];
+  _openEditorMiniViewer.activitySuspended =
+      compact && !_editorMiniViewerFramesRequired;
+  _openEditorPanel.minSize = [_openStaticView minimumHostedContentSize];
+
+  NSSize target;
+  if (compact) {
+    target = [_openStaticView naturalHostedContentSize];
+    target.width = current.width;
+  } else if (_editorExpandedSizeBeforeCompact.width > 0.0 &&
+             _editorExpandedSizeBeforeCompact.height > 0.0) {
+    target = _editorExpandedSizeBeforeCompact;
+    _editorExpandedSizeBeforeCompact = NSZeroSize;
+  } else {
+    target = [_openStaticView naturalHostedContentSize];
+    target.width = current.width;
+  }
+  target.width = MAX(target.width, _openEditorPanel.minSize.width);
+  target.height = MAX(target.height, _openEditorPanel.minSize.height);
+  [_openEditorPanel setContentSize:target keepingTopEdgeAt:anchoredTop];
+  [_openStaticView applyHostedContentSize:_openEditorPanel.frame.size];
+  // Reflowing the hosted hierarchy must not become the next toggle's anchor.
+  // Reassert the edge captured before the compact/expanded layout changed.
+  [_openEditorPanel setContentSize:_openEditorPanel.frame.size
+                  keepingTopEdgeAt:anchoredTop];
+}
+
+- (void)setEditorStatePersistenceKey:(NSString *)key {
+  if (_editorStatePersistenceKey == key ||
+      [_editorStatePersistenceKey isEqualToString:key])
+    return;
+  _editorStatePersistenceKey = [key copy];
+  BOOL compact = YES;
+  if (key.length) {
+    NSString *preferenceKey =
+        [@"timeline.editor.compactMode.instance." stringByAppendingString:key];
+    compact = KKEditorStoredBool(preferenceKey, YES);
+  }
+  [self _setEditorCompactMode:compact];
+}
+
+- (void)setMiniViewerRequestPath:(NSString *)path {
+  if (_miniViewerRequestPath == path ||
+      [_miniViewerRequestPath isEqualToString:path])
+    return;
+  _miniViewerRequestPath = [path copy];
+  _publishedMiniViewerFeedActiveValid = NO;
+  [self _syncMiniViewerFeedActivity];
+}
+
+- (BOOL)editorCompactMode {
+  return _editorCompactMode;
+}
+
+- (void)setEditorMiniViewerFramesRequired:(BOOL)required {
+  if (_editorMiniViewerFramesRequired == required)
+    return;
+  _editorMiniViewerFramesRequired = required;
+  _openEditorMiniViewer.activitySuspended = _editorCompactMode && !required;
+  _openEditorMiniViewer.pixelConsumerActive = required;
+  [self _syncMiniViewerFeedActivity];
+}
+
+- (BOOL)editorMiniViewerFramesRequired {
+  return _editorMiniViewerFramesRequired;
+}
+
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {
   _renderMode = mode;
+}
+
+- (void)dealloc {
+  if (_editorKeyMonitor)
+    [NSEvent removeMonitor:_editorKeyMonitor];
+  if (_editorGlobalKeyDownMonitor)
+    [NSEvent removeMonitor:_editorGlobalKeyDownMonitor];
+  if (_editorGlobalKeyUpMonitor)
+    [NSEvent removeMonitor:_editorGlobalKeyUpMonitor];
+  [_staticEditorPanel hidePanel];
+  [_segmentEditorPanel hidePanel];
 }
 
 @end

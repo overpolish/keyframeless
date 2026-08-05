@@ -5,7 +5,20 @@
 
 #import "KKSnapEngine.h"
 #import "KKOnScreenControl+CoordinateSpace.h"
+#import "NSColor+KKColors.h" // accentMatchingHost (object-target guide colour)
 #import <FxPlug/FxPlugSDK.h>
+
+void KKSnapGuideColors(simd_float4 *canvasOut, simd_float4 *objectOut) {
+  if (canvasOut)
+    *canvasOut = (simd_float4){1, 1, 0, 1}; // yellow
+  if (objectOut) {
+    NSColor *accent = [[NSColor accentMatchingHost]
+        colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+    CGFloat r = 1, g = 1, b = 1, a = 1;
+    [accent getRed:&r green:&g blue:&b alpha:&a];
+    *objectOut = (simd_float4){(float)r, (float)g, (float)b, (float)a};
+  }
+}
 
 @implementation KKSnapEngine
 

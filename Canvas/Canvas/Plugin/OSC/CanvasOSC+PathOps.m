@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 #import "CanvasCenterline.h"    // CanvasApplyCenterlineOp
 #import "CanvasCornerFillet.h"  // CanvasPathByExpandingCorners
 #import "CanvasLayerRender.h"   // CanvasProjectLayerPointObj
@@ -61,10 +62,10 @@
   MTLPixelFormat fmt = [KKMetalDeviceCache pixelFormatForImageTile:dest];
   id<MTLRenderPipelineState> ps = [cache
       buildAndRegisterPipelineStateForPluginID:
-          @"co.overpolish.keyframeless.Canvas.OpFill"
+          @"com.keyframeless.Canvas.OpFill"
                                     registryID:reg
                                    pixelFormat:fmt
-                                      bundleID:@"co.overpolish.keyframeless."
+                                      bundleID:@"com.keyframeless."
                                                @"KeyframelessKit"
                                   vertexShader:@"KKVertexShader"
                                 fragmentShader:@"KKLabelFragment"
@@ -254,13 +255,6 @@
 // reload see the new values before the param round-trip republishes them.
 - (void)_commitPathOpPaths:(NSArray<KKBezierPath *> *)paths
             selectLayerIDs:(NSArray<NSString *> *)ids {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!actionAPI || !setAPI)
-    return;
-
   NSString *newB64 =
       [[KKBezierPath blobFromPaths:paths] base64EncodedStringWithOptions:0];
 
@@ -273,11 +267,17 @@
                                                      error:nil]
           encoding:NSUTF8StringEncoding];
 
-  [actionAPI startAction:self];
-  KKWriteCustomParamString(setAPI, newB64, kParamLayerData);
-  KKWriteCustomParamString(setAPI, uiJSON, kParamUIState);
-  [actionAPI endAction:self];
-
+  BOOL scoped = KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (!setAPI)
+          return;
+        KKWriteCustomParamString(setAPI, newB64, kParamLayerData);
+        KKWriteCustomParamString(setAPI, uiJSON, kParamUIState);
+      });
+  if (!scoped)
+    return;
   CanvasSetLayerBlobSnapshot(newB64);
   CanvasSetUIStateSnapshot(uiJSON);
 }

@@ -7,7 +7,6 @@
 #import <KeyframelessKit/KKPlugin.h> // KKBeginUndoGroup / KKEndUndoGroup
 
 #import "CanvasLayerRender.h"
-#import "CanvasLayerRowViews.h"
 #import "CanvasLayerTree.h"
 #import "CanvasLocalized.h"
 #import "Constants.h"
@@ -15,6 +14,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKCheckboxRowView.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKListRowViews.h>
 #import <KeyframelessKit/KKSVGParser.h>
 #import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -24,6 +24,7 @@
 
 // Build-time helpers (implemented in the primary @implementation below).
 @interface CanvasLayerListView ()
+@property(nonatomic, strong) NSTrackingArea *arrowCursorArea;
 - (NSTextField *)_buildTitleLabel;
 - (void)_buildAutoSelectRow;
 - (void)_buildScrollWell;
@@ -35,6 +36,28 @@
 @end
 
 @implementation CanvasLayerListView
+
+- (void)resetCursorRects {
+  [super resetCursorRects];
+  [self addCursorRect:self.bounds cursor:NSCursor.arrowCursor];
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (self.arrowCursorArea)
+    [self removeTrackingArea:self.arrowCursorArea];
+  self.arrowCursorArea = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways |
+                   NSTrackingInVisibleRect
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:self.arrowCursorArea];
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  [NSCursor.arrowCursor set];
+}
 
 - (instancetype)initWithFrame:(NSRect)frame {
   if ((self = [super initWithFrame:frame])) {
@@ -220,7 +243,7 @@
   // 1pt separator-color hairline matching the timing inspector box. An overlay
   // (not the scroll's own layer) because NSScrollView's clip view draws over
   // its backing layer's border. Passthrough so it never eats clicks/scroll.
-  _listBorder = [[CanvasLayerPassthroughView alloc] initWithFrame:NSZeroRect];
+  _listBorder = [[KKListPassthroughView alloc] initWithFrame:NSZeroRect];
   _listBorder.translatesAutoresizingMaskIntoConstraints = NO;
   _listBorder.wantsLayer = YES;
   _listBorder.layer.cornerRadius = KKRadiusMD;
@@ -311,6 +334,8 @@
   [NSNotificationCenter.defaultCenter removeObserver:self];
   if (_keyMonitor)
     [NSEvent removeMonitor:_keyMonitor];
+  if (_renameClickMon)
+    [NSEvent removeMonitor:_renameClickMon];
   if (_hoverMonitorLocal)
     [NSEvent removeMonitor:_hoverMonitorLocal];
   if (_hoverMonitorGlobal)
@@ -320,8 +345,8 @@
 #pragma mark - Scroll-edge shadows
 
 - (NSView *)_edgeShadowAtTop:(BOOL)atTop {
-  CanvasLayerPassthroughView *v =
-      [[CanvasLayerPassthroughView alloc] initWithFrame:NSZeroRect];
+  KKListPassthroughView *v =
+      [[KKListPassthroughView alloc] initWithFrame:NSZeroRect];
   v.translatesAutoresizingMaskIntoConstraints = NO;
   CAGradientLayer *grad = [CAGradientLayer layer];
   // Match Steno's ScrollShadowView: top max 0.15, bottom max 0.3.
@@ -586,6 +611,33 @@
     [self hoverRowAtIndex:-1]; // clear any stuck highlight when detached
     _hoveredRowIndex = -1;
   }
+  // While a rename is live, a click outside the field (empty space, another
+  // panel) drops focus -> ends editing -> commit. Clicking another row already
+  // commits via selectIndex; this covers everything else.
+  if (self.window && !_renameClickMon) {
+    __weak typeof(self) weak = self;
+    _renameClickMon = [NSEvent
+        addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown |
+                                             NSEventMaskRightMouseDown
+                                     handler:^NSEvent *(NSEvent *e) {
+                                       __strong typeof(weak) s = weak;
+                                       if (!s || s->_editingIndex < 0)
+                                         return e;
+                                       NSTextField *f = s->_editingField;
+                                       if (!f.currentEditor)
+                                         return e;
+                                       NSRect r = [f convertRect:f.bounds
+                                                          toView:nil];
+                                       if (!(e.window == f.window &&
+                                             NSPointInRect(e.locationInWindow,
+                                                           r)))
+                                         [f.window makeFirstResponder:nil];
+                                       return e;
+                                     }];
+  } else if (!self.window && _renameClickMon) {
+    [NSEvent removeMonitor:_renameClickMon];
+    _renameClickMon = nil;
+  }
 }
 
 // Hover highlight (mini-viewer): hit-test the live row frames against the
@@ -629,15 +681,13 @@
 // scope opened with the plugin (paramActionTarget), like the kit does.
 - (void)_performHostCommand:(FxCommand)command {
   id<PROAPIAccessing> api = self.apiManager;
-  id<FxCustomParameterActionAPI_v4> act =
-      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!act)
-    return;
-  id target = self.paramActionTarget ?: self;
-  [act startAction:target];
-  id<FxCommandAPI_v2> cmd = [api apiForProtocol:@protocol(FxCommandAPI_v2)];
-  [cmd performCommand:command error:nil];
-  [act endAction:target];
+  KKPerformUndoable(api, self.paramActionTarget ?: self, nil,
+                    ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                      id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+                      id<FxCommandAPI_v2> cmd =
+                          [api apiForProtocol:@protocol(FxCommandAPI_v2)];
+                      [cmd performCommand:command error:nil];
+                    });
 }
 // Wrap a multi-write mutation (a _modifyPaths blob write plus the follow-up
 // _notifyPrimaryLayerSelected selection write) in ONE host undo group, so a
@@ -645,29 +695,15 @@
 // separate undo steps (cmd-Z first moves the selection, then a second cmd-Z
 // undoes the structural change). Matches the kit's detached-window undo path.
 - (void)_runInUndoGroup:(NSString *)name block:(void (^)(void))block {
-  id<PROAPIAccessing> api = self.apiManager;
-  id<FxCustomParameterActionAPI_v4> act =
-      api ? [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)] : nil;
-  id undoTarget = self.paramActionTarget ?: self;
-  BOOL undoGroup = NO;
-  if (act) {
-    [act startAction:undoTarget];
-    undoGroup = KKBeginUndoGroup(api, name);
-    [act endAction:undoTarget];
-  }
-  block();
-  if (act) {
-    [act startAction:undoTarget];
-    KKEndUndoGroup(api, undoGroup);
-    [act endAction:undoTarget];
-  }
+  KKWithHostUndoGroup(self.apiManager, self.paramActionTarget ?: self, name,
+                      block);
 }
 
 - (void)_deleteSelectedRows {
   if (_selection.count == 0)
     return;
   [self
-      _runInUndoGroup:@"Delete Layer"
+      _runInUndoGroup:KKUndoLabelDeleteLayer()
                 block:^{
                   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
                     NSMutableIndexSet *expanded =
@@ -742,7 +778,7 @@
   if (dropIdx < 0)
     return; // already at the end of its level
   [self
-      _runInUndoGroup:delta < 0 ? @"Move Layer Up" : @"Move Layer Down"
+      _runInUndoGroup:KKUndoLabelMoveLayer(delta < 0)
                 block:^{
                   [self
                       performRowReorderFromIndices:[self dragIndicesForRow:idx]

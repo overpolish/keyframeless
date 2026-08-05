@@ -7,7 +7,7 @@ import Darwin
 import Foundation
 import os
 
-private let clientLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.helper")
+private let clientLog = Logger(subsystem: "com.keyframeless", category: "ai.helper")
 
 /// `LocalLLMRunner` that talks to the SHARED out-of-process helper over a
 /// Unix-domain socket in the app-group container. Used by every memory-capped or
@@ -55,11 +55,11 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 	private static let idleTimeout: TimeInterval = 120
 
 	private let socketPath: String
-	private let queue = DispatchQueue(label: "co.overpolish.ai.helper.client")
+	private let queue = DispatchQueue(label: "com.keyframeless.ai.helper.client")
 	private var conn: FileHandle?
 
 	/// Fails to init when the app-group socket path is unavailable (missing
-	/// `group.co.overpolish.keyframeless` entitlement) - local inference is then
+	/// `group.com.keyframeless` entitlement) - local inference is then
 	/// unavailable and the caller (`LocalLLM.defaultRunner`) returns nil.
 	public init?() {
 		guard let path = LocalAIHelperSocket.sharedSocketPath() else { return nil }
@@ -119,10 +119,18 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 							break
 						}
 						if resp.done == true { break }
-						if let chunk = resp.chunk { continuation.yield(chunk) }
+						if let chunk = resp.chunk, !chunk.isEmpty { continuation.yield(chunk) }
 					}
 					continuation.finish()
 				} catch {
+					if let helperError = error as? HelperError, case .timedOut = helperError {
+						// The data connection timing out does not itself cancel MLX. Tell
+						// the helper to stop over its independent control connection so a
+						// dead answer cannot keep using the GPU after the UI unblocks.
+						_ = try? self.controlExchange("cancel")
+						clientLog.notice(
+							"client: streaming helper timed out; cancelled active jobs")
+					}
 					// A dead socket leaves the connection unusable; drop it so the next
 					// call reconnects/respawns.
 					self.teardown()
@@ -189,15 +197,17 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		do {
 			return try roundtrip(req)
 		} catch let e as HelperError where isTransport(e) {
-			teardown()
 			// A timed-out (hung) helper won't recover by retrying into the same
 			// stall - surface the error now so the inspector unblocks. Dropping the
 			// connection lets the NEXT prompt reconnect (and respawn a fresh helper
 			// if this one has gone away).
 			if case .timedOut = e {
-				clientLog.notice("client: helper timed out; dropped connection")
+				_ = try? controlExchange("cancel")
+				teardown()
+				clientLog.notice("client: helper timed out; cancelled jobs and dropped connection")
 				throw e
 			}
+			teardown()
 			clientLog.notice(
 				"client: transport lost (\(e.localizedDescription, privacy: .public)); reconnecting"
 			)
@@ -354,7 +364,7 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 
 	/// Start the shared helper without exec'ing it ourselves. The sandbox forbids a
 	/// plugin from launching an out-of-bundle binary, but it CAN look up an app-group
-	/// Mach service - and the helper is installed once (by the "Keyframeless AI"
+	/// Mach service - and the helper is installed once (by the Kai
 	/// package) as an on-demand LaunchAgent that vends exactly that service. Opening
 	/// the connection and sending one message makes launchd launch the helper, which
 	/// then binds its socket and serves as before. On a dev machine with no installed

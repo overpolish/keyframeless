@@ -5,14 +5,26 @@
 
 #import "KKOSCChecklistView.h"
 
+#import "KKLaneCategoryNav.h"
 #import "KKLocalized.h"
+#import "KKOSCVisibilityDefaults.h"
 #import "KKPaddedScrollView.h"
+#import "KKPillBar.h"
+#import "KKPillToggleRowView.h"
 #import "KKTimelineLanesView_Private.h" // _KKManageRow, _KKSearchField, tokens
 #import "KKTokens.h"
+#import "NSColor+KKColors.h"
 
 // Cap the row area at this many rows; beyond it the list scrolls (with the
 // scroll view's top/bottom fade shadows) instead of growing the popover.
 static const NSInteger kOSCMaxVisibleRows = 6;
+
+// The [Reset][Make Default] row between the search field and the list.
+static const CGFloat kOSCDefaultsRowH = 20.0;
+
+// The optional owner (layer) pill row above the search field. Same height as
+// the Animated dropdown's navs, so the two popovers line up.
+static const CGFloat kOSCLayerPillH = 24.0;
 
 @interface KKOSCChecklistView () <NSSearchFieldDelegate>
 @end
@@ -30,6 +42,21 @@ static const NSInteger kOSCMaxVisibleRows = 6;
   // spotlight maps straight back to the inspector's compound coordinates.
   NSMutableArray<NSNumber *> *_rowCompound;
   NSMutableArray<NSNumber *> *_rowSegment;
+  NSView *_defaultsRow;
+  NSLayoutConstraint *_defaultsRowHeight; // collapses to 0 when both hide
+  NSLayoutConstraint *_scrollTopGap;      // row -> list gap, collapses with it
+  NSButton *_makeDefaultButton;
+  NSButton *_resetDefaultButton;
+  NSString * (^_displayForKey)(NSString *);
+  // Owner (layer) nav, one level ABOVE the rows: present only when the fed
+  // compounds resolve to two or more distinct owners (Mirage's shader rack).
+  // There is no "all owners" page - one concrete owner is always selected.
+  KKPillBar *_layerPillBar;
+  NSArray<NSString *> *_layerKeys;
+  NSDictionary<NSString *, NSString *> *_layerByElementKey;
+  NSString *_selectedLayer;
+  // The search field's top pin, re-made when the layer nav takes the top edge.
+  NSLayoutConstraint *_searchTop;
 }
 
 + (CGFloat)preferredWidth {
@@ -56,9 +83,16 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
 
 - (instancetype)initWithCompounds:(NSArray<NSArray<NSString *> *> *)compounds
                            states:(NSArray<NSArray<NSNumber *> *> *)states {
+  return [self initWithCompounds:compounds states:states displayForKey:nil];
+}
+
+- (instancetype)initWithCompounds:(NSArray<NSArray<NSString *> *> *)compounds
+                           states:(NSArray<NSArray<NSNumber *> *> *)states
+                    displayForKey:(NSString * (^)(NSString *))displayForKey {
   self = [super initWithFrame:NSZeroRect];
   if (!self)
     return nil;
+  _displayForKey = [displayForKey copy];
   _compounds = [compounds copy];
   _states = [NSMutableArray array];
   for (NSArray<NSNumber *> *s in states)
@@ -88,10 +122,12 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
                                           constant:KKPaddingMD],
     [_search.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                            constant:-KKPaddingMD],
-    [_search.topAnchor constraintEqualToAnchor:self.topAnchor
-                                      constant:KKPaddingMD],
+    (_searchTop = [_search.topAnchor constraintEqualToAnchor:self.topAnchor
+                                                    constant:KKPaddingMD]),
     [_search.heightAnchor constraintEqualToConstant:kSearchH],
   ]];
+
+  [self _buildDefaultsRowBelow:_search];
 
   _rowStack = [NSStackView stackViewWithViews:@[]];
   _rowStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -108,8 +144,9 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
   [NSLayoutConstraint activateConstraints:@[
     [_scroll.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_scroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-    [_scroll.topAnchor constraintEqualToAnchor:_search.bottomAnchor
-                                      constant:KKSpacingSM],
+    (_scrollTopGap =
+         [_scroll.topAnchor constraintEqualToAnchor:_defaultsRow.bottomAnchor
+                                           constant:KKSpacingSM]),
     // Flush to the bottom edge so the bottom fade shadow meets the popover edge
     // (no trailing margin below the list).
     [_scroll.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
@@ -128,6 +165,11 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
       // draw time, like the manage dropdown's rows.
       row.rowLabel = [compound[si] componentsSeparatedByString:@"."].lastObject
                          ?: compound[si];
+      // rowLabel stays the identity (guide reporting keys on it); show the
+      // plugin's display name for this element when provided.
+      NSString *disp = _displayForKey ? _displayForKey(compound[si]) : nil;
+      if (disp.length)
+        row.displayOverride = disp;
       row.checked =
           (si < (NSInteger)_states[ci].count) ? _states[ci][si].boolValue : NO;
       row.indentLevel = KKOSCIndentForKey(compound, si);
@@ -145,7 +187,260 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
     }
   }
   _scrollHeight.constant = [self _rowAreaHeight];
+  [self _updateDefaultsRow];
   return self;
+}
+
+// The owner of one element key: the lane that declares it, or - for a Position
+// OSC's motion-path element, which has no lane of its own - the base lane it
+// hangs off. Mirrors the display-name lookup the host feeds in `displayForKey`.
+static NSString *
+_kkOSCLayerForElementKey(NSString *key,
+                         NSDictionary<NSString *, NSString *> *byLaneKey) {
+  NSString *layer = byLaneKey[key];
+  if (layer.length)
+    return layer;
+  if ([key hasSuffix:@" Path"])
+    return byLaneKey[[key substringToIndex:key.length - 5]];
+  return nil;
+}
+
+- (void)applyLayerLanes:(NSArray<KKLane *> *)lanes
+       selectedLayerKey:(NSString *)selectedLayerKey {
+  NSMutableDictionary<NSString *, NSString *> *byLaneKey =
+      [NSMutableDictionary dictionary];
+  for (KKLane *l in lanes)
+    if (l.key.length && l.layerKey.length)
+      byLaneKey[l.key] = l.layerKey;
+
+  // Only the owners this list's OWN elements resolve to: a plugin hands us its
+  // whole template set, most of which declares no on-screen control, and an
+  // owner with nothing to show here must not get a pill that lands on an empty
+  // page. Ordered by first appearance in the compounds, so the nav reads in the
+  // same order as the rows.
+  NSMutableArray<NSString *> *keys = [NSMutableArray array];
+  NSMutableDictionary<NSString *, NSString *> *layerByElement =
+      [NSMutableDictionary dictionary];
+  for (NSArray<NSString *> *compound in _compounds)
+    for (NSString *elementKey in compound) {
+      NSString *layer = _kkOSCLayerForElementKey(elementKey, byLaneKey);
+      if (!layer.length)
+        continue;
+      layerByElement[elementKey] = layer;
+      if (![keys containsObject:layer])
+        [keys addObject:layer];
+    }
+  if (keys.count < 2)
+    return; // single-owner (or no layer info): today's flat list, untouched
+
+  _layerKeys = keys;
+  _layerByElementKey = layerByElement;
+  NSUInteger found = selectedLayerKey.length
+                         ? [keys indexOfObject:selectedLayerKey]
+                         : NSNotFound;
+  _selectedLayer = (found == NSNotFound) ? keys.firstObject : selectedLayerKey;
+
+  // Reuse the lane set for the pill LABELS (each owner's display name lives on
+  // its lanes), scoped to the owners that survived above so the pill run and
+  // `_layerKeys` are the same list in the same order.
+  NSMutableArray<KKLane *> *pillLanes = [NSMutableArray array];
+  for (NSString *k in keys)
+    for (KKLane *l in lanes)
+      if ([l.layerKey isEqualToString:k]) {
+        [pillLanes addObject:l];
+        break;
+      }
+  __weak typeof(self) weak = self;
+  KKPillToggleRowView *pill =
+      KKMakeLaneLayerPill(pillLanes, _selectedLayer, ^(NSString *layerKey) {
+        [weak _selectLayerKey:layerKey];
+      });
+  if (!pill) {
+    _layerKeys = nil;
+    _layerByElementKey = nil;
+    _selectedLayer = nil;
+    return;
+  }
+
+  // A long owner run scrolls inside the bar (edge-faded) instead of forcing the
+  // popover wide - same wrapper the Animated dropdown's navs use.
+  _layerPillBar = [[KKPillBar alloc] initWithPillRow:pill];
+  _layerPillBar.translatesAutoresizingMaskIntoConstraints = NO;
+  [_layerPillBar
+      setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                 forOrientation:NSLayoutConstraintOrientationHorizontal];
+  [_layerPillBar
+      setContentCompressionResistancePriority:1
+                               forOrientation:
+                                   NSLayoutConstraintOrientationHorizontal];
+  [self addSubview:_layerPillBar];
+  // The nav takes the top edge; the search field moves under it.
+  _searchTop.active = NO;
+  [NSLayoutConstraint activateConstraints:@[
+    [_layerPillBar.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+    [_layerPillBar.leadingAnchor
+        constraintGreaterThanOrEqualToAnchor:self.leadingAnchor
+                                    constant:KKPaddingMD],
+    [_layerPillBar.trailingAnchor
+        constraintLessThanOrEqualToAnchor:self.trailingAnchor
+                                 constant:-KKPaddingMD],
+    [_layerPillBar.topAnchor constraintEqualToAnchor:self.topAnchor
+                                            constant:KKPaddingMD],
+    [_layerPillBar.heightAnchor constraintEqualToConstant:kOSCLayerPillH],
+    (_searchTop =
+         [_search.topAnchor constraintEqualToAnchor:_layerPillBar.bottomAnchor
+                                           constant:KKSpacingSM]),
+  ]];
+  [self _applyFilter];
+}
+
+// Picking an owner only re-scopes the ROWS: unlike the Animated dropdown there
+// is no category nav under this one to rebuild, so a refilter is the whole job.
+- (void)_selectLayerKey:(NSString *)layerKey {
+  if (!_layerKeys.count || [layerKey isEqualToString:_selectedLayer])
+    return;
+  _selectedLayer = [layerKey copy];
+  [self _applyFilter];
+}
+
+// One flat text-and-glyph action, matching the curve popover's title-bar pair:
+// no bezel, no background, accent for the save, grey for the revert.
+static NSButton *KKOSCDefaultsButton(NSString *title, NSString *symbol,
+                                     NSColor *tint, id target, SEL action) {
+  NSButton *b = [NSButton buttonWithTitle:title target:target action:action];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.controlSize = NSControlSizeSmall;
+  b.font = [NSFont systemFontOfSize:10.0 weight:NSFontWeightMedium];
+  b.image = [NSImage imageWithSystemSymbolName:symbol
+                      accessibilityDescription:title];
+  b.imagePosition = b.image ? NSImageLeading : NSNoImage;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  b.contentTintColor = tint;
+  b.imageHugsTitle = YES;
+  // See KKSegmentEditView: opened over another popover, the release lands in
+  // that popover's window, so a release-driven button never fires its action.
+  [b sendActionOn:NSEventMaskLeftMouseDown];
+  return b;
+}
+
+// "Make Default" saves which controls are hidden right now as the starting set
+// for every new clip (and, in Canvas, every new layer of this kind); "Reset"
+// puts this clip back to that saved set. Both hide while the two already match.
+- (void)_buildDefaultsRowBelow:(NSView *)anchorView {
+  _defaultsRow = [[NSView alloc] initWithFrame:NSZeroRect];
+  _defaultsRow.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:_defaultsRow];
+
+  _resetDefaultButton = KKOSCDefaultsButton(
+      KKLoc(@"Reset", @"Button: restore the saved default curve."),
+      @"arrow.uturn.backward", [NSColor secondaryLabelColor], self,
+      @selector(_resetToDefaultTapped:));
+  _resetDefaultButton.toolTip =
+      KKLoc(@"Put these controls back to the saved default",
+            @"Tooltip for the OSC Reset button.");
+  [_defaultsRow addSubview:_resetDefaultButton];
+
+  _makeDefaultButton = KKOSCDefaultsButton(
+      KKLoc(@"Make Default", @"Button: save these curve settings as default."),
+      @"star", [NSColor accentMatchingHost], self,
+      @selector(_makeDefaultTapped:));
+  _makeDefaultButton.toolTip =
+      KKLoc(@"Show this set of on-screen controls on every new clip",
+            @"Tooltip for the OSC Make Default button.");
+  [_defaultsRow addSubview:_makeDefaultButton];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [_defaultsRow.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                               constant:KKPaddingMD],
+    [_defaultsRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                                constant:-KKPaddingMD],
+    [_defaultsRow.topAnchor constraintEqualToAnchor:anchorView.bottomAnchor
+                                           constant:KKSpacingSM],
+    (_defaultsRowHeight = [_defaultsRow.heightAnchor
+         constraintEqualToConstant:kOSCDefaultsRowH]),
+
+    [_resetDefaultButton.leadingAnchor
+        constraintEqualToAnchor:_defaultsRow.leadingAnchor],
+    [_resetDefaultButton.centerYAnchor
+        constraintEqualToAnchor:_defaultsRow.centerYAnchor],
+    [_makeDefaultButton.trailingAnchor
+        constraintEqualToAnchor:_defaultsRow.trailingAnchor],
+    [_makeDefaultButton.centerYAnchor
+        constraintEqualToAnchor:_defaultsRow.centerYAnchor],
+  ]];
+}
+
+// The elements currently unchecked, in the same key space the default stores.
+- (NSSet<NSString *> *)_hiddenKeys {
+  NSMutableSet<NSString *> *hidden = [NSMutableSet set];
+  for (NSInteger ci = 0; ci < (NSInteger)_compounds.count; ci++)
+    for (NSInteger si = 0; si < (NSInteger)_compounds[ci].count; si++) {
+      BOOL on =
+          (ci < (NSInteger)_states.count && si < (NSInteger)_states[ci].count)
+              ? _states[ci][si].boolValue
+              : NO;
+      if (!on)
+        [hidden addObject:_compounds[ci][si]];
+    }
+  return hidden;
+}
+
+- (void)setDefaultsScope:(NSString *)defaultsScope {
+  _defaultsScope = [defaultsScope copy];
+  [self _updateDefaultsRow];
+}
+
+- (void)_updateDefaultsRow {
+  if (!_makeDefaultButton)
+    return;
+  NSSet<NSString *> *saved = KKOSCVisibilityDefaultsRead(self.defaultsScope);
+  // Compare only against keys this list actually has: a default saved on a
+  // shader with more controls must still read as "already default" here.
+  NSMutableSet<NSString *> *savedHere = [NSMutableSet set];
+  for (NSArray<NSString *> *c in _compounds)
+    for (NSString *key in c)
+      if ([saved containsObject:key])
+        [savedHere addObject:key];
+  BOOL matches = saved && [savedHere isEqualToSet:[self _hiddenKeys]];
+  _makeDefaultButton.hidden = matches;
+  _resetDefaultButton.hidden = matches;
+  // Collapse the row itself, not just its buttons - a hidden view keeps its
+  // constraints, so leaving the height in place left a blank band above the
+  // list. Re-fit the popover the same way the search filter does.
+  _defaultsRow.hidden = matches;
+  CGFloat wanted = matches ? 0.0 : kOSCDefaultsRowH;
+  if (fabs(_defaultsRowHeight.constant - wanted) > 0.5) {
+    _defaultsRowHeight.constant = wanted;
+    // Its gap to the list goes with it, else a collapsed row still leaves a
+    // double spacer under the search field.
+    _scrollTopGap.constant = matches ? 0.0 : KKSpacingSM;
+    if (self.popover)
+      self.popover.contentSize =
+          NSMakeSize([KKOSCChecklistView preferredWidth], [self fittingHeight]);
+  }
+}
+
+- (void)_makeDefaultTapped:(id)sender {
+  KKOSCVisibilityDefaultsWrite([self _hiddenKeys], self.defaultsScope);
+  [self _updateDefaultsRow];
+}
+
+- (void)_resetToDefaultTapped:(id)sender {
+  NSSet<NSString *> *saved = KKOSCVisibilityDefaultsRead(self.defaultsScope);
+  if (!saved)
+    return;
+  // Flip through the normal toggle path so each change persists exactly as a
+  // click would - the host owns the storage, this view only mirrors it.
+  for (NSInteger ci = 0; ci < (NSInteger)_compounds.count; ci++)
+    for (NSInteger si = 0; si < (NSInteger)_compounds[ci].count; si++) {
+      if (ci >= (NSInteger)_states.count || si >= (NSInteger)_states[ci].count)
+        continue;
+      BOOL wanted = ![saved containsObject:_compounds[ci][si]];
+      if (_states[ci][si].boolValue != wanted)
+        [self _toggleCompound:ci segment:si];
+    }
+  [self _updateDefaultsRow];
 }
 
 // Height of the scrollable row area: the visible rows, capped at
@@ -166,6 +461,8 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
       _rows[r].checked = now;
   if (self.onToggled)
     self.onToggled(ci, si, now);
+  // After the host has stored it, so the row reflects the committed state.
+  [self _updateDefaultsRow];
 }
 
 - (void)reloadStates:(NSArray<NSArray<NSNumber *> *> *)states {
@@ -179,6 +476,7 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
     if (ci < (NSInteger)_states.count && si < (NSInteger)_states[ci].count)
       _rows[r].checked = _states[ci][si].boolValue;
   }
+  [self _updateDefaultsRow];
 }
 
 - (NSInteger)_visibleRowCount {
@@ -191,7 +489,12 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
 
 - (CGFloat)fittingHeight {
   // Flush bottom (no trailing pad) so the fade shadow reaches the popover edge.
-  return KKPaddingMD + kSearchH + KKSpacingSM + [self _rowAreaHeight];
+  // Matches the live constraints: search gap + (row + its gap, when shown).
+  CGFloat defaultsH =
+      _defaultsRow.hidden ? 0.0 : (kOSCDefaultsRowH + KKSpacingSM);
+  CGFloat layerH = _layerPillBar ? (kOSCLayerPillH + KKSpacingSM) : 0.0;
+  return KKPaddingMD + layerH + kSearchH + KKSpacingSM + defaultsH +
+         [self _rowAreaHeight];
 }
 
 - (NSRect)screenRectForCompoundIndex:(NSInteger)compoundIndex {
@@ -212,11 +515,20 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
 - (void)_applyFilter {
   NSString *query = _search.stringValue;
   BOOL searching = query.length > 0;
-  for (_KKManageRow *row in _rows) {
+  for (NSInteger r = 0; r < (NSInteger)_rows.count; r++) {
+    _KKManageRow *row = _rows[r];
     BOOL match =
         !searching || [row.rowLabel rangeOfString:query
                                           options:NSCaseInsensitiveSearch]
                               .location != NSNotFound;
+    // An element with no resolved owner shows on every owner page, exactly as
+    // an uncategorised lane does for the category nav.
+    if (match && _layerKeys.count) {
+      NSInteger ci = _rowCompound[r].integerValue;
+      NSInteger si = _rowSegment[r].integerValue;
+      NSString *layer = _layerByElementKey[_compounds[ci][si]];
+      match = !layer.length || [layer isEqualToString:_selectedLayer];
+    }
     row.hidden = !match;
   }
   _scrollHeight.constant = [self _rowAreaHeight];
@@ -227,6 +539,14 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
 
 - (void)controlTextDidChange:(NSNotification *)note {
   [self _applyFilter];
+}
+
+// Enter / Esc drop focus (blur) so spacebar (playback) and Esc (close popover)
+// reach the popover again, matching every other field in a ViewBridge popover.
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)selector {
+  return KKSearchFieldBlurOnCommit(control, selector);
 }
 
 @end

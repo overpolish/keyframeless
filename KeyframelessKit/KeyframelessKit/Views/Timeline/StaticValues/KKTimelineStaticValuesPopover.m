@@ -3,15 +3,27 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKCodeEditorView.h"
+#import "KKFloatingPanel.h"
+#import "KKGLSLSyntax.h" // KKExprCatalog for the function reference menu
 #import "KKLaneCategoryNav.h"
+#import "KKLinkBus.h"
+#import "KKLinkExpr.h"
 #import "KKLocalized.h"
+#import "KKLog.h"
+#import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPaddedScrollView.h"
+#import "KKPaletteGenerator.h"
+#import "KKPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKTimelineStaticValuesPopover_Private.h" // @package ivars for categories
+#import "KKTimingEvaluation.h" // KKTimelineLaneValueAtFraction (live ref override)
 #import "KKTokens.h"
 #import "KKValueTextField.h"
 #import "NSColor+KKColors.h"
@@ -21,113 +33,34 @@
 // Height of the category nav pill row (icon pills under the mini-viewer).
 static const CGFloat kKKCategoryPillH = 24.0;
 
+// A parameter-link expression editor sits as its own row directly under the
+// value row whose lane carries an expression: 1 line collapsed, taller when
+// expanded via the chevron button. The row reserves a bottom 16pt strip for the
+// live result readout, so the ROW height = the text height + the strip; the
+// gutter buttons centre on the TEXT height (kKKExprEditorTextH) = the first
+// line.
+const CGFloat kKKExprEditorTextH = 30.0;
+const CGFloat kKKExprEditorRowH = 46.0;       // text + result strip
+const CGFloat kKKExprEditorExpandedH = 112.0; // ~3 lines + result strip
+
+// A lane shows an inline expression editor when it carries a linkExpression AND
+// is referenceable (not a code editor or a palette-generator bar - mirrors the
+// manifest / row-label filter).
+BOOL KKLaneHasExpressionEditor(KKLane *lane) {
+  // Present = the lane HAS an expression binding, even an empty one. Clearing
+  // the editor text leaves an empty (passthrough) expression, and the editor
+  // stays open; only "Remove Expression" (which nils linkExpression) closes it.
+  return lane.linkExpression != nil && lane.valueType != KKLaneValueTypeCode &&
+         !lane.paletteGeneratorBar && !lane.positionPathDriven;
+}
+
 // Vertical breathing room kept around the popover when its natural height is
 // clamped to the screen (so the arrow + a small gap fit on a low-res display),
 // and the floor below which we never clamp.
 static const CGFloat kKKStaticPopoverScreenMargin = 48.0;
 static const CGFloat kKKStaticPopoverMinHeight = 160.0;
 
-// Global user preference (not per-clip): the mini-viewer size (0 = sm/default,
-// 1 = md, 2 = lg) is a viewing aid, so it persists across sessions and clips
-// like a UI setting, never in the timeline blob. Read by the width class method
-// so every height calculation that derives from the width follows
-// automatically.
-static NSString *const kKKStaticPopoverSizeDefaultsKey =
-    @"KKStaticPopoverMiniViewerSize";
-
-@interface _KKStaticValuesPopoverView ()
-+ (CGFloat)_heightForLanes:(NSArray<KKLane *> *)lanes
-            descriptorPath:(nullable NSString *)descriptorPath
-                clipAspect:(CGFloat)clipAspect
-             reserveHeader:(BOOL)reserveHeader
-          selectedCategory:(nullable NSString *)selectedCategory
-             valuesByLabel:
-                 (nullable NSDictionary<NSString *, NSArray<NSNumber *> *> *)
-                     valuesByLabel;
-@end
-
-@implementation _KKStaticValuesPopoverView {
-  NSMutableDictionary<NSString *, _KKStaticValueRow *> *_rowsByLabel;
-  NSStackView *_stack;
-  // Vertical scroller (top/bottom fade shadows) hosting only the param-row
-  // stack, so the mini-viewer + header + category pill stay sticky above and a
-  // small / low-resolution display can scroll the rows instead of clipping
-  // them.
-  KKPaddedScrollView *_rowsScroll;
-  KKMiniViewerView *_miniViewer;
-  // Header-band 3-segment pill (sm/md/lg) that sets the global mini-viewer
-  // size; the mini-viewer's height constraint is updated in place so the
-  // preview grows/shrinks without reopening the popover. Both nil with no
-  // mini-viewer.
-  KKPillToggleRowView *_sizePill;
-  NSLayoutConstraint *_miniViewerHeightConstraint;
-  KKPillToggleRowView *_renderModePill; // guide anchor; nil when no pill shown
-  // Category nav: an icon pill row under the mini-viewer that filters which
-  // param rows show. nil/empty when <2 distinct lane categories (no pill).
-  KKPillToggleRowView *_categoryPill;
-  NSArray<NSString *> *_categoryKeys; // ordered, first-seen
-  NSString *_selectedCategory;        // currently shown category key
-  NSDictionary<NSString *, NSString *> *_rowCategoryByLabel;
-  // Live component values per lane (seeded from open-time keyposes, updated on
-  // every edit) so conditional `visibleWhen` rules + the page-resize see the
-  // current Mode/Type selections, not the stale open-time snapshot.
-  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *_currentValuesByLabel;
-  // YES when any lane carries a `visibleWhen` rule - gates the (cheap but not
-  // free) per-edit visibility recompute to plugins that actually use it.
-  BOOL _laneGatesVisibility;
-  // YES while a colour swatch's shared panel is open. The presenter's outside-
-  // click monitors read this (via -suppressesPopoverDismiss) and skip
-  // dismissal, so clicking into the panel (a separate window) doesn't close the
-  // popover.
-  BOOL _colorPanelOpen;
-  // Debounced persist for the async colour panel: while it's open, a continuous
-  // drag fires a value callback every frame. Persisting each one stacks an undo
-  // step per frame, and we can't hold a synchronous drag undo group open across
-  // the panel's own event loop (that corrupts FCP's FFUIAction nesting). So we
-  // preview live but defer the persist, coalescing a burst into ONE undoable
-  // write when the drag settles (timer) or the panel closes.
-  NSTimer *_colorPersistTimer;
-  NSString *_colorPendingLabel;
-  NSArray<NSNumber *> *_colorPendingValues;
-  // Excluded ("Animate" placeholder) rows aren't in _rowsByLabel; track them so
-  // the category filter can hide/show them too.
-  NSMutableDictionary<NSString *, NSView *> *_excludedRowsByLabel;
-  CGFloat _labelColumnWidth; // uniform across rows (widest localized name)
-  NSArray<KKLane *> *_lanes; // last lanes laid out (for per-category resize)
-  // The anchor the category pill (and, when there's no pill, the row stack)
-  // pins below - the mini-viewer / header bottom. Captured in init so the pill
-  // can be rebuilt in place when the lane set changes (a category empties out).
-  NSLayoutYAxisAnchor *_categoryNavTopAnchor;
-  CGFloat _categoryNavTopInset;
-  NSLayoutConstraint *_stackTopConstraint;
-  NSString *_descriptorPath;
-  CGFloat _clipAspect;
-  void (^_onHandleValue)(NSString *, NSArray<NSNumber *> *);
-  void (^_onSmoothToggled)(NSString *, BOOL);
-  void (^_onLinkToggled)(NSString *, BOOL);
-  void (^_onGradientTypeChanged)(NSString *, NSInteger);
-  BOOL _editsKeypose;
-  void (^_onDragBegin)(void);
-  void (^_onDragEnd)(void);
-  NSButton *_navPrevButton;
-  NSButton *_navNextButton;
-  void (^_onNavigate)(NSInteger);
-  KKPopoverHeaderView *_header;
-  BOOL _hasHeader;
-  // Stored so the in-place row rebuild (add/remove/navigate) can re-derive
-  // rows without the popover reopening: provider feeds reset defaults,
-  // message/onAnimate drive the "Animate" (addable) rows.
-  NSArray<NSNumber *> * (^_defaultsProvider)(NSString *);
-  NSString *_excludedMessage;
-  void (^_onAnimate)(NSString *);
-  // Set (Advanced only) → editable rows gain a leading "−" remove button
-  // that calls this with the row's label; nil → no remove gutter (Basic /
-  // constants). Stored so the in-place rebuild keeps the gutter.
-  void (^_rowRemoveHandler)(NSString *);
-  // Constants popover only → rows gain a leading curve-glyph button that
-  // calls this with the row's label to flip the lane to animatable.
-  void (^_rowAddToAnimatedHandler)(NSString *);
-}
+@implementation _KKStaticValuesPopoverView
 
 - (void)setRowRemoveHandler:(void (^)(NSString *label))handler {
   _rowRemoveHandler = [handler copy];
@@ -166,9 +99,143 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // documentView (its other strong hold) lets the mini-viewer dealloc and free
 // that memory even while the empty window shell lingers.
 - (void)releaseMiniViewer {
+  // The result strips lose their time source and the popover is closing; stop
+  // the refresh timer so it doesn't keep firing on a stranded content view.
+  [_exprResultTimer invalidate];
+  _exprResultTimer = nil;
   _miniViewer.enclosingScrollView.documentView = nil;
   [_miniViewer removeFromSuperview];
   _miniViewer = nil;
+}
+
+- (void)
+    reconfigureForEditsKeypose:(BOOL)editsKeypose
+                     withLanes:(NSArray<KKLane *> *)lanes
+                excludedLabels:(NSArray<NSString *> *)excludedLabels
+                   headerTitle:(NSString *)headerTitle
+                  headerDetail:(NSString *)headerDetail
+                    headerIcon:(NSImage *)headerIcon
+                    renderMode:(KKMiniViewerRenderMode)renderMode
+                 onModeChanged:(void (^)(KKMiniViewerRenderMode))onModeChanged
+                 onHandleValue:(void (^)(NSString *,
+                                         NSArray<NSNumber *> *))onHandleValue
+                   onDragBegin:(void (^)(void))onDragBegin
+                     onDragEnd:(void (^)(void))onDragEnd
+                    onNavigate:(void (^)(NSInteger))onNavigate {
+  _editsKeypose = editsKeypose;
+  _onHandleValue = [onHandleValue copy];
+  _onDragBegin = [onDragBegin copy];
+  _onDragEnd = [onDragEnd copy];
+  _onNavigate = [onNavigate copy];
+
+  // Re-point the PRESERVED mini viewer's drag callbacks at the new mode's
+  // blocks (keypose-write vs constant-write). The instance - and its overlay's
+  // working mouse tracking - is untouched; recreating it via close+reopen is
+  // what froze/crashed, so every constants<->keypose switch happens in place.
+  if (_miniViewer) {
+    __weak typeof(self) weakSelf = self;
+    _miniViewer.onHandleValue =
+        ^(NSString *label, NSArray<NSNumber *> *values) {
+          [weakSelf liveUpdateValues:values forLabel:label];
+          if (onHandleValue)
+            onHandleValue(label, values);
+        };
+    _miniViewer.onHandleDragBegin = onDragBegin;
+    _miniViewer.onHandleDragEnd = onDragEnd;
+  }
+
+  // Render-mode gating follows the mode: the off/film/onion pill and the
+  // filmstrip/onion layouts belong to keypose editing only. A keypose-born
+  // popover switched to constants drops the pill and falls back to the single
+  // frame; a constants-born popover switched to keypose gains the pill it
+  // never built at init.
+  BOOL wantPill =
+      editsKeypose && onModeChanged != nil && _descriptorPath.length > 0;
+  if (wantPill) {
+    [self _installRenderModePill:renderMode onModeChanged:onModeChanged];
+    _renderModePill.hidden = _compactMode;
+  } else if (_renderModePill) {
+    [_renderModePill removeFromSuperview];
+    _renderModePill = nil;
+  }
+  if (_miniViewer)
+    _miniViewer.renderMode = (NSInteger)renderMode;
+
+  // Add the keypose nav chevrons (keypose mode) or remove them (constants
+  // mode), then rebuild the header pinned after them. Same band geometry as
+  // -initWithLanes:; the mini-viewer sits below the band and is unaffected.
+  CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
+  CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
+  // Close + composition peek are preserved from init; nav + header follow.
+  NSLayoutXAxisAnchor *bandLead =
+      _compactButton
+          ? _compactButton.trailingAnchor
+          : (_rightPanelButton ? _rightPanelButton.trailingAnchor
+                               : (_sidebarButton ? _sidebarButton.trailingAnchor
+                                                 : self.leadingAnchor));
+  CGFloat bandLeadInset = _sidebarButton ? KKSpacingMD : KKPaddingMD;
+  if (editsKeypose && onNavigate && !_navPrevButton) {
+    _navPrevButton = [self _makeNavButton:@"chevron.left"
+                                direction:-1
+                               onNavigate:onNavigate];
+    _navNextButton = [self _makeNavButton:@"chevron.right"
+                                direction:1
+                               onNavigate:onNavigate];
+    [self addSubview:_navPrevButton];
+    [self addSubview:_navNextButton];
+    [NSLayoutConstraint activateConstraints:@[
+      [_navPrevButton.leadingAnchor constraintEqualToAnchor:bandLead
+                                                   constant:bandLeadInset],
+      [_navPrevButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                                   constant:bandCenterOffset],
+      [_navPrevButton.widthAnchor constraintEqualToConstant:bandH],
+      [_navPrevButton.heightAnchor constraintEqualToConstant:bandH],
+      [_navNextButton.leadingAnchor
+          constraintEqualToAnchor:_navPrevButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [_navNextButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                                   constant:bandCenterOffset],
+      [_navNextButton.widthAnchor constraintEqualToConstant:bandH],
+      [_navNextButton.heightAnchor constraintEqualToConstant:bandH],
+    ]];
+  } else if (!editsKeypose && _navPrevButton) {
+    [_navPrevButton removeFromSuperview];
+    [_navNextButton removeFromSuperview];
+    _navPrevButton = nil;
+    _navNextButton = nil;
+  }
+  if (_header) {
+    [_header removeFromSuperview];
+    _header = nil;
+  }
+  if (headerTitle.length > 0) {
+    _header = [[KKPopoverHeaderView alloc] initWithTitle:headerTitle
+                                                  detail:headerDetail
+                                                    icon:headerIcon];
+    [self addSubview:_header];
+    NSLayoutXAxisAnchor *titleLead =
+        _navNextButton ? _navNextButton.trailingAnchor : bandLead;
+    CGFloat titleLeadInset = _navNextButton ? KKSpacingMD : bandLeadInset;
+    [NSLayoutConstraint activateConstraints:@[
+      [_header.leadingAnchor constraintEqualToAnchor:titleLead
+                                            constant:titleLeadInset],
+      [_header.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                            constant:bandCenterOffset],
+    ]];
+  }
+
+  // Rebuild the rows in the new mode (mini-viewer + the band we just rebuilt
+  // are untouched by this call).
+  [self rebuildRowsWithLanes:lanes excludedLabels:excludedLabels];
+
+  // The mode flip changes which OSC set the mini-viewer draws (keypose handles
+  // vs the constant's). The delegate's boundary-editing state was already
+  // updated by the caller, but the paused MTKView doesn't repaint on its own -
+  // force a redraw + handle refresh so it isn't left showing the old mode's OSC
+  // until the next click (same repaint the keypose->keypose in-place update
+  // does).
+  [_miniViewer setNeedsDisplay:YES];
+  [_miniViewer setHandlesNeedDisplay];
 }
 
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode {
@@ -187,13 +254,17 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _onLinkToggled = [handler copy];
 }
 
+- (void)setOnSetLinkExpression:(void (^)(NSString *, NSString *))handler {
+  _onSetLinkExpression = [handler copy];
+}
+
 - (void)setOnGradientTypeChanged:(void (^)(NSString *, NSInteger))handler {
   _onGradientTypeChanged = [handler copy];
 }
 
 - (void)rebindLanes:(NSArray<KKLane *> *)lanes {
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *row = _rowsByLabel[lane.label];
+    _KKStaticValueRow *row = _rowsByLabel[lane.key];
     if (!row || lane.keyposes.count == 0)
       continue;
     [row applyValues:lane.keyposes.firstObject.values];
@@ -204,39 +275,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   }
 }
 
-+ (NSInteger)_popoverSizeIndex {
-  NSInteger i = [[NSUserDefaults standardUserDefaults]
-      integerForKey:kKKStaticPopoverSizeDefaultsKey];
-  return i < 0 ? 0 : (i > 2 ? 2 : i);
-}
-
-+ (NSInteger)popoverSizeIndex {
-  return [self _popoverSizeIndex];
-}
-
-+ (void)setPopoverSizeIndex:(NSInteger)sizeIndex {
-  [[NSUserDefaults standardUserDefaults]
-      setInteger:(sizeIndex < 0 ? 0 : (sizeIndex > 2 ? 2 : sizeIndex))
-          forKey:kKKStaticPopoverSizeDefaultsKey];
-}
-
-- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index {
-  if (!_sizePill)
-    return NSZeroRect;
-  return [_sizePill guidePillScreenRectAtIndex:index];
-}
-
 + (CGFloat)_popoverWidthForDescriptor:(NSString *)descriptorPath {
-  if (descriptorPath.length == 0)
-    return kPopoverW; // constants-only (no mini-viewer): never resized
-  switch ([self _popoverSizeIndex]) {
-  case 1:
-    return kCanvasPopoverWMedium;
-  case 2:
-    return kCanvasPopoverWLarge;
-  default:
-    return kCanvasPopoverW; // sm
-  }
+  return descriptorPath.length > 0 ? kCanvasPopoverW : kPopoverW;
 }
 
 + (CGFloat)_canvasHeightForAspect:(CGFloat)aspect width:(CGFloat)w {
@@ -282,7 +322,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Conditionally-hidden lanes (visibleWhen rule fails) contribute no row
   // height, so the page hugs only what is shown for the current Mode/Type.
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(lanes, valuesByLabel);
+      KKConditionalVisibleLaneKeys(lanes, valuesByLabel);
   // Wrapping pill rows (markers) grow per wrapped line, so the per-row height
   // is width-dependent: feed the popover width + label column to heightForLane.
   CGFloat cw = [self _popoverWidthForDescriptor:descriptorPath];
@@ -298,19 +338,25 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         selectedCategory.length ? selectedCategory : cats.firstObject[0];
     CGFloat page = 0;
     for (KKLane *lane in lanes)
-      if ([condVisible containsObject:lane.label] &&
+      if ([condVisible containsObject:lane.key] &&
           (lane.categoryKey.length == 0 ||
-           [lane.categoryKey isEqualToString:sel]))
+           [lane.categoryKey isEqualToString:sel])) {
         page += [_KKStaticValueRow heightForLane:lane
                                     contentWidth:cw
                                 labelColumnWidth:labelColumnWidth];
+        if (KKLaneHasExpressionEditor(lane))
+          page += kKKExprEditorRowH;
+      }
     rows = page + kKKCategoryPillH + KKPaddingMD;
   } else {
     for (KKLane *lane in lanes)
-      if ([condVisible containsObject:lane.label])
+      if ([condVisible containsObject:lane.key]) {
         rows += [_KKStaticValueRow heightForLane:lane
                                     contentWidth:cw
                                 labelColumnWidth:labelColumnWidth];
+        if (KKLaneHasExpressionEditor(lane))
+          rows += kKKExprEditorRowH;
+      }
   }
   // No trailing bottom pad: the rows scroller is pinned flush to the popover's
   // bottom edge (so its fade shadow sits at the absolute bottom). The leading
@@ -329,6 +375,239 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 
 - (BOOL)isFlipped {
   return YES;
+}
+
+- (NSView *)panelDragHandleView {
+  return _panelDragHandle;
+}
+
+- (NSSize)minimumHostedContentSize {
+  if (_compactMode)
+    return NSMakeSize(375.0, 175.0);
+  return NSMakeSize(375.0, _descriptorPath.length > 0 ? 240.0 : 160.0);
+}
+
+// Current intrinsic height of the visible parameter stack. Hidden category /
+// conditional rows collapse completely. Reading the arranged views directly
+// also includes supplementary expression rows, which the lane model alone
+// cannot describe accurately after an expand/collapse.
+- (CGFloat)_visibleRowsNaturalHeight {
+  CGFloat height = 0.0;
+  for (NSView *view in _stack.arrangedSubviews) {
+    if (view.hidden)
+      continue;
+    CGFloat h = view.intrinsicContentSize.height;
+    if (h == NSViewNoIntrinsicMetric || h < 0.0)
+      h = view.fittingSize.height;
+    height += MAX(0.0, h);
+  }
+  return height;
+}
+
+// Reflow a freely-sized persistent panel. The viewport itself always fills
+// the available width; KKMiniViewerView aspect-fits the media inside it and
+// uses the remaining canvas for pan / zoom. Normal parameter pages hug their
+// real row height and donate spare room to the viewer. A code page does the
+// reverse: its editor expands to the bottom so only the editor's own text
+// scroller is active, rather than nesting it inside a second tall scroller.
+- (void)applyHostedContentSize:(NSSize)size {
+  if (size.width <= 0.0 || size.height <= 0.0)
+    return;
+  _hostedContentSize = size;
+  [self _applyMaxWidthCeiling];
+  CGFloat contentWidth = size.width;
+  _categoryPillBar.maxIntrinsicWidth =
+      MAX(1.0, contentWidth - 2.0 * KKPaddingMD);
+  for (NSString *label in _rowsByLabel)
+    [_rowsByLabel[label] updateContentWidth:contentWidth];
+
+  if (_miniViewerHeightConstraint) {
+    // Reset a previously stretched code row before measuring this pass.
+    _KKStaticValueRow *visibleCodeRow = nil;
+    CGFloat codeBaseHeight = 0.0;
+    for (KKLane *lane in _lanes) {
+      _KKStaticValueRow *row = _rowsByLabel[lane.key];
+      if (lane.valueType != KKLaneValueTypeCode || !row || row.hidden)
+        continue;
+      CGFloat base = [_KKStaticValueRow heightForLane:lane
+                                         contentWidth:contentWidth
+                                     labelColumnWidth:_labelColumnWidth];
+      [row setEditorRowHeight:base];
+      if (!visibleCodeRow) {
+        visibleCodeRow = row;
+        codeBaseHeight = base;
+      }
+    }
+
+    CGFloat rowsH = [self _visibleRowsNaturalHeight];
+    CGFloat topH =
+        _hasHeader
+            ? KKPaddingMD +
+                  [_KKStaticValuesPopoverView _renderModePillHeaderHeight] +
+                  KKPaddingMD
+            : KKPaddingMD;
+    CGFloat categoryH = _categoryPillBar ? kKKCategoryPillH + KKPaddingMD : 0.0;
+    CGFloat betweenH =
+        _accessoryTopConstraint.constant + _accessoryHeight + categoryH;
+    CGFloat sharedH = MAX(0.0, size.height - topH - betweenH);
+    if (_compactMode) {
+      // With the mini viewer hidden, the rows viewport owns all remaining
+      // space. A code page must therefore stretch its editor through that
+      // viewport; retaining the expanded-mode 150pt cap leaves a dead region
+      // below the editor and creates an unnecessary second scrolling area.
+      if (visibleCodeRow) {
+        CGFloat otherRowsH = MAX(0.0, rowsH - codeBaseHeight);
+        [visibleCodeRow setEditorRowHeight:MAX(100.0, sharedH - otherRowsH)];
+      }
+      _miniViewerHeightConstraint.constant = 0.0;
+      [self setNeedsLayout:YES];
+      [self layoutSubtreeIfNeeded];
+      return;
+    }
+    // The viewer is the primary editor surface. Ordinary parameter pages may
+    // use at most 40% of the shared height (viewer gets at least 60%). A code
+    // page deliberately starts 50/50 so viewer and editor grow equally until
+    // the editor reaches its cap below.
+    CGFloat maxRowsViewportH = floor(sharedH * (visibleCodeRow ? 0.5 : 0.4));
+    if (visibleCodeRow) {
+      CGFloat otherRowsH = MAX(0.0, rowsH - codeBaseHeight);
+      // Viewer and code grow together until the editor reaches 250pt. From
+      // there every additional point belongs to the viewer. The 200pt floor is
+      // the last usable text area; below that the outer rows scroller is the
+      // fallback instead of crushing the editor chrome.
+      CGFloat codeH = MIN(250.0, MAX(200.0, maxRowsViewportH - otherRowsH));
+      [visibleCodeRow setEditorRowHeight:codeH];
+      rowsH = otherRowsH + codeH;
+    }
+    // When the panel is too short, the rows viewport shrinks and its outer
+    // scroller becomes the overflow fallback. Otherwise it exactly hugs the
+    // rows, leaving every spare point to the mini viewer.
+    CGFloat rowsViewportH = MIN(rowsH, MAX(0.0, maxRowsViewportH));
+    _miniViewerHeightConstraint.constant = MAX(1.0, sharedH - rowsViewportH);
+  }
+  [self setNeedsLayout:YES];
+  [self layoutSubtreeIfNeeded];
+}
+
+- (NSButton *)_makeCloseButton {
+  NSImage *img = [NSImage imageWithSystemSymbolName:@"xmark"
+                           accessibilityDescription:nil];
+  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
+                                   target:self
+                                   action:@selector(_closeButtonClicked:)];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  // Fire on mouseDOWN, not mouseUp: after the popover's shared ViewBridge
+  // window is closed+reopened, FCP forwards the mouseDown but not the matching
+  // mouseUp, so a normal (mouseUp) button would highlight and never fire.
+  // mouseDown is always delivered, so the close still works across a reopen.
+  [b.cell sendActionOn:NSEventMaskLeftMouseDown];
+  return b;
+}
+
+- (KKPopoverPeekButton *)_makeCompositionPeekButton {
+  __weak typeof(self) weak = self;
+  return KKCreateCompositionPeekButton(^(BOOL held) {
+    __strong typeof(weak) self = weak;
+    if (self.onCompositionPeekChanged)
+      self.onCompositionPeekChanged(held);
+  });
+}
+
+- (KKPopoverSidebarButton *)_makeSidebarButton {
+  __weak typeof(self) weak = self;
+  return KKCreateSidebarVisibilityButton(YES, ^(BOOL visible) {
+    __strong typeof(weak) self = weak;
+    if (self.onSidebarVisibilityChanged)
+      self.onSidebarVisibilityChanged(visible);
+  });
+}
+
+- (void)setSidebarVisible:(BOOL)visible {
+  _sidebarButton.sidebarVisible = visible;
+}
+
+- (KKPopoverSidebarButton *)_makeRightPanelButton {
+  __weak typeof(self) weak = self;
+  return KKCreateRightPanelVisibilityButton(YES, ^(BOOL visible) {
+    __strong typeof(weak) self = weak;
+    if (self.onRightPanelVisibilityChanged)
+      self.onRightPanelVisibilityChanged(visible);
+  });
+}
+
+- (void)setRightPanelVisible:(BOOL)visible {
+  _rightPanelButton.sidebarVisible = visible;
+}
+
+- (void)setRightPanelToggleVisible:(BOOL)visible {
+  if (!_rightPanelButton)
+    return;
+  _rightPanelButton.hidden = !visible;
+  _rightPanelLeadingConstraint.constant = visible ? KKPaddingSM : 0.0;
+  _rightPanelWidthConstraint.constant =
+      visible ? [_KKStaticValuesPopoverView _renderModePillHeaderHeight] : 0.0;
+}
+
+- (NSButton *)_makeCompactButton {
+  NSString *label = KKLoc(@"Use compact editor",
+                          @"Accessibility label for hiding the mini viewer in "
+                           "the constants/keypose editor.");
+  NSImage *image =
+      [NSImage imageWithSystemSymbolName:@"rectangle.compress.vertical"
+                accessibilityDescription:label];
+  NSButton *button = [NSButton buttonWithImage:image ?: [NSImage new]
+                                        target:self
+                                        action:@selector(_compactClicked:)];
+  button.translatesAutoresizingMaskIntoConstraints = NO;
+  button.bordered = NO;
+  button.bezelStyle = NSBezelStyleShadowlessSquare;
+  button.imageScaling = NSImageScaleProportionallyDown;
+  button.accessibilityLabel = label;
+  button.toolTip = KKLoc(@"Hide or show the mini viewer. (V)",
+                         @"Tooltip for the compact editor toggle.");
+  [button.cell sendActionOn:NSEventMaskLeftMouseDown];
+  return button;
+}
+
+- (void)_compactClicked:(id)sender {
+  BOOL compact = !_compactMode;
+  if (self.onCompactModeChanged)
+    self.onCompactModeChanged(compact);
+  else
+    [self setCompactMode:compact];
+}
+
+- (void)setCompactMode:(BOOL)compact {
+  _compactMode = compact;
+  _miniViewer.activitySuspended = compact;
+  _compactButton.state =
+      compact ? NSControlStateValueOn : NSControlStateValueOff;
+  _compactButton.contentTintColor = compact ? NSColor.accentMatchingHost : nil;
+  _miniViewerScroll.hidden = compact;
+  _renderModePill.hidden = compact;
+  if (_miniViewerHeightConstraint)
+    _miniViewerHeightConstraint.constant = compact ? 0.0 : 1.0;
+  // In compact mode the zero-height viewer already begins one standard gap
+  // below the title bar. Do not add the viewer-to-accessory gap a second time.
+  if (_accessoryTopConstraint)
+    _accessoryTopConstraint.constant =
+        compact ? 0.0
+                : (_accessoryHost.subviews.count
+                       ? _accessoryTopInset - [self _accessoryInstalledTopDrop]
+                       : _accessoryTopInset);
+  [self applyHostedContentSize:_hostedContentSize];
+}
+
+- (NSSize)naturalHostedContentSize {
+  return [self _naturalContentSize];
+}
+
+- (void)_closeButtonClicked:(id)sender {
+  if (self.onCloseTapped)
+    self.onCloseTapped();
 }
 
 - (NSButton *)_makeNavButton:(NSString *)symbolName
@@ -381,53 +660,35 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return pill;
 }
 
-// A grouped 3-segment radio pill (sm / md / lg) styled like the render-mode
-// pill beside it; the icons grade from compact to expanded.
-- (KKPillToggleRowView *)_makeSizePillSelected:(NSInteger)sel
-                                 onSizeChanged:(void (^)(NSInteger))cb {
-  NSImage * (^sym)(NSString *) = ^NSImage *(NSString *name) {
-    NSImage *img = [NSImage imageWithSystemSymbolName:name
-                             accessibilityDescription:nil];
-    return img ?: [[NSImage alloc] initWithSize:NSMakeSize(11, 11)];
-  };
-  KKPillToggleRowView *pill = [[KKPillToggleRowView alloc] initWithIcons:@[
-    sym(@"rectangle.arrowtriangle.2.inward"), sym(@"rectangle"),
-    sym(@"rectangle.arrowtriangle.2.outward")
+// Build + constrain the trailing render-mode pill (off/film/onion).
+// Shared by init and -reconfigureForEditsKeypose:...: a constants-born popover
+// has no pill until an in-place switch to keypose mode installs one. No-op if
+// already installed.
+- (void)_installRenderModePill:(KKMiniViewerRenderMode)renderMode
+                 onModeChanged:(void (^)(KKMiniViewerRenderMode))onModeChanged {
+  if (_renderModePill)
+    return;
+  CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
+  CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
+  __weak typeof(self) weakSelfPill = self;
+  void (^wrappedModeChanged)(KKMiniViewerRenderMode) =
+      ^(KKMiniViewerRenderMode m) {
+        __strong typeof(weakSelfPill) ss = weakSelfPill;
+        ss->_miniViewer.renderMode = (NSInteger)m;
+        if (onModeChanged)
+          onModeChanged(m);
+      };
+  KKPillToggleRowView *pill = [self _makeRenderModePill:renderMode
+                                          onModeChanged:wrappedModeChanged];
+  _renderModePill = pill;
+  [self addSubview:pill];
+  [NSLayoutConstraint activateConstraints:@[
+    [pill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                        constant:-KKPaddingMD],
+    [pill.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                       constant:bandCenterOffset],
+    [pill.heightAnchor constraintEqualToConstant:bandH],
   ]];
-  pill.translatesAutoresizingMaskIntoConstraints = NO;
-  pill.grouped = YES;
-  pill.radioMode = YES;
-  NSMutableArray<NSNumber *> *states = [NSMutableArray array];
-  for (NSInteger i = 0; i < 3; i++)
-    [states addObject:@(i == sel)];
-  pill.states = states;
-  pill.onToggled = ^(NSInteger index, BOOL isOn) {
-    if (!isOn || !cb)
-      return;
-    cb(index);
-  };
-  return pill;
-}
-
-// Persist the global size preference, grow/shrink the mini-viewer height
-// constraint in place, then re-fit the popover (the width class method now
-// reports the selected size's width, so the height calc follows). The pill
-// repaints its own active segment.
-- (void)_setSizeIndex:(NSInteger)idx {
-  [[NSUserDefaults standardUserDefaults]
-      setInteger:idx
-          forKey:kKKStaticPopoverSizeDefaultsKey];
-  CGFloat W =
-      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath];
-  _miniViewerHeightConstraint.constant =
-      [_KKStaticValuesPopoverView _canvasHeightForAspect:_clipAspect width:W];
-  // Wrapping pill rows (markers) don't rebuild on resize, so re-derive their
-  // block width + row height for the new content width before refitting.
-  for (NSString *label in _rowsByLabel)
-    [_rowsByLabel[label] updateContentWidth:W];
-  [self _resizePopoverToSelectedCategory];
-  if (_onSizeChanged)
-    _onSizeChanged(idx);
 }
 
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
@@ -445,6 +706,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                   onDragBegin:(void (^)(void))onDragBegin
                     onDragEnd:(void (^)(void))onDragEnd
                  editsKeypose:(BOOL)editsKeypose
+        showsRightPanelToggle:(BOOL)showsRightPanelToggle
               initialCategory:(NSString *)initialCategory {
   BOOL showPill = (onModeChanged != nil && descriptorPath.length > 0);
   BOOL hasHeader = showPill || headerTitle.length > 0;
@@ -467,6 +729,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _clipAspect = clipAspect;
   _rowsByLabel = [NSMutableDictionary dictionary];
   _excludedRowsByLabel = [NSMutableDictionary dictionary];
+  _exprRowsByLabel = [NSMutableDictionary dictionary];
+  _exprExpandedLabels = [NSMutableSet set];
+  _exprEditorByLabel = [NSMutableDictionary dictionary];
   _editsKeypose = editsKeypose;
   _onHandleValue = [onHandleValue copy];
   _onDragBegin = [onDragBegin copy];
@@ -478,15 +743,102 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   CGFloat canvasTopInset = KKPaddingMD;
 
   // Header band (one row, shared): nav chevrons (leftmost, fixed position) →
-  // title; render-mode pill trailing. Everything shares the band's
-  // vertical centre.
+  // title; render-mode pill trailing. A transparent drag strip spans the whole
+  // band behind those controls, so decorative and empty space moves the panel.
   CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
   CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
   BOOL hasNav = (showPill && onNavigate != nil);
   BOOL hasBand = (showPill || headerTitle.length > 0);
 
-  NSLayoutXAxisAnchor *titleLead = self.leadingAnchor;
-  CGFloat titleLeadInset = KKPaddingMD;
+  if (hasBand) {
+    _panelDragHandle = [[KKPanelDragHandleView alloc] initWithFrame:NSZeroRect];
+    _panelDragHandle.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_panelDragHandle];
+    [NSLayoutConstraint activateConstraints:@[
+      [_panelDragHandle.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor],
+      [_panelDragHandle.trailingAnchor
+          constraintEqualToAnchor:self.trailingAnchor],
+      [_panelDragHandle.topAnchor constraintEqualToAnchor:self.topAnchor],
+      [_panelDragHandle.heightAnchor
+          constraintEqualToConstant:KKPaddingMD + bandH + KKPaddingMD],
+    ]];
+  }
+
+  // Close then composition peek, leftmost in the band - always present (both
+  // modes). Nav + header follow.
+  NSLayoutXAxisAnchor *bandLead = self.leadingAnchor;
+  CGFloat bandLeadInset = KKPaddingMD;
+  if (hasBand) {
+    _closeButton = [self _makeCloseButton];
+    _compositionPeekButton = [self _makeCompositionPeekButton];
+    _sidebarButton = [self _makeSidebarButton];
+    if (showsRightPanelToggle)
+      _rightPanelButton = [self _makeRightPanelButton];
+    if (descriptorPath.length > 0)
+      _compactButton = [self _makeCompactButton];
+    [self addSubview:_closeButton];
+    [self addSubview:_compositionPeekButton];
+    [self addSubview:_sidebarButton];
+    if (_rightPanelButton)
+      [self addSubview:_rightPanelButton];
+    if (_compactButton)
+      [self addSubview:_compactButton];
+    [NSLayoutConstraint activateConstraints:@[
+      [_closeButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                                 constant:KKPaddingMD],
+      [_closeButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                                 constant:bandCenterOffset],
+      [_closeButton.widthAnchor constraintEqualToConstant:bandH],
+      [_closeButton.heightAnchor constraintEqualToConstant:bandH],
+      [_compositionPeekButton.leadingAnchor
+          constraintEqualToAnchor:_closeButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [_compositionPeekButton.centerYAnchor
+          constraintEqualToAnchor:_closeButton.centerYAnchor],
+      [_compositionPeekButton.widthAnchor constraintEqualToConstant:bandH],
+      [_compositionPeekButton.heightAnchor constraintEqualToConstant:bandH],
+      [_sidebarButton.leadingAnchor
+          constraintEqualToAnchor:_compositionPeekButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [_sidebarButton.centerYAnchor
+          constraintEqualToAnchor:_compositionPeekButton.centerYAnchor],
+      [_sidebarButton.widthAnchor constraintEqualToConstant:bandH],
+      [_sidebarButton.heightAnchor constraintEqualToConstant:bandH],
+    ]];
+    if (_rightPanelButton) {
+      _rightPanelLeadingConstraint = [_rightPanelButton.leadingAnchor
+          constraintEqualToAnchor:_sidebarButton.trailingAnchor
+                         constant:KKPaddingSM];
+      _rightPanelWidthConstraint =
+          [_rightPanelButton.widthAnchor constraintEqualToConstant:bandH];
+      [NSLayoutConstraint activateConstraints:@[
+        _rightPanelLeadingConstraint,
+        [_rightPanelButton.centerYAnchor
+            constraintEqualToAnchor:_sidebarButton.centerYAnchor],
+        _rightPanelWidthConstraint,
+        [_rightPanelButton.heightAnchor constraintEqualToConstant:bandH],
+      ]];
+    }
+    if (_compactButton) {
+      NSView *beforeCompact = _rightPanelButton ?: _sidebarButton;
+      [NSLayoutConstraint activateConstraints:@[
+        [_compactButton.leadingAnchor
+            constraintEqualToAnchor:beforeCompact.trailingAnchor
+                           constant:KKPaddingSM],
+        [_compactButton.centerYAnchor
+            constraintEqualToAnchor:_sidebarButton.centerYAnchor],
+        [_compactButton.widthAnchor constraintEqualToConstant:bandH],
+        [_compactButton.heightAnchor constraintEqualToConstant:bandH],
+      ]];
+    }
+    bandLead = (_compactButton ?: _rightPanelButton ?: _sidebarButton)
+                   .trailingAnchor;
+    bandLeadInset = KKSpacingMD;
+  }
+
+  NSLayoutXAxisAnchor *titleLead = bandLead;
+  CGFloat titleLeadInset = bandLeadInset;
   if (hasNav) {
     _navPrevButton = [self _makeNavButton:@"chevron.left"
                                 direction:-1
@@ -497,8 +849,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [self addSubview:_navPrevButton];
     [self addSubview:_navNextButton];
     [NSLayoutConstraint activateConstraints:@[
-      [_navPrevButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                                   constant:KKPaddingMD],
+      [_navPrevButton.leadingAnchor constraintEqualToAnchor:bandLead
+                                                   constant:bandLeadInset],
       [_navPrevButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
                                                    constant:bandCenterOffset],
       [_navPrevButton.widthAnchor constraintEqualToConstant:bandH],
@@ -528,51 +880,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     ]];
   }
 
-  // Size pill (sm/md/lg): trailing-most in the band whenever there's a
-  // mini-viewer, sitting beside the render-mode pill as a second grouped pill.
-  if (descriptorPath.length > 0) {
-    __weak typeof(self) weakSelfSize = self;
-    _sizePill = [self
-        _makeSizePillSelected:[_KKStaticValuesPopoverView _popoverSizeIndex]
-                onSizeChanged:^(NSInteger idx) {
-                  [weakSelfSize _setSizeIndex:idx];
-                }];
-    [self addSubview:_sizePill];
-    [NSLayoutConstraint activateConstraints:@[
-      [_sizePill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                               constant:-KKPaddingMD],
-      [_sizePill.centerYAnchor constraintEqualToAnchor:self.topAnchor
-                                              constant:bandCenterOffset],
-      [_sizePill.heightAnchor constraintEqualToConstant:bandH],
-    ]];
-  }
-
-  if (showPill) {
-    __weak typeof(self) weakSelfPill = self;
-    void (^wrappedModeChanged)(KKMiniViewerRenderMode) =
-        ^(KKMiniViewerRenderMode m) {
-          __strong typeof(weakSelfPill) ss = weakSelfPill;
-          ss->_miniViewer.renderMode = (NSInteger)m;
-          if (onModeChanged)
-            onModeChanged(m);
-        };
-    KKPillToggleRowView *pill = [self _makeRenderModePill:renderMode
-                                            onModeChanged:wrappedModeChanged];
-    _renderModePill = pill;
-    [self addSubview:pill];
-    // Sit to the left of the size pill (which is trailing-most when a
-    // mini-viewer is present); fall back to the band's trailing edge otherwise.
-    NSLayoutXAxisAnchor *pillTrail =
-        _sizePill ? _sizePill.leadingAnchor : self.trailingAnchor;
-    CGFloat pillTrailInset = _sizePill ? -KKSpacingMD : -KKPaddingMD;
-    [NSLayoutConstraint activateConstraints:@[
-      [pill.trailingAnchor constraintEqualToAnchor:pillTrail
-                                          constant:pillTrailInset],
-      [pill.centerYAnchor constraintEqualToAnchor:self.topAnchor
-                                         constant:bandCenterOffset],
-      [pill.heightAnchor constraintEqualToConstant:bandH],
-    ]];
-  }
+  if (showPill)
+    [self _installRenderModePill:renderMode onModeChanged:onModeChanged];
 
   if (hasBand) {
     canvasTopAnchor = self.topAnchor;
@@ -632,11 +941,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     sv.verticalScrollElasticity = NSScrollElasticityNone;
     sv.documentView = _miniViewer;
     [self addSubview:sv];
+    _miniViewerScroll = sv;
     NSClipView *clip = sv.contentView;
+    CGFloat initialCanvasWidth = W - 2.0 * KKPaddingMD;
     _miniViewerHeightConstraint = [sv.heightAnchor
-        constraintEqualToConstant:[_KKStaticValuesPopoverView
-                                      _canvasHeightForAspect:clipAspect
-                                                       width:W]];
+        constraintEqualToConstant:initialCanvasWidth /
+                                  (clipAspect > 0 ? clipAspect : 16.0 / 9.0)];
     [NSLayoutConstraint activateConstraints:@[
       [sv.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                        constant:KKPaddingMD],
@@ -656,6 +966,29 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     stackTopAnchor = sv.bottomAnchor;
     stackTopInset = KKPaddingMD;
   }
+
+  // The host accessory strip sits between the mini-viewer band and everything
+  // below it, IN the chain rather than over it: the category nav (and, with no
+  // pill, the row scroller) pins below the host, and the host pins below the
+  // mini-viewer. Empty and zero-height here, so a host that never installs one
+  // gets the layout it had before this existed.
+  _accessoryHost = [[NSView alloc] initWithFrame:NSZeroRect];
+  _accessoryHost.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:_accessoryHost];
+  _accessoryHeightConstraint =
+      [_accessoryHost.heightAnchor constraintEqualToConstant:0.0];
+  _accessoryTopInset = stackTopInset;
+  _accessoryTopConstraint =
+      [_accessoryHost.topAnchor constraintEqualToAnchor:stackTopAnchor
+                                               constant:stackTopInset];
+  [NSLayoutConstraint activateConstraints:@[
+    [_accessoryHost.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [_accessoryHost.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    _accessoryTopConstraint,
+    _accessoryHeightConstraint,
+  ]];
+  stackTopAnchor = _accessoryHost.bottomAnchor;
+  stackTopInset = 0.0;
 
   // Capture the anchor the category nav (or, when there's no pill, the row
   // stack) pins below - the mini-viewer / header bottom - so the nav can be
@@ -692,7 +1025,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _KKStaticValueRow *row = [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
-    _rowsByLabel[lane.label] = row;
+    _rowsByLabel[lane.key] = row;
+    [self _installExprEditorForLane:lane];
   }
   [self _applyCategoryFilter];
   return self;
@@ -706,8 +1040,36 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // falls back to the first category. Lets the constants popover drop a tab live
 // when its last constant lane is moved to animated, without reopening (no
 // mini-viewer blink).
+// Re-assert the popover's width ceiling - and the category bar's matching
+// intrinsic cap - for the current hosted width. Called from the nav rebuild
+// (the initial build, before the panel exists) and from every hosted resize, so
+// the ceiling follows the panel instead of pinning the editor to its first
+// width.
+//
+// The ceiling exists because a single wide row - e.g. a 4-component lane whose
+// auto-sized component labels are long - otherwise propagates its required
+// width up through `row.width == stack.width` and NSPopover grows the whole
+// popover past its hardcoded size, leaving the centred pill bar over the edge.
+- (void)_applyMaxWidthCeiling {
+  CGFloat maxW = _hostedContentSize.width > 0.0
+                     ? _hostedContentSize.width
+                     : [_KKStaticValuesPopoverView
+                           _popoverWidthForDescriptor:_descriptorPath];
+  if (!_maxWidthConstraint) {
+    _maxWidthConstraint =
+        [self.widthAnchor constraintLessThanOrEqualToConstant:maxW];
+    _maxWidthConstraint.active = YES;
+  } else if (fabs(_maxWidthConstraint.constant - maxW) > 0.5) {
+    _maxWidthConstraint.constant = maxW;
+  }
+  _categoryPillBar.maxIntrinsicWidth = maxW - KKPaddingMD * 2;
+}
+
 - (void)_rebuildCategoryNavForLanes:(NSArray<KKLane *> *)lanes
                     initialCategory:(NSString *)requested {
+  _categoryDefinitions = [KKOrderedLaneCategories(lanes) copy];
+  [_categoryPillBar removeFromSuperview];
+  _categoryPillBar = nil;
   [_categoryPill removeFromSuperview];
   _categoryPill = nil;
   _stackTopConstraint.active = NO;
@@ -722,6 +1084,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         if (!ss)
           return;
         ss->_selectedCategory = categoryKey;
+        // A source may have been renamed since these rows were built (the
+        // shader's own name lives a category away), and switching category
+        // only reveals rows - it doesn't rebuild them.
+        [ss _retranslateExprEditors];
         [ss _applyCategoryFilter];
         [ss _resizePopoverToSelectedCategory];
         if (ss.onCategoryChanged)
@@ -731,14 +1097,40 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _categoryKeys = KKLaneCategoryKeys(lanes);
     _selectedCategory = KKResolveLaneCategory(lanes, requested);
     _categoryPill = pill;
-    [self addSubview:pill];
+    // Wrapped in the same edge-faded horizontal scroll the lane-filter
+    // checklist uses. Added bare, a long category run overflowed the popover
+    // and the tabs past the edge were simply unreachable - and a shader can
+    // name as many groups as it likes, so this isn't a rare case.
+    KKPillBar *bar = [[KKPillBar alloc] initWithPillRow:pill];
+    bar.translatesAutoresizingMaskIntoConstraints = NO;
+    // Cap the intrinsic width at what this popover actually has. Reporting the
+    // full pill run instead stretched the content VIEW past the popover's fixed
+    // contentSize (540 -> 597 with 9 categories) while the WINDOW stayed 540,
+    // so the bar overhung the edge until a reopen re-created the popover at the
+    // inflated size. Capped, the inner scroll takes over as intended below.
+    bar.maxIntrinsicWidth = [_KKStaticValuesPopoverView
+                                _popoverWidthForDescriptor:_descriptorPath] -
+                            KKPaddingMD * 2;
+    // Hug the content while it fits, but near-zero compression resistance lets
+    // it shrink so the inner scroll takes over instead of clipping.
+    [bar setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                    forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [bar setContentCompressionResistancePriority:1
+                                  forOrientation:
+                                      NSLayoutConstraintOrientationHorizontal];
+    _categoryPillBar = bar;
+    [self addSubview:bar];
     [NSLayoutConstraint activateConstraints:@[
-      [pill.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-      [pill.topAnchor constraintEqualToAnchor:_categoryNavTopAnchor
-                                     constant:_categoryNavTopInset],
-      [pill.heightAnchor constraintEqualToConstant:kKKCategoryPillH],
+      [bar.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+      [bar.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor
+                                                     constant:KKPaddingMD],
+      [bar.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor
+                                                   constant:-KKPaddingMD],
+      [bar.topAnchor constraintEqualToAnchor:_categoryNavTopAnchor
+                                    constant:_categoryNavTopInset],
+      [bar.heightAnchor constraintEqualToConstant:kKKCategoryPillH],
     ]];
-    top = pill.bottomAnchor;
+    top = bar.bottomAnchor;
     inset = KKPaddingMD;
   } else {
     _categoryKeys = nil;
@@ -747,6 +1139,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _stackTopConstraint = [_rowsScroll.topAnchor constraintEqualToAnchor:top
                                                               constant:inset];
   _stackTopConstraint.active = YES;
+  // Idempotent; also covers the initial build, which runs before the popover
+  // (and so before the first -_applyContentSize).
+  [self _applyMaxWidthCeiling];
 }
 
 // (Re)seed the live per-lane values from the current `_lanes` snapshot, so the
@@ -757,8 +1152,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       [NSMutableDictionary dictionaryWithCapacity:_lanes.count];
   _laneGatesVisibility = NO;
   for (KKLane *l in _lanes) {
-    _currentValuesByLabel[l.label] = l.keyposes.firstObject.values ?: @[];
-    if (l.visibleWhenLabel.length)
+    _currentValuesByLabel[l.key] = l.keyposes.firstObject.values ?: @[];
+    if (l.visibleWhenKey.length || l.maxControllerKey.length)
       _laneGatesVisibility = YES;
   }
 }
@@ -769,7 +1164,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // NSStackView collapses hidden arranged subviews, so visible rows pack to top.
 - (void)_applyCategoryFilter {
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_lanes, _currentValuesByLabel);
+      KKConditionalVisibleLaneKeys(_lanes, _currentValuesByLabel);
   NSString * (^catFor)(NSString *) = ^(NSString *label) {
     return self->_rowCategoryByLabel[label];
   };
@@ -786,19 +1181,106 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         catHidden(label) || ![condVisible containsObject:label];
   for (NSString *label in _excludedRowsByLabel)
     _excludedRowsByLabel[label].hidden = catHidden(label);
+  // An inline expression editor follows its value row's visibility exactly.
+  for (NSString *label in _exprRowsByLabel)
+    _exprRowsByLabel[label].hidden =
+        catHidden(label) || ![condVisible containsObject:label];
+  [self _refreshDynamicMaxRows];
+}
+
+// Rows built once at open keep the slider max they were built with; a lane
+// whose max tracks another lane (maxControllerKey, e.g. Mirage's colour count
+// vs Type) needs its slider re-bounded whenever the controller changes. Runs on
+// every visibility pass (which re-fires on any gating edit), so the max stays
+// live.
+- (void)_refreshDynamicMaxRows {
+  for (KKLane *l in _lanes) {
+    if (l.maxControllerKey.length == 0 ||
+        l.componentMaxByControllerValue.count == 0)
+      continue;
+    _KKStaticValueRow *row = _rowsByLabel[l.key];
+    if (!row)
+      continue;
+    KKLane *adjusted = [self _laneWithDynamicMaxApplied:l];
+    double effMax = adjusted.componentMax.count
+                        ? adjusted.componentMax[0].doubleValue
+                        : 0.0;
+    [row applySliderMax:effMax];
+  }
+}
+
+- (CGFloat)_accessoryInstalledTopDrop {
+  return MIN(_accessoryTopInset, KKPaddingMD);
+}
+
+- (void)setAccessoryView:(NSView *)view height:(CGFloat)height {
+  for (NSView *v in _accessoryHost.subviews.copy)
+    [v removeFromSuperview];
+  _accessoryHeight = view ? MAX(0.0, height) : 0.0;
+  _accessoryHeightConstraint.constant = _accessoryHeight;
+  // An installed strip pads itself, so the ONE KKPaddingMD of separation the
+  // chain would give it goes: kept, it stacked on the strip's own top inset and
+  // the strip's content sat 12 above / 6 below. Only that one pad is dropped -
+  // with no mini-viewer the inset also clears a header band, which still has to
+  // be cleared. Restored with the strip, so a popover that never installs one
+  // lays out exactly as before.
+  _accessoryTopConstraint.constant =
+      view ? _accessoryTopInset - [self _accessoryInstalledTopDrop]
+           : _accessoryTopInset;
+  if (view) {
+    view.translatesAutoresizingMaskIntoConstraints = NO;
+    [_accessoryHost addSubview:view];
+    [NSLayoutConstraint activateConstraints:@[
+      [view.leadingAnchor constraintEqualToAnchor:_accessoryHost.leadingAnchor],
+      [view.trailingAnchor
+          constraintEqualToAnchor:_accessoryHost.trailingAnchor],
+      [view.topAnchor constraintEqualToAnchor:_accessoryHost.topAnchor],
+      [view.bottomAnchor constraintEqualToAnchor:_accessoryHost.bottomAnchor],
+    ]];
+  }
+  // No-op before the popover exists (the presenter's initial clamp reads the
+  // new natural size); re-fits it afterwards.
+  [self _applyContentSize];
 }
 
 // The popover content's natural (unclamped) size for the current lanes /
 // category / live values.
 - (CGSize)_naturalContentSize {
-  return NSMakeSize(
-      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
+  CGFloat h =
       [_KKStaticValuesPopoverView _heightForLanes:_lanes
                                    descriptorPath:_descriptorPath
                                        clipAspect:_clipAspect
                                     reserveHeader:_hasHeader
                                  selectedCategory:_selectedCategory
-                                    valuesByLabel:_currentValuesByLabel]);
+                                    valuesByLabel:_currentValuesByLabel];
+  if (_compactMode && _descriptorPath.length > 0) {
+    h -= [_KKStaticValuesPopoverView
+             _canvasHeightForAspect:_clipAspect
+                              width:[_KKStaticValuesPopoverView
+                                        _popoverWidthForDescriptor:
+                                            _descriptorPath]] +
+         KKPaddingMD;
+  }
+  // The class-level height calc assumes every expression editor is COLLAPSED
+  // (it has no instance state); add the extra height for each visible EXPANDED
+  // one.
+  CGFloat extra = kKKExprEditorExpandedH - kKKExprEditorRowH;
+  for (NSString *label in _exprExpandedLabels) {
+    NSView *ed = _exprRowsByLabel[label];
+    if (ed && !ed.hidden)
+      h += extra;
+  }
+  // Likewise instance state: the host strip is installed after init, so the
+  // class-level calc knows nothing about it. It costs its own height and gives
+  // back the external gap the install zeroes (see -setAccessoryView:height:),
+  // which that calc counted as part of the mini-viewer band.
+  if (_accessoryHeight > 0.0)
+    h += _accessoryHeight - [self _accessoryInstalledTopDrop];
+  return NSMakeSize(_hostedContentSize.width > 0.0
+                        ? _hostedContentSize.width
+                        : [_KKStaticValuesPopoverView
+                              _popoverWidthForDescriptor:_descriptorPath],
+                    h);
 }
 
 // Clamp a natural content height to what fits on `screen` (with a margin and a
@@ -814,13 +1296,20 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // rows scroll rather than running off a small display. No-op before the popover
 // exists (initial sizing goes through -clampContentToScreenOfView:).
 - (void)_applyContentSize {
-  if (!_popover)
+  // Before the popover check: the ceiling must track the size class even on
+  // the paths that run while the popover is still being built.
+  [self _applyMaxWidthCeiling];
+  if (!_popover && !_onRequestContentSize)
     return;
   CGSize s = [self _naturalContentSize];
-  s.height =
-      [self _clampHeight:s.height
-                toScreen:_popover.contentViewController.view.window.screen];
-  _popover.contentSize = s;
+  NSScreen *screen = self.window.screen;
+  if (!screen)
+    screen = _popover.contentViewController.view.window.screen;
+  s.height = [self _clampHeight:s.height toScreen:screen];
+  if (_onRequestContentSize)
+    _onRequestContentSize(s);
+  else
+    _popover.contentSize = s;
 }
 
 - (void)clampContentToScreenOfView:(NSView *)view {
@@ -834,7 +1323,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // the shorter page, and so revealing/hiding a conditional lane re-fits. No-op
 // when there's no popover.
 - (void)_resizePopoverToSelectedCategory {
-  if (!_popover)
+  if (!_popover && !_onRequestContentSize)
     return;
   [self _applyContentSize];
 }
@@ -881,16 +1370,47 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 
 - (void)dealloc {
   [_colorPersistTimer invalidate];
+  [_exprResultTimer invalidate];
 }
 
 // Presenter hook (KKTimelineLanesView+Popovers `_showPopoverWithContent`): when
 // YES, the outside-click / scroll dismissal monitors treat every event as
 // inside the popover, so a colour-panel interaction can't close it.
 - (BOOL)suppressesPopoverDismiss {
-  return _colorPanelOpen;
+  return _colorPanelOpen || _exprMenuOpen;
+}
+
+// A lane whose slider max reacts to another lane (maxControllerKey): returns
+// a copy with componentMax[0] swapped for the value looked up from the
+// controller lane's current value, so the range tracks e.g. Mirage's Type.
+// Unchanged lanes are returned as-is. Rebuilt whenever rows rebuild (Type
+// change re-runs the visibility cascade), so the max stays reactive.
+- (KKLane *)_laneWithDynamicMaxApplied:(KKLane *)lane {
+  if (lane.maxControllerKey.length == 0 ||
+      lane.componentMaxByControllerValue.count == 0)
+    return lane;
+  NSArray<NSNumber *> *cv = _currentValuesByLabel[lane.maxControllerKey];
+  if (cv.count == 0)
+    return lane;
+  NSInteger idx = (NSInteger)llround(cv[0].doubleValue);
+  if (idx < 0 || idx >= (NSInteger)lane.componentMaxByControllerValue.count)
+    return lane;
+  double effMax = lane.componentMaxByControllerValue[idx].doubleValue;
+  double minV =
+      lane.componentMin.count ? lane.componentMin[0].doubleValue : 0.0;
+  if (effMax < minV)
+    effMax = minV;
+  double curMax =
+      lane.componentMax.count ? lane.componentMax[0].doubleValue : effMax;
+  if (effMax == curMax)
+    return lane;
+  KKLane *adjusted = [lane copy];
+  adjusted.componentMax = @[ @(effMax) ];
+  return adjusted;
 }
 
 - (_KKStaticValueRow *)_makeRowForLane:(KKLane *)lane {
+  lane = [self _laneWithDynamicMaxApplied:lane];
   BOOL showsRemove = (_rowRemoveHandler != nil);
   // Non-animatable lanes are value-only: no "make animatable" gutter button.
   BOOL showsAdd = (_rowAddToAnimatedHandler != nil && lane.animatable);
@@ -911,7 +1431,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
             contentWidth:[_KKStaticValuesPopoverView
                              _popoverWidthForDescriptor:_descriptorPath]];
   row.translatesAutoresizingMaskIntoConstraints = NO;
-  NSString *label = lane.label;
+  NSString *label = lane.key;
   __weak typeof(self) weak = self;
   if (showsRemove)
     row.onRemove = ^{
@@ -930,10 +1450,19 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // width; odd-index (H/Y-like) use height, with the inverse on typed input.
   // Covers Crop (W,H,X,Y), Position X/Y, Anchor X/Y. The componentUnits string
   // is cosmetic and does NOT drive this - a lane can show "px" while storing
-  // raw pixels (Glow Radius). Returns 0 until the feed resolves, which the row
-  // treats as "fall back to raw norm".
+  // raw pixels (a raw px radius). Returns 0 until the feed resolves, which the
+  // row treats as "fall back to raw norm".
   if (lane.componentsScaleWithMedia) {
+    NSArray<NSString *> *units = lane.componentUnits;
     row.componentScale = ^double(NSInteger i) {
+      // Per-component units decide scaling: ONLY a "px" component (or an
+      // absent units array, the legacy scale-all default) scales with the
+      // media. A "%" is a literal percentage, an EXPLICIT empty-string
+      // component (units={px,px,,}) is a raw 0..1 value, and a plugin's own
+      // unit ("°", "stops") is a label on a raw number - none of them are
+      // pixels. Lets one lane mix px W/H with raw, % or labelled X/Y.
+      if (i < (NSInteger)units.count && ![units[i] isEqualToString:@"px"])
+        return 1.0;
       __strong typeof(weak) s = weak;
       CGSize m = s ? s->_miniViewer.sourceMediaSize : CGSizeZero;
       double scale = (i % 2 == 0) ? m.width : m.height;
@@ -961,6 +1490,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       [s->_miniViewer setNeedsDisplay:YES];
       [s->_miniViewer setHandlesNeedDisplay];
     }
+    // Re-run every expression readout now (not just on the 0.2s timer) so a
+    // lane deriving from THIS one (e.g. rotation = min(${...Split}, 90)) shows
+    // its new result on the same drag tick, matching the mini-viewer preview.
+    [s _updateAllExprResults];
     if (s->_onHandleValue) {
       if (s->_colorPanelOpen)
         // Async colour drag: preview above already ran; coalesce the persist.
@@ -968,6 +1501,22 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       else
         s->_onHandleValue(label, values);
     }
+  };
+  row.onCodeChanged = ^(NSString *code) {
+    __strong typeof(weak) s = weak;
+    if (s.onHandleCode)
+      s.onHandleCode(label, code);
+  };
+  row.onCodeSectionsChanged =
+      ^(NSArray<NSDictionary<NSString *, NSString *> *> *sections) {
+        __strong typeof(weak) s = weak;
+        if (s.onHandleCodeSections)
+          s.onHandleCodeSections(label, sections);
+      };
+  row.onCodeSaveNameChanged = ^(NSString *name) {
+    __strong typeof(weak) s = weak;
+    if (s.onHandleCodeSaveName)
+      s.onHandleCodeSaveName(label, name);
   };
   row.onDragBegin = ^{
     __strong typeof(weak) s = weak;
@@ -991,8 +1540,36 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       if (s->_onLinkToggled)
         s->_onLinkToggled(label, on);
     };
+  // Parameter linking: right-click "Add / Remove Expression" on the label.
+  row.onSetLinkExpression = ^(NSString *_Nullable expr) {
+    __strong typeof(weak) s = weak;
+    // Persist through the host.
+    if (s->_onSetLinkExpression)
+      s->_onSetLinkExpression(label, expr);
+    // Grow/shrink IN PLACE (works for both the constants and keypose popovers -
+    // popover-level, so it doesn't depend on the lanes-view reconcile that only
+    // runs for constants). Update the cached lane so the resize computes the
+    // new height, sync the editor under the row, then re-fit. Idempotent, so
+    // the constants path's later reconcile is a no-op.
+    [s _updateCachedLaneExpression:expr forLabel:label];
+    _KKStaticValueRow *r = s->_rowsByLabel[label];
+    if (r && [s _syncExprEditorForLabel:label expression:expr afterRow:r])
+      [s _applyContentSize];
+  };
+  // Right-click "Format Expression": tidy the live editor text in place. Parses
+  // the friendly display text (refs round-trip verbatim) and rewrites it
+  // normalized; a parse error no-ops. onChange then re-stores the uuid form.
+  row.onFormatExpression = ^{
+    __strong typeof(weak) s = weak;
+    KKCodeEditorView *ed = s->_exprEditorByLabel[label];
+    [ed formatUsing:^NSString *(NSString *code) {
+      KKLinkExpr *e = [KKLinkExpr compile:code error:NULL];
+      return e ? [e formattedSource] : nil;
+    }];
+  };
   if (lane.valueType == KKLaneValueTypeColor ||
-      lane.valueType == KKLaneValueTypeGradient)
+      lane.valueType == KKLaneValueTypeGradient ||
+      lane.valueType == KKLaneValueTypeColorPoint)
     row.onColorEditing = ^(BOOL editing) {
       __strong typeof(weak) s = weak;
       [s _setColorEditing:editing];
@@ -1007,6 +1584,32 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       if (s->_onGradientTypeChanged)
         s->_onGradientTypeChanged(label, type);
     };
+  // A lockable colour row: restore its transient lock state (survives rebuilds
+  // via the popover's label set) and track toggles for a later palette reroll.
+  if (lane.paletteLockable) {
+    if (!_lockedColorLabels)
+      _lockedColorLabels = [NSMutableSet set];
+    [row applyPaletteLock:[_lockedColorLabels containsObject:label]];
+    row.onPaletteLockToggled = ^(BOOL locked) {
+      __strong typeof(weak) s = weak;
+      if (!s)
+        return;
+      if (locked)
+        [s->_lockedColorLabels addObject:label];
+      else
+        [s->_lockedColorLabels removeObject:label];
+    };
+  }
+  if (lane.paletteGeneratorBar) {
+    row.onPaletteGenerate = ^(NSInteger mode) {
+      __strong typeof(weak) s = weak;
+      [s _generatePaletteWithMode:mode];
+    };
+    row.onPaletteRefine = ^{
+      __strong typeof(weak) s = weak;
+      [s _refinePalette];
+    };
+  }
   return row;
 }
 
@@ -1040,8 +1643,18 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [old removeFromSuperview];
     [_rowsByLabel removeObjectForKey:label];
 
+    // Resolve the lane's display name (identity `label` here is the KEY, e.g.
+    // a shader uniform name) so the excluded row reads the same name as the
+    // editable row it replaced.
+    NSString *displayLabel = nil;
+    for (KKLane *l in _lanes)
+      if ([l.key isEqualToString:label]) {
+        displayLabel = l.label;
+        break;
+      }
     _KKExcludedRow *row =
         [[_KKExcludedRow alloc] initWithLabel:label
+                                 displayLabel:displayLabel
                                       message:message
                                        gutter:(_rowRemoveHandler != nil)];
     row.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1067,25 +1680,52 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // excluded to editable always fits; no resize needed.
 - (void)rebuildRowsWithLanes:(NSArray<KKLane *> *)lanes
               excludedLabels:(NSArray<NSString *> *)excluded {
+  // Preserve code-editor rows across the rebuild: their editor holds live tab
+  // state (active tab + unsaved text) that recreating would destroy, and a code
+  // row is non-animatable so nothing about its appearance changes here.
+  NSMutableDictionary<NSString *, _KKStaticValueRow *> *keepCode =
+      [NSMutableDictionary dictionary];
+  for (NSString *label in _rowsByLabel)
+    if (_rowsByLabel[label].isCodeRow)
+      keepCode[label] = _rowsByLabel[label];
+  NSArray *kept = keepCode.allValues;
   for (NSView *v in [_stack.arrangedSubviews copy]) {
     [_stack removeArrangedSubview:v];
-    [v removeFromSuperview];
+    if (![kept containsObject:v])
+      [v removeFromSuperview];
   }
   [_rowsByLabel removeAllObjects];
   [_excludedRowsByLabel removeAllObjects];
+  [_exprRowsByLabel
+      removeAllObjects]; // editors were removed with the stack above
+  [_exprEditorByLabel removeAllObjects]; // re-tracked per editor rebuild
+  // NB: _exprExpandedLabels persists so the user's expand choice survives
+  // rebuilds.
   _lanes = [lanes copy];
   [self _seedCurrentValues];
   _labelColumnWidth = [_KKStaticValueRow labelColumnWidthForLanes:lanes];
   NSMutableDictionary<NSString *, NSString *> *catByLabel =
       [NSMutableDictionary dictionary];
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *row = [self _makeRowForLane:lane];
+    _KKStaticValueRow *reused = keepCode[lane.key];
+    _KKStaticValueRow *row = reused ?: [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
-    [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
-    _rowsByLabel[lane.label] = row;
+    if (!reused) // a reused row already has its stack-width constraint
+      [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
+    _rowsByLabel[lane.key] = row;
+    [self _installExprEditorForLane:lane];
     if (lane.categoryKey.length)
-      catByLabel[lane.label] = lane.categoryKey;
+      catByLabel[lane.key] = lane.categoryKey;
   }
+  // Tear down any PRESERVED code row the new lane set didn't reuse (e.g. the
+  // constants "Mirage" code lane when reconfiguring into a keypose popover,
+  // whose lanes don't include it). It was held back from the
+  // removeFromSuperview sweep above so its live editor state could be reused;
+  // when it isn't, it would otherwise float over the new rows ("bleeding").
+  NSArray<_KKStaticValueRow *> *reusedRows = _rowsByLabel.allValues;
+  for (_KKStaticValueRow *codeRow in kept)
+    if (![reusedRows containsObject:codeRow])
+      [codeRow removeFromSuperview];
   _rowCategoryByLabel = catByLabel;
   if (_defaultsProvider)
     for (NSString *label in _rowsByLabel)
@@ -1132,6 +1772,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 - (void)liveUpdateValues:(NSArray<NSNumber *> *)values
                 forLabel:(NSString *)label {
   [[self _rowForLabelTolerant:label] applyValues:values];
+  // Keep the live-value cache current for OSC drags too (the row's own onValue
+  // does this for field edits), so an expression lane's result strip re-runs
+  // against the value being dragged instead of a stale cached keypose.
+  _currentValuesByLabel[label] = values;
+  [self _refreshDynamicMaxRows];
 }
 
 - (nullable NSView *)rowViewForLabel:(NSString *)label {
@@ -1248,8 +1893,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 }
 
 - (void)updateUnoptedLanes:(NSArray<KKLane *> *)lanes {
+  // Rows are keyed by lane.key - the survivors set MUST be keys too, or every
+  // row whose key differs from its display label (all Mirage directives) is
+  // torn down and remade on each update, stealing focus from an open editor.
   NSSet<NSString *> *newSet =
-      [NSSet setWithArray:[lanes valueForKeyPath:@"label"]];
+      [NSSet setWithArray:[lanes valueForKeyPath:@"key"]];
 
   NSMutableArray<NSString *> *toRemove = [NSMutableArray array];
   for (NSString *label in _rowsByLabel)
@@ -1260,6 +1908,14 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [_stack removeArrangedSubview:row];
     [row removeFromSuperview];
     [_rowsByLabel removeObjectForKey:label];
+    // Drop its inline expression editor too, if any (the label is gone).
+    NSView *ed = _exprRowsByLabel[label];
+    if (ed) {
+      [_stack removeArrangedSubview:ed];
+      [ed removeFromSuperview];
+      [_exprRowsByLabel removeObjectForKey:label];
+      [_exprEditorByLabel removeObjectForKey:label];
+    }
   }
 
   _lanes = [lanes copy];
@@ -1268,14 +1924,47 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Make a row for each newly-constant lane (append for now) and refresh the
   // existing ones.
   for (KKLane *lane in lanes) {
-    if (_rowsByLabel[lane.label]) {
-      [_rowsByLabel[lane.label] applyLane:lane]; // reflect external edits
+    _KKStaticValueRow *existing = _rowsByLabel[lane.key];
+    // A reused row whose rendering STRUCTURE changed (palette bar <-> value
+    // editor, code <-> non-code, seed <-> field, float <-> percent/choice, unit
+    // or field-count change) can't be updated in place - drop it so it is
+    // remade below. Metadata-only changes (range, values) are handled by
+    // applyLane; a shared label-column shift (a relabel changed the widest
+    // name) restretches in place below - remaking for it tore down the CODE
+    // editor mid-typing when its own rename widened the column (focus +
+    // scroll lost on every debounce commit).
+    if (existing && ![existing renderShapeMatchesLane:lane]) {
+      [_stack removeArrangedSubview:existing];
+      [existing removeFromSuperview];
+      [_rowsByLabel removeObjectForKey:lane.key];
+      // Drop its inline expression editor too (a remake reinstalls a fresh
+      // one).
+      NSView *oldEd = _exprRowsByLabel[lane.key];
+      if (oldEd) {
+        [_stack removeArrangedSubview:oldEd];
+        [oldEd removeFromSuperview];
+        [_exprRowsByLabel removeObjectForKey:lane.key];
+        [_exprEditorByLabel removeObjectForKey:lane.key];
+      }
+      existing = nil;
+    }
+    if (existing) {
+      [existing updateLabelColumnWidth:_labelColumnWidth];
+      [existing applyLane:lane]; // reflect external edits (values + range)
+      // Grow/shrink in place when an expression was added/removed on a reused
+      // row.
+      [self _syncExprEditorForLane:lane afterRow:existing];
+      // Re-sync a KEPT editor's text to the (possibly undone/redone)
+      // expression, so cmd-Z reaches the inline editor - the GLSL code row does
+      // this via applyLane, but the expression editor is popover-level.
+      [self _resyncExprEditorTextForLane:lane];
       continue;
     }
     _KKStaticValueRow *row = [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
-    _rowsByLabel[lane.label] = row;
+    _rowsByLabel[lane.key] = row;
+    [self _installExprEditorForLane:lane];
   }
   // Order the stack by the canonical `lanes` order (the parameter order), not
   // alphabetically: a row restored by cmd-Z (undo of "move to animated") must
@@ -1284,24 +1973,58 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // in that sequence.
   NSInteger pos = 0;
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *row = _rowsByLabel[lane.label];
+    _KKStaticValueRow *row = _rowsByLabel[lane.key];
     if (!row)
       continue;
     [_stack removeArrangedSubview:row];
     [_stack insertArrangedSubview:row atIndex:pos++];
+    // Keep the inline expression editor directly under its row.
+    NSView *ed = _exprRowsByLabel[lane.key];
+    if (ed) {
+      [_stack removeArrangedSubview:ed];
+      [_stack insertArrangedSubview:ed atIndex:pos++];
+    }
   }
 
-  // Rebuild the category nav so a tab disappears the moment its last constant
-  // lane is moved to animated (and the selection falls back to a populated
-  // tab).
+  // Refresh each row's template default (drives the reset button) so a changed
+  // default - e.g. a shader `// #color default=` edit - re-evaluates the reset
+  // affordance on the reused rows. Mirrors rebuildRowsWithLanes:.
+  if (_defaultsProvider)
+    for (NSString *label in _rowsByLabel)
+      _rowsByLabel[label].defaultValues = _defaultsProvider(label);
+
+  // Rebuild only when the category run itself changed. A normal value write
+  // refreshes the constants lanes too; tearing down the unchanged pill bar in
+  // the middle of its row's slider drag invalidates that tracking control and
+  // can make the freshly-built bar fall back to its first page ("Shader").
+  // Structural changes still rebuild immediately so an emptied category
+  // disappears as before.
   _rowCategoryByLabel = KKLaneCategoryByLabel(lanes);
-  [self _rebuildCategoryNavForLanes:lanes initialCategory:_selectedCategory];
+  NSArray<NSArray<NSString *> *> *categoryDefinitions =
+      KKOrderedLaneCategories(lanes);
+  if (![_categoryDefinitions isEqualToArray:categoryDefinitions])
+    [self _rebuildCategoryNavForLanes:lanes
+                      initialCategory:_selectedCategory];
   [self _applyCategoryFilter];
 
-  if (lanes.count == 0 && _popover)
-    [_popover close];
-  else if (_popover)
+  // No rows left = nothing to edit = close... unless a host accessory strip is
+  // installed, which is content of its own AND the only way back: Mirage's
+  // shader rack scopes these rows to the link selected IN the strip, so a
+  // scope that momentarily resolves to nothing (a just-appended entry whose
+  // lanes have not been derived yet) would dismiss the popover the user is
+  // building the chain in, with no way to reselect.
+  BOOL hosted = _popover || _onRequestContentSize;
+  if (lanes.count == 0 && hosted && _accessoryHeight <= 0.0) {
+    if (_onRequestClose)
+      _onRequestClose();
+    else
+      [_popover close];
+  } else if (hosted) {
+    if (lanes.count == 0)
+      KKLogDebug(@"[StaticValues] no constant rows, accessory installed - "
+                 @"holding the popover open");
     [self _applyContentSize];
+  }
 
   // The shared mini-viewer renderer was updated externally (cmd-Z, or a new
   // layer's lanes arriving while the companion layer-list panel is open), but

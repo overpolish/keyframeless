@@ -25,7 +25,7 @@ KKOSCGuideBridge *CanvasSharedOSCGuideBridge(void) {
 // Guide-scoped Position (object [0,1] clip space). The OSC can't read the layer
 // blob from the drawOSC tick (FxParameterRetrievalAPI is nil there), so during
 // a guide the inspector drag pushes the live position here and the handle
-// follows it - mirrors MagicMove's sGuidePosition / Rounded's sGuideRadius.
+// follows it.
 static CGPoint sCanvasGuidePosition = {0.5, 0.5};
 
 // Object-space target the interactive drag nudges the Position handle toward
@@ -125,7 +125,7 @@ BOOL CanvasGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
 
 // hover context: screen + canvas coords arrive together AND canvasZoom is valid
 // here, so this bootstraps the bridge's canvas reference - the draw tick can't
-// on its own. Mirrors MagicMove's / Rounded's OSC hover feed.
+// on its own.
 - (void)_ingestGuideHitTestAtCanvasX:(double)cx y:(double)cy {
   CGPoint tr, bl;
   if (![self _guideCanvasTopRight:&tr bottomLeft:&bl])

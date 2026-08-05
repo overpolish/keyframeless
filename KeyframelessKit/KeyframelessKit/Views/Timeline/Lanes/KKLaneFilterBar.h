@@ -6,7 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 // Opted-in lanes are grouped into capsules by category - a categorised run is
 // [CategoryName | lane | lane ...] where the leading category segment is a
 // master toggle for the whole group; an uncategorised lane is its own single
-// segment capsule (e.g. MagicMove [Position] [Scale] [Opacity]). Toggling
+// segment capsule (e.g. [Position] [Scale] [Opacity]). Toggling
 // hides/shows lanes in the timeline. Order follows the lanes passed in
 // (parameter order). Click-drag paints across capsules; option-click solos a
 // lane or group (drawn in the warning tint). Every lane may be hidden - the
@@ -44,6 +44,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// layer list switches it; nil = show every lane (single-owner). Setting it
 /// re-scopes an open checklist in place.
 @property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// YES = the checklist carries its OWN layer pill nav (the shared chrome's),
+/// pre-selected to `activeLayerKey`, so the user can switch owners from inside
+/// the dropdown. For a host whose one timeline holds every owner's lanes
+/// (Mirage's shader rack).
+///
+/// NO (the default) keeps the bar scoping the checklist itself to
+/// `activeLayerKey` before handing the lanes over - what a host that already
+/// drives owner selection from its own UI wants (Canvas's layer list), since
+/// a second nav inside the dropdown would just shadow it.
+@property(nonatomic) BOOL layerNavEnabled;
 /// Minimum popover height (matches the companion layer panel, like the Animated
 /// dropdown). 0 = hug the rows.
 @property(nonatomic) CGFloat minimumPopoverHeight;

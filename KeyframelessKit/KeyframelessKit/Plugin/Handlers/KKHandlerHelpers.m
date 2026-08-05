@@ -6,88 +6,10 @@
 #import "KKDataBlob.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
+#import "KKLocalized.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
-#import <KeyframelessKit/KKTimingStage.h>
-
-/// Returns a canonical form of `json` for dedup comparison - sorted keys
-/// so two semantically-equal JSONs that differ only in field order
-/// compare equal. Selection (`sel`) is **not** stripped: each segment
-/// click writes a real undo entry through the host (typical document-
-/// editor behavior - cmd-Z bounces through selection history along with
-/// structural edits).
-NSString *KKMultiStageNormalizedForDedup(NSString *json) {
-  if (!json.length)
-    return json;
-  NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
-  id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-  if (!parsed)
-    return json;
-  NSData *out = [NSJSONSerialization dataWithJSONObject:parsed
-                                                options:NSJSONWritingSortedKeys
-                                                  error:nil];
-  return out ? [[NSString alloc] initWithData:out encoding:NSUTF8StringEncoding]
-             : json;
-}
-
-/// Native-string mirror of the lanes JSON. Written in lockstep with
-/// every blob write; read by the OSC's drawTick on cold-boot to seed
-/// the snapshot before consumers (oscVisible, bezier path, etc.) run.
-/// The blob remains the canonical undoable store - this is a write-
-/// through cache, not a separate source of truth.
-void KKWriteMultiStageMirror(NSString *json,
-                             id<FxParameterSettingAPI_v5> setAPI) {
-  if (!setAPI)
-    return;
-  [setAPI setStringParameterValue:json ?: @""
-                      toParameter:kKKParamMultiStageDataMirror];
-}
-
-NSString *KKReadMultiStageMirror(id<PROAPIAccessing> apiManager) {
-  if (!apiManager)
-    return nil;
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!getAPI)
-    return nil;
-  NSString *value = nil;
-  [getAPI getStringParameterValue:&value
-                    fromParameter:kKKParamMultiStageDataMirror];
-  return value;
-}
-
-BOOL KKWriteMultiStageJSONDeduped(NSString *json,
-                                  id<FxParameterSettingAPI_v5> setAPI,
-                                  id<PROAPIAccessing> apiManager) {
-  if (!setAPI || !json)
-    return NO;
-  KKPluginInstanceState *state =
-      apiManager ? KKInstanceStateForAPI(apiManager) : nil;
-  // While the host is reverting params for a cmd-Z, suppress all writes -
-  // every write here registers a fresh undo entry, which immediately
-  // overwrites the host's revert and fragments one logical undo into N.
-  // Flag is set by `multiStageRefreshFromParamForAPI:` and cleared after
-  // ~100ms (long enough to cover the full revert burst plus any deferred
-  // live-update blocks queued before MS-REFRESH ran).
-  if (state.hostUndoSuppressionPending)
-    return NO;
-  NSString *normalized = KKMultiStageNormalizedForDedup(json);
-  if (state && [state.lastWrittenMultiStageJSON isEqualToString:normalized])
-    return NO;
-  KKWriteCustomParamString(setAPI, json, kKKParamMultiStageData);
-  // Mirror the same JSON to a native string param so OSC scope can
-  // read it on cold-boot (the blob is unreadable there).
-  KKWriteMultiStageMirror(json, setAPI);
-  if (state) {
-    state.lastWrittenMultiStageJSON = normalized;
-    // Every successful write triggers exactly one parameterChanged echo
-    // from the host. Bumping this counter lets MS-REFRESH classify its
-    // next callback as an echo without any I/O - see the consume-side
-    // logic in `multiStageRefreshFromParamForAPI:`.
-    state.expectedMultiStageEchoCount += 1;
-  }
-  return YES;
-}
+#import <KeyframelessKit/KKTimeline.h>
 
 void KKRunOnMain(dispatch_block_t block) {
   if (!block)
@@ -112,52 +34,94 @@ void KKEndUndoGroup(id<PROAPIAccessing> apiManager, BOOL started) {
   [undoAPI endUndoGroup];
 }
 
-void KKWithUndoGroup(id<PROAPIAccessing> apiManager, NSString *name,
-                     dispatch_block_t block) {
+/// Bracket a MULTI-WRITE mutation in one host undo group where each write
+/// inside `block` manages its OWN action scope (e.g. _modifyPaths-style blob
+/// writes followed by a selection write). The group begin and end each get a
+/// brief scope of their own - holding one scope across the block would NEST
+/// the writes' scopes, which asserts FFUIAction in the host. Complement to
+/// KKPerformUndoable (which holds a single scope around scope-less work).
+void KKWithHostUndoGroup(id<PROAPIAccessing> apiManager, id principal,
+                         NSString *name, void (^block)(void)) {
   if (!block)
     return;
-  BOOL started = KKBeginUndoGroup(apiManager, name);
+  id<FxCustomParameterActionAPI_v4> act =
+      apiManager
+          ? [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)]
+          : nil;
+  BOOL undoGroup = NO;
+  if (act) {
+    [act startAction:principal];
+    undoGroup = KKBeginUndoGroup(apiManager, name);
+    [act endAction:principal];
+  }
   @try {
     block();
   } @finally {
-    KKEndUndoGroup(apiManager, started);
-  }
-}
-
-NSMutableArray<KKTimingLane *> *
-KKReadLanesRebalanced(id<PROAPIAccessing> __unused apiManager,
-                      id<FxParameterRetrievalAPI_v6> __unused getAPI) {
-  return nil;
-}
-
-NSInteger KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
-                                      NSArray<KKTimingLane *> *jsonLanes,
-                                      NSSet<NSString *> *hidden) {
-  NSInteger visible = 0;
-  for (NSInteger i = 0; i < (NSInteger)jsonLanes.count; i++) {
-    KKTimingLane *lane = jsonLanes[i];
-    if (hidden && [hidden containsObject:lane.propertyLabel])
-      continue;
-    if (visible == viewIndex)
-      return i;
-    visible++;
-  }
-  return -1;
-}
-
-void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
-                      id<FxParameterSettingAPI_v5> setAPI,
-                      id<PROAPIAccessing> apiManager) {
-  NSMutableArray<KKTimingLane *> *mutableLanes = [lanes mutableCopy];
-  KKApplyHTHNormalizationInPlace(mutableLanes);
-  NSString *updated = [KKTimingLane jsonFromLanes:mutableLanes];
-  if (updated)
-    KKWriteMultiStageJSONDeduped(updated, setAPI, apiManager);
-  if (apiManager) {
-    KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
-    if (state) {
-      state.lanesSnapshot = [mutableLanes copy];
-      state.lanesEverPersisted = YES;
+    if (act) {
+      [act startAction:principal];
+      KKEndUndoGroup(apiManager, undoGroup);
+      [act endAction:principal];
     }
   }
+}
+
+BOOL KKPerformUndoable(id<PROAPIAccessing> apiManager, id principal,
+                       NSString *name,
+                       void (^block)(id<FxParameterRetrievalAPI_v6> getAPI,
+                                     id<FxParameterSettingAPI_v5> setAPI,
+                                     CMTime actionTime)) {
+  if (!block)
+    return NO;
+  id<FxCustomParameterActionAPI_v4> act =
+      apiManager
+          ? [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)]
+          : nil;
+  if (!act)
+    return NO;
+  [act startAction:principal];
+  BOOL started = name != nil && KKBeginUndoGroup(apiManager, name);
+  @try {
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    block(getAPI, setAPI, [act currentTime]);
+  } @finally {
+    // Close in @finally: an early return is fine (blocks can't early-return
+    // past this), but an exception escaping an open scope wedges FCP's undo
+    // machinery (its next beginWithUndoState aborts).
+    KKEndUndoGroup(apiManager, started);
+    [act endAction:principal];
+  }
+  return YES;
+}
+
+NSString *KKUndoLabelAdjust(NSString *productName) {
+  return [NSString
+      stringWithFormat:KKLoc(@"Adjust %@", @"Host undo label; %@ is the plugin "
+                                           @"product name (Canvas, Mirage)"),
+                       productName];
+}
+
+NSString *KKUndoLabelEditGradient(void) {
+  return KKLoc(@"Edit Gradient", @"Host undo label: gradient stop/color edit");
+}
+
+NSString *KKUndoLabelDuplicateLayer(void) {
+  return KKLoc(@"Duplicate Layer", @"Host undo label: duplicate a layer");
+}
+
+NSString *KKUndoLabelDeleteLayer(void) {
+  return KKLoc(@"Delete Layer", @"Host undo label: delete a layer");
+}
+
+NSString *KKUndoLabelGroupLayers(void) {
+  return KKLoc(@"Group Layers", @"Host undo label: group selected layers");
+}
+
+NSString *KKUndoLabelMoveLayer(BOOL up) {
+  return up ? KKLoc(@"Move Layer Up",
+                    @"Host undo label: reorder a layer upward in the stack")
+            : KKLoc(@"Move Layer Down",
+                    @"Host undo label: reorder a layer downward in the stack");
 }

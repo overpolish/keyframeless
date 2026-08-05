@@ -70,6 +70,7 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
   __weak NSTextField *_editingField;
   NSMutableSet<NSString *> *_collapsedGroups; // UI-only collapsed group IDs
   id _keyMonitor;                             // local keyDown monitor
+  id _renameClickMon; // local mouse-down monitor: blur rename on outside click
   // Mouse-moved monitors for the row-hover highlight. Tracking areas are
   // unreliable in the inspector's ViewBridge process (need a key window, and
   // a row rebuild on selection destroys them without firing exit), so hit-test

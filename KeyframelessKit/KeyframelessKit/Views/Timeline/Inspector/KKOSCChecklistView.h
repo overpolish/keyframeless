@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -26,6 +27,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithCompounds:(NSArray<NSArray<NSString *> *> *)compounds
                            states:(NSArray<NSArray<NSNumber *> *> *)states;
 
+/// Maps an element key to the user-facing name to SHOW for it (else the key's
+/// localized leaf is used). Lets a dynamic plugin key elements on a stable id
+/// (e.g. a shader uniform name) while the checklist shows the display label.
+/// Set BEFORE the view is added; applied at build time.
+- (instancetype)initWithCompounds:(NSArray<NSArray<NSString *> *> *)compounds
+                           states:(NSArray<NSArray<NSNumber *> *> *)states
+                    displayForKey:
+                        (nullable NSString * (^)(NSString *key))displayForKey;
+
 /// Fired when a row's checkbox toggles, with the element's position in
 /// `compounds` and its new state.
 @property(nonatomic, copy, nullable) void (^onToggled)
@@ -33,6 +43,26 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Set so the view can re-fit the popover as the search filter hides rows.
 @property(nonatomic, weak, nullable) NSPopover *popover;
+
+/// Scope the "Make Default" / "Reset" pair reads and writes (see
+/// KKOSCVisibilityDefaults). nil = the process-wide active scope, which is the
+/// plugin (plus the shader template in Mirage); Canvas passes a kind-suffixed
+/// scope so a vector layer's default can't leave an image layer with no
+/// visible control. Set before the view is shown.
+@property(nonatomic, copy, nullable) NSString *defaultsScope;
+
+/// Feed the owner (layer) dimension, from the plugin's lane templates: an
+/// element key's owner is the `layerKey` of the lane whose `key` matches it (a
+/// motion-path element, `<lane> Path`, inherits its base lane's). When the
+/// CURRENT compounds resolve to two or more distinct owners, a layer pill row
+/// appears above the search field and the rows are scoped to the selected one,
+/// exactly as the Animated dropdown's nav does; below two it is a no-op and the
+/// list stays pixel-identical. `selectedLayerKey` is the owner to open on (an
+/// unknown key falls back to the first - there is no "all owners" page).
+///
+/// Call BEFORE the view is sized / presented: it changes `fittingHeight`.
+- (void)applyLayerLanes:(NSArray<KKLane *> *)lanes
+       selectedLayerKey:(nullable NSString *)selectedLayerKey;
 
 /// Replace the checkbox states (parallel to the init `compounds`), e.g. when
 /// the host swaps to a different owner's set while the popover stays open.

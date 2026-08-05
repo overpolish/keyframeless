@@ -5,6 +5,7 @@
 
 #import "KKGradientFavoritesPopover.h"
 #import "KKGradientFavorites.h"
+#import "KKPopoverBackground.h"
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 
@@ -15,38 +16,6 @@ static const CGFloat kPreviewWidth = 50.0;
 static const CGFloat kSaveRowHeight = 32.0;
 static const CGFloat kEmptyRowHeight = 28.0;
 static const CGFloat kMaxVisibleRows = 7;
-
-static void _clearPopoverBackground(NSView *view) {
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        NSView *current = view;
-        NSView *popoverFrame = nil;
-        while (current) {
-          if ([NSStringFromClass([current class])
-                  hasPrefix:@"NSPopoverFrame"]) {
-            popoverFrame = current;
-            break;
-          }
-          current = current.superview;
-        }
-        if (!popoverFrame)
-          return;
-        for (NSView *sub in popoverFrame.subviews) {
-          if (![NSStringFromClass([sub class]) containsString:@"GlassView"])
-            continue;
-          for (NSView *glassSub in sub.subviews) {
-            glassSub.wantsLayer = YES;
-            NSString *name = NSStringFromClass([glassSub class]);
-            if ([name containsString:@"CoreHostingView"])
-              glassSub.layer.opacity = 0;
-            else if ([name containsString:@"ContentHolderView"])
-              glassSub.layer.backgroundColor = NSColor.clearColor.CGColor;
-          }
-          break;
-        }
-      });
-}
 
 @interface KKGradientMiniBar : NSView
 @property(nonatomic, copy) NSArray<KKGradientStop *> *stops;
@@ -320,7 +289,7 @@ static void _clearPopoverBackground(NSView *view) {
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (self.window)
-    _clearPopoverBackground(self);
+    KKApplyPopoverBackground(self);
 }
 
 @end

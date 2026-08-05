@@ -50,7 +50,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// YES while the square is being dragged.
 @property(nonatomic, readonly) BOOL isDragging;
 
-/// Optional override for the square's overlay-point centre (e.g. a Canvas
+/// Optional override for the square's overlay-point centre (e.g. a
 /// member inside a transformed group, where the pivot is the group-composed
 /// point). When set, it replaces the default content-space pivot for both
 /// drawing and hit-testing; the drag still writes the lane value in content
@@ -73,8 +73,8 @@ NS_ASSUME_NONNULL_BEGIN
     (CGPoint viewPoint, CGRect contentRect);
 
 /// The neutral reference the Anchor offset is measured from: the pivot is
-/// Position + (value - reference). Default {0.5, 0.5} (clip centre). A Canvas
-/// group sets it to its frozen content-centre rest. Only affects the snap math
+/// Position + (value - reference). Default {0.5, 0.5} (clip centre). A group
+/// sets it to its frozen content-centre rest. Only affects the snap math
 /// (Cmd / grid); the delta drag is already value-relative, so it is unchanged.
 @property(nonatomic) simd_float2 anchorReferenceCenter;
 

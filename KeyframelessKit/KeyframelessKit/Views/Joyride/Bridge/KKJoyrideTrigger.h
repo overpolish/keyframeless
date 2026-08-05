@@ -28,8 +28,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)staticValuesPopoverClosed;
 /// `label` nil = any. Fires once per drag (after `onStaticValueDragEnded`).
 + (instancetype)staticValueDragEndedForLabel:(nullable NSString *)label;
-/// Fires when the constant choice-pill for `label` is set to `index` (a discrete
-/// radio selection, e.g. an end-marker type) - matched plain-label-tolerant.
+/// Fires when the constant choice-pill for `label` is set to `index` (a
+/// discrete radio selection, e.g. an end-marker type) - matched
+/// plain-label-tolerant.
 + (instancetype)staticChoiceSelectedForLabel:(NSString *)label
                                        index:(NSInteger)index;
 /// Fires when the constant popover's category-nav pill switches to `key` (e.g.
@@ -66,14 +67,11 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)miniViewerZoomed;
 + (instancetype)miniViewerViewReset;
 /// Fires when a mini-viewer double-click is consumed by the delegate (e.g.
-/// Magic Move toggling a keypose corner/smooth) rather than resetting the view.
+/// a plugin toggling a keypose corner/smooth) rather than resetting the view.
 + (instancetype)miniViewerDoubleClickHandled;
 /// Fires when the boundary popover's render-mode pill changes the mode. `mode`
 /// is a KKMiniViewerRenderMode (0 = Off, 1 = Filmstrip, 2 = Onion); < 0 = any.
 + (instancetype)renderModeChanged:(NSInteger)mode;
-/// Fires when the boundary popover's size pill changes the mini-viewer size.
-/// `sizeIndex` is 0 = sm, 1 = md, 2 = lg; < 0 = any.
-+ (instancetype)miniViewerSizeChanged:(NSInteger)sizeIndex;
 /// Fires when the user clicks an inactive filmstrip cell (navigates to that
 /// keypose). Filmstrip mode only.
 + (instancetype)filmstripCellActivated;

@@ -20,7 +20,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --type <type>           Plugin type: effect (default), title, generator"
-    echo "  --bundle-prefix <str>   Bundle ID prefix (default: co.overpolish.keyframeless)"
+    echo "  --bundle-prefix <str>   Bundle ID prefix (default: com.keyframeless)"
     echo "  --add-to-workspace      Add new project to Keyframeless.xcworkspace"
     echo "  -h, --help              Show this message"
     echo ""
@@ -41,7 +41,7 @@ to_lower() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
 [[ $# -lt 1 ]] && usage
 
 PLUGIN_NAME="$1"; shift
-BUNDLE_PREFIX="co.overpolish.keyframeless"
+BUNDLE_PREFIX="com.keyframeless"
 PLUGIN_TYPE="effect"
 ADD_TO_WORKSPACE=false
 
@@ -91,11 +91,14 @@ UPDATE_CHECKER="$REPO_ROOT/KeyframelessKit/KeyframelessKit/Update/KKUpdateChecke
 # These are Template's fixed UUIDs from Info.plist - must be unique per plugin.
 OLD_UUID_EFFECT="E62BB814-A76B-4438-B1B1-090145A42CC2"
 OLD_UUID_OSC="A1B70771-EDBB-4D3B-81B6-DB70B74CEDE4"
-OLD_UUID_GROUP="450150AA-FB81-4198-BB73-058CFEF39F5C"
 
 NEW_UUID_EFFECT=$(uuidgen | tr '[:lower:]' '[:upper:]')
 NEW_UUID_OSC=$(uuidgen | tr '[:lower:]' '[:upper:]')
-NEW_UUID_GROUP=$(uuidgen | tr '[:lower:]' '[:upper:]')
+
+# The plug-in GROUP uuid is deliberately NOT regenerated: every plugin shares
+# Template's, so they all land in the one "Keyframeless" category in Motion and
+# Final Cut instead of each creating a group of its own. Minting a fresh one
+# here is what produced the old "Canvas Group" / "Mirage Group" split.
 
 # ── Step 1: Copy ──────────────────────────────────────────────────────────────
 
@@ -121,8 +124,8 @@ mv "$DEST/Template" "$DEST/$PLUGIN_NAME"
 mv "$DEST/Template.xcodeproj" "$DEST/$PLUGIN_NAME.xcodeproj"
 
 # Rename Metal shader file
-mv "$DEST/$PLUGIN_NAME/Plugin/Template.metal" \
-   "$DEST/$PLUGIN_NAME/Plugin/$PLUGIN_NAME.metal"
+mv "$DEST/$PLUGIN_NAME/Plugin/Render/Template.metal" \
+   "$DEST/$PLUGIN_NAME/Plugin/Render/$PLUGIN_NAME.metal"
 
 ok "Renamed"
 
@@ -159,11 +162,10 @@ PLIST="$DEST/$PLUGIN_NAME/Plugin/Info.plist"
 
 sed -i '' "s/$OLD_UUID_EFFECT/$NEW_UUID_EFFECT/g" "$PLIST"
 sed -i '' "s/$OLD_UUID_OSC/$NEW_UUID_OSC/g"       "$PLIST"
-sed -i '' "s/$OLD_UUID_GROUP/$NEW_UUID_GROUP/g"   "$PLIST"
 
 ok "UUIDs: effect=$NEW_UUID_EFFECT"
 ok "       osc   =$NEW_UUID_OSC"
-ok "       group =$NEW_UUID_GROUP"
+ok "       group = shared (Keyframeless)"
 
 # ── Step 5: Register in bump-version.sh ───────────────────────────────────────
 
@@ -197,14 +199,10 @@ ok "Added '$PLUGIN_KEY' to bump-version.sh"
 
 log "Registering in KKUpdateChecker.m..."
 
-# Add to KKKnownComponents
-sed -i '' "s|@\"magicmove\" : @\"MagicMove\"|@\"magicmove\" : @\"MagicMove\",\\
-    @\"$PLUGIN_KEY\" : @\"$PLUGIN_NAME\"|" "$UPDATE_CHECKER"
-
 # Add to KKBundleIDToComponent (host + .PlugIn extension, the standard scheme)
-sed -i '' "s|@\"co.overpolish.keyframeless.MagicMove.PlugIn\" : @\"magicmove\"|@\"co.overpolish.keyframeless.MagicMove.PlugIn\" : @\"magicmove\",\\
-    @\"co.overpolish.keyframeless.$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
-    @\"co.overpolish.keyframeless.$PLUGIN_NAME.PlugIn\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
+sed -i '' "s|@\"com.keyframeless.Canvas.PlugIn\" : @\"canvas\"|@\"com.keyframeless.Canvas.PlugIn\" : @\"canvas\",\\
+    @\"com.keyframeless.$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
+    @\"com.keyframeless.$PLUGIN_NAME.PlugIn\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
 
 ok "Added '$PLUGIN_NAME' to KKUpdateChecker.m"
 

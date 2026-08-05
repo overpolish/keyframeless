@@ -11,17 +11,15 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
+// Fill/stroke come from the SHARED glyph style (KKOSCGlyphStyle.h) - same
+// palette as the point dot, so viewer + mini squares can't drift.
+#import "KKOSCGlyphStyle.h"
+
 static NSColor *squarePointFillColor(void) {
-  return [NSColor colorWithRed:0xFF / 255.0
-                         green:0xFF / 255.0
-                          blue:0xFF / 255.0
-                         alpha:1.0f];
+  return KKOSCColorFromSimd(KKOSCPointFill());
 }
 static NSColor *squarePointStrokeColor(void) {
-  return [NSColor colorWithRed:0x00 / 255.0
-                         green:0x00 / 255.0
-                          blue:0x00 / 255.0
-                         alpha:0.75f];
+  return KKOSCColorFromSimd(KKOSCPointStroke());
 }
 static NSColor *squarePointShadowColor(void) {
   return [NSColor colorWithRed:0x00 / 255.0
@@ -44,7 +42,7 @@ static NSColor *squarePointShadowColor(void) {
 }
 
 - (NSString *)pipelinePluginID {
-  return @"co.overpolish.keyframelesskit.SquarePointOSC";
+  return @"com.keyframeless.kit.SquarePointOSC";
 }
 - (NSString *)fragmentFunctionName {
   return @"KKSquarePointOSCFragment";

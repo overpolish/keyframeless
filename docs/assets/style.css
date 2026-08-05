@@ -63,6 +63,8 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
+  color: var(--text);
+  text-decoration: none;
 }
 
 .brand .logo {
@@ -111,6 +113,31 @@ body {
   filter: brightness(1.08);
 }
 
+.cta-shine {
+  background-image: linear-gradient(
+    110deg,
+    #ff5000 0% 38%,
+    #ff9a79 46%,
+    #fff0e9 50%,
+    #ff8a63 54%,
+    #ff5000 62% 100%
+  );
+  background-size: 280% 100%;
+  box-shadow: 0 6px 22px rgba(255, 80, 0, 0.2);
+  animation: cta-button-shine 5s ease-in-out infinite;
+}
+
+@keyframes cta-button-shine {
+  0%,
+  58% {
+    background-position: 100% 50%;
+  }
+  82%,
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 /* release block = KKPanel: white.opacity(0.04) fill, faint border, radius 12 */
 .release {
   background: var(--panel);
@@ -138,17 +165,43 @@ body {
   font-size: 12px;
 }
 
+/* Release-notes hub only: a centred menu of products, sized like headings
+   rather than a list of links. */
 .entries {
   list-style: none;
-  margin: 0;
+  margin: 40px 0 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
 }
 
 .entries li {
-  display: flex;
-  gap: var(--sp-lg);
-  align-items: flex-start;
-  padding: 5px 0;
+  display: block;
+  padding: 0;
+}
+
+.entries li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: 10px 18px;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.entries li a:hover {
+  background: var(--pill-bg);
+}
+
+.entries li a .name {
+  line-height: 1.2;
 }
 
 /* grouped-by-type layout: one badge per type, bullet list beside it */
@@ -218,6 +271,14 @@ body {
 .tag.kind {
   color: var(--muted);
   background: var(--pill-bg);
+}
+
+/* Scaled up to sit with the header-size product names on the hub. */
+.entries .tag.kind {
+  width: auto;
+  height: 24px;
+  font-size: 11px;
+  padding: 0 12px;
 }
 
 figure {
@@ -306,4 +367,10 @@ a {
   border-top: 1px solid var(--panel-border);
   color: var(--muted);
   font-size: 12.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-shine {
+    animation: none;
+  }
 }

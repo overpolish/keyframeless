@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKFieldEditorSupport.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
+#import "KKPopoverBackground.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
@@ -15,46 +17,11 @@
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
-// macOS 26 wraps popover content in a GlassView that injects a CoreHostingView
-// (glass chrome) and ContentHolderView (opaque bg fill). Walk up to
-// NSPopoverFrame and zero out both so liquid glass shows through unobstructed.
-static void _clearPopoverBackground(NSView *view) {
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        NSView *current = view;
-        NSView *popoverFrame = nil;
-        while (current) {
-          if ([NSStringFromClass([current class])
-                  hasPrefix:@"NSPopoverFrame"]) {
-            popoverFrame = current;
-            break;
-          }
-          current = current.superview;
-        }
-        if (!popoverFrame)
-          return;
-        for (NSView *sub in popoverFrame.subviews) {
-          if (![NSStringFromClass([sub class]) containsString:@"GlassView"])
-            continue;
-          for (NSView *glassSub in sub.subviews) {
-            glassSub.wantsLayer = YES;
-            NSString *name = NSStringFromClass([glassSub class]);
-            if ([name containsString:@"CoreHostingView"])
-              glassSub.layer.opacity = 0;
-            else if ([name containsString:@"ContentHolderView"])
-              glassSub.layer.backgroundColor = NSColor.clearColor.CGColor;
-          }
-          break;
-        }
-      });
-}
-
 @implementation _KKLVPopoverContentView
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (self.window)
-    _clearPopoverBackground(self);
+    KKApplyPopoverBackground(self);
 }
 @end
 
@@ -67,9 +34,42 @@ static void _clearPopoverBackground(NSView *view) {
 }
 @end
 
-@implementation _KKSearchField
+BOOL KKSearchFieldBlurOnCommit(NSControl *control, SEL selector) {
+  if (selector == @selector(insertNewline:) ||
+      selector == @selector(cancelOperation:)) {
+    [control.window makeFirstResponder:nil];
+    return YES;
+  }
+  return NO;
+}
+
+@implementation _KKSearchField {
+  id _outsideClickMon; // blurs the field on an outside click while editing
+}
 + (Class)cellClass {
   return [_KKSearchFieldCell class];
+}
+
+// Focus from a real click only, never the window's key-view loop when the
+// popover opens - so a freshly-shown checklist (lane filter, OSC, "Applies to")
+// doesn't auto-grab focus. That auto-focus would leave the field editor as
+// first responder, which swallows spacebar (playback) and Esc (close popover).
+// Same approach as KKCodeEditorView: gate on the CURRENT EVENT being a
+// mouse-down in OUR window landing on the field; the popover's opening click is
+// in the host window, so the key-loop auto-focus is rejected while a genuine
+// click focuses.
+- (BOOL)acceptsFirstResponder {
+  NSEvent *cur = NSApp.currentEvent;
+  BOOL fromClick = cur && (cur.type == NSEventTypeLeftMouseDown ||
+                           cur.type == NSEventTypeRightMouseDown);
+  if (!fromClick || cur.window != self.window)
+    return NO;
+  NSPoint p = [self convertPoint:cur.locationInWindow fromView:nil];
+  return NSPointInRect(p, self.bounds);
+}
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES; // focus on the first click even when the popover isn't key yet
 }
 
 - (void)drawRect:(NSRect)dirty {
@@ -84,17 +84,19 @@ static void _clearPopoverBackground(NSView *view) {
 - (BOOL)becomeFirstResponder {
   BOOL r = [super becomeFirstResponder];
   if (r) {
-    NSTextView *ed = (NSTextView *)[self currentEditor];
-    if ([ed isKindOfClass:[NSTextView class]]) {
-      ed.insertionPointColor = [NSColor accentMatchingHost];
-      ed.selectedTextAttributes = @{
-        NSBackgroundColorAttributeName :
-            [[NSColor accentMatchingHost] colorWithAlphaComponent:0.2],
-        NSForegroundColorAttributeName : [NSColor inspectorLabel],
-      };
-    }
+    KKStyleFieldEditorAccent([self currentEditor]);
+    // Blur on a click anywhere off the field: a ViewBridge popover won't resign
+    // a field on a click that lands on a non-responder (a checklist row), so
+    // wire the shared field monitor - same as every other field.
+    if (!_outsideClickMon)
+      _outsideClickMon = KKMakeFieldOutsideClickMonitor(self);
   }
   return r;
+}
+
+- (void)dealloc {
+  if (_outsideClickMon)
+    [NSEvent removeMonitor:_outsideClickMon];
 }
 @end
 
@@ -117,6 +119,11 @@ static const CGFloat kManageRowIndentStep = 14.0;
 
 - (void)setChecked:(BOOL)checked {
   _checked = checked;
+  [self setNeedsDisplay:YES];
+}
+
+- (void)setRadio:(BOOL)radio {
+  _radio = radio;
   [self setNeedsDisplay:YES];
 }
 
@@ -155,17 +162,20 @@ static const CGFloat kManageRowIndentStep = 14.0;
 
   NSColor *fillColor =
       _warning ? [NSColor warning] : [NSColor accentMatchingHost];
+  // A full-height radius rounds the same square into a circle, so radio and
+  // checkbox share one path and stay pixel-identical in size and alignment.
+  CGFloat radius = _radio ? kCheckSize / 2.0 : kCheckRadius;
   if (_checked) {
     NSBezierPath *fill = [NSBezierPath bezierPathWithRoundedRect:boxRect
-                                                         xRadius:kCheckRadius
-                                                         yRadius:kCheckRadius];
+                                                         xRadius:radius
+                                                         yRadius:radius];
     [fillColor setFill];
     [fill fill];
     NSRect innerRect = NSInsetRect(boxRect, 0.25, 0.25);
     NSBezierPath *innerStroke =
         [NSBezierPath bezierPathWithRoundedRect:innerRect
-                                        xRadius:kCheckRadius - 0.25
-                                        yRadius:kCheckRadius - 0.25];
+                                        xRadius:radius - 0.25
+                                        yRadius:radius - 0.25];
     [[NSColor colorWithWhite:1.0 alpha:0.15] setStroke];
     innerStroke.lineWidth = 0.25;
     [innerStroke stroke];
@@ -186,8 +196,8 @@ static const CGFloat kManageRowIndentStep = 14.0;
   } else {
     NSBezierPath *border =
         [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(boxRect, 0.5, 0.5)
-                                        xRadius:kCheckRadius
-                                        yRadius:kCheckRadius];
+                                        xRadius:radius
+                                        yRadius:radius];
     [[[NSColor inspectorLabel] colorWithAlphaComponent:0.3] setStroke];
     border.lineWidth = 1.0;
     [border stroke];
@@ -249,8 +259,8 @@ static const CGFloat kManageRowIndentStep = 14.0;
 }
 
 - (void)configureRow:(_KKManageRow *)row forLane:(KKLane *)lane {
-  row.checked = [_checkedLabels containsObject:lane.label];
-  NSString *label = lane.label;
+  row.checked = [_checkedLabels containsObject:lane.key];
+  NSString *label = lane.key;
   void (^onToggle)(NSString *) = _onToggle;
   row.onToggle = ^{
     if (onToggle)

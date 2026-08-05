@@ -35,16 +35,31 @@ public enum LocalModelCatalog {
 	/// order, and the recommendation prefers later (larger) entries when the
 	/// hardware qualifies.
 	public static let models: [LocalAIModel] = [
+		// Dense 14B: the reliable pick for 16-24 GB Macs. ~8 GB resident (4-bit)
+		// leaves headroom for the OS + FCP + the prefill spike, so it never swaps
+		// on a 24 GB machine - unlike the MoE options below, whose ~17-19 GB
+		// baseline sits right against the ceiling and thrashes during prefill.
+		// Loads via the standard dense text path (no VLM factory). Tool-capable.
+		LocalAIModel(
+			id: "qwen3-14b",
+			displayName: "Qwen3 14B",
+			blurb: AILoc("Balanced, low memory"),
+			sizeDescription: "~8 GB",
+			minRAMGB: 16,
+			repoID: "mlx-community/Qwen3-14B-4bit"
+		),
 		// MoE: 26B of knowledge, only 4B active per token, so it reasons like a
 		// big model at ~4B speed. The dense 12B/31B would be ideal sizes but ship
 		// as model_type "gemma4_unified", which mlx-swift-lm 3.31.3 can't load;
-		// this A4B variant is "gemma4" and loads via the same text path as E4B.
+		// this A4B variant is "gemma4" and loads via the VLM factory (it drags in
+		// vision weights). ~19 GB resident + the prefill spike overflows a 24 GB
+		// Mac into swap, so it wants 32 GB - not a 24 GB recommendation.
 		LocalAIModel(
 			id: "gemma-4-26b-a4b",
 			displayName: "Gemma 4 26B (A4B)",
 			blurb: AILoc("Fast and capable"),
-			sizeDescription: "~16 GB",
-			minRAMGB: 24,
+			sizeDescription: "~19 GB",
+			minRAMGB: 32,
 			repoID: "mlx-community/gemma-4-26b-a4b-it-4bit",
 			usesVLMFactory: true
 		),
@@ -67,10 +82,12 @@ public enum LocalModelCatalog {
 		models.first { $0.id == id }
 	}
 
-	/// The largest model whose RAM requirement the host meets. `minRAMGB` already
-	/// includes headroom for FCP + the OS (the ~16 GB Gemma MoE wants a 24 GB Mac),
-	/// and the buffer-cache cap (see MLXLocalLLMRunner) keeps the footprint from
-	/// ballooning into swap. Falls back to the lightest entry.
+	/// The largest model whose RAM requirement the host meets. `minRAMGB` is the
+	/// TOTAL system RAM for comfortable (swap-free) use = the model's resident
+	/// footprint + headroom for the OS, FCP, and the prefill spike. So the dense
+	/// 14B (~8 GB) wants 16 GB and is the 24 GB pick; the ~17-19 GB MoE options
+	/// want 32 GB. The buffer-cache cap (see MLXLocalLLMRunner) bounds retained
+	/// buffers but not the live prefill spike. Falls back to the lightest entry.
 	public static var recommendedModelID: String {
 		let ramGB = Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824)
 		let affordable = models.filter { ramGB >= $0.minRAMGB }

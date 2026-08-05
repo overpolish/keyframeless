@@ -19,12 +19,12 @@
 // single staged owner.
 - (NSString *)_guideResolvedLabel:(NSString *)label {
   for (KKLane *l in self->_timeline.lanes)
-    if (l.enabled && [l.label isEqualToString:label])
+    if (l.enabled && [l.key isEqualToString:label])
       return label;
   NSString *plain = KKPlainLaneLabel(label);
   for (KKLane *l in self->_timeline.lanes)
-    if (l.enabled && [KKPlainLaneLabel(l.label) isEqualToString:plain])
-      return l.label;
+    if (l.enabled && [KKPlainLaneLabel(l.key) isEqualToString:plain])
+      return l.key;
   return label;
 }
 
@@ -37,11 +37,11 @@
 // the full tracks rect when no lane rows are visible.
 - (NSRect)_guideLaneRowsRect {
   NSRect tracks = [self _tracksRect];
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
-  NSInteger n = (NSInteger)lanes.count;
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
+  NSInteger n = (NSInteger)rows.count;
   CGFloat top = -CGFLOAT_MAX, bot = CGFLOAT_MAX;
   for (NSInteger i = 0; i < n; i++) {
-    if (lanes[i].headerPlaceholder)
+    if (rows[i].isHeader)
       continue;
     NSRect r = [self _rowRectForIndex:i count:n];
     top = MAX(top, NSMaxY(r));
@@ -290,7 +290,7 @@
     if (![self _decodeSelectionKey:k label:&kLabel kpIdx:&idx])
       continue;
     for (KKLane *lane in _timeline.lanes) {
-      if (![lane.label isEqualToString:kLabel])
+      if (![lane.key isEqualToString:kLabel])
         continue;
       if (idx >= 0 && idx < (NSInteger)lane.keyposes.count)
         _dragOriginTimes[k] = @(lane.keyposes[idx].time);

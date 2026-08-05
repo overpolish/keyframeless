@@ -74,8 +74,8 @@
         return;
       [strong _applyPresetJSON:timelineJSON atPlayhead:atPlayhead];
     };
-    // Content presets (a payloadKind) are inserted by the plugin, not applied as
-    // a timeline curve - forward to the host's hook.
+    // Content presets (a payloadKind) are inserted by the plugin, not applied
+    // as a timeline curve - forward to the host's hook.
     popover.onApplyPresetPayload =
         ^(NSString *kind, NSString *json, BOOL atPlayhead) {
           KKTimelineInspectorView *strong = weak;
@@ -117,6 +117,14 @@
   if (self.onTimelineMutated)
     self.onTimelineMutated(result);
   [self applyTimeline:result];
+  // onTimelineMutated wrote the new blob, but FCP serves a CACHED frame for a
+  // static playhead (a one-shot preset click isn't an ongoing interaction like
+  // an OSC drag). So a generator (e.g. Mirage) - or any plugin whose playhead
+  // isn't moving - keeps showing the old frame and the preset appears to do
+  // nothing. Bump the render-nudge nonce (the same forced-re-render the
+  // boundary preview uses) so FCP treats it as a real change and re-renders.
+  if (self.onBoundaryPreviewNeedsRender)
+    self.onBoundaryPreviewNeedsRender();
   // A multi-lane / structurally-rich preset may not fit Basic; jump to Advanced
   // so the user sees the real animation rather than a degraded Basic
   // projection.

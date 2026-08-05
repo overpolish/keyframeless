@@ -24,8 +24,8 @@
 }
 
 - (void)configureRow:(_KKManageRow *)row forLane:(KKLane *)lane {
-  row.checked = [_checked containsObject:lane.label];
-  NSString *label = lane.label;
+  row.checked = [_checked containsObject:lane.key];
+  NSString *label = lane.key;
   __weak typeof(self) weak = self;
   row.onToggle = ^{
     __strong typeof(weak) s = weak;

@@ -30,10 +30,9 @@ FOUNDATION_EXPORT NSButton *KKResetToDefaultButton(id target, SEL action);
 @property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);
 @end
 
-/// "Maintain Timing" toggle (accent when `on`). Lock icon - pins the
-/// animation to absolute source-media time so trimming / growing / splitting
-/// the clip preserves where each keypose lands instead of rescaling it with
-/// the clip's new duration.
+/// "Maintain Timing" toggle (accent when `on`). Lock icon - preserves the
+/// whole animation through clip-range edits. Explicit gap locks are separate
+/// and remain active whether this toggle is on or off.
 @interface KKMaintainTimingButton : NSView
 @property(nonatomic) BOOL on;
 @property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);
@@ -51,8 +50,11 @@ FOUNDATION_EXPORT NSButton *KKResetToDefaultButton(id target, SEL action);
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 
-/// "Constants" button: icon + label, opens the static-values popover.
+/// "Constants" button: icon + label, opens the static-values popover. Draws an
+/// accent selection border + tint while `active` (its popover is showing
+/// constants), matching the keypose/gap graph highlight.
 @interface KKConstantsButton : NSView
+@property(nonatomic) BOOL active;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 

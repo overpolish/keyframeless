@@ -4,11 +4,27 @@
 
 - Install [workflow extension SDK](https://developer.apple.com/download/all/?q=WorkflowExtensions)
 
+### Mirage custom-shader transpiler (git submodules)
+
+Mirage's **Custom** shader type transpiles Shadertoy GLSL to Metal at
+runtime via vendored **glslang + SPIRV-Cross** (git submodules under
+`ThirdParty/`). They build into one static library the Mirage XPC service links.
+On a fresh clone, before building Mirage, run once:
+
+```sh
+git submodule update --init --recursive
+ThirdParty/build-transpiler.sh universal      # -> ThirdParty/build/lib/libkktranspiler.a
+```
+
+`ThirdParty/build/` is git-ignored; re-run the script only after the pinned
+submodule tags change (or a clean). CI that builds Mirage must run both steps.
+Details in `ThirdParty/README.md`.
+
 ...
 
 ## Plugin structure
 
-Every FxPlug plugin (Rounded, MagicMove, and the canonical `Template/`) follows the same `Plugin/` layout. Starting a new plugin is "copy `Template/`, rename, fill the hooks", so keep new plugins on this shape:
+Every FxPlug plugin (Canvas, Mirage, and the canonical `Template/`) follows the same `Plugin/` layout. Starting a new plugin is "copy `Template/`, rename, fill the hooks", so keep new plugins on this shape:
 
 ```
 Plugin/
@@ -17,7 +33,7 @@ Plugin/
   OSC/        OSC.{h,m}, OSC_Internal.h, <Name>OSC+<Category>.m, <Name>OSCMath.{h,m}
   Render/     Plugin+Render.m, <Name>MiniViewerRenderer.{h,m}, ShaderTypes.h, <Name>.metal
   Inspector/  (optional) <Name>InspectorView*.{h,m} - only if the plugin has a custom
-              inspector subclass (Rounded does; MagicMove does not)
+              inspector subclass (Canvas does; the Template does not)
   Assets/     (optional) cursors / images
   Info.plist, en.lproj/   (stay at the Plugin/ root, not inside Core/)
 ```
@@ -42,7 +58,7 @@ Notes:
 > KEEP="$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app"
 >
 > # unregister every copy except the debug build
-> $LS -dump | grep -B20 'identifier:.*co.overpolish.keyframeless.Keyframeless-X$' \
+> $LS -dump | grep -B20 'identifier:.*com.keyframeless.Keyframeless-X$' \
 >   | grep "path:" | sed 's/.*path: *//; s/ (0x.*//' \
 >   | while read -r p; do
 >       [ "$p" != "$KEEP" ] && $LS -u "$p" && echo "Unregistered: $p"
@@ -51,7 +67,7 @@ Notes:
 > # re-register the debug build
 > $LS -f -R -trusted "$KEEP"
 > pluginkit -a "$KEEP/Contents/PlugIns/Keyframeless X FCP.appex"
-> pluginkit -e use -i co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP
+> pluginkit -e use -i com.keyframeless.Keyframeless-X.Keyframeless-X-FCP
 > ```
 >
 > Restart FCP after fixing.
@@ -69,7 +85,7 @@ Quick sanity check that points at this cause: add `+ (void)load` and an `initWit
 Debug XPC service builds are non-sandboxed, so `NSUserDefaults` writes to `~/Library/Preferences/<BundleID>.plist` instead of the sandbox container. The `defaults` CLI looks in the container and won't find or delete the key. To reset the intro-seen state:
 
 ```sh
-plutil -remove introSeen ~/Library/Preferences/co.overpolish.keyframeless.Rounded.PlugIn.plist
+plutil -remove introSeen ~/Library/Preferences/com.keyframeless.Canvas.PlugIn.plist
 killall cfprefsd
 ```
 
@@ -79,10 +95,10 @@ killall cfprefsd
 
 ## Switching languages during development
 
-Plugin UI (Rounded, the timeline sequencer) and the workflow extension are localized via String Catalogs (`.xcstrings`). To see another language while developing:
+Plugin UI (Canvas, the timeline sequencer) and the workflow extension are localized via String Catalogs (`.xcstrings`). To see another language while developing:
 
 > [!IMPORTANT]
-> Use the **global** `AppleLanguages` for everything, and make sure FCP has **no per-app override**. Why: the FxPlug plugin (Rounded render XPC + ViewBridge inspector/joyride are separate system-spawned processes) reads the global language directly. The workflow extension instead follows **FCP's own** language - which falls back to the global only when FCP has no per-app override. A stale `com.apple.FinalCut` override therefore pins the extension to that language while the plugin tracks the global, so they disagree.
+> Use the **global** `AppleLanguages` for everything, and make sure FCP has **no per-app override**. Why: the FxPlug plugin (Canvas render XPC + ViewBridge inspector/joyride are separate system-spawned processes) reads the global language directly. The workflow extension instead follows **FCP's own** language - which falls back to the global only when FCP has no per-app override. A stale `com.apple.FinalCut` override therefore pins the extension to that language while the plugin tracks the global, so they disagree.
 >
 > One-time: clear any FCP per-app override so FCP (and the extension) follow the global:
 >
@@ -123,8 +139,8 @@ Two related-but-separate systems share the docs site and the in-plugin banner.
 ```mermaid
 flowchart LR
   MD["changelog .md<br/>(one per release)"] -->|"build-changelog.py"| HTML["generated HTML<br/>+ kk-version meta"]
-  HTML -->|"commit + push"| Pages["GitHub Pages<br/>update.keyframeless.overpolish.co"]
-  Media["images / video"] -->|"manual upload"| R2m[("R2<br/>media.keyframeless.overpolish.co")]
+  HTML -->|"commit + push"| Pages["GitHub Pages<br/>keyframeless.com"]
+  Media["images / video"] -->|"manual upload"| R2m[("R2<br/>media.keyframeless.com")]
   R2m -.->|"embedded in pages"| Pages
   Plugin["Plugin · KKUpdateChecker"] -->|"GET notes page"| Pages
   Pages -.->|"kk-version"| Plugin
@@ -135,12 +151,12 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  Btn["Plugin · Send feedback button"] -->|"opens feedbackURL<br/>(plugin + version)"| Form["Feedback form<br/>(static asset)"]
-  Form -->|"POST /submit (multipart)"| Submit
+  Btn["Plugin · Send feedback button"] -->|"opens feedbackURL<br/>(plugin + version)"| Form["Feedback form<br/>keyframeless.com/feedback<br/>(static, on the site)"]
+  Form -->|"POST /feedback/submit (multipart)"| Submit
 
-  subgraph Worker["Cloudflare Worker · feedback.keyframeless.overpolish.co"]
-    Submit["/submit"]
-    Hook["/github-webhook"]
+  subgraph Worker["Cloudflare Worker · keyframeless.com/feedback/*"]
+    Submit["/feedback/submit"]
+    Hook["/feedback/github-webhook"]
   end
 
   Submit -->|"verify token"| TS["Turnstile"]
@@ -155,7 +171,7 @@ flowchart TD
 ## Previewing the changelog site (and the update banner)
 
 The changelog/update site under `docs/` is generated from Markdown - one file per
-release at `docs/changelog/<component>/<version>.md`. Edit a `.md` (or
+release at `docs/changelog/<product>/<version>.md`. Edit a `.md` (or
 `docs/assets/style.css`), then rebuild and serve:
 
 ```sh
@@ -163,8 +179,8 @@ python3 scripts/build-changelog.py
 cd docs && python3 -m http.server 8000
 ```
 
-Open http://localhost:8000/ for the suite index, or http://localhost:8000/rounded/
-for a plugin page. The generated `index.html` files are build output - edit the `.md`
+Open http://localhost:8000/ for the landing page, or http://localhost:8000/mirage/
+for a product page. The generated `index.html` files are build output - edit the `.md`
 and rerun the script, never the HTML.
 
 Debug builds point `KKUpdateChecker` at `http://localhost:8000` (release builds use the
@@ -174,7 +190,7 @@ one:
 
 ```sh
 # bump the served version above what's installed, then rebuild + reload the plugin
-cp docs/changelog/rounded/3.0.0.md docs/changelog/rounded/9.9.9.md
+cp docs/changelog/canvas/2.0.0.md docs/changelog/canvas/9.9.9.md
 python3 scripts/build-changelog.py
 ```
 
@@ -185,7 +201,7 @@ would publish a bogus version and trip the checker for real users.
 > FCP-hosted plugins don't inherit Xcode scheme env vars, so the banner can't be forced
 > with an environment variable. For pure UI work without a server, flip the compile-time
 > switch instead: `forceUpdateBanner` in `AppShell.swift` (Keyframeless X) or
-> `kKKForceUpdateBanner` in `KKLogoBannerView.m` (Rounded). Keep both `false`/`NO` for
+> `kKKForceUpdateBanner` in `KKLogoBannerView.m` (Canvas). Keep both `false`/`NO` for
 > shipping.
 
 ## Running the feedback form locally
@@ -206,7 +222,7 @@ npm run dev                      # serves form + /submit at http://localhost:878
 
 Debug plugin builds point `KKUpdateChecker` at `http://localhost:8787/`, so a running debug plugin's feedback button opens the local form. Open it directly with prefilled context at http://localhost:8787/?plugin=rounded&version=1.2.3.
 
-The form's CSS/icons are copied from `docs/assets` by `npm run sync-assets` (run automatically by `dev`/`deploy`) - edit the originals in `docs/assets`, never the copies under `feedback-worker/public/assets`.
+The form is `docs/feedback/index.html`, a normal page on the site, so it uses `docs/assets` directly - there is no asset copy step. Serve `docs/` (port 8000) and run `wrangler dev` alongside it; the form posts to :8787 automatically when opened on localhost.
 
 Screenshot uploads go to R2. Under local `wrangler dev` they land in a local R2 simulation, so the embedded image URLs (which point at the public `r2.dev` base) won't resolve - use `wrangler dev --remote` to exercise real uploads, or just verify image handling in production.
 

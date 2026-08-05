@@ -4,26 +4,30 @@
  */
 
 // The MERGED (all-layers) timeline: flatten every layer's animated lanes into
-// one timeline for the Advanced graph view (each lane tagged with its owning
-// layerID so multiple layers' lanes coexist), and write an edited merged set
+// one timeline for the Advanced graph view, and write an edited merged set
 // back out to the individual layers. Split out of CanvasLayerTimeline.m (which
 // keeps the per-layer builder + seeding) - this is the cross-layer concern.
+//
+// Identity model: a merged lane's KEY is the layer-scoped composite
+// "templateKey\x1flayerID" (opaque outside this file - every edit surface
+// routes on it, and two layers' same-named lanes never collide), while its
+// LABEL is the plain display name ("Scale"), duplicated freely across layers.
 
 #import "CanvasLayerTimeline.h"
 #import <KeyframelessKit/KKBezierPath.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
-// U+001F separator joining a context lane's short label to its layerID (unique
-// across layers; KKLocalizedParamName strips it for display).
+// U+001F separator joining a lane's template key to its layerID inside the
+// merged-timeline KEY.
 static NSString *const kCanvasLaneSep = @"\x1f";
 
-// Tagged label joining a lane's plain short label to its owning layerID.
-static NSString *CanvasTaggedLabel(NSString *plain, NSString *layerID) {
+// Layer-scoped merged key for a per-layer template key.
+static NSString *CanvasTaggedKey(NSString *plain, NSString *layerID) {
   return [NSString stringWithFormat:@"%@%@%@", plain, kCanvasLaneSep, layerID];
 }
 
-// Plain short label of a (possibly tagged) lane label.
-static NSString *CanvasPlainLabel(NSString *tagged) {
+// Plain template key of a (possibly layer-scoped) merged key.
+static NSString *CanvasPlainKey(NSString *tagged) {
   NSRange r = [tagged rangeOfString:kCanvasLaneSep];
   return r.location == NSNotFound ? tagged
                                   : [tagged substringToIndex:r.location];
@@ -48,35 +52,36 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
     NSMutableDictionary<NSString *, KKLane *> *stored =
         [NSMutableDictionary dictionary];
     for (KKLane *l in s.lanes)
-      if (l.label)
-        stored[l.label] = l;
+      if (l.key)
+        stored[l.key] = l;
     // Emit in TEMPLATE (parameter) order, only the layer's ANIMATED lanes, so
     // every layer's rows share one stable order and constant-only layers add
-    // nothing. Lane labels (and any visibleWhen controller reference) are
-    // tagged with the layer id so each layer's cascade resolves against ITS
-    // controller.
+    // nothing. Lane KEYS (and any visibleWhen controller reference, which is
+    // a key reference) are layer-scoped so each layer's cascade resolves
+    // against ITS controller; labels stay plain for display.
     NSMutableSet<NSString *> *emittedPlain = [NSMutableSet set];
     NSMutableSet<NSString *> *neededControllers = [NSMutableSet set];
     void (^tag)(KKLane *, NSString *) = ^(KKLane *c, NSString *plain) {
-      c.label = CanvasTaggedLabel(plain, lid);
-      if (c.visibleWhenLabel.length)
-        c.visibleWhenLabel = CanvasTaggedLabel(c.visibleWhenLabel, lid);
+      c.key = CanvasTaggedKey(CanvasPlainKey(c.key ?: plain), lid);
+      c.label = plain;
+      if (c.visibleWhenKey.length)
+        c.visibleWhenKey = CanvasTaggedKey(c.visibleWhenKey, lid);
       c.layerKey = lid;
       c.layerLabel = name;
       c.layerSymbol = p.isGroup ? @"folder" : nil;
       c.locked = p.locked;
     };
     for (KKLane *t in templates) {
-      KKLane *st = stored[t.label];
+      KKLane *st = stored[t.key];
       if (!st || !st.enabled)
         continue;
       KKLane *c = [st copy];
-      tag(c, t.label);
+      tag(c, t.key);
       [lanes addObject:c];
-      [order addObject:c.label];
-      [emittedPlain addObject:t.label];
-      if (st.visibleWhenLabel.length)
-        [neededControllers addObject:st.visibleWhenLabel];
+      [order addObject:c.key];
+      [emittedPlain addObject:t.key];
+      if (st.visibleWhenKey.length)
+        [neededControllers addObject:st.visibleWhenKey];
     }
     // A gated animated lane (e.g. Stroke Width) is controlled by a CONSTANT
     // lane (e.g. the "Enabled" toggle) that the animated-only emit above skips.
@@ -100,10 +105,10 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
       KKLane *cc = [cst copy];
       tag(cc, ctrlPlain);
       [lanes addObject:cc];
-      [order addObject:cc.label];
+      [order addObject:cc.key];
       [carried addObject:ctrlPlain];
-      if (cst.visibleWhenLabel.length)
-        [pending addObject:cst.visibleWhenLabel]; // its own controller, in turn
+      if (cst.visibleWhenKey.length)
+        [pending addObject:cst.visibleWhenKey]; // its own controller, in turn
     }
   }
   tl.lanes = lanes;
@@ -114,7 +119,8 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
 void CanvasApplyMergedTimelineToPaths(KKTimeline *merged,
                                       NSArray<KKBezierPath *> *paths,
                                       NSArray<KKLane *> *templates) {
-  // Group edited lanes by owning layerID, stripped back to plain labels.
+  // Group edited lanes by owning layerID, keys stripped back to the plain
+  // per-layer template key.
   NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, KKLane *> *>
       *byLayer = [NSMutableDictionary dictionary];
   for (KKLane *l in merged.lanes) {
@@ -125,25 +131,27 @@ void CanvasApplyMergedTimelineToPaths(KKTimeline *merged,
       byLayer[lid] = edits;
     }
     KKLane *c = [l copy];
-    c.label = CanvasPlainLabel(l.label);
-    // Strip the layer tag from the visibleWhen CONTROLLER reference too, not
-    // just the label - CanvasMergedTimeline tags both. If we persist a tagged
-    // controller ("Mode\x1f<lid>"), the next rebuild can't re-find the plain
-    // "Mode" lane to carry, the cascade's controller lookup fails, and a gated
-    // lane (Gradient when Mode=Solid) falls open and wrongly shows.
-    if (c.visibleWhenLabel.length)
-      c.visibleWhenLabel = CanvasPlainLabel(c.visibleWhenLabel);
+    NSString *plain = CanvasPlainKey(l.key ?: l.label);
+    c.key = plain;
+    c.label = plain;
+    // Strip the layer scope from the visibleWhen CONTROLLER reference too. If
+    // we persist a scoped controller ("Mode\x1f<lid>"), the next rebuild can't
+    // re-find the plain "Mode" lane to carry, the cascade's controller lookup
+    // fails, and a gated lane (Gradient when Mode=Solid) falls open and
+    // wrongly shows.
+    if (c.visibleWhenKey.length)
+      c.visibleWhenKey = CanvasPlainKey(c.visibleWhenKey);
     c.layerKey = nil;
     c.layerLabel = nil;
     c.layerSymbol = nil;
-    edits[c.label] = c;
+    edits[c.key] = c;
   }
 
   NSMutableArray<NSString *> *paramOrder =
       [NSMutableArray arrayWithCapacity:templates.count];
   for (KKLane *t in templates)
-    if (t.label)
-      [paramOrder addObject:t.label];
+    if (t.key)
+      [paramOrder addObject:t.key];
 
   for (KKBezierPath *p in paths) {
     // No lock guard: lock is UI-enforced (Advanced blocks locked lanes), and
@@ -164,7 +172,7 @@ void CanvasApplyMergedTimelineToPaths(KKTimeline *merged,
                                                BOOL *stop) {
       BOOL found = NO;
       for (NSUInteger i = 0; i < lanes.count; i++)
-        if ([lanes[i].label isEqualToString:plain]) {
+        if ([lanes[i].key isEqualToString:plain]) {
           lanes[i] = lane;
           found = YES;
           break;
@@ -198,12 +206,13 @@ KKTimeline *CanvasAITimeline(NSArray<KKBezierPath *> *paths,
     NSMutableDictionary<NSString *, KKLane *> *stored =
         [NSMutableDictionary dictionary];
     for (KKLane *l in s.lanes)
-      if (l.label)
-        stored[l.label] = l;
+      if (l.key)
+        stored[l.key] = l;
     void (^tag)(KKLane *, NSString *) = ^(KKLane *c, NSString *plain) {
-      c.label = CanvasTaggedLabel(plain, lid);
-      if (c.visibleWhenLabel.length)
-        c.visibleWhenLabel = CanvasTaggedLabel(c.visibleWhenLabel, lid);
+      c.key = CanvasTaggedKey(CanvasPlainKey(c.key ?: plain), lid);
+      c.label = plain;
+      if (c.visibleWhenKey.length)
+        c.visibleWhenKey = CanvasTaggedKey(c.visibleWhenKey, lid);
       c.layerKey = lid;
       c.layerLabel = name;
       c.layerSymbol = p.isGroup ? @"folder" : nil;
@@ -212,13 +221,13 @@ KKTimeline *CanvasAITimeline(NSArray<KKBezierPath *> *paths,
     // Emit in template (parameter) order so every layer's lanes share a stable
     // order.
     for (KKLane *t in templates) {
-      KKLane *st = stored[t.label];
+      KKLane *st = stored[t.key];
       if (!st)
         continue; // lane doesn't apply to this layer type
       KKLane *c = [st copy];
-      tag(c, t.label);
+      tag(c, t.key);
       [lanes addObject:c];
-      [order addObject:c.label];
+      [order addObject:c.key];
     }
   }
   tl.lanes = lanes;

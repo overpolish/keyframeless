@@ -19,8 +19,8 @@ KKOrderedLaneCategories(NSArray<KKLane *> *lanes) {
     [syms addObject:l.categorySymbol.length ? l.categorySymbol : @"circle"];
   }
   // Show the category nav whenever ANY category is declared (a single-category
-  // plugin like Canvas's "Transform" still gets its pill). Plugins that set no
-  // categoryKey at all (Rounded, MagicMove) get none, as before.
+  // plugin's sole category still gets its pill). Plugins that set no
+  // categoryKey at all get none, as before.
   if (keys.count < 1)
     return @[];
   NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];
@@ -42,7 +42,7 @@ KKLaneCategoryByLabel(NSArray<KKLane *> *lanes) {
       [NSMutableDictionary dictionary];
   for (KKLane *lane in lanes)
     if (lane.categoryKey.length)
-      byLabel[lane.label] = lane.categoryKey;
+      byLabel[lane.key] = lane.categoryKey;
   return byLabel;
 }
 
@@ -55,6 +55,91 @@ NSString *KKResolveLaneCategory(NSArray<KKLane *> *lanes, NSString *requested) {
       if ([pair[0] isEqualToString:requested])
         return requested;
   return cats.firstObject[0];
+}
+
+NSArray<NSString *> *KKLaneLayerKeys(NSArray<KKLane *> *lanes) {
+  NSMutableArray<NSString *> *keys = [NSMutableArray array];
+  for (KKLane *l in lanes) {
+    NSString *k = l.layerKey;
+    if (k.length && ![keys containsObject:k])
+      [keys addObject:k];
+  }
+  return keys;
+}
+
+NSSet<NSString *> *
+KKLaneLayerKeysWithKeyposeNearFraction(NSArray<KKLane *> *lanes,
+                                       double fraction) {
+  double snapped = fraction, best = INFINITY;
+  for (KKLane *l in lanes) {
+    if (!l.enabled || !l.layerKey.length)
+      continue;
+    for (KKKeyPose *kp in l.keyposes) {
+      double d = fabs(kp.time - fraction);
+      if (d < best) {
+        best = d;
+        snapped = kp.time;
+      }
+    }
+  }
+  NSMutableSet<NSString *> *out = [NSMutableSet set];
+  for (KKLane *l in lanes) {
+    if (!l.enabled || !l.layerKey.length ||
+        [out containsObject:(NSString *)l.layerKey])
+      continue;
+    for (KKKeyPose *kp in l.keyposes)
+      if (fabs(kp.time - snapped) < 1.0e-4) {
+        [out addObject:l.layerKey];
+        break;
+      }
+  }
+  return out;
+}
+
+NSDictionary<NSString *, NSString *> *
+KKLaneLayerNames(NSArray<KKLane *> *lanes) {
+  NSMutableDictionary<NSString *, NSString *> *names =
+      [NSMutableDictionary dictionary];
+  for (KKLane *l in lanes) {
+    NSString *k = l.layerKey;
+    if (k.length && names[k] == nil)
+      names[k] = l.layerLabel.length ? l.layerLabel : k;
+  }
+  return names;
+}
+
+KKPillToggleRowView *KKMakeLaneLayerPill(NSArray<KKLane *> *lanes,
+                                         NSString *selected,
+                                         void (^onSelect)(NSString *)) {
+  NSArray<NSString *> *keys = KKLaneLayerKeys(lanes);
+  if (keys.count < 2)
+    return nil;
+  NSDictionary<NSString *, NSString *> *names = KKLaneLayerNames(lanes);
+  NSMutableArray<NSString *> *labels = [NSMutableArray array];
+  for (NSString *k in keys)
+    [labels addObject:KKTruncatedLayerName(names[k] ?: k)];
+  // Never "no owner": a caller whose selection isn't in this lane set lands on
+  // the first layer rather than on an all-owners page.
+  NSUInteger found =
+      selected.length ? [keys indexOfObject:selected] : NSNotFound;
+  NSUInteger selIdx = (found == NSNotFound) ? 0 : found;
+
+  KKPillToggleRowView *pill =
+      [[KKPillToggleRowView alloc] initWithLabels:labels];
+  pill.translatesAutoresizingMaskIntoConstraints = NO;
+  pill.grouped = YES;
+  pill.radioMode = YES;
+  NSMutableArray<NSNumber *> *states = [NSMutableArray array];
+  for (NSUInteger i = 0; i < labels.count; i++)
+    [states addObject:@(i == selIdx)];
+  pill.states = states;
+  pill.onToggled = ^(NSInteger index, BOOL isOn) {
+    if (!isOn || index < 0 || index >= (NSInteger)keys.count)
+      return;
+    if (onSelect)
+      onSelect(keys[index]);
+  };
+  return pill;
 }
 
 NSImage *KKCategorySymbolImage(NSString *symbolName,
@@ -75,11 +160,11 @@ static NSArray<NSString *> *_kkCategoryUnits(NSArray<KKLane *> *lanes) {
     NSString *cat = l.categoryKey;
     if (cat.length) {
       NSMutableArray<NSString *> *labels =
-          [NSMutableArray arrayWithObject:KKLocalizedParamName(l.label)];
+          [NSMutableArray arrayWithObject:KKLocalizedParamName(l.displayName)];
       NSInteger j = i + 1;
       while (j < (NSInteger)lanes.count && [lanes[j].categoryKey
                                                isEqualToString:cat]) {
-        [labels addObject:KKLocalizedParamName(lanes[j].label)];
+        [labels addObject:KKLocalizedParamName(lanes[j].displayName)];
         j++;
       }
       [units
@@ -89,7 +174,7 @@ static NSArray<NSString *> *_kkCategoryUnits(NSArray<KKLane *> *lanes) {
                                              componentsJoinedByString:@", "]]];
       i = j;
     } else {
-      [units addObject:KKLocalizedParamName(l.label)];
+      [units addObject:KKLocalizedParamName(l.displayName)];
       i++;
     }
   }

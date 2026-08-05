@@ -17,7 +17,8 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 };
 
 /// Content view for the segment-edit popover. Shows curve/hold-effect pills,
-/// intensity + frequency sliders, and (for holds) a seed field.
+/// Intensity + Frequency value rows (slider + number field), and (for holds) a
+/// seed field.
 @interface KKSegmentEditView : NSView
 
 @property(nonatomic, readonly) KKSegmentEditKind kind;
@@ -45,8 +46,9 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 /// cmd-Z reverts the drag as a single step rather than per-tick.
 @property(nonatomic, copy, nullable) void (^onSliderDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onSliderDragEnd)(void);
+/// Fires for a typed seed AND for the row's re-roll button - the row rolls the
+/// new value itself, so both arrive here.
 @property(nonatomic, copy, nullable) void (^onSeedChanged)(uint32_t newSeed);
-@property(nonatomic, copy, nullable) void (^onSeedReroll)(void);
 @property(nonatomic, copy, nullable) void (^onLinkedChanged)(BOOL linked);
 /// Per-property participation pills (which animatable properties this phase
 /// applies to). Multi-select with click-drag sweep; drag-begin/end bracket
@@ -117,6 +119,25 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
                                     (NSArray<NSArray<NSString *> *> *)compounds
                                    states:
                                        (NSArray<NSArray<NSNumber *> *> *)states;
+
+/// Open the "Applies to" checklist on `layerKey`'s page. A multi-owner lane set
+/// (Canvas's layers, Mirage's shader rack) shows one owner at a time behind a
+/// layer pill nav, and it should open on the owner the host has selected rather
+/// than on the first one. No-op for a single-owner list or a pill-bar
+/// participation.
+- (void)selectParticipationLayerKey:(nullable NSString *)layerKey;
+
+/// The content height changed on its own (the Frequency row collapsing when
+/// the picked curve has no frequency). The host re-sizes the popover; without
+/// it the row's space would be left blank. Fires only on a real change.
+@property(nonatomic, copy, nullable) void (^onContentHeightChanged)(void);
+
+/// Buttons for the popover's title bar - [Reset][Make Default], at the trailing
+/// edge of the header. They save this
+/// segment's shape as the plugin's default for new segments, and put the
+/// segment back to it; both hide while the segment already matches the saved
+/// default. Built on first call, then cached.
+- (NSView *)defaultsAccessoryView;
 
 /// The view's required content height for the current configuration. Unlike the
 /// class method this accounts for the checklist participation section, whose

@@ -9,14 +9,45 @@ import Foundation
 /// processed-audio output would change (source, time range, volume curve,
 /// fades, AU filters incl. their params/keyframes, channel routing).
 ///
-/// Used to key processed-audio caches (renderer, waveform) and to detect
-/// timeline clip-array changes that should invalidate per-index waveform
-/// buffers.
+/// Comes in two flavours, and the difference matters:
+///
+/// - `of` identifies a clip *on this Mac*, keyed by absolute URL. Used for the
+///   processed-audio and waveform caches, and to spot timeline clip-array
+///   changes that invalidate per-index waveform buffers.
+/// - `identity` identifies the same clip *anywhere*, keyed by filename. Used
+///   for Sonar's published-source identity.
+///
+/// They differ in exactly one requirement: `of` must tell two same-named files
+/// in different folders apart, and `identity` must NOT tell two copies of one
+/// project on two Macs apart.
 enum AudioClipFingerprint {
+	/// Local identity. Absolute URL, so two same-named files can't collide in a
+	/// cache and hand back each other's audio.
 	static func of(_ clip: FCPXMLParser.AudioClip) -> String {
-		let url = clip.url?.absoluteString ?? clip.name
-		return
-			"\(url)#\(clip.sourceStart)+\(clip.sourceDuration)"
+		(clip.url?.absoluteString ?? clip.name) + edits(clip)
+	}
+
+	/// Portable identity: the same clip on another Mac, where the media sits
+	/// under a different absolute path, hashes the same.
+	///
+	/// This is what Sonar hashes into a source's `contentHash`, and a shader's
+	/// `#audio` lane stores a hash of that. So if this moved with the media, a
+	/// project opened on a second Mac could never reconnect to its audio - not
+	/// even after republishing the very same clips, because the key it looks up
+	/// would have changed underneath it.
+	///
+	/// Filename, not full path: media moving folders is ordinary, and the edit
+	/// suffix below carries enough (source range, curves, fades, filters) that
+	/// two genuinely different clips still separate.
+	static func identity(_ clip: FCPXMLParser.AudioClip) -> String {
+		(clip.url?.lastPathComponent ?? clip.name) + edits(clip)
+	}
+
+	/// Everything about a clip that changes its processed audio, short of which
+	/// file it came from. Shared so the two identities can't drift apart in what
+	/// they consider an edit.
+	private static func edits(_ clip: FCPXMLParser.AudioClip) -> String {
+		"#\(clip.sourceStart)+\(clip.sourceDuration)"
 			+ "/curve=\(volumeCurveHash(clip.volumeCurve))"
 			+ "/fade=\(fadeHash(clip.fadeIn))-\(fadeHash(clip.fadeOut))"
 			+ "/filters=\(filtersHash(clip.auFilters))"
@@ -43,7 +74,8 @@ enum AudioClipFingerprint {
 					?? "static"
 				return "\(o.key)=\(o.value)/\(kfs)"
 			}.joined(separator: ",")
-			return "\(f.auType)/\(f.auSubtype)/\(f.auManufacturer)/\(f.effectState?.count ?? 0)/\(params)"
+			return
+				"\(f.auType)/\(f.auSubtype)/\(f.auManufacturer)/\(f.effectState?.count ?? 0)/\(params)"
 		}.joined(separator: "|") ?? "none"
 	}
 }

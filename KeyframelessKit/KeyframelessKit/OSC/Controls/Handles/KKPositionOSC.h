@@ -26,8 +26,8 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
   KKPositionHitTangentHandle = 3 // an in/out tangent handle
 };
 
-/// Supplied by a plugin that runs an OSC guide over its Position handle (e.g.
-/// MagicMove). nil = no guide; the handle reads the live timeline normally.
+/// Supplied by a plugin that runs an OSC guide over its Position handle.
+/// nil = no guide; the handle reads the live timeline normally.
 @protocol KKPositionGuideProvider <NSObject>
 /// The per-process guide bridge (for `guideStep` + `handleHovered`).
 - (KKOSCGuideBridge *)positionGuideBridge;
@@ -76,10 +76,24 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// space to an enclosing parent's space - e.g. a Canvas member's clip space to
 /// where its rotated/scaled/translated group actually draws it. Applied forward
 /// to every drawn point (object -> parent -> canvas) and INVERTED on input
-/// (canvas -> parent -> object), so the handle draws where the layer is rendered
-/// AND a drag maps the cursor back through the parent (reacting to the parent's
-/// rotation) instead of skewing or feeding back. Default identity.
+/// (canvas -> parent -> object), so the handle draws where the layer is
+/// rendered AND a drag maps the cursor back through the parent (reacting to the
+/// parent's rotation) instead of skewing or feeding back. Default identity.
 @property(nonatomic) simd_float3x3 parentObjectTransform;
+
+/// Optional ARBITRARY (possibly nonlinear) warp between the lane's value space
+/// and object space, applied INSIDE the parent transform: lane -> warp ->
+/// parent -> canvas on every drawn point (handle, motion-path samples, keypose
+/// anchors, tangent endpoints - all point-mapped), and inverted on input.
+/// `fraction` is the clip fraction the mapped point belongs to (the playhead
+/// for the handle and drags, each sample's own time along the path), so a
+/// warp referencing other ANIMATED values can follow them per sample. Set
+/// BOTH or NEITHER (there is no numeric 2D inversion). Default nil = identity
+/// (Shader wires these to a `// @osc` block's toPos/fromPos).
+@property(nonatomic, copy, nullable) simd_float2 (^laneToObjectWarp)
+    (simd_float2 laneValue, double fraction);
+@property(nonatomic, copy, nullable) simd_float2 (^objectToLaneWarp)
+    (simd_float2 objectPoint, double fraction);
 
 /// nil = no guide.
 @property(nonatomic, weak, nullable) id<KKPositionGuideProvider> guideProvider;
@@ -91,16 +105,29 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// owning layer. The block is invoked inside the control's open action scope,
 /// so the host's get/set API (same apiManager) resolves there. The lane carries
 /// its owner via `layerKey`. nil = default single-param write
-/// (Glow/MagicMove/Rounded unchanged).
+/// (single-param plugins unchanged).
 @property(nonatomic, copy, nullable) void (^onTimelinePersist)
     (KKTimeline *timeline);
 
 /// Optional persistent snap (e.g. a grid), applied to the dragged handle's
-/// CANVAS point when Cmd is NOT held. The host returns the snapped canvas point;
-/// the control converts it back to the lane value. Generic (canvas space) so the
-/// Anchor control and a future pen tool reuse the same hook. nil = no snap.
+/// CANVAS point when Cmd is NOT held. The host returns the snapped canvas
+/// point; the control converts it back to the lane value. Generic (canvas
+/// space) so the Anchor control and a future pen tool reuse the same hook. nil
+/// = no snap.
 @property(nonatomic, copy, nullable) CGPoint (^canvasSnapProvider)
     (CGPoint canvasPoint);
+
+/// Extra OBJECT-space snap targets (0..1, Y-up) folded into the Cmd-held snap
+/// alongside the lane's own keyposes and the canvas anchors - so a host with
+/// other position-like handles (e.g. Shader's point OSCs) can let this control
+/// snap onto them. Each NSValue wraps a CGPoint. nil / empty = keyposes only.
+/// Set fresh per drag; read on every snap tick.
+@property(nonatomic, copy, nullable) NSArray<NSValue *> *externalSnapTargets;
+
+/// Opt this control out of snapping entirely (the Cmd snap and any
+/// canvasSnapProvider), for a host handle the user asked not to snap
+/// (Shader's `skipsnapping`). Default NO.
+@property(nonatomic) BOOL snapDisabled;
 
 /// Set by the hit-test: YES when the hovered Position target is a keypose
 /// anchor dot rather than the playhead arc handle (both report Handle/AnchorDot

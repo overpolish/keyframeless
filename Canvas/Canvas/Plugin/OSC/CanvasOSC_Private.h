@@ -139,7 +139,7 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 @property(nonatomic, strong) KKPointOSC *penAnchorOSC;
 @property(nonatomic, strong) KKPointOSC *penHandleOSC;
 // Live-corner radius widget glyph: the shared KKRingOSC, tinted accent (or
-// error at max), so it matches the Glow radius ring + Rounded's handle.
+// error at max).
 @property(nonatomic, strong) KKRingOSC *penCornerRingOSC;
 @end
 

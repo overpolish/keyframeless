@@ -78,7 +78,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
-    if (!lane.enabled || ![lane.label isEqualToString:label] ||
+    if (!lane.enabled || ![lane.key isEqualToString:label] ||
         lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
@@ -124,7 +124,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
-    if (!lane.enabled || ![lane.label isEqualToString:label] ||
+    if (!lane.enabled || ![lane.key isEqualToString:label] ||
         lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
@@ -175,7 +175,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
-    if (!lane.enabled || ![lane.label isEqualToString:label] ||
+    if (!lane.enabled || ![lane.key isEqualToString:label] ||
         lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);

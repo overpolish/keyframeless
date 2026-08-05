@@ -9,16 +9,21 @@
 
 #import "CanvasLayerListController.h"
 #import "CanvasLayerListView.h"
+#import <KeyframelessKit/KKCompanionPanelController.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface CanvasLayerListController () {
 @protected
-  NSPanel *_panel;
+  // The panel beside the popover (construction, placement, entrance): kit
+  // scaffold, shared with Mirage's template browser. This class supplies the
+  // content and everything the content means.
+  KKCompanionPanelController *_panelController;
   __weak CanvasLayerListView *_listView;
-  __weak NSWindow *_parentWindow; // also the pending target during the delay
-  __weak NSView *_popoverContentView; // re-align source when the popover flips
-  BOOL _visible;
+  // The non-selectable set for the popover currently opening, handed to the
+  // list the moment the panel is attached (the panel is built lazily, so the
+  // set is derived before the view it applies to exists).
+  NSSet<NSString *> *_pendingNonSelectable;
   __weak id<PROAPIAccessing> _apiManager;
   // Layer to highlight in the list (a keypose popover's active layer). Stored
   // so it survives the panel being created lazily AFTER the highlight is
@@ -34,9 +39,21 @@ NS_ASSUME_NONNULL_BEGIN
   // selectable. Cleared on close.
   NSString *_openPopoverKind;
   double _openPopoverFraction;
+  // The content surface the layer-list window is physically attached to.
+  // A temporary option popover can open over a persistent editor; in that
+  // case the list borrows the option's selection scope without reparenting its
+  // NSPanel (ViewBridge raises if the same child window is reparented there).
+  __weak NSView *_attachedContentView;
+  __weak NSView *_overlayContentView;
+  NSString *_underlyingPopoverKind;
+  double _underlyingPopoverFraction;
   // Backs the public templateLaneCount property; declared here so the
   // +NonSelectable category can read it.
   NSUInteger _templateLaneCount;
+  // Bumped by every open AND every close, so a panel build deferred out of the
+  // notification turn can tell whether the popover it was for is still the one
+  // on screen. Main-thread only.
+  NSInteger _openGeneration;
 }
 @end
 

@@ -5,6 +5,7 @@
 
 #import "KKTimelineInspectorView.h"
 #import "KKLocalized.h"
+#import "KKLog.h"
 #import "KKTimelineInspectorView_Private.h"
 
 #import "KKCheckboxView.h"
@@ -14,7 +15,9 @@
 #import "KKMiniViewerView.h"
 #import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
+#import "KKPluginInstanceState.h" // KKInstanceUUIDForAPI
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKPopupSelectView.h"
 #import "KKReorderListView.h"
 #import "KKShaderTypes.h"
@@ -72,6 +75,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   if (!self)
     return nil;
   _apiManager = apiManager;
+  _clipProjectStartSec = -1.0; // unknown until the render tick pushes it
   _availableLanes = [availableLanes copy];
   _selectedTab = (KKTimelineTab)activeTab;
   _constantsButtonTitle =
@@ -210,8 +214,9 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _maintainTimingButton.hidden = (_selectedTab != KKTimelineTabAdvanced);
   _maintainTimingButton.toolTip =
       KKLoc(@"Maintain Timing",
-            @"Toolbar toggle: pin the animation to absolute time so trimming "
-            @"or splitting the clip keeps each keypose where it is.");
+            @"Preserve the whole animation while trimming or splitting. Gap "
+            @"locks set from the right-click menu work independently of this "
+            @"toggle.");
   _maintainTimingButton.onToggled = ^(BOOL isOn) {
     if (weak.onMaintainTimingToggled)
       weak.onMaintainTimingToggled(isOn);
@@ -280,6 +285,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
                                                  timeline:timeline];
   _basicView.translatesAutoresizingMaskIntoConstraints = NO;
   [_basicView setActiveTab:_selectedTab];
+  // This clip's identity, so its expression popover can read its own manifest
+  // off the bus and scope the reference picker to its project. Resolved on the
+  // view side (the render process can't push it here - different process).
+  [_basicView setLinkSelfUUID:KKInstanceUUIDForAPI(_apiManager)];
   [_contentView addSubview:_basicView];
 
   _constantsButton.hidden = !_basicView.hasUnoptedLanes;
@@ -298,6 +307,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     if (basic && btn)
       [basic showStaticValuesPopoverFromView:btn];
   };
+  _basicView.onConstantsPopoverActiveChanged = ^(BOOL active) {
+    KKConstantsButton *btn = weakConstants;
+    btn.active = active;
+  };
   _basicView.onTimelineMutated = ^(KKTimeline *updated) {
     KKTimelineInspectorView *strong = weak;
     KKTimelineLanesView *basic = weakBasic;
@@ -315,13 +328,57 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     if (weak.onDragEnd)
       weak.onDragEnd();
   };
+  _basicView.onUndo = ^{
+    if (weak.onUndo)
+      weak.onUndo();
+  };
+  _basicView.onRedo = ^{
+    if (weak.onRedo)
+      weak.onRedo();
+  };
+  _basicView.onTogglePlayback = ^{
+    if (weak.onTogglePlayback)
+      weak.onTogglePlayback();
+  };
   _basicView.onScrub = ^(double frac) {
-    if (weak.onScrub)
-      weak.onScrub(frac);
+    KKTimelineInspectorView *strong = weak;
+    if (!strong)
+      return;
+    [strong setPlayheadFraction:frac];
+    if (strong.onScrub)
+      strong.onScrub(frac);
+  };
+  // Keypose seek rides the same host-seek path as a scrub. No local
+  // setPlayheadFraction: the host's own render ticks push the playhead back,
+  // and seeding it here would race them.
+  _basicView.onBoundarySeekHostPlayhead = ^(double frac) {
+    KKTimelineInspectorView *strong = weak;
+    if (strong.onScrub)
+      strong.onScrub(frac);
   };
   _basicView.onZoomChanged = ^(BOOL zoomed) {
     KKTimelineInspectorView *strong = weak;
     strong->_resetButton.zoomed = zoomed;
+  };
+  // Live source-derived lanes: on a code commit, re-derive the available-lanes
+  // set (if the host provided a provider) and swap it into the rows live.
+  _basicView.onCodeCommitted = ^(NSString *code) {
+    KKTimelineInspectorView *strong = weak;
+    if (!strong)
+      return;
+    // nil timeline: a commit changes the SOURCE under a timeline that is
+    // already the one on screen, so the provider's own live copy is the right
+    // one to derive against.
+    if (strong.availableLanesProvider) {
+      NSArray<KKLane *> *lanes = strong.availableLanesProvider(code, nil);
+      if (lanes)
+        [strong applyAvailableLanes:lanes];
+    }
+    // Let a host with a source-derived OSC set re-wire its visibility checklist
+    // to the new element set (the lane re-derive above doesn't touch OSC
+    // wiring).
+    if (strong.onCodeCommitted)
+      strong.onCodeCommitted(code);
   };
   _basicView.onBoundaryPreviewNeedsRender = ^{
     if (weak.onBoundaryPreviewNeedsRender)
@@ -415,6 +472,9 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 - (void)setMiniViewerDelegate:(id<KKMiniViewerDelegate>)delegate {
   _miniViewerDelegate = delegate;
   _basicView.miniViewerDelegate = delegate;
+  // The motion-blur row is usually seeded BEFORE the delegate is attached, so
+  // seed the fresh delegate rather than waiting for the next settings change.
+  [self pushMotionBlurToMiniViewer];
 }
 
 - (void)setMiniGrabsKeyFocusOnClick:(BOOL)grabs {
@@ -534,7 +594,90 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     _onGuideTabChanged(tab);
 }
 
+- (void)applyAvailableLanes:(NSArray<KKLane *> *)lanes {
+  if (!lanes)
+    return;
+  _availableLanes = [lanes copy];
+  [_basicView updateAvailableLanes:lanes];
+}
+
 - (void)applyTimeline:(KKTimeline *)timeline {
+  // Re-derive source-declared lanes from the timeline's code lane, so a shader
+  // SWAP / undo updates the lane set the same as a live directive edit (which
+  // routes through onCodeCommitted). Cached on the source so this is a no-op
+  // when the code didn't change (applyTimeline runs on ordinary edits too).
+  if (_availableLanesProvider) {
+    NSString *code = @"";
+    for (KKLane *l in timeline.lanes)
+      if (l.valueType == KKLaneValueTypeCode && l.codeString.length) {
+        code = l.codeString;
+        break;
+      }
+    if (![code isEqualToString:(_lastDerivedCode ?: @"")]) {
+      _lastDerivedCode = [code copy];
+      // The INCOMING timeline, not the one still on screen: the rows are about
+      // to be filtered against whatever this returns, and the timeline being
+      // replaced is not what they are being filtered for.
+      NSArray<KKLane *> *lanes = _availableLanesProvider(code, timeline);
+      if (lanes)
+        [self applyAvailableLanes:lanes];
+    }
+  }
+  // `label` is NOT serialized, so a timeline that has round-tripped through the
+  // blob comes back with label == key. For a plugin whose key IS its label
+  // (Speed, Grain) that is invisible; for a dynamic lane the key is a raw
+  // uniform name, so the row reads "uCenter" instead of "Center" and, having no
+  // template, loses `animatable` and drops out of Basic / Advanced entirely.
+  //
+  // Re-asserted on EVERY apply, not just when the code changed: the previous
+  // placement inside the re-derive guard meant any ordinary mutation - notably
+  // animating a property, which persists and reloads without touching the
+  // source - left every dynamic lane showing its uniform key.
+  if (_availableLanes.count && timeline.lanes.count) {
+    NSMutableDictionary<NSString *, NSString *> *labelByKey =
+        [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
+    // Every declared key, INCLUDING templates with no label - those still
+    // exist, so the orphan test must not mistake "unlabelled" for "gone".
+    NSMutableSet<NSString *> *templateKeys =
+        [NSMutableSet setWithCapacity:_availableLanes.count];
+    for (KKLane *t in _availableLanes) {
+      if (!t.key.length)
+        continue;
+      [templateKeys addObject:t.key];
+      if (t.label.length)
+        labelByKey[t.key] = t.label;
+    }
+    NSMutableArray<KKLane *> *relabelled = nil;
+    for (NSUInteger i = 0; i < timeline.lanes.count; i++) {
+      KKLane *l = timeline.lanes[i];
+      NSString *want = labelByKey[KKPlainLaneLabel(l.key ?: @"")];
+      if (!want.length || [want isEqualToString:l.label])
+        continue;
+      if (!relabelled)
+        relabelled = [timeline.lanes mutableCopy];
+      KKLane *c = [l copy];
+      c.label = want;
+      relabelled[i] = c;
+    }
+    if (relabelled) {
+      timeline = [timeline copy];
+      timeline.lanes = relabelled;
+    }
+    // Orphans: a lane the source no longer declares. Dropped from the ROWS
+    // only - it stays in `timeline` (and so in the blob), so re-declaring the
+    // directive restores its keyframes untouched.
+    if (_hidesLanesWithoutTemplate) {
+      NSMutableArray<KKLane *> *live =
+          [NSMutableArray arrayWithCapacity:timeline.lanes.count];
+      for (KKLane *l in timeline.lanes)
+        if ([templateKeys containsObject:KKPlainLaneLabel(l.key ?: @"")])
+          [live addObject:l];
+      if (live.count != timeline.lanes.count) {
+        timeline = [timeline copy];
+        timeline.lanes = live;
+      }
+    }
+  }
   [_basicView applyTimeline:timeline];
   _constantsButton.hidden = !_basicView.hasUnoptedLanes;
   [_detachedView applyTimeline:timeline];
@@ -555,21 +698,82 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _clipDurationSeconds = seconds;
   [_basicView setClipDurationSeconds:seconds];
   [_detachedView setClipDurationSeconds:seconds];
+  [self _pushLinkTimeToMiniViewer];
 }
 
 - (double)clipDurationSeconds {
   return _clipDurationSeconds;
 }
 
+// This clip's absolute project-start seconds (fraction 0). Pushed from the
+// shared render tick (KKRefreshRenderCache). Constant while a clip plays, so it
+// feeds parameter-link resolution at the 60fps feed rate instead of the ~2/sec
+// playhead poller - see -_pushLinkTimeToMiniViewer.
+- (void)setClipProjectStartSec:(double)seconds {
+  if (_clipProjectStartSec == seconds)
+    return;
+  _clipProjectStartSec = seconds;
+  [self _pushLinkTimeToMiniViewer];
+}
+
+- (double)clipProjectStartSec {
+  return _clipProjectStartSec;
+}
+
+// Feed the mini-viewer's parameter-link timing generically for EVERY plugin
+// (the renderer's clip props are on the KKMiniViewerRenderer base).
+// `linkTimelineSec` is the scrub/static fallback (poller-paced); during live
+// playback the mini draw path overrides it per-frame from the feed frame's own
+// fraction, using the constant `clipTimelineStartSec` pushed here. KVC so a
+// delegate that predates these keys is simply skipped (non-linked plugins are
+// unaffected either way).
+- (void)_pushLinkTimeToMiniViewer {
+  NSObject *del = (NSObject *)_miniViewerDelegate;
+  if (!del)
+    return;
+  double link = -1.0;
+  if (_clipProjectStartSec >= 0.0 && _playheadFraction >= 0.0)
+    link = _clipProjectStartSec + _playheadFraction * _clipDurationSeconds;
+  @try {
+    [del setValue:@(_clipDurationSeconds) forKey:@"clipDurationSeconds"];
+    [del setValue:@(_clipProjectStartSec) forKey:@"clipTimelineStartSec"];
+    [del setValue:@(link) forKey:@"linkTimelineSec"];
+  } @catch (...) {
+  }
+}
+
+// The preview has no timing API, so the shutter WINDOW is resolved here (where
+// the frame duration is known) rather than shipping the raw angle. Same KVC
+// approach as -_pushLinkTimeToMiniViewer: a delegate predating these keys is
+// simply skipped, so non-blurring plugins are unaffected.
+- (void)pushMotionBlurToMiniViewer {
+  NSObject *del = (NSObject *)_miniViewerDelegate;
+  if (!del)
+    return;
+  double shutterSec = 0.0;
+  if (_frameDurationSeconds > 0.0 && _mbShutterAngle > 0.0)
+    shutterSec = (_mbShutterAngle / 360.0) * _frameDurationSeconds;
+  @try {
+    [del setValue:@(_mbCheckbox.isChecked) forKey:@"previewMotionBlurEnabled"];
+    [del setValue:@(shutterSec) forKey:@"previewMotionBlurShutterSeconds"];
+    [del setValue:@(_mbSamples) forKey:@"previewMotionBlurSamples"];
+    [del setValue:@(_mbTechnique) forKey:@"previewMotionBlurTechnique"];
+  } @catch (...) {
+  }
+}
+
 - (void)setFrameDurationSeconds:(double)seconds {
   _frameDurationSeconds = seconds;
   [_basicView setFrameDurationSeconds:seconds];
   [_detachedView setFrameDurationSeconds:seconds];
+  [self pushMotionBlurToMiniViewer]; // the shutter window depends on it
 }
 
 - (void)setPlayheadFraction:(double)frac {
+  _playheadFraction = frac;
   [_basicView setPlayheadFraction:frac];
   [_detachedView setPlayheadFraction:frac];
+  [self _pushLinkTimeToMiniViewer];
 }
 
 - (void)setPlaying:(BOOL)playing {
@@ -579,6 +783,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     return;
   _playButton.playing = playing;
   [_detachedView setPlaying:playing];
+  // Flip the open keypose/constants popover's live preview in place, so the
+  // clip can be played back without closing the editor. The preview itself
+  // follows the feed frames; this only toggles the play/idle mode.
+  [_basicView setOpenPopoverLivePlaying:playing];
 }
 
 - (KKPlayButton *)_guidePlayButton {
@@ -617,6 +825,8 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   copy.miniViewerRequestPath = _miniViewerRequestPath;
   copy.miniViewerDelegate = _miniViewerDelegate;
   copy.miniGrabsKeyFocusOnClick = _miniGrabsKeyFocusOnClick;
+  copy.basicLanesView.editorStatePersistenceKey =
+      _basicView.editorStatePersistenceKey;
   copy.managePopoverSpotlightLabel = _managePopoverSpotlightLabel;
   copy.constantsButtonTitle = _constantsButtonTitle;
   copy.presetPluginKey = self.presetPluginKey;
@@ -636,6 +846,8 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   copy.onDragEnd = _onDragEnd;
   copy.onScrub = _onScrub;
   copy.onTogglePlayback = _onTogglePlayback;
+  copy.onUndo = _onUndo;
+  copy.onRedo = _onRedo;
   copy.onBoundaryPreviewNeedsRender = _onBoundaryPreviewNeedsRender;
   _detachedView = copy;
   // Bidirectional Advanced selection mirror - selection lives per-view, not

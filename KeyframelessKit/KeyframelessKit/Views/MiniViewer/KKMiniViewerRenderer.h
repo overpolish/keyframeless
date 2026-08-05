@@ -32,6 +32,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// The persisted timeline (constants live here as disabled single-keypose
 /// lanes). The host keeps this in sync.
 @property(nonatomic, copy, nullable) KKTimeline *timeline;
+/// KKLicense product this preview belongs to. Set it and the trial watermark
+/// is BAKED into each slot's processed texture right after the effect encode,
+/// the same way the render bakes it into the destination tile - it becomes the
+/// preview's pixels, so every consumer of that texture carries it. nil (the
+/// default) = no watermark.
+@property(nonatomic, copy, nullable) NSString *watermarkProductID;
 /// Weak ref to the canvas this renderer is currently delegating for. Set by
 /// the base on every delegate call, so subclasses can read the canvas's
 /// frame size (e.g. to scale overlay glyphs with popover size) without
@@ -46,6 +52,84 @@ NS_ASSUME_NONNULL_BEGIN
 /// `editFraction` (preserving structure) instead of a t=0 single keypose.
 @property(nonatomic) BOOL boundaryEditing;
 @property(nonatomic) double editFraction;
+/// Absolute project time (seconds) of the frame the preview shows, for
+/// resolving parameter links (`${refs}`) so the mini-viewer matches the render.
+/// The owning inspector sets it (typically the playhead's timeline time). A
+/// negative value means unknown - linked lanes then resolve their sources
+/// out-of-span. Only consulted for lanes that actually carry a link binding.
+@property(nonatomic) double linkTimelineSec;
+/// The clip's duration in seconds, pushed by the inspector. Used both for the
+/// preview's own time scaling and, with `clipTimelineStartSec`, to feed-lock
+/// parameter-link resolution to the frame being drawn. 0/unknown = fall back to
+/// the raw fraction. (Hoisted to the base so every plugin's mini gets link
+/// feed-locking for free.)
+@property(nonatomic) double clipDurationSeconds;
+/// Absolute project time (seconds) of this clip's first frame (fraction 0),
+/// pushed by the inspector. Constant while a clip plays (only the playhead
+/// moves), so unlike the poller-driven `linkTimelineSec` it is not starved
+/// during live playback. The mini draw path pairs it with the feed frame's
+/// fraction
+/// (`clipTimelineStartSec + editFraction * clipDurationSeconds`) to resolve
+/// links in lockstep with the 60fps feed - fixing linked-clip playback jitter.
+/// Negative = unknown.
+@property(nonatomic) double clipTimelineStartSec;
+/// This clip's instance UUID, so the live-drag ref override can VERIFY a
+/// `${uuid...}` ref actually targets this clip before resolving it against
+/// the local timeline - a cross-clip ref whose param label coincides with a
+/// local lane must read the bus, not the local value. Empty = legacy
+/// bare-label matching (pre-identity plugins).
+@property(nonatomic, copy, nullable) NSString *linkSelfUUID;
+
+/// Motion blur for the PREVIEW, mirroring the inspector's motion-blur row.
+///
+/// The preview re-renders the effect once per sample at a staggered
+/// `editFraction` across the shutter window and averages the results, which is
+/// the same sample-and-accumulate the render uses. Two deliberate differences:
+///
+/// - Fast (velocity-reconstruction) is used only when the subclass implements
+///   `encodeFastMotionBlurFromSource:...`; otherwise it falls back to
+///   accumulating, which is what a plugin with no analytic velocity (Mirage's
+///   arbitrary GLSL) must do.
+/// - There is no when-to-fire gate. The render skips quiet frames via
+///   `+[KKMotionBlur frameShouldBlurForMode:...]`; here a quiet frame's samples
+///   all land on the same values and average to the unblurred image anyway, so
+///   the gate would only save time, and the cost is already paid per preview
+///   frame.
+///
+/// `previewMotionBlurShutterSeconds` is the shutter window (shutterAngle/360 x frame
+/// duration) - the inspector computes it, since the preview has no timing API.
+/// Blur is skipped unless enabled, samples >= 2, shutter > 0 and
+/// `clipDurationSeconds` > 0 (the shutter has to become a clip fraction).
+@property(nonatomic) BOOL previewMotionBlurEnabled;
+@property(nonatomic) double previewMotionBlurShutterSeconds;
+@property(nonatomic) NSInteger previewMotionBlurSamples;
+/// 0 = Fast (velocity reconstruction), 1 = Accurate (accumulate). Matches
+/// KKMotionBlurTechnique; typed as NSInteger so the header stays free of the
+/// motion-blur enum.
+@property(nonatomic) NSInteger previewMotionBlurTechnique;
+
+/// Fast (velocity-reconstruction) blur, for a subclass that can emit a
+/// per-pixel velocity buffer. Cost is fixed in the tap count rather than
+/// proportional to the sample count, which is the whole point of Fast during
+/// playback.
+///
+/// `shutterFraction` is the shutter window expressed in clip fractions: the
+/// velocity is the displacement from `editFraction - shutterFraction` to
+/// `editFraction`, the same convention the render uses.
+///
+/// Return NO to decline (unsupported, or setup failed) and the base falls back
+/// to accumulating, so a subclass may implement this partially and still be
+/// correct. Default returns NO.
+- (BOOL)encodeFastMotionBlurFromSource:(id<MTLTexture>)source
+                                  into:(id<MTLTexture>)dest
+                       shutterFraction:(double)shutterFraction
+                         commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
+
+/// YES only while `encodeEffectFromSource:` is being called for a motion-blur
+/// sample. Subclasses use it to drop work whose result the averaging would
+/// destroy anyway - Mirage skips its 1080-tall grain-fidelity intermediate,
+/// which is what makes N samples affordable there.
+@property(nonatomic, readonly) BOOL previewMotionBlurSampling;
 /// Number of slots the canvas is currently iterating. KKMiniViewerView
 /// sets this before its per-slot processSourceTexture loop. Subclasses
 /// can use it to differentiate "single-slot, source is the pre-rendered
@@ -94,8 +178,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// hide-toggling are unaffected).
 @property(nonatomic) BOOL revealHidden;
 
+// NOTE (descriptor model, M1): the per-kind GhostAlpha hooks below are now
+// ASSEMBLY-INTERNAL - the view draws OSC elements solely from
+// `miniViewer:elementsForContentRect:` (each KKMiniElement carries its own
+// `alpha`), and the base assembly folds these hooks into that array. They
+// remain overridable for subclasses that still feed the legacy hooks; a
+// descriptor-native renderer overrides the elements method and these die
+// with it (M4).
+
 /// Alpha to draw the point handle at: 1.0 normal, 0.3 when it's a revealed
-/// ghost. Read by the mini-viewer view when encoding the arc glyph.
+/// ghost. Folded into the point element's alpha by the element assembly.
 - (CGFloat)pointHandleGhostAlpha;
 
 /// Alpha to draw the crop OSC at (border + corner handles): 1.0 normal, 0.3
@@ -144,6 +236,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// subclass must also override the rotation hooks below.
 @property(nonatomic, readonly, nullable) NSString *rotationLabel;
 
+/// Which Euler axes the rotation lane drives (see KKRotationAxes). Default
+/// `KKRotationAxesAll` (classic 3-component [X,Y,Z] lane). A 2D plugin
+/// overrides this to `KKRotationAxisZ` so the mini gizmo shows only the Z ring
+/// and reads/writes a 1-component lane - matching the viewer `KKRotationOSC`.
+- (KKRotationAxes)rotationEnabledAxes;
+
 /// Persist a full mutated timeline. Mini-viewer motion-path edits (dragging an
 /// arbitrary keypose anchor or a tangent handle) rewrite the whole blob, unlike
 /// `commitValues:forLabel:` which writes a single label's value at
@@ -167,17 +265,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Glyph style for the renderer's point handle (the one returned by
 /// `pointHandleCenter:forContentRect:`). Mini-viewer draws the same glyph
-/// the viewer-side OSC uses, so plugins backed by `KKArcOSC` (e.g. Magic
-/// Move's Position) can match it here.
+/// the viewer-side OSC uses, so plugins backed by `KKArcOSC` (e.g. a
+/// Position handle) can match it here.
 typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
   KKMiniHandleStylePoint = 0, ///< Default: solid dot (matches KKPointOSC).
   KKMiniHandleStyleArc = 1,   ///< Ring (matches KKArcOSC).
   KKMiniHandleStyleNone = 2,  ///< No glyph: the renderer draws its own control
-                              ///< (e.g. Glow's radius ring) but still exposes a
+                              ///< (e.g. a radius ring) but still exposes a
                               ///< point-handle anchor for guides / programmatic
                               ///< drag.
   KKMiniHandleStyleRing = 3,  ///< Haloed ring (matches KKRingOSC): the shared
-                             ///< radius-widget glyph (Canvas corners, Rounded).
+                              ///< radius-widget glyph for corner + radius
+                              ///< controls.
+  KKMiniHandleStyleSquare = 4, ///< Filled square (matches KKSquarePointOSC).
 };
 
 #pragma mark - Subclass effect + point handle (override)
@@ -188,9 +288,8 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 
 /// Size multiplier for the point-style handle glyph (the main point handle and
 /// any crop-corner handles), relative to the standard mini-viewer dot. Default
-/// 1.0. Lets a plugin match a specific reference dot - e.g. Rounded sets this
-/// so its radius + crop handles are the same size as Magic Move's path-anchor
-/// dots.
+/// 1.0. Lets a plugin match a specific reference dot - e.g. so its radius +
+/// crop handles are the same size as another plugin's path-anchor dots.
 - (CGFloat)pointHandleSizeScale;
 
 /// YES while the main point handle is currently being dragged. Lets the
@@ -248,12 +347,12 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// `-valuesForLabel:[self rotationLabel]`.
 - (NSArray<NSNumber *> *)rotationEulerDegrees;
 /// Where the sphere sits in overlay points (y-up). Default = centre of
-/// `contentRect`. Override to lock it to another handle (e.g. MagicMove
+/// `contentRect`. Override to lock it to another handle (e.g. a plugin
 /// uses the Position handle so the rings move with the translated image).
 - (CGPoint)rotationCenterForContentRect:(CGRect)contentRect;
 /// A parent/world rotation pre-applied to the DISPLAYED rings + drag tangent
 /// (not the written value), so a control on an object nested in a rotated
-/// parent (e.g. a Canvas member inside a rotated group) shows rings in the
+/// parent (e.g. a member inside a rotated group) shows rings in the
 /// parent's frame. Default identity.
 - (KKRotMatrix3)rotationBaseMatrix;
 /// The anchor's normalised position within the content box, per axis ([-1,1]; 0
@@ -306,6 +405,15 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// end) so the drag's in-flight value shows immediately without round-tripping
 /// through FxPlug param writes.
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label;
+
+/// Like `valuesForLabel:` but WITHOUT resolving a lane's link expression - the
+/// lane's own (root) value. OSC handles read this so a drag on an
+/// expression-driven lane seeds + commits the underlying value (never the
+/// `value*expr` result, which would compound on every grab). The rendered
+/// object still uses `valuesForLabel:` (resolved), so the handle sits at the
+/// root value, matching the main viewer's OSC. Identical to `valuesForLabel:`
+/// for a lane with no expression.
+- (NSArray<NSNumber *> *)rootValuesForLabel:(NSString *)label;
 
 /// Push the in-flight drag value for `label` as a live override at
 /// `fraction`. The next `valuesForLabel:` returns these instead of the

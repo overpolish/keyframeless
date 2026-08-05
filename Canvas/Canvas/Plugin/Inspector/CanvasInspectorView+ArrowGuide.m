@@ -4,8 +4,9 @@
  */
 
 // The "Animating an Arrow" end-to-end walkthrough, split out of
-// CanvasInspectorView.m to keep the inspector file focused. Runs entirely in the
-// Constants popover + Basic graph, mirroring the Basic timing guide's structure.
+// CanvasInspectorView.m to keep the inspector file focused. Runs entirely in
+// the Constants popover + Basic graph, mirroring the Basic timing guide's
+// structure.
 
 #import "CanvasInspectorView+ArrowGuide.h"
 
@@ -23,13 +24,14 @@
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 
-// "Animating an Arrow" guide step indices (see -_arrowGuideStepsForGuide:binder:).
-// Only steps that check their own index or bind at it are named; the three draw
-// steps (indices 2-4) advance imperatively from the pen point count, so the gap
-// 1 -> 5 is intentional.
+// "Animating an Arrow" guide step indices (see
+// -_arrowGuideStepsForGuide:binder:). Only steps that check their own index or
+// bind at it are named; the three draw steps (indices 2-4) advance imperatively
+// from the pen point count, so the gap 1 -> 5 is intentional.
 static const NSInteger kArrowGuideStepOpenConstants = 0; // open Constants panel
-static const NSInteger kArrowGuideStepPen = 1;     // switch to the Pen tool
-static const NSInteger kArrowGuideStepStrokeGroup = 5; // open the Stroke category
+static const NSInteger kArrowGuideStepPen = 1; // switch to the Pen tool
+static const NSInteger kArrowGuideStepStrokeGroup =
+    5;                                               // open the Stroke category
 static const NSInteger kArrowGuideStepMarker = 6;    // set End Marker -> Arrow
 static const NSInteger kArrowGuideStepAnimate = 7;   // Draw On End -> Animated
 static const NSInteger kArrowGuideStepIn = 8;        // turn the In phase on
@@ -54,13 +56,15 @@ static NSString *const kArrowMarkerLaneLabel = @"End Marker";
 static NSString *const kArrowStrokeCategoryKey = @"Stroke";
 static const NSInteger kArrowMarkerArrowChoiceIndex = 1;
 
-// Canvas content-rect fractions for the two-point line the user draws (a roughly
-// horizontal stroke, left -> right, so the end marker reads as a forward arrow).
+// Canvas content-rect fractions for the two-point line the user draws (a
+// roughly horizontal stroke, left -> right, so the end marker reads as a
+// forward arrow).
 static const CGFloat kArrowDrawStartFx = 0.32, kArrowDrawStartFy = 0.5;
 static const CGFloat kArrowDrawEndFx = 0.68, kArrowDrawEndFy = 0.5;
 
-// A small circular spotlight rect centred on a screen point (NSZeroRect when the
-// point is unset, so the draw steps degrade gracefully before the canvas maps).
+// A small circular spotlight rect centred on a screen point (NSZeroRect when
+// the point is unset, so the draw steps degrade gracefully before the canvas
+// maps).
 static NSRect KKGuideSpotRectAround(NSPoint p) {
   if (NSEqualPoints(p, NSZeroPoint))
     return NSZeroRect;
@@ -72,24 +76,27 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
 
 // The arrow workflow runs entirely in the Constants (static-values) popover -
 // Canvas's main editing surface - mirroring the Basic timing guide's structure
-// (open Constants, draw in the mini, style, move to animated, keypose, playback).
-// The steps are grouped into per-phase sub-builders below.
+// (open Constants, draw in the mini, style, move to animated, keypose,
+// playback). The steps are grouped into per-phase sub-builders below.
 - (NSArray<KKJoyrideStep *> *)
     _arrowGuideStepsForGuide:(KKJoyrideController *)guide
                       binder:(KKJoyrideLanesBinder *)binder {
   NSMutableArray<KKJoyrideStep *> *steps = [NSMutableArray array];
-  [steps addObjectsFromArray:[self _arrowSetupStepsForGuide:guide binder:binder]];
-  [steps addObjectsFromArray:[self _arrowDrawStepsForGuide:guide binder:binder]];
-  [steps addObjectsFromArray:[self _arrowStyleStepsForGuide:guide binder:binder]];
-  [steps
-      addObjectsFromArray:[self _arrowTimingStepsForGuide:guide binder:binder]];
+  [steps addObjectsFromArray:[self _arrowSetupStepsForGuide:guide
+                                                     binder:binder]];
+  [steps addObjectsFromArray:[self _arrowDrawStepsForGuide:guide
+                                                    binder:binder]];
+  [steps addObjectsFromArray:[self _arrowStyleStepsForGuide:guide
+                                                     binder:binder]];
+  [steps addObjectsFromArray:[self _arrowTimingStepsForGuide:guide
+                                                      binder:binder]];
   return steps;
 }
 
 // Steps 0-1: open the Constants popover, then pick the Pen tool in its mini.
-- (NSArray<KKJoyrideStep *> *)_arrowSetupStepsForGuide:(KKJoyrideController *)guide
-                                               binder:
-                                                   (KKJoyrideLanesBinder *)binder {
+- (NSArray<KKJoyrideStep *> *)
+    _arrowSetupStepsForGuide:(KKJoyrideController *)guide
+                      binder:(KKJoyrideLanesBinder *)binder {
   __weak typeof(self) weak = self;
   __weak KKJoyrideLanesBinder *weakBinder = binder;
 
@@ -117,6 +124,9 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
            targetView:nil];
   sPen.spotlightCircular = YES;
   sPen.spotlightPassThrough = YES;
+  // The guide presses the in-process toolbar itself. Keep the real click on
+  // Joyride's panel or it also passes through to the mini and selects twice.
+  sPen.spotlightSynthesizesInProcess = YES;
   sPen.targetScreenRect = ^NSRect {
     return [weakBinder.latestMiniViewer
         guideToolbarButtonScreenRectForTag:CanvasToolbarToolPen];
@@ -159,6 +169,10 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
   KKJoyrideStep *step = [KKJoyrideStep stepWithMessage:message targetView:nil];
   step.spotlightCircular = YES;
   step.spotlightPassThrough = YES;
+  // guideToolClickAtScreenPoint: is the one authoritative Pen click. Without
+  // this flag the physical click also reaches the mini under the overlay, so a
+  // single guided click places two points and can advance multiple steps.
+  step.spotlightSynthesizesInProcess = YES;
   NSRect (^rect)(void) = ^NSRect {
     return KKGuideSpotRectAround([weakBinder.latestMiniViewer
         guideScreenPointForContentFractionX:fx
@@ -180,9 +194,9 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
 // Steps 2-4: the three pen clicks in the mini - start, end, then the last
 // anchor again to finish the OPEN path (clicking the FIRST anchor would close
 // it; clicking the LAST ends it as-is, within the pen's close radius).
-- (NSArray<KKJoyrideStep *> *)_arrowDrawStepsForGuide:(KKJoyrideController *)guide
-                                              binder:
-                                                  (KKJoyrideLanesBinder *)binder {
+- (NSArray<KKJoyrideStep *> *)
+    _arrowDrawStepsForGuide:(KKJoyrideController *)guide
+                     binder:(KKJoyrideLanesBinder *)binder {
   __weak KKJoyrideController *weakGuide = guide;
   __weak KKJoyrideLanesBinder *weakBinder = binder;
   void (^penHover)(NSPoint) = [self _arrowPenHoverForBinder:binder];
@@ -192,9 +206,10 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
                       binder:binder
                    fractionX:kArrowDrawStartFx
                            y:kArrowDrawStartFy
-                     message:CLoc(@"Click the <warn>glowing point</warn> to "
-                                  @"start your line.",
-                                  @"Arrow guide: click to place the first point.")
+                     message:
+                         CLoc(@"Click the <warn>glowing point</warn> to "
+                              @"start your line.",
+                              @"Arrow guide: click to place the first point.")
               advanceAtCount:1
                     penHover:penHover];
 
@@ -203,9 +218,10 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
                       binder:binder
                    fractionX:kArrowDrawEndFx
                            y:kArrowDrawEndFy
-                     message:CLoc(@"Click the <warn>second point</warn> to draw "
-                                  @"the line.",
-                                  @"Arrow guide: click to place the end point.")
+                     message:CLoc(
+                                 @"Click the <warn>second point</warn> to draw "
+                                 @"the line.",
+                                 @"Arrow guide: click to place the end point.")
               advanceAtCount:2
                     penHover:penHover];
 
@@ -216,6 +232,7 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
            targetView:nil];
   sDrawDone.spotlightCircular = YES;
   sDrawDone.spotlightPassThrough = YES;
+  sDrawDone.spotlightSynthesizesInProcess = YES;
   NSRect (^drawDoneRect)(void) = ^NSRect {
     return KKGuideSpotRectAround(
         [weakBinder.latestMiniViewer guideLastPenPointScreen]);
@@ -233,10 +250,11 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
   return @[ sDrawStart, sDrawEnd, sDrawDone ];
 }
 
-// Steps 5-7: open the Stroke group, set End Marker = Arrow, animate Draw On End.
-- (NSArray<KKJoyrideStep *> *)_arrowStyleStepsForGuide:(KKJoyrideController *)guide
-                                               binder:
-                                                   (KKJoyrideLanesBinder *)binder {
+// Steps 5-7: open the Stroke group, set End Marker = Arrow, animate Draw On
+// End.
+- (NSArray<KKJoyrideStep *> *)
+    _arrowStyleStepsForGuide:(KKJoyrideController *)guide
+                      binder:(KKJoyrideLanesBinder *)binder {
   __weak typeof(self) weak = self;
 
   // Switch to the Stroke category tab (where the marker lanes live). The
@@ -257,8 +275,8 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
   };
   sStrokeGroup.targetScreenRect = ^NSRect {
     __strong typeof(weak) s = weak;
-    return s ? [s.basicLanesView
-                   guideConstantCategoryPillScreenRectForKey:kArrowStrokeCategoryKey]
+    return s ? [s.basicLanesView guideConstantCategoryPillScreenRectForKey:
+                                     kArrowStrokeCategoryKey]
              : NSZeroRect;
   };
   [binder bindStep:sStrokeGroup
@@ -285,26 +303,31 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
   sMarker.targetScreenRect = ^NSRect {
     __strong typeof(weak) s = weak;
     return s ? [s.basicLanesView
-                   guideConstantChoicePillScreenRectForLabel:kArrowMarkerLaneLabel
-                                                     atIndex:kArrowMarkerArrowChoiceIndex]
+                   guideConstantChoicePillScreenRectForLabel:
+                       kArrowMarkerLaneLabel
+                                                     atIndex:
+                                                         kArrowMarkerArrowChoiceIndex]
              : NSZeroRect;
   };
-  [binder bindStep:sMarker
-           atIndex:kArrowGuideStepMarker
-         advanceOn:[KKJoyrideTrigger
-                       staticChoiceSelectedForLabel:kArrowMarkerLaneLabel
-                                              index:kArrowMarkerArrowChoiceIndex]
-         dismissOn:nil];
+  [binder
+       bindStep:sMarker
+        atIndex:kArrowGuideStepMarker
+      advanceOn:[KKJoyrideTrigger
+                    staticChoiceSelectedForLabel:kArrowMarkerLaneLabel
+                                           index:kArrowMarkerArrowChoiceIndex]
+      dismissOn:nil];
 
   // Move Draw On End to Animated via its per-lane gutter button (the shortcut
   // next to the lane, vs the manage dropdown). Scroll it into view on enter,
   // spotlight the button, advance when the lane opts into animation, then close
-  // the Constants popover - the timing steps that follow are on the Basic graph.
+  // the Constants popover - the timing steps that follow are on the Basic
+  // graph.
   KKJoyrideStep *sAnimate = [KKJoyrideStep
-      stepWithMessage:CLoc(@"Click the <accent>curve</accent> button to animate "
-                           @"<warn>Draw On End</warn> - that's what draws the "
-                           @"line on.",
-                           @"Arrow guide: add Draw On End to animated.")
+      stepWithMessage:CLoc(
+                          @"Click the <accent>curve</accent> button to animate "
+                          @"<warn>Draw On End</warn> - that's what draws the "
+                          @"line on.",
+                          @"Arrow guide: add Draw On End to animated.")
            targetView:nil];
   sAnimate.spotlightCircular = YES;
   sAnimate.onEnter = ^{
@@ -421,8 +444,13 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
   };
   sPlayback.onEnter = ^{
     __strong typeof(weak) s = weak;
-    // Close the keypose popover left open by the slider step, reset to the start.
+    // Close the keypose popover left open by the slider step, reset to the
+    // start.
     [s.basicLanesView guideCloseContentPopover];
+    // This is a guide-driven seek, not a graph scrub, so update the editor's
+    // local playhead explicitly before asking FCP to move. Otherwise the host
+    // can seek while the timeline ruler keeps displaying the previous frame.
+    [s setPlayheadFraction:0.0];
     if (s.onScrub)
       s.onScrub(0.0);
     if (s.onBoundaryPreviewNeedsRender)
@@ -431,7 +459,8 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
   __block BOOL watchBackScheduled = NO;
   binder.playToggleTapped = ^{
     __strong KKJoyrideController *g = weakGuide;
-    if (!g || g.currentStepIndex != kArrowGuideStepPlayback || watchBackScheduled)
+    if (!g || g.currentStepIndex != kArrowGuideStepPlayback ||
+        watchBackScheduled)
       return;
     watchBackScheduled = YES;
     dispatch_after(
@@ -445,7 +474,7 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
           if (s2.onTogglePlayback)
             s2.onTogglePlayback(); // auto-pause
           [s2 guideSetPlayingAccent:NO];
-          [g2 advance];            // last step -> completes the guide
+          [g2 advance]; // last step -> completes the guide
         });
   };
   [binder bindStep:sPlayback
@@ -456,9 +485,9 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
 }
 
 // Steps 8-12: turn In on, click KP1, drag its value to 0, watch back, closer.
-- (NSArray<KKJoyrideStep *> *)_arrowTimingStepsForGuide:(KKJoyrideController *)guide
-                                                binder:
-                                                    (KKJoyrideLanesBinder *)binder {
+- (NSArray<KKJoyrideStep *> *)
+    _arrowTimingStepsForGuide:(KKJoyrideController *)guide
+                       binder:(KKJoyrideLanesBinder *)binder {
   __weak typeof(self) weak = self;
 
   // Turn the In phase on (Basic graph), easing Draw On End from its start value
@@ -470,7 +499,8 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
            targetView:nil];
   sIn.targetScreenRect = ^NSRect {
     __strong typeof(weak) s = weak;
-    return s ? [s.basicLanesView.basicGraph guidePhaseToggleScreenRectForPhase:0]
+    return s ? [s.basicLanesView.basicGraph
+                   guidePhaseToggleScreenRectForPhase:0]
              : NSZeroRect;
   };
   [binder bindStep:sIn
@@ -491,11 +521,12 @@ static NSRect KKGuideSpotRectAround(NSPoint p) {
                    guideDiamondScreenRectForIndex:kArrowKeyposeDiamondIndex]
              : NSZeroRect;
   };
-  [binder bindStep:sKeypose
-           atIndex:kArrowGuideStepKeypose
-         advanceOn:[[KKJoyrideTrigger diamondTapped:kArrowKeyposeDiamondIndex]
-                       thenWaitFor:[KKJoyrideTrigger staticValuesPopoverWillOpen]]
-         dismissOn:nil];
+  [binder
+       bindStep:sKeypose
+        atIndex:kArrowGuideStepKeypose
+      advanceOn:[[KKJoyrideTrigger diamondTapped:kArrowKeyposeDiamondIndex]
+                    thenWaitFor:[KKJoyrideTrigger staticValuesPopoverWillOpen]]
+      dismissOn:nil];
 
   KKJoyrideStep *sSlider = [self _arrowSliderStepForGuide:guide binder:binder];
   KKJoyrideStep *sPlayback = [self _arrowPlaybackStepForGuide:guide

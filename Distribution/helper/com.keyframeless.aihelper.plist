@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.keyframeless.aihelper</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Library/Application Support/Keyframeless/kk-ai-helper</string>
+	</array>
+	<!-- On demand only: launchd holds the Mach service and launches the helper the
+	     first time a plugin looks it up. No RunAtLoad, so BYOK/remote users who never
+	     touch local models never start it; the helper idle-exits and is relaunched on
+	     the next lookup. -->
+	<key>MachServices</key>
+	<dict>
+		<key>group.com.keyframeless.aihelper</key>
+		<true/>
+	</dict>
+	<!-- Interactive so launchd doesn't energy-throttle GPU inference (the helper also
+	     takes a latency-critical activity assertion of its own). -->
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>

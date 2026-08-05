@@ -49,9 +49,17 @@ typedef struct KKSquarePointOSCParams {
 /// rotated by the world matrix R = Ry * Rx * Rz so the rings tilt with the
 /// current pose. R is stored as 3 columns (column-major).
 typedef struct KKRotationOSCParams {
-    vector_float3 rotCol0;
-    vector_float3 rotCol1;
-    vector_float3 rotCol2;
+    /// PER-RING plane bases (U/V span each ring's circle; the sample point is
+    /// radius * (cos t * U + sin t * V), its z the depth for back-dimming). A
+    /// full 3-axis gizmo fills all three from ONE pose matrix; a partial-axes
+    /// gizmo fills each from its NESTED frame (see KKRingDisplayMatrix), so a
+    /// ring draws exactly where its Euler rotation applies.
+    vector_float3 ringUX;
+    vector_float3 ringVX;
+    vector_float3 ringUY;
+    vector_float3 ringVY;
+    vector_float3 ringUZ;
+    vector_float3 ringVZ;
     float radius;        ///< Sphere radius in normalized OSC coords (0..1).
     float ringHalfWidth; ///< Half-width of the ring fill.
     float outlineWidth;  ///< Extra half-width added beyond the fill.

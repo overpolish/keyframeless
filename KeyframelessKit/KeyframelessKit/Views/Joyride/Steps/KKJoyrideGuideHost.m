@@ -5,10 +5,10 @@
 
 #import "KKJoyrideGuideHost.h"
 #import <KeyframelessKit/KKHostInfo.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
-#import <KeyframelessKit/KKTimingStage.h>
 
 // OSC warm-up timing: after the zoom-to-fit AppleScript, the host needs time
 // to actually resize the viewer before the guide reads spotlight positions.
@@ -37,6 +37,7 @@ NSNotificationName const KKJoyrideRunDidEndNotification =
   // duration, then the user's hidden set is reinstated on teardown.
   NSSet<NSString *> *_savedHiddenLaneLabels;
   BOOL _didSaveHidden;
+  BOOL _didOverrideEditorLayout;
   NSInteger _finalIndex;
 }
 
@@ -76,6 +77,8 @@ NSNotificationName const KKJoyrideRunDidEndNotification =
   [_guide dismiss];
   // Close any popover the user left open so it isn't sitting over the guide.
   [_lanesView guideCloseAllPopovers];
+  if (self.onRunWillPrepare)
+    self.onRunWillPrepare();
   KKTimeline *seed = seedBlock ? seedBlock() : nil;
   if (seed)
     [self prepareWithSeed:seed];
@@ -89,6 +92,8 @@ NSNotificationName const KKJoyrideRunDidEndNotification =
             extraOnComplete:(void (^)(void))extraOnComplete {
   [_guide dismiss];
   [_lanesView guideCloseAllPopovers];
+  if (self.onRunWillPrepare)
+    self.onRunWillPrepare();
   [self prepareWithSeed:seed];
 
   NSArray<KKJoyrideStep *> * (^build)(
@@ -184,6 +189,9 @@ NSNotificationName const KKJoyrideRunDidEndNotification =
   if (!hostView || !lanesView || !buildSteps)
     return;
 
+  [lanesView guideBeginEditorLayoutOverride];
+  _didOverrideEditorLayout = YES;
+
   if (self.onRunWillStart)
     self.onRunWillStart();
 
@@ -251,6 +259,7 @@ NSNotificationName const KKJoyrideRunDidEndNotification =
   BOOL restoreHidden = _didSaveHidden;
   _savedHiddenLaneLabels = nil;
   _didSaveHidden = NO;
+  BOOL restoreLayout = _didOverrideEditorLayout;
   void (^applier)(KKTimeline *) = self.timelineApplier;
   __weak KKTimelineLanesView *lanesView = _lanesView;
   void (^restoreSel)(void) = ^{
@@ -260,13 +269,20 @@ NSNotificationName const KKJoyrideRunDidEndNotification =
     // bar), reinstate the pills they had hidden before the guide.
     if (restoreHidden)
       [lanesView guideRestoreLaneFilterHidden:hidden];
+    if (restoreLayout) {
+      [lanesView guideEndEditorLayoutOverride];
+      self->_didOverrideEditorLayout = NO;
+    }
+    if (self.onRunDidRestore)
+      self.onRunDidRestore();
   };
   if (saved && applier) {
     dispatch_async(dispatch_get_main_queue(), ^{
       applier(saved);
       restoreSel();
     });
-  } else if (restoreSelection || restoreHidden) {
+  } else if (restoreSelection || restoreHidden || restoreLayout ||
+             self.onRunDidRestore) {
     dispatch_async(dispatch_get_main_queue(), restoreSel);
   }
 }

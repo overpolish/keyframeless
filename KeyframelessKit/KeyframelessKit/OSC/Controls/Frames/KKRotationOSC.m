@@ -15,11 +15,51 @@
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
+KKLane *KKRotationLaneWithLabel(NSString *label, KKRotationAxes axes) {
+  if (axes == 0)
+    axes = KKRotationAxesAll;
+  // Standard 3D-axis tint convention (Motion / Blender / Maya): X=red, Y=green,
+  // Z=blue, slightly desaturated for the inspector.
+  NSColor *cx = [NSColor colorWithSRGBRed:0.95 green:0.35 blue:0.35 alpha:1.0];
+  NSColor *cy = [NSColor colorWithSRGBRed:0.40 green:0.85 blue:0.45 alpha:1.0];
+  NSColor *cz = [NSColor colorWithSRGBRed:0.40 green:0.60 blue:0.95 alpha:1.0];
+  NSMutableArray<NSString *> *units = [NSMutableArray array];
+  NSMutableArray<NSString *> *labels = [NSMutableArray array];
+  NSMutableArray<NSColor *> *colors = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *zeros = [NSMutableArray array];
+  if (axes & KKRotationAxisX) {
+    [units addObject:@"°"];
+    [labels addObject:@"X"];
+    [colors addObject:cx];
+    [zeros addObject:@0.0];
+  }
+  if (axes & KKRotationAxisY) {
+    [units addObject:@"°"];
+    [labels addObject:@"Y"];
+    [colors addObject:cy];
+    [zeros addObject:@0.0];
+  }
+  if (axes & KKRotationAxisZ) {
+    [units addObject:@"°"];
+    [labels addObject:@"Z"];
+    [colors addObject:cz];
+    [zeros addObject:@0.0];
+  }
+  KKLane *lane = [KKLane laneWithKey:label label:label];
+  lane.valueType = KKLaneValueTypeAngle;
+  // Knobs cover one revolution visually but values accumulate past 360°
+  // (2 turns = 720°). Empty min/max = unconstrained.
+  lane.componentMin = @[];
+  lane.componentMax = @[];
+  lane.componentUnits = units;
+  lane.componentLabels = labels;
+  lane.componentLabelColors = colors;
+  [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:zeros]];
+  return lane;
+}
+
 static const int kRingSamples = 192;
 static const float kHitThresholdPixels = 10.0f;
-// Cmd snaps the per-axis drag delta to 15° steps (applied to the OBJECT-axis
-// delta before composing - see -mouseDraggedAtX:).
-static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 
 @implementation KKRotationOSC {
   NSInteger _activeAxis; // -1 / 0 / 1 / 2
@@ -52,6 +92,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
     _outlineWidth = 1.0f;
     _backDim = 0.3f;
     _activeAxis = -1;
+    _enabledAxes = KKRotationAxesAll;
     _showX = YES;
     _showY = YES;
     _showZ = YES;
@@ -76,8 +117,18 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
                         KKBuildRotationMatrix(_rotX, _rotY, _rotZ));
 }
 
+// Ring `k`'s display frame: the full pose for a 3-axis gizmo (trackball drag
+// spins about the visible axis), the NESTED frame for a partial axis set
+// (drag = Euler increment, so each ring sits where its rotation applies).
+// Composed under the parent/base rotation like _displayMatrix.
+- (KKRotMatrix3)_ringDisplayMatrix:(int)k {
+  return KKRotMatrixMul(
+      _baseRotation,
+      KKRingDisplayMatrix(_rotX, _rotY, _rotZ, (int)self.enabledAxes, k));
+}
+
 - (NSString *)pipelinePluginID {
-  return @"co.overpolish.keyframelesskit.RotationOSC";
+  return @"com.keyframeless.kit.RotationOSC";
 }
 - (NSString *)fragmentFunctionName {
   return @"KKRotationOSCFragment";
@@ -93,7 +144,6 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 - (BOOL)hitTestAtMousePositionX:(double)positionX
                       positionY:(double)positionY
                          atTime:(CMTime)time {
-  KKRotMatrix3 m = [self _displayMatrix];
   // Hit-test in Y-DOWN screen space so it agrees with both the shader's
   // textureCoordinate.y and the renderer's internal screen convention. The
   // canvas itself is Y-UP (positionY increases upward), so negate Y when
@@ -101,7 +151,8 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   CGPoint local = CGPointMake(positionX - _center.x, _center.y - positionY);
   // Front-only: the shader visibly dims the back half, so back portions
   // are easy to mistake for empty space. Only the bright front hemisphere
-  // is grabbable - what you see is what you can hit.
+  // is grabbable - what you see is what you can hit. Each ring hit-tests in
+  // ITS display frame (nested for partial axis sets), matching the draw.
   double bestFront = 1e9;
   NSInteger bestFrontK = -1;
   double bestFrontT = 0;
@@ -109,7 +160,8 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   for (int k = 0; k < 3; k++) {
     if (!ringShown[k])
       continue; // hidden ring is not grabbable
-    KKRingHit h = KKClosestAngleOnRing(m, k, _radius, local, kRingSamples);
+    KKRingHit h = KKClosestAngleOnRing([self _ringDisplayMatrix:k], k, _radius,
+                                       local, kRingSamples);
     if (h.frontDist < bestFront) {
       bestFront = h.frontDist;
       bestFrontK = k;
@@ -128,11 +180,25 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   }
   _activeAxis = bestFrontK;
   _pressAngle = bestFrontT;
-  // Cursor encodes the axis (X -> up/down resize, Y -> left/right resize, Z ->
-  // rotate) so it stays clear as the gizmo reorients. Canvas Y-up for the Z
-  // quadrant: dy = posY - centerY.
-  double cursorAngle = atan2(positionY - _center.y, positionX - _center.x);
-  [oscAPI setCursor:KKRotationAxisCursor(bestFrontK, cursorAngle)];
+  if (bestFrontK == 2) {
+    // Z: in-plane spin -> the rotate cursor, oriented by the hover quadrant
+    // (canvas Y-up: dy = posY - centerY).
+    double cursorAngle = atan2(positionY - _center.y, positionX - _center.x);
+    [oscAPI setCursor:KKRotationAxisCursor(bestFrontK, cursorAngle)];
+  } else {
+    // X/Y: a drag moves the grab point ALONG the ring, so the resize cursor
+    // follows the ring's on-screen TANGENT at the hovered angle - correct at
+    // any gizmo pose (a reoriented X ring lying horizontal gets a horizontal
+    // cursor, not its base-pose vertical one). Ring point = r(cos t·U +
+    // sin t·V), tangent = -sin t·U + cos t·V; the local frame is Y-down, so
+    // flip for the Y-up cursor angle.
+    simd_float3 U, V;
+    KKRingBasis([self _ringDisplayMatrix:(int)bestFrontK], (int)bestFrontK, &U,
+                &V);
+    double tx = -sin(bestFrontT) * U.x + cos(bestFrontT) * V.x;
+    double ty = -(-sin(bestFrontT) * U.y + cos(bestFrontT) * V.y);
+    [oscAPI setCursor:KKResizeCursorForAngle(atan2(ty, tx))];
+  }
   _cursorSet = YES;
   return YES;
 }
@@ -156,36 +222,9 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   _pressRotZ = _rotZ;
   if (_activeAxis < 0)
     return;
-  KKRotMatrix3 m = [self _displayMatrix];
-  simd_float3 U, V;
-  KKRingBasis(m, (int)_activeAxis, &U, &V);
-  double t = _pressAngle;
-  // Screen-space tangent at the ring point = derivative w.r.t. t, projected.
-  double tx = -sin(t) * U.x + cos(t) * V.x;
-  double ty = -sin(t) * U.y + cos(t) * V.y;
-  double len = sqrt(tx * tx + ty * ty);
-  if (len > 1e-6) {
-    tx /= len;
-    ty /= len;
-  }
-  _pressTangentX = tx;
-  _pressTangentY = ty;
-}
-
-- (double)angleDeltaFromPressPoint:(CGPoint)pressPoint
-                      currentPoint:(CGPoint)currentPoint {
-  if (_activeAxis < 0 || _radius <= 0)
-    return 0.0;
-  double dx = currentPoint.x - pressPoint.x;
-  // Mouse y comes in canvas Y-UP; the press tangent was captured in
-  // Y-DOWN screen space (same convention as the shader / hit-test), so
-  // negate dy before projecting.
-  double dy = pressPoint.y - currentPoint.y;
-  double projected = dx * _pressTangentX + dy * _pressTangentY;
-  // Per-axis sign tuned to user-natural drag direction.
-  static const double kAxisSign[3] = {+1.0, -1.0, +1.0};
-  double sign = kAxisSign[_activeAxis];
-  return sign * projected / (double)_radius;
+  KKRingScreenTangentAtT([self _ringDisplayMatrix:(int)_activeAxis],
+                         (int)_activeAxis, _pressAngle, &_pressTangentX,
+                         &_pressTangentY);
 }
 
 - (void)drawAtCanvasPosition:(CGPoint)canvasPosition
@@ -200,12 +239,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 
   float quadHalf = _radius + _ringHalfWidth + _outlineWidth + 2.0f;
 
-  KKRotMatrix3 m = [self _displayMatrix];
-
   KKRotationOSCParams params = {
-      .rotCol0 = m.col0,
-      .rotCol1 = m.col1,
-      .rotCol2 = m.col2,
       .radius = _radius / quadHalf,
       .ringHalfWidth = _ringHalfWidth / quadHalf,
       .outlineWidth = _outlineWidth / quadHalf,
@@ -220,6 +254,10 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
                                      _showY ? _ringAlphaY : 0.0f,
                                      _showZ ? _ringAlphaZ : 0.0f},
   };
+  KKRotMatrix3 mX = [self _ringDisplayMatrix:0];
+  KKRotMatrix3 mY = [self _ringDisplayMatrix:1];
+  KKRotMatrix3 mZ = [self _ringDisplayMatrix:2];
+  KKRotationOSCParamsSetRingBases(&params, mX, mY, mZ);
 
   [self drawQuadForDestinationImage:destinationImage
                      canvasPosition:canvasPosition
@@ -244,7 +282,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 
 - (nullable KKLane *)_rotationLane {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -254,17 +292,41 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
                                  KKProcessFrameDurationSeconds());
 }
 
+// Expand a lane value (one component per enabled axis, X/Y/Z order) to a full
+// [X,Y,Z] Euler in degrees; disabled axes read 0.
+- (NSArray<NSNumber *> *)_eulerDegFromLaneValues:(NSArray<NSNumber *> *)v {
+  double xyz[3] = {0.0, 0.0, 0.0};
+  NSUInteger idx = 0;
+  if (self.enabledAxes & KKRotationAxisX)
+    xyz[0] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  if (self.enabledAxes & KKRotationAxisY)
+    xyz[1] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  if (self.enabledAxes & KKRotationAxisZ)
+    xyz[2] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  return @[ @(xyz[0]), @(xyz[1]), @(xyz[2]) ];
+}
+
+// Collapse a full [X,Y,Z] Euler back to the lane's components (only the enabled
+// axes, in X/Y/Z order).
+- (NSArray<NSNumber *> *)_laneValuesFromEulerDeg:(NSArray<NSNumber *> *)e {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  if (self.enabledAxes & KKRotationAxisX)
+    [out addObject:e[0]];
+  if (self.enabledAxes & KKRotationAxisY)
+    [out addObject:e[1]];
+  if (self.enabledAxes & KKRotationAxisZ)
+    [out addObject:e[2]];
+  return out;
+}
+
 // 3-axis Euler [X,Y,Z] in DEGREES, smoothed (what's on screen). Always 3 comps.
 - (NSArray<NSNumber *> *)_rotationValuesAtFraction:(double)frac {
   KKLane *lane = [self _rotationLane];
   if (!lane)
     return @[ @0.0, @0.0, @0.0 ];
   NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-  NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithArray:v ?: @[]];
-  while (out.count < 3)
-    [out addObject:@0.0];
-  return out;
+      KKLaneDisplayValueAtFraction(lane, frac);
+  return [self _eulerDegFromLaneValues:v];
 }
 
 // Per-ring visibility + ghost alpha from the OSC-visibility state (master
@@ -287,9 +349,9 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
       (yEn && activeHere) || (reveal && [self kkOSCRevealEligible:yKey]);
   BOOL zShow =
       (zEn && activeHere) || (reveal && [self kkOSCRevealEligible:zKey]);
-  self.showX = xShow;
-  self.showY = yShow;
-  self.showZ = zShow;
+  self.showX = xShow && (self.enabledAxes & KKRotationAxisX) != 0;
+  self.showY = yShow && (self.enabledAxes & KKRotationAxisY) != 0;
+  self.showZ = zShow && (self.enabledAxes & KKRotationAxisZ) != 0;
   float ghost = [self kkRevealGhostAlpha];
   self.ringAlphaX = xEn ? 1.0f : ghost;
   self.ringAlphaY = yEn ? 1.0f : ghost;
@@ -301,11 +363,16 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 // matches the inspector.
 - (void)_syncColorsFromLane {
   KKLane *lane = [self _rotationLane];
-  if (lane.componentLabelColors.count >= 3) {
-    self.colorX = lane.componentLabelColors[0];
-    self.colorY = lane.componentLabelColors[1];
-    self.colorZ = lane.componentLabelColors[2];
-  }
+  // Colours map to the lane's components in enabled-axis order (a 1-component
+  // Z lane's single colour becomes the Z ring).
+  NSArray<NSColor *> *cols = lane.componentLabelColors;
+  NSUInteger idx = 0;
+  if ((self.enabledAxes & KKRotationAxisX) && idx < cols.count)
+    self.colorX = cols[idx++];
+  if ((self.enabledAxes & KKRotationAxisY) && idx < cols.count)
+    self.colorY = cols[idx++];
+  if ((self.enabledAxes & KKRotationAxisZ) && idx < cols.count)
+    self.colorZ = cols[idx++];
 }
 
 // Sync the drawn/hit pose (radians) to the smoothed on-screen values.
@@ -374,8 +441,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   NSArray<NSNumber *> *r = nil;
   if (lane.keyposes.count > 0)
     r = lane.keyposes[KKLaneNearestKeyposeIndex(lane, frac)].values;
-  if (r.count < 3)
-    r = @[ @0.0, @0.0, @0.0 ];
+  r = [self _eulerDegFromLaneValues:r ?: @[]];
   _rotPressKpX = r[0].doubleValue * M_PI / 180.0;
   _rotPressKpY = r[1].doubleValue * M_PI / 180.0;
   _rotPressKpZ = r[2].doubleValue * M_PI / 180.0;
@@ -401,71 +467,69 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
             forceUpdate:(BOOL *)forceUpdate
                  atTime:(CMTime)time {
   NSInteger axis = self.activeAxis;
-  if (axis < 0)
+  if (axis < 0 || _radius <= 0)
     return;
-  double dAngle = [self angleDeltaFromPressPoint:_rotPressCanvas
-                                    currentPoint:CGPointMake(x, y)];
-  // Cmd snaps the OBJECT-axis delta to 15° BEFORE composing. Snapping the
-  // decomposed Euler values directly jiggles the other two axes (their
-  // decomposition shifts tick-to-tick as the object rotates).
-  if (modifiers & kFxModifierKey_COMMAND)
-    dAngle = round(dAngle / kRotSnapRad) * kRotSnapRad;
-  // Compose around the OBJECT's current ring axis (R_press * R_axis(dAngle)) so
-  // dragging the X ring after a Y rotation spins around the visible X, then
-  // decompose to Euler nearest the last-written pose (continuous past ±90°).
+  // Mouse y comes in canvas Y-UP; the press tangent is Y-DOWN screen space
+  // (same convention as the shader / hit-test), so flip dy. Delta + Cmd-snap
+  // + full/partial apply are the shared ring-drag model's.
+  double dAngle = KKRingDragAngleDelta(
+      (int)axis, x - _rotPressCanvas.x, _rotPressCanvas.y - y, _pressTangentX,
+      _pressTangentY, (double)_radius,
+      (modifiers & kFxModifierKey_COMMAND) != 0);
   double lastRx = _rotLastWrittenX, lastRy = _rotLastWrittenY,
          lastRz = _rotLastWrittenZ;
   double rx = 0, ry = 0, rz = 0;
-  KKRotationComposeAxisDelta((int)axis, dAngle, _rotPressKpX, _rotPressKpY,
-                             _rotPressKpZ, &lastRx, &lastRy, &lastRz, &rx, &ry,
-                             &rz);
+  KKRotationAxes all = KKRotationAxisX | KKRotationAxisY | KKRotationAxisZ;
+  KKRingApplyDragDelta((int)axis, (self.enabledAxes & all) == all, dAngle,
+                       _rotPressKpX, _rotPressKpY, _rotPressKpZ, &lastRx,
+                       &lastRy, &lastRz, &rx, &ry, &rz);
   _rotLastWrittenX = lastRx;
   _rotLastWrittenY = lastRy;
   _rotLastWrittenZ = lastRz;
   const double kRadToDeg = 180.0 / M_PI;
-  NSArray<NSNumber *> *newValues =
+  NSArray<NSNumber *> *euler =
       @[ @(rx * kRadToDeg), @(ry * kRadToDeg), @(rz * kRadToDeg) ];
-  [self _writeRotationValues:newValues atTime:time forceUpdate:forceUpdate];
+  // Persist only the enabled axes (the lane carries one component per axis).
+  [self _writeRotationValues:[self _laneValuesFromEulerDeg:euler]
+                      atTime:time
+                 forceUpdate:forceUpdate];
 }
 
 - (void)_writeRotationValues:(NSArray<NSNumber *> *)newValues
                       atTime:(CMTime)time
                  forceUpdate:(BOOL *)forceUpdate {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
+  __block BOOL wrote = NO;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (!setAPI)
+          return;
 
-  double frac = [self fractionAtTime:time];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                              snap, self.laneLabel, frac, newValues)
-                        : nil;
-  if (!tl) {
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    KKLane *rotLane =
-        [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
-    rotLane.enabled = NO;
-    rotLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
-    [lanes addObject:rotLane];
-    tl.lanes = lanes;
-  }
+        double frac = [self fractionAtTime:time];
+        KKTimeline *snap = KKProcessTimelineSnapshot();
+        KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
+                                    snap, self.laneLabel, frac, newValues)
+                              : nil;
+        if (!tl) {
+          tl = snap ? [snap copy] : [KKTimeline timeline];
+          NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+          KKLane *rotLane =
+              [self.templateLane copy] ?: [KKLane laneWithKey:self.laneLabel label:self.laneLabel];
+          rotLane.enabled = NO;
+          rotLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+          [lanes addObject:rotLane];
+          tl.lanes = lanes;
+        }
 
-  if (self.onTimelinePersist)
-    self.onTimelinePersist(tl);
-  else
-    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                             kKKParamTimelineData);
-  [actionAPI endAction:self];
-  if (forceUpdate)
+        if (self.onTimelinePersist)
+          self.onTimelinePersist(tl);
+        else
+          KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                                   kKKParamTimelineData);
+        wrote = YES;
+      });
+  if (wrote && forceUpdate)
     *forceUpdate = YES;
 }
 
@@ -476,11 +540,15 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 - (NSArray<NSString *> *)oscElementKeys {
   if (!self.laneLabel)
     return @[];
-  return @[
-    self.laneLabel, [self.laneLabel stringByAppendingString:@".X"],
-    [self.laneLabel stringByAppendingString:@".Y"],
-    [self.laneLabel stringByAppendingString:@".Z"]
-  ];
+  NSMutableArray<NSString *> *keys =
+      [NSMutableArray arrayWithObject:self.laneLabel];
+  if (self.enabledAxes & KKRotationAxisX)
+    [keys addObject:[self.laneLabel stringByAppendingString:@".X"]];
+  if (self.enabledAxes & KKRotationAxisY)
+    [keys addObject:[self.laneLabel stringByAppendingString:@".Y"]];
+  if (self.enabledAxes & KKRotationAxisZ)
+    [keys addObject:[self.laneLabel stringByAppendingString:@".Z"]];
+  return keys;
 }
 
 @end

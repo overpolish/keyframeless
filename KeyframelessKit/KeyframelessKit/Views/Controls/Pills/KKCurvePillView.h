@@ -41,6 +41,18 @@ typedef CGFloat (^KKCurvePillValueBlock)(NSInteger pillIndex, CGFloat t);
 /// names). nil/short array = no tooltip for those pills.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *pillTooltips;
 
+/// One caption per pill, drawn small under its curve glyph. At low intensity
+/// several curves plot as near-identical lines, so the glyph alone can't tell
+/// them apart - the caption names them without a hover. Defaults to
+/// `pillTooltips`; set explicitly for shorter text. Tail-truncated to the pill
+/// width. nil (with nil tooltips) = glyph-only pills, at the shorter height.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *pillCaptions;
+
+/// The view height a pill row needs: the glyph area, plus the caption line
+/// when captions are shown. Callers size their layout with this rather than
+/// hard-coding the pill height.
++ (CGFloat)heightWithCaptions:(BOOL)captions;
+
 - (void)redraw;
 
 /// View-space rect of pill `index` (0..pillCount-1). NSZeroRect if pillCount

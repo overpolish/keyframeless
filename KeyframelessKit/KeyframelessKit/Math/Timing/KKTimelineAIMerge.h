@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 // Forward-declare the FxPlug protocol rather than #importing FxPlugSDK.h (not a
 // module - importing it in a framework header trips the non-modular-header

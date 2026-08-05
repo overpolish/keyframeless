@@ -6,8 +6,9 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKBoundaryEditingGraph.h>
 #import <KeyframelessKit/KKGapPopoverTypes.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -24,6 +25,11 @@ NS_ASSUME_NONNULL_BEGIN
     NS_DESIGNATED_INITIALIZER;
 - (instancetype)initWithFrame:(NSRect)frameRect NS_UNAVAILABLE;
 - (instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
+
+/// Refresh the plugin's lane templates (display names, metadata) after they
+/// change at runtime (directive rename / source-derived lanes) - the boundary
+/// popover resolves template metadata from this set.
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes;
 
 /// Push an updated timeline from outside (e.g. parameterChanged:). Does not
 /// fire onTimelineMutated.
@@ -43,6 +49,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// tick. < 0 hides it (not playing / no timing yet). Drawn on the warped
 /// (log) axis like everything else.
 @property(nonatomic) double playheadFraction;
+
+/// Empty-state text drawn centered in the track area when nothing is animated.
+/// Set it to keep the graph - and so its scrub ruler - visible instead of
+/// collapsing to a separate placeholder, so the playhead can still be dragged.
+/// nil when phases/lanes are showing.
+@property(nonatomic, copy, nullable) NSString *emptyMessage;
 
 /// Reset pinch-zoom/pan back to fit (zoom 1, no pan).
 - (void)resetZoom;
@@ -65,6 +77,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// Multi-owner timelines: the host's selected layer, so the keypose popover
 /// scopes its params to that layer (nil => first animated layer).
 @property(nonatomic, copy, nullable) NSString *activeLayerKey;
+
+/// Multi-owner keypose popovers: how a param of the active owner that does NOT
+/// participate in the clicked boundary is presented.
+///  - NO (default, Canvas): it keeps the "Animate" affordance - a message row
+///    with a button that arms the property at this boundary. Canvas's layers
+///    are independently keyed, so arming one there is a normal edit.
+///  - YES (Mirage's shader rack): it is dimmed + inert. A rack entry's
+///    keyposes are one co-timed set, so arming a property that has no keypose
+///    at this boundary is exactly the edit the rule forbids.
+/// Single-owner timelines keep their Animate rows either way.
+@property(nonatomic) BOOL keyposeStrictCoTimed;
 /// Fired when a keypose popover resolves its scope to a layer, so the host can
 /// highlight that layer in its layer list.
 @property(nonatomic, copy, nullable) void (^onKeyposeLayerActivated)
@@ -137,12 +160,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// `participantLabels` / `participantStates` are the animatable properties
 /// and whether the Hold modulation currently applies to each (its Hold
 /// interval modulation != None); `onParticipation` toggles one lane on/off.
+/// `participantCompoundLanes[i]` is the live lane behind compound `i` - the
+/// "Applies to" checklist groups by its category / layer, which no label
+/// lookup can recover (the compound's first entry is a display name).
 @property(nonatomic, copy, nullable) void (^onHoldModulationPopover)
     (NSView *anchorView, double startFraction, double endFraction,
      KKIntervalModulation modulation, double intensity, double frequency,
      uint32_t seed, BOOL linked, BOOL showsLinked,
      NSArray<NSArray<NSString *> *> *participantCompoundLabels,
      NSArray<NSArray<NSNumber *> *> *participantCompoundStates,
+     NSArray<KKLane *> *participantCompoundLanes,
      NSArray<NSArray<NSNumber *> *> *_Nullable (^participantStateRebuilder)
          (void),
      void (^onModulation)(KKIntervalModulation modulation),
@@ -154,13 +181,18 @@ NS_ASSUME_NONNULL_BEGIN
      KKGapIntervalReader _Nonnull intervalReader,
      KKGapIntervalMutator _Nonnull intervalMutator);
 
+/// Clear the active keypose / gap highlight in the graph. Called when the
+/// popover switches to a non-keypose mode (constants) in place, which doesn't
+/// fire the close notification the highlight otherwise clears on.
+- (void)clearPopoverHighlights;
+
 @end
 
 /// Public popover entry points. Declared as a category so the primary
 /// @implementation isn't expected to provide them (silences
 /// -Wincomplete-implementation while keeping them public); implemented in
 /// KKTimelineBasicView+BoundaryPopover.m.
-@interface KKTimelineBasicView (BoundaryPopover)
+@interface KKTimelineBasicView (BoundaryPopover) <KKBoundaryEditingGraph>
 /// Programmatic re-open of the boundary value popover at the diamond
 /// closest to `fraction`. Used by the onion-skin filmstrip - clicking an
 /// inactive cell swaps the popover to the corresponding boundary diamond

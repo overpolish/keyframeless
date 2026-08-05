@@ -4,12 +4,13 @@
  */
 
 #import "CanvasLayerTransform.h"
-#import "CanvasLayerRender.h" // CanvasGroupContentCenterObj (public decl)
+#import "CanvasLayerRender.h"   // CanvasGroupContentCenterObj (public decl)
+#import "CanvasLayerTimeline.h" // CanvasResolvedLaneValue
 #import "CanvasLayerTree.h"
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKShape.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
 
 KKTimeline *CanvasLayerEffectiveTimeline(KKBezierPath *path,
                                          NSString *overrideLayerID,
@@ -23,9 +24,9 @@ KKTimeline *CanvasLayerEffectiveTimeline(KKBezierPath *path,
   // Memoize the parse: every lane evaluation (stroke width/colour/draw-on, fill
   // style/colour, the per-layer fill gate, ...) calls this, so one render would
   // otherwise deserialize a layer's animationJSON dozens of times - and motion
-  // blur multiplies that by the sample count (~1000 parses/frame). The result is
-  // read-only, so a content-addressed cache (keyed by the JSON text) is safe and
-  // reused across calls AND frames. Per-process (separate XPC process per
+  // blur multiplies that by the sample count (~1000 parses/frame). The result
+  // is read-only, so a content-addressed cache (keyed by the JSON text) is safe
+  // and reused across calls AND frames. Per-process (separate XPC process per
   // instance); content-addressed so sharing across instances in one process is
   // harmless. NSCache is thread-safe for FCP's render threads.
   static NSCache<NSString *, KKTimeline *> *sCache;
@@ -97,25 +98,22 @@ CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
                                                       double frac) {
   CanvasLayerTransform t = CanvasLayerTransformIdentity();
   for (KKLane *lane in tl.lanes) {
-    if ([lane.label isEqualToString:@"Scale"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    if ([lane.key isEqualToString:@"Scale"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       // Overshoot/elastic easing can dip scale below 0; clamp rather than flip.
       if (v.count > 0)
         t.scaleX = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
       if (v.count > 1)
         t.scaleY = (float)(fmax(0.0, v[1].doubleValue) / 100.0);
-    } else if ([lane.label isEqualToString:@"Position"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.key isEqualToString:@"Position"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         t.posX = (float)v[0].doubleValue;
       if (v.count > 1)
         t.posY = (float)v[1].doubleValue;
-    } else if ([lane.label isEqualToString:@"Rotation"]) {
+    } else if ([lane.key isEqualToString:@"Rotation"]) {
       // 3-axis Euler [X,Y,Z]°.
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       const double kDegToRad = M_PI / 180.0;
       if (v.count > 0)
         t.rotX = (float)(v[0].doubleValue * kDegToRad);
@@ -123,18 +121,16 @@ CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
         t.rotY = (float)(v[1].doubleValue * kDegToRad);
       if (v.count > 2)
         t.rotation = (float)(v[2].doubleValue * kDegToRad);
-    } else if ([lane.label isEqualToString:@"Opacity"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.key isEqualToString:@"Opacity"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         t.opacity = (float)(fmax(0.0, fmin(100.0, v[0].doubleValue)) / 100.0);
-    } else if ([lane.label isEqualToString:@"Anchor"]) {
+    } else if ([lane.key isEqualToString:@"Anchor"]) {
       // Pivot for Rotation/Scale, normalised (0.5,0.5 = layer centre). Empty
       // lane on a cold-boot snapshot evaluates to [0,0]; keep the centre
       // default.
       if (lane.keyposes.count > 0) {
-        NSArray<NSNumber *> *v =
-            KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+        NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
         if (v.count > 0)
           t.anchorX = (float)v[0].doubleValue;
         if (v.count > 1)
@@ -450,9 +446,10 @@ matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
     // The perspective centres on the OUTERMOST element that actually TILTS: a
     // group's 3D tilt foreshortens its members about the group's pivot. A group
     // with NO tilt (including an identity group) must stay a no-op for the
-    // member's own perspective, so track the member's centre THROUGH the group's
-    // 2D transform instead of snapping the pivot onto the group - otherwise an
-    // untilted group re-shears a self-tilted member about the clip centre.
+    // member's own perspective, so track the member's centre THROUGH the
+    // group's 2D transform instead of snapping the pivot onto the group -
+    // otherwise an untilted group re-shears a self-tilted member about the clip
+    // centre.
     if (groups[k].t.rotX != 0.0f || groups[k].t.rotY != 0.0f) {
       pcPx = gcPx + (gPosPx - gRestPx) + gAncPx;
     } else {

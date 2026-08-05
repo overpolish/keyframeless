@@ -125,40 +125,43 @@
 // set, the selection is written in the SAME action so it undoes together.
 - (void)penMutateBlob:(void (^)(NSMutableArray<KKBezierPath *> *paths))mutate
         selectLayerID:(NSString *)selectID {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!actionAPI || !setAPI)
+  __block NSString *newBlob = nil;
+  __block NSString *newState = nil;
+  BOOL scoped = KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (!setAPI)
+          return;
+        NSString *b64 = CanvasLayerBlobSnapshot();
+        NSMutableArray<KKBezierPath *> *paths =
+            b64.length
+                ? [KKBezierPath
+                      pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64
+                                                                        options:0]]
+                : [NSMutableArray array];
+        mutate(paths);
+        newBlob =
+            [[KKBezierPath blobFromPaths:paths] base64EncodedStringWithOptions:0];
+        KKWriteCustomParamString(setAPI, newBlob, kParamLayerData);
+
+        if (selectID.length) {
+          NSMutableDictionary *state = [[self _uiStateDict] mutableCopy];
+          state[@"selectedLayerID"] = selectID;
+          // Collapse the multi-set to the single result too, else a prior multi-
+          // selection's now-stale IDs linger (e.g. after deleting a multi-selection
+          // the deleted IDs would stay in selectedLayerIDs).
+          state[@"selectedLayerIDs"] = @[ selectID ];
+          newState = [[NSString alloc]
+              initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                           options:0
+                                                             error:nil]
+                  encoding:NSUTF8StringEncoding];
+          KKWriteCustomParamString(setAPI, newState, kParamUIState);
+        }
+  });
+  if (!scoped || !newBlob)
     return;
-  [actionAPI startAction:self];
-  NSString *b64 = CanvasLayerBlobSnapshot();
-  NSMutableArray<KKBezierPath *> *paths =
-      b64.length
-          ? [KKBezierPath
-                pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64
-                                                                  options:0]]
-          : [NSMutableArray array];
-  mutate(paths);
-  NSString *newBlob =
-      [[KKBezierPath blobFromPaths:paths] base64EncodedStringWithOptions:0];
-  KKWriteCustomParamString(setAPI, newBlob, kParamLayerData);
-  NSString *newState = nil;
-  if (selectID.length) {
-    NSMutableDictionary *state = [[self _uiStateDict] mutableCopy];
-    state[@"selectedLayerID"] = selectID;
-    // Collapse the multi-set to the single result too, else a prior multi-
-    // selection's now-stale IDs linger (e.g. after deleting a multi-selection
-    // the deleted IDs would stay in selectedLayerIDs).
-    state[@"selectedLayerIDs"] = @[ selectID ];
-    newState = [[NSString alloc]
-        initWithData:[NSJSONSerialization dataWithJSONObject:state
-                                                     options:0
-                                                       error:nil]
-            encoding:NSUTF8StringEncoding];
-    KKWriteCustomParamString(setAPI, newState, kParamUIState);
-  }
-  [actionAPI endAction:self];
   CanvasSetLayerBlobSnapshot(newBlob);
   if (newState)
     CanvasSetUIStateSnapshot(newState);
@@ -174,15 +177,12 @@
   // republishes it.
   NSString *blob =
       [[KKBezierPath blobFromPaths:paths] base64EncodedStringWithOptions:0];
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (actionAPI && setAPI) {
-    [actionAPI startAction:self];
-    KKWriteCustomParamString(setAPI, blob, kParamLayerData);
-    [actionAPI endAction:self];
-  }
+  KKPerformUndoable(self.apiManager, self, nil,
+                    ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                      id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+                      if (setAPI)
+                        KKWriteCustomParamString(setAPI, blob, kParamLayerData);
+                    });
   CanvasSetLayerBlobSnapshot(blob);
   self.penLiveParamWritten =
       YES; // this gesture has committed via per-tick writes
@@ -205,15 +205,15 @@
   // the gesture only previewed (a click insert with no drag), write the
   // snapshot once now so it persists as the single undo.
   if (!self.penLiveParamWritten) {
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     NSString *blob = CanvasLayerBlobSnapshot();
-    if (actionAPI && setAPI && blob.length) {
-      [actionAPI startAction:self];
-      KKWriteCustomParamString(setAPI, blob, kParamLayerData);
-      [actionAPI endAction:self];
+    if (blob.length) {
+      KKPerformUndoable(
+          self.apiManager, self, nil,
+          ^(id<FxParameterRetrievalAPI_v6> getAPI,
+            id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+            if (setAPI)
+              KKWriteCustomParamString(setAPI, blob, kParamLayerData);
+          });
     }
   }
   self.penLiveParamWritten = NO;

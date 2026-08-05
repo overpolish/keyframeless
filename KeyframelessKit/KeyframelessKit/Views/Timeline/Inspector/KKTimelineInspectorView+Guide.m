@@ -192,9 +192,20 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
-    [s.basicLanesView applyTimeline:tl];
+    // Route through the inspector's -applyTimeline: (NOT basicLanesView's) so
+    // the seed gets the SAME processing an ordinary edit / shader-load does:
+    // re-derive the source-declared lanes AND (for a plugin that overrides it)
+    // re-wire the source-derived OSC set. A shader guide seed drops the code
+    // lane and falls back to the default shader, so its directive lanes + OSC
+    // controls load instead of showing the previous clip's. The teardown
+    // restore runs through this same applier, so the user's shader comes back.
+    [s applyTimeline:tl];
     if (s.onTimelineMutated)
       s.onTimelineMutated(tl);
+    // Nudge a re-render after the seed (and any guide re-apply). Plugin-owned,
+    // no-op if unset.
+    if (s.onBoundaryPreviewNeedsRender)
+      s.onBoundaryPreviewNeedsRender();
   };
   _timingGuideHost.onGuideCompleted = ^{
     __strong typeof(weak) s = weak;
@@ -223,6 +234,11 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   };
   cfg.scrubToFraction = ^(double fraction) {
     __strong typeof(weak) s = weak;
+    // Guide-driven scrubs do not originate in either graph, so they must push
+    // the local playhead explicitly before asking the host to seek. Otherwise
+    // the seeded timeline renders at the user's stale pre-guide fraction until
+    // FCP eventually echoes the seek back.
+    [s setPlayheadFraction:fraction];
     if (s.onScrub)
       s.onScrub(fraction);
   };
@@ -321,18 +337,25 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // the run - the checkbox / pill handlers update OSC state directly; the force
   // only stops an async refresh from reverting it. Restored on completion.
   self.guideOSCKeepLabels = nil;
+  if (cfg.scrubToFraction)
+    cfg.scrubToFraction(0.0);
   __weak typeof(self) weak = self;
   [host
       runWithSeed:^KKTimeline * {
-        // An enabled (animatable) keypose lane so the Advanced graph has a
-        // clickable keypose whose mini-viewer the opt-hide / peek steps use.
-        // The viewer-drag step overwrites it with its own single keypose (still
-        // enabled, still at index 0), and the host restores the user's timeline
-        // on end.
+        // An enabled (animatable) multi-keypose lane so the Advanced graph
+        // shows the seeded animation. The viewer-drag step edits the keypose
+        // nearest the playhead (via KKTimelineSettingValuesNearestFraction)
+        // rather than collapsing the lane, so the other keyposes survive.
+        // Restored to the user's timeline on end.
         return [KKMiniViewerGuide seedTimelineForConfig:cfg];
       }
       buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
                                              KKJoyrideLanesBinder *binder) {
+        // Reassert after the seed has landed. Applying the timeline can cause
+        // a host render/current-time echo, and the viewer OSC must resolve the
+        // first seeded keypose before its opening step is drawn.
+        if (cfg.scrubToFraction)
+          cfg.scrubToFraction(0.0);
         return [KKOSCGuide stepsForGuide:guide binder:binder config:cfg];
       }
       extraOnComplete:^{
@@ -361,12 +384,6 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // Start in Off so the first Filmstrip / Onion tap is a real mode change the
   // renderModeChanged trigger can catch.
   self.basicLanesView.renderMode = KKMiniViewerRenderModeOff;
-  // Snapshot + reset the mini-viewer size to the smallest (default) so the
-  // popover opens at a known size and the size step has somewhere to grow to;
-  // restored in extraOnComplete.
-  NSInteger priorMiniViewerSize =
-      [self.basicLanesView guideMiniViewerSizeIndex];
-  [self.basicLanesView guideSetMiniViewerSizeIndex:0];
   KKJoyrideGuideHost *host = [self timingGuideHost];
   host.forwardsGestures = YES;
   // The mini viewer (with all three modes) lives in the Advanced sequencer's
@@ -375,8 +392,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // Basic-incompatible, so a stray switch to Basic would bounce endlessly).
   [self setActiveTab:KKTimelineTabAdvanced];
   self.guideOwnsTab = YES;
-  if (self.onScrub)
-    self.onScrub(0.0);
+  if (cfg.scrubToFraction)
+    cfg.scrubToFraction(0.0);
 
   self.guideOSCKeepLabels = cfg.oscKeepLabels;
   __weak typeof(self) weak = self;
@@ -386,6 +403,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
       }
       buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
                                              KKJoyrideLanesBinder *binder) {
+        if (cfg.scrubToFraction)
+          cfg.scrubToFraction(0.0);
         return [KKMiniViewerGuide stepsForGuide:guide binder:binder config:cfg];
       }
       extraOnComplete:^{
@@ -394,7 +413,6 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
           return;
         [s.basicLanesView guideCloseContentPopover];
         s.basicLanesView.renderMode = priorRenderMode;
-        [s.basicLanesView guideSetMiniViewerSizeIndex:priorMiniViewerSize];
         s.guideOwnsTab = NO; // unlock before restoring the user's tab
         if (priorTab != s.activeTab)
           [s setActiveTab:priorTab];
@@ -422,6 +440,9 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // can't flicker it, and so a watch-back step's setPlayingAccent takes.
   // Mirrors the Basic/Advanced timing runners. Restored on completion.
   self.guideOwnsPlayState = YES;
+  // Custom guides do not carry a config, so mirror config.scrubToFraction:
+  // update the local playhead as well as asking FCP to seek.
+  [self setPlayheadFraction:0.0];
   if (self.onScrub)
     self.onScrub(0.0);
 
@@ -474,8 +495,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // The guide owns the play accent for its duration so FCP's bursty
   // currentTime can't flicker it. Restored on completion.
   self.guideOwnsPlayState = YES;
-  if (self.onScrub)
-    self.onScrub(0.0);
+  if (cfg.scrubToFraction)
+    cfg.scrubToFraction(0.0);
 
   self.guideOSCKeepLabels = cfg.oscKeepLabels;
   __weak typeof(self) weak = self;
@@ -494,6 +515,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
         s.onPlaybackToggleTapped = ^{
           [wb notifyPlaybackToggleTapped];
         };
+        if (cfg.scrubToFraction)
+          cfg.scrubToFraction(0.0);
         return [KKTimingGuide basicStepsForGuide:guide
                                           binder:binder
                                           config:cfg];
@@ -525,8 +548,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
 
   // Start visually on Basic so the user sees the tab switch in step 1.
   [self setActiveTab:KKTimelineTabBasic];
-  if (self.onScrub)
-    self.onScrub(0.0);
+  if (cfg.scrubToFraction)
+    cfg.scrubToFraction(0.0);
 
   self.guideOSCKeepLabels = cfg.oscKeepLabels;
   __weak typeof(self) weak = self;
@@ -550,6 +573,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
       }
       buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
                                              KKJoyrideLanesBinder *binder) {
+        if (cfg.scrubToFraction)
+          cfg.scrubToFraction(0.0);
         return [KKTimingGuide advancedStepsForGuide:guide
                                              binder:binder
                                              config:cfg];
@@ -591,9 +616,10 @@ static const NSTimeInterval kKKIntroAutostartPollInterval = 0.5;
   _introSeenKey = [seenKey copy];
   if (_introAutostartTimer)
     return; // already polling
-  // Poll for the gate rather than firing here: this runs mid -viewDidMoveToWindow
-  // (the OSC hasn't drawn yet on a fresh apply anyway), so deferring to the timer
-  // keeps the guide from starting synchronously during view attachment.
+  // Poll for the gate rather than firing here: this runs mid
+  // -viewDidMoveToWindow (the OSC hasn't drawn yet on a fresh apply anyway), so
+  // deferring to the timer keeps the guide from starting synchronously during
+  // view attachment.
   _introAutostartTimer = [NSTimer
       scheduledTimerWithTimeInterval:kKKIntroAutostartPollInterval
                               target:self

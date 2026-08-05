@@ -6,6 +6,8 @@
 #import "KKLocalized.h"
 #import "KKTimelineAdvancedView_Private.h"
 
+#import "KKLog.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineScrubMath.h"
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
@@ -33,7 +35,7 @@
   for (KKLane *l in _timeline.lanes) {
     if (!l.enabled)
       continue;
-    BOOL isSkipLane = [l.label isEqualToString:skipLane];
+    BOOL isSkipLane = [l.key isEqualToString:skipLane];
     for (NSInteger j = 0; j < (NSInteger)l.keyposes.count; j++) {
       if (isSkipLane && j == skipKP)
         continue;
@@ -103,18 +105,17 @@
   // (label == the scoped collapse key), layer headers toggle their layer. No
   // edit gesture below applies.
   {
-    NSArray<KKLane *> *anim = [self _animatableLanes];
+    NSArray<KKAdvancedRow *> *anim = [self _rows];
     NSInteger row = [self _laneRowAtPoint:pt];
-    if (row >= 0 && row < (NSInteger)anim.count &&
-        anim[row].headerPlaceholder) {
-      if (anim[row].categoryHeader) {
-        NSString *ck = anim[row].label;
+    if (row >= 0 && row < (NSInteger)anim.count && anim[row].isHeader) {
+      if (anim[row].kind == KKAdvancedRowCategoryHeader) {
+        NSString *ck = anim[row].collapseKey;
         if ([_collapsedCategoryKeys containsObject:ck])
           [_collapsedCategoryKeys removeObject:ck];
         else
           [_collapsedCategoryKeys addObject:ck];
       } else {
-        NSString *lk = anim[row].layerKey ?: @"";
+        NSString *lk = anim[row].collapseKey ?: @"";
         if ([_collapsedLayerKeys containsObject:lk])
           [_collapsedLayerKeys removeObject:lk];
         else
@@ -130,13 +131,13 @@
   // the value popover (which renders read-only, so you can inspect values);
   // modifier edits, gap edits and drags are all rejected.
   {
-    NSArray<KKLane *> *anim = [self _animatableLanes];
+    NSArray<KKAdvancedRow *> *anim = [self _rows];
     NSInteger row =
         (hitPill && laneIdx >= 0) ? laneIdx : [self _laneRowAtPoint:pt];
-    if (row >= 0 && row < (NSInteger)anim.count && anim[row].locked) {
+    if (row >= 0 && row < (NSInteger)anim.count && anim[row].lane.locked) {
       if (hitPill && !optKey && !cmdKey && !shiftKey) {
-        KKLane *lane = anim[laneIdx];
-        _pressLaneLabel = [lane.label copy];
+        KKLane *lane = anim[laneIdx].lane;
+        _pressLaneLabel = [lane.key copy];
         _pressKPIdx = kpIdx;
         _pressPoint = pt;
         _topLaneLabel = _pressLaneLabel;
@@ -154,12 +155,13 @@
   if (cmdKey && optKey) {
     NSRect tracks = [self _tracksRect];
     NSInteger row = [self _laneRowAtPoint:pt];
-    NSArray<KKLane *> *anim = [self _animatableLanes];
-    KKLane *lane = (row >= 0 && row < (NSInteger)anim.count) ? anim[row] : nil;
+    NSArray<KKAdvancedRow *> *anim = [self _rows];
+    KKLane *lane =
+        (row >= 0 && row < (NSInteger)anim.count) ? anim[row].lane : nil;
     double frac = lane ? [self _fracForX:pt.x inLane:lane inTracks:tracks]
                        : [self _fracForX:pt.x inTracks:tracks];
     _scrubbing = YES;
-    _scrubLaneLabel = lane ? [lane.label copy] : nil;
+    _scrubLaneLabel = lane ? [lane.key copy] : nil;
     _playheadFraction = frac;
     [self setNeedsDisplay:YES];
     if (self.onScrub)
@@ -168,8 +170,8 @@
   }
 
   if (optKey && hitPill) {
-    KKLane *lane = [self _animatableLanes][laneIdx];
-    _pressLaneLabel = [lane.label copy];
+    KKLane *lane = [self _rows][laneIdx].lane;
+    _pressLaneLabel = [lane.key copy];
     _pressKPIdx = kpIdx;
     _pressPoint = pt;
     _optPressOnPill = YES;
@@ -186,8 +188,8 @@
   }
 
   if (shiftKey && hitPill) {
-    KKLane *lane = [self _animatableLanes][laneIdx];
-    NSString *key = [self _selectionKeyForLabel:lane.label kpIdx:kpIdx];
+    KKLane *lane = [self _rows][laneIdx].lane;
+    NSString *key = [self _selectionKeyForLabel:lane.key kpIdx:kpIdx];
     if ([_selection containsObject:key])
       [_selection removeObject:key];
     else
@@ -200,8 +202,8 @@
     NSInteger row = [self _laneRowAtPoint:pt];
     if (row >= 0) {
       NSRect tracks = [self _tracksRect];
-      NSArray<KKLane *> *anim = [self _animatableLanes];
-      KKLane *lane = (row < (NSInteger)anim.count) ? anim[row] : nil;
+      NSArray<KKAdvancedRow *> *anim = [self _rows];
+      KKLane *lane = (row < (NSInteger)anim.count) ? anim[row].lane : nil;
       double frac = lane ? [self _fracForX:pt.x inLane:lane inTracks:tracks]
                          : [self _fracForX:pt.x inTracks:tracks];
       [self _addAndOpenKPForLaneIdx:row atFrac:frac];
@@ -212,8 +214,8 @@
   (void)ctrlKey; // link toggle moved to the right-click gap context menu
 
   if (hitPill) {
-    KKLane *lane = [self _animatableLanes][laneIdx];
-    _pressLaneLabel = [lane.label copy];
+    KKLane *lane = [self _rows][laneIdx].lane;
+    _pressLaneLabel = [lane.key copy];
     _pressKPIdx = kpIdx;
     _pressPoint = pt;
     _topLaneLabel = _pressLaneLabel;
@@ -226,12 +228,13 @@
   NSRect tracksForGap = [self _tracksRect];
   if (gapLane >= 0 && pt.x >= NSMinX(tracksForGap) &&
       pt.x <= NSMaxX(tracksForGap)) {
-    NSArray<KKLane *> *anim = [self _animatableLanes];
+    NSArray<KKAdvancedRow *> *anim = [self _rows];
     NSRect tracks = tracksForGap;
-    double frac = [self _fracForX:pt.x inLane:anim[gapLane] inTracks:tracks];
-    NSInteger aIdx = [self _intervalStartKPIdxInLane:anim[gapLane] atFrac:frac];
+    KKLane *gapLaneObj = anim[gapLane].lane;
+    double frac = [self _fracForX:pt.x inLane:gapLaneObj inTracks:tracks];
+    NSInteger aIdx = [self _intervalStartKPIdxInLane:gapLaneObj atFrac:frac];
     if (shiftKey && aIdx >= 0) {
-      NSString *gKey = [self _gapKeyForLabel:anim[gapLane].label aIdx:aIdx];
+      NSString *gKey = [self _gapKeyForLabel:gapLaneObj.key aIdx:aIdx];
       if ([_selectedGaps containsObject:gKey])
         [_selectedGaps removeObject:gKey];
       else
@@ -240,7 +243,7 @@
       return;
     }
     _gapPressActive = YES;
-    _gapPressLabel = (aIdx >= 0) ? [anim[gapLane].label copy] : nil;
+    _gapPressLabel = (aIdx >= 0) ? [gapLaneObj.key copy] : nil;
     _gapPressAIdx = aIdx;
     _pressPoint = pt;
     _marqueeShift = shiftKey;
@@ -311,7 +314,7 @@
           if (![self _decodeSelectionKey:k label:&label kpIdx:&idx])
             continue;
           for (KKLane *l in _timeline.lanes) {
-            if (![l.label isEqualToString:label])
+            if (![l.key isEqualToString:label])
               continue;
             if (idx >= 0 && idx < (NSInteger)l.keyposes.count)
               _dragOriginTimes[k] = @(l.keyposes[idx].time);
@@ -410,10 +413,10 @@
     return;
   }
   if (_optPressOnPill && !_dragActive) {
-    NSArray<KKLane *> *lanes = [self _animatableLanes];
+    NSArray<KKAdvancedRow *> *lanes = [self _rows];
     NSInteger li = -1;
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-      if ([lanes[i].label isEqualToString:_pressLaneLabel]) {
+      if ([lanes[i].lane.key isEqualToString:_pressLaneLabel]) {
         li = i;
         break;
       }
@@ -446,10 +449,10 @@
     } else {
       [_selection removeAllObjects];
       [self setNeedsDisplay:YES];
-      NSArray<KKLane *> *lanes = [self _animatableLanes];
+      NSArray<KKAdvancedRow *> *lanes = [self _rows];
       NSInteger li = -1;
       for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-        if ([lanes[i].label isEqualToString:_pressLaneLabel]) {
+        if ([lanes[i].lane.key isEqualToString:_pressLaneLabel]) {
           li = i;
           break;
         }
@@ -499,34 +502,34 @@
 
 - (void)_addPillsInRect:(NSRect)rect
             toSelection:(NSMutableSet<NSString *> *)sel {
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   NSRect tracks = [self _tracksRect];
   for (NSInteger i = 0; i < (NSInteger)anim.count; i++) {
     NSRect row = [self _rowRectForIndex:i count:anim.count];
     NSRect ix = NSIntersectionRect(rect, row);
     if (NSIsEmptyRect(ix))
       continue;
-    KKLane *lane = anim[i];
+    KKLane *lane = anim[i].lane;
     for (NSInteger j = 0; j < (NSInteger)lane.keyposes.count; j++) {
       CGFloat x = [self _xForFrac:lane.keyposes[j].time
                            inLane:lane
                          inTracks:tracks];
       if (x >= NSMinX(rect) && x <= NSMaxX(rect))
-        [sel addObject:[self _selectionKeyForLabel:lane.label kpIdx:j]];
+        [sel addObject:[self _selectionKeyForLabel:lane.key kpIdx:j]];
     }
   }
 }
 
 - (void)_addGapsInRect:(NSRect)rect
            toSelection:(NSMutableSet<NSString *> *)sel {
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   NSRect tracks = [self _tracksRect];
   for (NSInteger i = 0; i < (NSInteger)anim.count; i++) {
     NSRect row = [self _rowRectForIndex:i count:anim.count];
     NSRect ix = NSIntersectionRect(rect, row);
     if (NSIsEmptyRect(ix))
       continue;
-    KKLane *lane = anim[i];
+    KKLane *lane = anim[i].lane;
     for (NSInteger j = 0; j + 1 < (NSInteger)lane.keyposes.count; j++) {
       CGFloat xA = [self _xForFrac:lane.keyposes[j].time
                             inLane:lane
@@ -536,7 +539,7 @@
                           inTracks:tracks];
       CGFloat mid = (xA + xB) * 0.5;
       if (mid >= NSMinX(rect) && mid <= NSMaxX(rect))
-        [sel addObject:[self _gapKeyForLabel:lane.label aIdx:j]];
+        [sel addObject:[self _gapKeyForLabel:lane.key aIdx:j]];
     }
   }
 }
@@ -578,7 +581,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   BOOL changed = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    NSMutableArray<NSNumber *> *toRemove = byLabel[lanes[i].label];
+    NSMutableArray<NSNumber *> *toRemove = byLabel[lanes[i].key];
     if (toRemove.count == 0)
       continue;
     [toRemove
@@ -591,7 +594,7 @@
       if (idx >= 0 && idx < (NSInteger)nl.keyposes.count)
         [nl removeKeyposeAtIndex:idx];
     }
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     changed = YES;
   }
   if (!changed)
@@ -623,7 +626,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   NSInteger newIdx = -1;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     KKLane *nl = [lanes[i] copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
@@ -667,9 +670,9 @@
       if (kps[j] == moved) {
         newIdx = j;
         break;
-      }
+    }
     nl.keyposes = kps;
-    lanes[i] = nl;
+    lanes[i] = KKLaneRefreshingDurationLocks(nl, [self _clipDuration]);
     break;
   }
   if (newIdx < 0)

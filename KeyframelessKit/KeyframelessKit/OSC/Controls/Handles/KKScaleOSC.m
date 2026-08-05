@@ -12,7 +12,6 @@
 // Holding Cmd engages a fine mode that scales cursor movement down for precise
 // adjustment (essential at high scale, where the compressed box is otherwise
 // hyper-sensitive).
-static const double kScaleFineFactor = 0.2;
 
 @interface KKScaleOSC ()
 @property(nonatomic, readwrite) KKBoxOSC *box;
@@ -26,8 +25,7 @@ static const double kScaleFineFactor = 0.2;
 @property(nonatomic) CGPoint scalePressCenter;
 @property(nonatomic) double scalePressSclX;
 @property(nonatomic) double scalePressSclY;
-@property(nonatomic) CGPoint scaleEffCursor;
-@property(nonatomic) CGPoint scaleLastCursor;
+@property(nonatomic) KKScaleDragCursor scaleDragCursor;
 // Anchor frac captured at press (constant during a scale drag: only the Scale
 // lane changes), so the box keeps the anchor as the fixed point.
 @property(nonatomic) CGPoint scalePressFrac;
@@ -60,7 +58,7 @@ static const double kScaleFineFactor = 0.2;
 
 - (nullable KKLane *)_scaleLane {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -86,7 +84,7 @@ static const double kScaleFineFactor = 0.2;
   if (!lane)
     return @[ @100.0, @100.0 ];
   NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      KKLaneDisplayValueAtFraction(lane, frac);
   NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithArray:v ?: @[]];
   while (out.count < 2)
     [out addObject:@100.0];
@@ -112,7 +110,7 @@ static const double kScaleFineFactor = 0.2;
     return CGPointZero;
   double ax = self.anchorReferenceCenter.x, ay = self.anchorReferenceCenter.y;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:self.anchorLaneLabel]) {
+    if ([l.key isEqualToString:self.anchorLaneLabel]) {
       if (l.keyposes.count > 0) {
         NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(l, frac);
         if (v.count >= 2) {
@@ -218,10 +216,12 @@ static const double kScaleFineFactor = 0.2;
   KKScaleHandlePositions(self.scalePressCenter, self.scalePressSclX,
                          self.scalePressSclY, e0, span, self.scalePressFrac,
                          hp);
-  self.scaleEffCursor = (self.scaleGrabHandle >= 0 && self.scaleGrabHandle < 8)
-                            ? hp[self.scaleGrabHandle]
-                            : CGPointMake(x, y);
-  self.scaleLastCursor = CGPointMake(x, y);
+  KKScaleDragCursor cur;
+  cur.effCursor = (self.scaleGrabHandle >= 0 && self.scaleGrabHandle < 8)
+                      ? hp[self.scaleGrabHandle]
+                      : CGPointMake(x, y);
+  cur.lastCursor = CGPointMake(x, y);
+  self.scaleDragCursor = cur;
 }
 
 - (void)mouseDraggedAtX:(double)x
@@ -232,41 +232,21 @@ static const double kScaleFineFactor = 0.2;
   NSInteger h = self.scaleGrabHandle;
   if (h < 0)
     return;
-  // Advance the effective cursor by the raw movement (scaled down for
-  // Cmd-fine). The value comes from its distance to centre through the gizmo
-  // curve, so the grabbed handle tracks the cursor 1:1 in normal mode.
-  double rawDx = x - self.scaleLastCursor.x;
-  double rawDy = y - self.scaleLastCursor.y;
-  self.scaleLastCursor = CGPointMake(x, y);
-  double fine = (modifiers & kFxModifierKey_COMMAND) ? kScaleFineFactor : 1.0;
-  CGPoint eff = self.scaleEffCursor;
-  eff.x += rawDx * fine;
-  eff.y += rawDy * fine;
-  self.scaleEffCursor = eff;
-
-  CGPoint c = self.scalePressCenter;
-  double pX = self.scalePressSclX, pY = self.scalePressSclY;
   double e0 = 0, span = 0;
   [self _e0:&e0 span:&span];
-  // Candidate per-axis percents from the effective cursor's distance to the
-  // ANCHOR (c), divided by the handle's |sign - frac| so the anchor is the
-  // fixed point (frac 0 = symmetric). A degenerate axis (handle on the anchor)
-  // holds.
-  CGPoint f = self.scalePressFrac;
-  double tX = KKScaleGizmoPercentForHandle(eff.x, c.x, KKScaleHandleSignX(h),
-                                           f.x, e0, span);
-  double tY = KKScaleGizmoPercentForHandle(eff.y, c.y, KKScaleHandleSignY(h),
-                                           f.y, e0, span);
-  if (tX < 0)
-    tX = pX;
-  if (tY < 0)
-    tY = pY;
   // Link is global per-lane; Shift temporarily inverts it for this drag. The
-  // corner/edge coupling itself is the shared kit rule.
-  BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
-  BOOL effLinked = [self _aspectLinked] ^ shift;
+  // whole tick (Cmd-fine cursor, anchor-fixed percents, link coupling) is the
+  // shared gizmo rule.
+  BOOL effLinked =
+      [self _aspectLinked] ^ ((modifiers & kFxModifierKey_SHIFT) != 0);
+  KKScaleDragCursor cur = self.scaleDragCursor;
   double newX = 0, newY = 0;
-  KKScaleValuesForHandleDrag(h, pX, pY, tX, tY, effLinked, &newX, &newY);
+  KKScaleDragTick(&cur, CGPointMake(x, y),
+                  (modifiers & kFxModifierKey_COMMAND) != 0, h,
+                  self.scalePressCenter, self.scalePressFrac,
+                  self.scalePressSclX, self.scalePressSclY, effLinked, e0,
+                  span, &newX, &newY);
+  self.scaleDragCursor = cur;
   [self _writeScaleValues:@[ @(newX), @(newY) ]
                    atTime:time
               forceUpdate:forceUpdate];
@@ -275,41 +255,38 @@ static const double kScaleFineFactor = 0.2;
 - (void)_writeScaleValues:(NSArray<NSNumber *> *)newValues
                    atTime:(CMTime)time
               forceUpdate:(BOOL *)forceUpdate {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
+  __block BOOL wrote = NO;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (!setAPI)
+          return;
 
-  double frac = [self fractionAtTime:time];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                              snap, self.laneLabel, frac, newValues)
-                        : nil;
-  if (!tl) {
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    KKLane *scaleLane =
-        [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
-    scaleLane.enabled = NO;
-    scaleLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
-    [lanes addObject:scaleLane];
-    tl.lanes = lanes;
-  }
+        double frac = [self fractionAtTime:time];
+        KKTimeline *snap = KKProcessTimelineSnapshot();
+        KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
+                                    snap, self.laneLabel, frac, newValues)
+                              : nil;
+        if (!tl) {
+          tl = snap ? [snap copy] : [KKTimeline timeline];
+          NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+          KKLane *scaleLane =
+              [self.templateLane copy] ?: [KKLane laneWithKey:self.laneLabel label:self.laneLabel];
+          scaleLane.enabled = NO;
+          scaleLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+          [lanes addObject:scaleLane];
+          tl.lanes = lanes;
+        }
 
-  if (self.onTimelinePersist)
-    self.onTimelinePersist(tl);
-  else
-    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                             kKKParamTimelineData);
-  [actionAPI endAction:self];
-  if (forceUpdate)
+        if (self.onTimelinePersist)
+          self.onTimelinePersist(tl);
+        else
+          KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                                   kKKParamTimelineData);
+        wrote = YES;
+      });
+  if (wrote && forceUpdate)
     *forceUpdate = YES;
 }
 

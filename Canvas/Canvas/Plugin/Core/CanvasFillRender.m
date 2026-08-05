@@ -18,17 +18,17 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 
 static NSString *const kFillStencilKey =
-    @"co.overpolish.keyframeless.Canvas.fillStencil";
+    @"com.keyframeless.Canvas.fillStencil";
 static NSString *const kFillColorKey =
-    @"co.overpolish.keyframeless.Canvas.fillColor";
+    @"com.keyframeless.Canvas.fillColor";
 static NSString *const kFillGradientKey =
-    @"co.overpolish.keyframeless.Canvas.fillGradient";
+    @"com.keyframeless.Canvas.fillGradient";
 static NSString *const kFillCompositeKey =
-    @"co.overpolish.keyframeless.Canvas.fillComposite";
+    @"com.keyframeless.Canvas.fillComposite";
 static NSString *const kFillColorMaskKey =
-    @"co.overpolish.keyframeless.Canvas.fillColorMask";
+    @"com.keyframeless.Canvas.fillColorMask";
 static NSString *const kFillGradientMaskKey =
-    @"co.overpolish.keyframeless.Canvas.fillGradientMask";
+    @"com.keyframeless.Canvas.fillGradientMask";
 
 // MSAA sample count for the fill pass: the fan is rasterised multisampled and
 // resolved so the silhouette antialiases (coverage-based, crisp - unlike the

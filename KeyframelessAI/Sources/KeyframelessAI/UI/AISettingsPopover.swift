@@ -5,13 +5,18 @@
 
 import SwiftUI
 
+// Visual test: flip this to true (DEBUG builds only) to force the "Keyframeless
+// AI update available" banner to always show with a placeholder version, so its
+// layout can be eyeballed without a real pending update.
+private let kAIForceUpdateBanner = false
+
 public struct AISettingsPopover: View {
 	public enum Tab: String, CaseIterable, Identifiable {
 		case action, config
 		public var id: String { rawValue }
 		var label: String {
 			switch self {
-			case .action: return AILoc("Action")
+			case .action: return AILoc("Ask Kai")
 			case .config: return AILoc("Config")
 			}
 		}
@@ -24,6 +29,7 @@ public struct AISettingsPopover: View {
 	}
 
 	@StateObject private var keyState = AIKeyState.shared
+	@StateObject private var updateState = AIUpdateState.shared
 	@State private var tab: Tab
 	let selectedCount: Int
 	let productContext: String
@@ -56,6 +62,16 @@ public struct AISettingsPopover: View {
 
 	public var body: some View {
 		VStack(spacing: 0) {
+			if (kAIForceUpdateBanner || updateState.availableVersion != nil)
+				&& !updateState.dismissed
+			{
+				AIUpdateBanner(
+					version: updateState.availableVersion ?? "1.0.2",
+					url: updateState.notesURL
+						?? URL(string: "https://keyframeless.com/kai/"),
+					onDismiss: { updateState.dismissed = true }
+				)
+			}
 			HStack(spacing: 8) {
 				tabBar
 				Spacer(minLength: 0)
@@ -94,7 +110,9 @@ public struct AISettingsPopover: View {
 		.frame(width: 380)
 		.fixedSize(horizontal: false, vertical: true)
 		.animation(.easeInOut(duration: 0.18), value: tab)
+		.animation(.easeInOut(duration: 0.18), value: updateState.availableVersion)
 		.popoverGlassFix()
+		.onAppear { updateState.requestCheck() }
 		.onChange(of: keyState.hasAnyKey) { _, hasKey in
 			if !hasKey { tab = .config }
 		}

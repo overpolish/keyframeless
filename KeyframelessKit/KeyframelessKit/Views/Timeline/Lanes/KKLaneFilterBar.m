@@ -149,6 +149,10 @@ static NSButton *_kkGlyphButton(NSString *symbol, CGFloat pt, id target,
 // a nil selection to - rather than spilling every layer's lanes into the
 // popover.
 - (NSArray<KKLane *> *)_scopedLanes {
+  // The checklist's own layer nav does the scoping (and needs every owner's
+  // lanes to build its pills), so hand the whole set over untouched.
+  if (_layerNavEnabled)
+    return _lanes;
   NSString *targetKey = _activeLayerKey;
   if (targetKey.length == 0)
     for (KKLane *l in _lanes)
@@ -171,7 +175,13 @@ static NSButton *_kkGlyphButton(NSString *symbol, CGFloat pt, id target,
     return;
   _activeLayerKey = [activeLayerKey copy];
   // Re-scope an open checklist to the newly-selected layer (the companion layer
-  // list drove the switch), mirroring the Animated dropdown.
+  // list, or a keypose click, drove the switch), mirroring the Animated
+  // dropdown. With its own layer nav the lane set is unchanged - only which
+  // pill is lit - so move the nav instead of re-pushing lanes.
+  if (_layerNavEnabled) {
+    [_openList selectLayerKey:_activeLayerKey];
+    return;
+  }
   [_openList reloadLanes:[self _scopedLanes]
            visibleLabels:[self _visibleLabels]
             soloedLabels:[_model soloedLabels]];
@@ -184,8 +194,8 @@ static NSButton *_kkGlyphButton(NSString *symbol, CGFloat pt, id target,
   NSSet<NSString *> *hidden = [_model hiddenLabels];
   NSMutableSet<NSString *> *visible = [NSMutableSet set];
   for (KKLane *l in [self _scopedLanes])
-    if (![hidden containsObject:l.label])
-      [visible addObject:l.label];
+    if (![hidden containsObject:l.key])
+      [visible addObject:l.key];
   return visible;
 }
 
@@ -199,6 +209,12 @@ static NSButton *_kkGlyphButton(NSString *symbol, CGFloat pt, id target,
                                          visibleLabels:[self _visibleLabels]
                                           soloedLabels:[_model soloedLabels]
                                          minimumHeight:_minimumPopoverHeight];
+  // Open on the owner the host has selected (Mirage's selected rack entry)
+  // rather than on the first one - same rule as the Animated dropdown. Before
+  // the frame is taken: re-scoping changes the visible row count, hence the
+  // height.
+  if (_layerNavEnabled)
+    [list selectLayerKey:_activeLayerKey];
   list.frame = NSMakeRect(0, 0, [KKLaneFilterChecklistView preferredWidth],
                           list.fittingHeight);
   __weak typeof(self) weak = self;

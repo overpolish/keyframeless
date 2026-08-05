@@ -7,6 +7,7 @@
 // writing the kParamLayerData string, the cache-mutating _modifyPaths: helper,
 // and importing dropped image / SVG files into ready-to-insert layers.
 
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 #import "CanvasLayerListView_Private.h"
 
 #import "CanvasLayerRender.h"
@@ -32,19 +33,15 @@
   id<PROAPIAccessing> api = self.apiManager;
   if (!api)
     return;
-  id<FxCustomParameterActionAPI_v4> action =
-      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!action)
-    return;
-  id target = self.paramActionTarget ?: self;
-  [action startAction:target];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSData *blob = [KKBezierPath blobFromPaths:paths];
-  _selfWritePending++; // skip the echo this write will trigger
-  KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
-                           kParamLayerData);
-  [action endAction:target];
+  KKPerformUndoable(
+      api, self.paramActionTarget ?: self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        NSData *blob = [KKBezierPath blobFromPaths:paths];
+        self->_selfWritePending++; // skip the echo this write will trigger
+        KKWriteCustomParamString(
+            setAPI, [blob base64EncodedStringWithOptions:0], kParamLayerData);
+      });
 }
 
 // Mutate the cached paths, persist once, rebuild rows from the cache (no

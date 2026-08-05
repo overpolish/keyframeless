@@ -33,12 +33,13 @@ static NSColor *arcStrokeColor(void) {
     _strokeWidth = 10.0f;
     _outlineWidth = KKBorderWidthXS + 0.75;
     _fillAlpha = 1.0f;
+    _ghostAlpha = 1.0f;
   }
   return self;
 }
 
 - (NSString *)pipelinePluginID {
-  return @"co.overpolish.keyframelesskit.ArcOSC";
+  return @"com.keyframeless.kit.ArcOSC";
 }
 - (NSString *)fragmentFunctionName {
   return @"KKArcOSCFragment";
@@ -70,9 +71,10 @@ static NSColor *arcStrokeColor(void) {
       .plusHalfLen = isActive ? 7.0f / outerRadiusPixels : 0.0f,
       .plusFillHalfWidth = 1.0f / outerRadiusPixels,
       .plusOutlineWidth = 2.0f / outerRadiusPixels,
-      .fillColor =
-          [[arcFillColor() colorWithAlphaComponent:_fillAlpha] simdFloat4],
-      .strokeColor = [arcStrokeColor() simdFloat4]};
+      .fillColor = [[arcFillColor()
+          colorWithAlphaComponent:_fillAlpha * _ghostAlpha] simdFloat4],
+      .strokeColor = [[arcStrokeColor()
+          colorWithAlphaComponent:0.8f * _ghostAlpha] simdFloat4]};
 
   [self drawQuadForDestinationImage:destinationImage
                      canvasPosition:canvasPosition

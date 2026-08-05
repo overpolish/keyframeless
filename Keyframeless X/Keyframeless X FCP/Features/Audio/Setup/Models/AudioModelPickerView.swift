@@ -71,33 +71,48 @@ private struct AudioModelRow: View {
 				.frame(width: 6, height: 6)
 
 			VStack(alignment: .leading, spacing: 1) {
-				HStack(spacing: KKSpacingLG) {
-					Text(model.displayName)
-						.font(.system(size: 12, weight: isSelected ? .medium : .regular))
-						.foregroundStyle(isDownloaded ? .primary : .secondary)
+				Text(model.displayName)
+					.font(.system(size: 12, weight: isSelected ? .medium : .regular))
+					.foregroundStyle(isDownloaded ? .primary : .secondary)
+				Text(model.hint)
+					.font(.system(size: 10))
+					.foregroundStyle(.secondary)
+			}
+
+			Spacer(minLength: KKSpacingLG)
+
+			// Trailing badges, stacked like the Kai model list:
+			// "Recommended" on its own row above size + RAM, so the pills never
+			// squeeze the (flexible) title. Hidden while downloading - the
+			// progress bar takes the row's trailing space instead.
+			if !isDownloading {
+				VStack(alignment: .trailing, spacing: 3) {
 					if model.id == AudioModelManager.recommendedModelId {
 						InfoBadge(
 							label: String(localized: "Recommended"),
 							systemImage: "desktopcomputer.and.macbook",
 							color: .green
 						)
+						.fixedSize()
 					}
-					Text(model.sizeDescription)
-						.font(.system(size: 10))
-						.foregroundStyle(.tertiary)
+					HStack(spacing: 4) {
+						InfoBadge(
+							label: model.sizeDescription,
+							systemImage: "internaldrive"
+						)
+						InfoBadge(
+							label: "\(model.minRAMGB) GB",
+							systemImage: "memorychip"
+						)
+					}
+					.fixedSize()
 				}
-				Text(model.hint)
-					.font(.system(size: 10))
-					.foregroundStyle(.secondary)
 			}
-
-			Spacer()
 
 			if isDownloading {
 				ModelDownloadProgress(
 					progress: manager.downloadProgress,
-					accent: accent,
-					indeterminate: model.engine == .parakeet
+					accent: accent
 				)
 			} else if !isDownloaded {
 				ModelDownloadButton(accent: accent, disabled: manager.downloadingModel != nil) {

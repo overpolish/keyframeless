@@ -48,9 +48,9 @@
 	<array>
 		<dict>
 			<key>groupName</key>
-			<string>Template Group</string>
+			<string>Keyframeless</string>
 			<key>uuid</key>
-			<string>450150AA-FB81-4198-BB73-058CFEF39F5C</string>
+			<string>EF0195DD-310A-4CFE-AB7B-2981D5A47D84</string>
 		</dict>
 	</array>
 	<key>ProPlugPlugInList</key>
@@ -61,7 +61,7 @@
 			<key>displayName</key>
 			<string>Template::FxPlug Name</string>
 			<key>group</key>
-			<string>450150AA-FB81-4198-BB73-058CFEF39F5C</string>
+			<string>EF0195DD-310A-4CFE-AB7B-2981D5A47D84</string>
 			<key>infoString</key>
 			<string>Template::FxPlug Description</string>
 			<key>protocolNames</key>
@@ -79,7 +79,7 @@
 			<key>displayName</key>
 			<string>Template OSC</string>
 			<key>group</key>
-			<string>450150AA-FB81-4198-BB73-058CFEF39F5C</string>
+			<string>EF0195DD-310A-4CFE-AB7B-2981D5A47D84</string>
 			<key>infoString</key>
 			<string>Template Point Control</string>
 			<key>protocolNames</key>

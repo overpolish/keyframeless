@@ -5,7 +5,7 @@ summary: Position on-screen control - the draggable handle and curved motion pat
 
 # Position handle and motion path
 
-The Position OSC is a shared on-screen control that any plugin with a Position lane gets for free. It is one draggable handle plus, once Position is animated, a curved motion path. What the position _means_ depends on the plugin: in Magic Move it translates the clip; in Glow it offsets the glow. The control, its editing, and its keyboard modifiers are identical everywhere because they are the same shared code (the FCP viewer and the keypose mini-viewer share it too).
+The Position OSC is a shared on-screen control that any plugin with a Position lane gets for free. It is one draggable handle plus, once Position is animated, a curved motion path. What the position _means_ depends on the plugin: it might translate the clip, or offset an effect. The control, its editing, and its keyboard modifiers are identical everywhere because they are the same shared code (the FCP viewer and the keypose mini-viewer share it too).
 
 ## What the user sees
 

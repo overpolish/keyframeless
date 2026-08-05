@@ -99,12 +99,24 @@ extern NSString *const KKTimingIntroGuideIdentifier;
 /// need it.
 @property(nonatomic, weak) KKTimelineInspectorView *inspectorView;
 
-/// The property the guide teaches, e.g. @"Radius" / @"Position". Required.
+/// The property the guide teaches, e.g. @"Radius" / @"Position". This is the
+/// lane *identity* the seed lane and every OSC/timeline binding use - so for a
+/// plugin whose lane identity isn't its display name (Shader's directive lanes
+/// are keyed by GLSL uniform, e.g. @"uCenter", so the mini-viewer OSC binds to
+/// that), pass the identity here and the human name via `primaryDisplayLabel`.
+/// Required.
 @property(nonatomic, copy) NSString *primaryLabel;
 
 /// Optional second property to seed in Advanced (e.g. @"Crop"). The Basic
-/// flow teaches a single property; nil keeps it single-lane.
+/// flow teaches a single property; nil keeps it single-lane. Identity label,
+/// see `primaryLabel`.
 @property(nonatomic, copy, nullable) NSString *secondaryLabel;
+
+/// Human-facing names shown in the step copy ("Drag <Center>...") when the
+/// identity label isn't presentable (a GLSL uniform name). Fall back to
+/// `primaryLabel`/`secondaryLabel` when nil.
+@property(nonatomic, copy, nullable) NSString *primaryDisplayLabel;
+@property(nonatomic, copy, nullable) NSString *secondaryDisplayLabel;
 
 /// OSC element labels to keep visible for this guide's duration (the rest are
 /// hidden, then restored on end). nil/empty = keep all OSCs. The plugin's
@@ -116,7 +128,7 @@ extern NSString *const KKTimingIntroGuideIdentifier;
 
 /// Whether the primary lane's components are aspect-linked (move together).
 /// The seed timeline mirrors this so OSC drags during the guide behave like
-/// the real lane - e.g. Glow's radius ring, whose mini-viewer drag takes a
+/// the real lane - e.g. a radius ring, whose mini-viewer drag takes a
 /// uniform path when linked and a per-axis path when not. Default NO.
 @property(nonatomic) BOOL primaryAspectLinked;
 
@@ -142,7 +154,7 @@ extern NSString *const KKTimingIntroGuideIdentifier;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *secondarySeedValues;
 @property(nonatomic) NSInteger secondaryValueType;
 
-/// Optional category keys for the seed lanes (e.g. Glow's @"Core" / @"Noise").
+/// Optional category keys for the seed lanes (e.g. @"Core" / @"Noise").
 /// When set, the Advanced seed carries them so the lane-filter bar groups the
 /// pills into the real `[Category | lane]` capsules the plugin shows, and the
 /// guide's filter step teaches the grouping. nil = ungrouped single pills.

@@ -8,6 +8,7 @@
 #import "KKTokens.h"
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h> // CACurrentMediaTime (gesture-active timing)
+#import <math.h>
 
 // View transform (zoom / pan), pointer-handle dragging, and screen-rect
 // geometry. The canvas's interactive surface, kept apart from the render path.
@@ -80,9 +81,23 @@
 // both states. Pan keeps the scrollWheel: responder below - AppKit delivers
 // scroll to inactive windows, so it already works non-key.
 - (void)scrollWheel:(NSEvent *)event {
+  // Keep AppKit's gesture machinery in the responder chain. A trackpad pinch
+  // begins as part of the same gesture stream as precise scrolling; dropping
+  // the superclass dispatch here made two-finger pan continue to work while
+  // preventing the subsequent NSEventTypeMagnify events from being formed.
+  // Our classification below still owns the actual pan / mouse-wheel zoom, so
+  // restoring this does not undo the Parsec/smooth-wheel normalization.
   [super scrollWheel:event];
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
-  if (event.hasPreciseScrollingDeltas) {
+  // `hasPreciseScrollingDeltas` is not a reliable trackpad test: smooth-wheel
+  // mice (including Logitech devices and the Magic Mouse) report precise
+  // deltas too. Trackpad two-finger gestures carry a gesture phase, whereas a
+  // mouse wheel is normally phase-less. Keep two-finger scrolling as pan, but
+  // make every mouse wheel zoom even when its driver enables smooth scrolling.
+  BOOL trackpadGesture = event.hasPreciseScrollingDeltas &&
+                         (event.phase != NSEventPhaseNone ||
+                          event.momentumPhase != NSEventPhaseNone);
+  if (trackpadGesture) {
     // Trackpad two-finger → pan.
     _lastPanZoomTime = CACurrentMediaTime();
     CGFloat s = [self _backingScale];
@@ -93,8 +108,17 @@
     [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindPan];
   } else {
     // Mouse wheel → zoom toward cursor.
-    CGFloat factor = 1.0 - event.scrollingDeltaY * 0.05;
+    // Parsec sends a single ordinary notch as precise scrollingDeltaY=120 but
+    // legacy deltaY=12. Normalise that legacy notch instead of treating the
+    // transport's 120 as 120 physical wheel steps. Clamp bursty remote events
+    // so one packet can never jump from fit straight to the zoom limit.
+    CGFloat raw = event.deltaY;
+    if (fabs(raw) < 0.001)
+      raw = event.scrollingDeltaY / 10.0;
+    CGFloat steps = MAX(-3.0, MIN(3.0, raw / 12.0));
+    CGFloat factor = pow(1.12, -steps);
     [self _zoomTo:_zoom * factor aboutViewPoint:p];
+    [self _drawNowForInteraction];
   }
 }
 
@@ -190,7 +214,8 @@
 - (NSRect)guideToolbarButtonScreenRectForTag:(NSInteger)tag {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
-      ![d respondsToSelector:@selector(miniViewer:toolbarButtonViewRectForTag:)])
+      ![d respondsToSelector:@selector(
+                                 miniViewer:toolbarButtonViewRectForTag:)])
     return NSZeroRect;
   NSRect vr = [d miniViewer:self toolbarButtonViewRectForTag:tag];
   if (NSIsEmptyRect(vr))
@@ -218,7 +243,8 @@
 // cursor via -cursorAtScreenPoint:.
 - (void)guideToolMoveToScreenPoint:(NSPoint)screenPoint {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
-  if (![d respondsToSelector:@selector(miniViewer:toolMovedToPoint:contentRect:)])
+  if (![d respondsToSelector:@selector(
+                                 miniViewer:toolMovedToPoint:contentRect:)])
     return;
   [d miniViewer:self
       toolMovedToPoint:[self _viewPointForScreenPoint:screenPoint]
@@ -232,8 +258,8 @@
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
   CGPoint vp = [self _viewPointForScreenPoint:screenPoint];
   CGRect cr = [self contentRectInViewPoints];
-  if ([d respondsToSelector:@selector(miniViewer:
-                                 toolDownAtPoint:contentRect:modifiers:)])
+  if ([d respondsToSelector:
+              @selector(miniViewer:toolDownAtPoint:contentRect:modifiers:)])
     [d miniViewer:self toolDownAtPoint:vp contentRect:cr modifiers:0];
   if ([d respondsToSelector:@selector(miniViewer:toolUpAtPoint:contentRect:)])
     [d miniViewer:self toolUpAtPoint:vp contentRect:cr];
@@ -288,8 +314,8 @@
   // The toolbar still owns its own buttons (the toolbar step spotlights those).
   if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
       [d miniViewerToolDrawingActive:self] &&
-      [d respondsToSelector:@selector(miniViewer:
-                                  toolCursorAtPoint:contentRect:)]) {
+      [d respondsToSelector:@selector(
+                                miniViewer:toolCursorAtPoint:contentRect:)]) {
     BOOL overToolbar =
         [d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
         [d miniViewer:self toolbarTagAtPoint:vp] != 0;
@@ -357,7 +383,7 @@
 // `ctr` is overlay points, y-up, in the canvas's own coordinate space (the
 // overlay fills the canvas bounds 1:1) → glyph rect in screen space.
 // The point handle's visual radius in view points. Arc-style handles (e.g.
-// Magic Move's Position) draw a ring ~2x the point dot that scales with the
+// a Position handle) draw a ring ~2x the point dot that scales with the
 // popover, so a guide spotlight must match it (mirrors +Rendering's arc glyph:
 // outer 9pt at the 230pt baseline canvas height).
 - (CGFloat)_pointHandleRadiusPt {
@@ -386,17 +412,22 @@
 
 - (NSRect)pointHandleScreenRect {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
-  if (!self.window ||
-      ![d respondsToSelector:@selector(
-                                 miniViewer:pointHandleCenter:contentRect:)])
+  if (!self.window)
     return NSZeroRect;
+  CGRect cr = [self contentRectInViewPoints];
   CGPoint ctr;
-  if (![d miniViewer:self
-          pointHandleCenter:&ctr
-                contentRect:[self contentRectInViewPoints]])
-    return NSZeroRect;
-  return [self _screenRectForHandleCenter:ctr
-                                   radius:[self _pointHandleRadiusPt]];
+  if ([d respondsToSelector:@selector(
+                                miniViewer:pointHandleCenter:contentRect:)] &&
+      [d miniViewer:self pointHandleCenter:&ctr contentRect:cr])
+    return [self _screenRectForHandleCenter:ctr
+                                     radius:[self _pointHandleRadiusPt]];
+  // Multi-point renderer (no single primary): resolve the active handle.
+  if ([d respondsToSelector:
+              @selector(miniViewer:activePointHandleCenter:contentRect:)] &&
+      [d miniViewer:self activePointHandleCenter:&ctr contentRect:cr])
+    return [self _screenRectForHandleCenter:ctr
+                                     radius:[self _pointHandleRadiusPt]];
+  return NSZeroRect;
 }
 
 - (NSRect)pointHandleScreenRectForValue:(double)value {
@@ -417,18 +448,28 @@
 
 - (NSRect)pointHandleScreenRectForValues:(NSArray<NSNumber *> *)values {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
-  if (!self.window ||
-      ![d respondsToSelector:
-              @selector(miniViewer:pointHandleCenter:forValues:contentRect:)])
+  if (!self.window)
     return NSZeroRect;
+  CGRect cr = [self contentRectInViewPoints];
   CGPoint ctr;
-  if (![d miniViewer:self
+  if ([d respondsToSelector:
+              @selector(miniViewer:pointHandleCenter:forValues:contentRect:)] &&
+      [d miniViewer:self
           pointHandleCenter:&ctr
                   forValues:values
-                contentRect:[self contentRectInViewPoints]])
-    return NSZeroRect;
-  return [self _screenRectForHandleCenter:ctr
-                                   radius:[self _pointHandleRadiusPt]];
+                contentRect:cr])
+    return [self _screenRectForHandleCenter:ctr
+                                     radius:[self _pointHandleRadiusPt]];
+  // Multi-point renderer (no single primary): resolve the active handle.
+  if ([d respondsToSelector:@selector(miniViewer:activePointHandleCenter:
+                                      forValues:contentRect:)] &&
+      [d miniViewer:self
+          activePointHandleCenter:&ctr
+                        forValues:values
+                      contentRect:cr])
+    return [self _screenRectForHandleCenter:ctr
+                                     radius:[self _pointHandleRadiusPt]];
+  return NSZeroRect;
 }
 
 - (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers
@@ -567,6 +608,74 @@
   // draw the pan path already uses for the same reason.
   [self _drawNowForInteraction];
   return YES;
+}
+
+@end
+
+// Before/after compare: divider geometry and its drag. Interaction rather than
+// draw, so the overlay's hit-test and the canvas's composite read the divider's
+// position from ONE place and can't disagree by a pixel.
+@implementation KKMiniViewerView (Compare)
+
+- (BOOL)_compareBypassActive {
+  return self.compareBypassing && self.compareAvailable;
+}
+
+// Bypass wins: holding "before" with a split armed shows a whole ungraded frame
+// rather than a split of two identical halves.
+- (BOOL)_compareSplitActive {
+  return self.compareSplitEnabled && self.compareAvailable &&
+         !self.compareBypassing;
+}
+
+/// Device pixels per view point, or 0 when the drawable has no size yet.
+- (CGFloat)_compareBackingScale {
+  CGSize drawable = self.drawableSize;
+  CGFloat width = self.bounds.size.width;
+  if (drawable.width <= 0.0 || width <= 0.0)
+    return 0.0;
+  return drawable.width / width;
+}
+
+// SNAPPED to a whole device pixel, and the composite's seam is snapped the same
+// way from the same number. A divider at a fractional pixel puts the boundary
+// between the two halves mid-texel: the edge samples both images at once and
+// the seam bleeds and shimmers as it moves. Rounding the line without rounding
+// the seam would be worse still - the stroke would sit a half pixel off the
+// join it is supposed to mark.
+- (CGFloat)_compareDividerXInViewPoints {
+  if (![self _compareSplitActive] || self.livePlaybackActive)
+    return -1.0;
+  CGRect cr = [self contentRectInViewPoints];
+  if (cr.size.width <= 0.5)
+    return -1.0;
+  CGFloat x = CGRectGetMinX(cr) + self.compareSplitFraction * cr.size.width;
+  CGFloat scale = [self _compareBackingScale];
+  return scale > 0.0 ? round(x * scale) / scale : x;
+}
+
+- (BOOL)_compareDividerGrabbableAtPoint:(CGPoint)point {
+  CGFloat x = [self _compareDividerXInViewPoints];
+  if (x < 0.0)
+    return NO;
+  CGRect cr = [self contentRectInViewPoints];
+  if (point.y < CGRectGetMinY(cr) || point.y > CGRectGetMaxY(cr))
+    return NO;
+  return fabs(point.x - x) <= kKKMiniCompareGrabPt;
+}
+
+- (void)_dragCompareDividerToPoint:(CGPoint)point {
+  CGRect cr = [self contentRectInViewPoints];
+  if (cr.size.width <= 0.5)
+    return;
+  self.compareSplitFraction = (point.x - CGRectGetMinX(cr)) / cr.size.width;
+  if (self.onCompareSplitFractionChanged)
+    self.onCompareSplitFractionChanged(self.compareSplitFraction);
+}
+
+- (void)_compareStateChanged {
+  if (self.onCompareStateChanged)
+    self.onCompareStateChanged();
 }
 
 @end

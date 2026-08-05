@@ -5,7 +5,7 @@ summary: Rotation on-screen control - the three-ring sphere gizmo
 
 # Rotation gizmo
 
-The Rotation OSC is a three-ring sphere that lets the user rotate the clip around all three axes (X, Y, Z) directly on canvas, without typing into number fields. It appears as part of any plugin that exposes a Rotation lane (e.g. Magic Move).
+The Rotation OSC is a three-ring sphere that lets the user rotate the clip around all three axes (X, Y, Z) directly on canvas, without typing into number fields. It appears as part of any plugin that exposes a Rotation lane.
 
 ## What the user sees
 

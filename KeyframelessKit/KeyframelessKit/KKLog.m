@@ -13,7 +13,7 @@ static const DDLogLevel ddLogLevel = DDLogLevelDebug;
 static const DDLogLevel ddLogLevel = DDLogLevelWarning;
 #endif
 
-static NSString *const KKLogFolderName = @"co.overpolish.keyframeless";
+static NSString *const KKLogFolderName = @"com.keyframeless";
 
 @interface KKLog ()
 @property(nonatomic, strong) DDLog *ddLog;
@@ -110,6 +110,10 @@ static NSString *const KKLogFolderName = @"co.overpolish.keyframeless";
          format:format
            args:args];
   va_end(args);
+}
+
+- (void)flush {
+  [_ddLog flushLog];
 }
 
 - (void)verbose:(NSString *)format, ... {

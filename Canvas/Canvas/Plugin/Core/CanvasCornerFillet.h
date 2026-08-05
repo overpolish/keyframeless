@@ -16,8 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The live-corner widget for one anchor, computed in PROJECTED (object/canvas)
 /// space so its resting offset is a fixed fraction of the canvas - invariant to
-/// the layer transform / shape size, matching Rounded's radius handle (a fixed
-/// canvas-px inset) rather than scaling with the path's local space. `valid` is
+/// the layer transform / shape size (a fixed canvas-px inset) rather than
+/// scaling with the path's local space. `valid` is
 /// NO for open-path endpoints and degenerate (near-straight) corners. The
 /// handle sits along the interior bisector at `baseOffsetObjPx +
 /// currentRadius`, so it rests clear of the anchor dot and slides out as the

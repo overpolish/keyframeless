@@ -12,8 +12,8 @@
 // gesture CLASSIFICATION (hover cursor + which part is hit, in priority order:
 // toolbar > pen/shape tools > transform gizmo > path points > body-move >
 // auto-select pick > empty-canvas marquee) lives here. Splitting it from the
-// event HANDLING (CanvasOSC+Input.m) keeps both readable. The category trips the
-// protocol-method-in-category warning.
+// event HANDLING (CanvasOSC+Input.m) keeps both readable. The category trips
+// the protocol-method-in-category warning.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
@@ -177,20 +177,22 @@
   BOOL pointsReveal = !pointsVisible && self.optRevealActive &&
                       [self kkOSCRevealEligible:@"Points"];
   // Point editing needs EXACTLY one selected layer: off while a multi-selection
-  // is active (layer-level - the points show dimmed, non-editable), and off with
-  // nothing selected (count 0) - else the hit-test resolves the topmost path via
-  // the fallback and the unselected top layer's anchors become grabbable though
-  // none are drawn.
+  // is active (layer-level - the points show dimmed, non-editable), and off
+  // with nothing selected (count 0) - else the hit-test resolves the topmost
+  // path via the fallback and the unselected top layer's anchors become
+  // grabbable though none are drawn.
   BOOL singleSel = [self _selectedLayerIDs].count == 1;
-  // Corner-radius widgets are their own "Corners" element: claim a hover over one
-  // as CanvasOSCPartCorner so an Opt-click toggles "Corners" (not "Points") and
-  // the eye cursor reads the right element. Checked before the anchor/handle
-  // claim (the widgets sit in the empty area inside a corner, clear of anchors).
+  // Corner-radius widgets are their own "Corners" element: claim a hover over
+  // one as CanvasOSCPartCorner so an Opt-click toggles "Corners" (not "Points")
+  // and the eye cursor reads the right element. Checked before the
+  // anchor/handle claim (the widgets sit in the empty area inside a corner,
+  // clear of anchors).
   BOOL cornersVisible = [self kkOSCElementVisible:@"Corners"];
   BOOL cornersReveal = !cornersVisible && self.optRevealActive &&
                        [self kkOSCRevealEligible:@"Corners"];
   if (singleSel && [self _activeTool] == CanvasToolbarToolCursor) {
-    self.pathEditController.cornerWidgetsActive = cornersVisible || cornersReveal;
+    self.pathEditController.cornerWidgetsActive =
+        cornersVisible || cornersReveal;
     if ((cornersVisible || cornersReveal) &&
         [self.pathEditController cornerWidgetHitAtX:positionX y:positionY]) {
       *activePart = CanvasOSCPartCorner;
@@ -217,8 +219,8 @@
   }
   // Body of an ALREADY-selected layer (cursor tool): claim it so a drag moves
   // the whole selection (paths shift points, images shift Position). Checked
-  // after the gizmo + point handles (they win) and before auto-select / marquee.
-  // Click vs drag is resolved on mouseUp (a click just (re)selects).
+  // after the gizmo + point handles (they win) and before auto-select /
+  // marquee. Click vs drag is resolved on mouseUp (a click just (re)selects).
   if (*activePart == CanvasOSCPartNone &&
       [self _activeTool] == CanvasToolbarToolCursor) {
     NSString *hit = [self _pickLayerIDAtX:positionX y:positionY atTime:time];
@@ -234,9 +236,9 @@
   }
   // Auto-select: no handle was grabbed, so if the toggle is on, claim a click
   // over the topmost layer to select it. A plain click over an already-selected
-  // layer is a no-op (leave it to FCP); but Shift / Cmd makes the click additive
-  // (toggle into / out of the multi-selection), so claim it even when the layer
-  // is already selected so the toggle-off can register.
+  // layer is a no-op (leave it to FCP); but Shift / Cmd makes the click
+  // additive (toggle into / out of the multi-selection), so claim it even when
+  // the layer is already selected so the toggle-off can register.
   self.pendingPickLayerID = nil;
   if ([self _autoSelectEnabled]) {
     NSString *hit = [self _pickLayerIDAtX:positionX y:positionY atTime:time];
@@ -244,9 +246,10 @@
                                               NSEventModifierFlagCommand)) != 0;
     NSArray<NSString *> *curSel = [self _selectedLayerIDs];
     BOOL alreadySelected = [curSel containsObject:(hit ?: @"")];
-    // Claim the click to (re)select when: a modifier makes it additive (toggle),
-    // the hit isn't already selected, OR a multi-selection is active - a plain
-    // click on any layer then collapses the selection to just that one.
+    // Claim the click to (re)select when: a modifier makes it additive
+    // (toggle), the hit isn't already selected, OR a multi-selection is active
+    // - a plain click on any layer then collapses the selection to just that
+    // one.
     if (hit.length && (additive || !alreadySelected || curSel.count > 1)) {
       self.pendingPickLayerID = hit;
       *activePart = CanvasOSCPartLayerPick;
@@ -260,19 +263,25 @@
   // layers; a click (no drag) deselects. Over a layer the pick / body-drag
   // branches above own it (when auto-select is ON), so the marquee stays the
   // empty-area fallback there. But with auto-select OFF nothing claims an
-  // unselected layer body - so a drag over it must still marquee (else you can't
-  // rubber-band over an image with auto-select off).
+  // unselected layer body - so a drag over it must still marquee (else you
+  // can't rubber-band over an image with auto-select off).
   if (*activePart == CanvasOSCPartNone &&
       [self _activeTool] == CanvasToolbarToolCursor &&
       [self.pathEditController canMarqueeAtX:positionX y:positionY] &&
-      (![self _autoSelectEnabled] ||
-       [self _pickLayerIDAtX:positionX y:positionY atTime:time] == nil)) {
+      (![self _autoSelectEnabled] || [self _pickLayerIDAtX:positionX
+                                                         y:positionY
+                                                    atTime:time] == nil)) {
     *activePart = CanvasOSCPartPathEdit;
     id<FxOnScreenControlAPI_v4> mqAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     [mqAPI setCursor:[NSCursor crosshairCursor]];
     self.pointCursorSet = YES;
   }
+  // Motion full-preview Opt-reveal fallback (shared kit machinery): claim a
+  // background part over empty canvas so Motion keeps reporting OPTION on
+  // hover. Last resort - only when nothing else (controls, layer pick, marquee)
+  // claimed.
+  *activePart = [self kkOSCBackgroundPartFallbackForActivePart:*activePart];
 }
 
 @end

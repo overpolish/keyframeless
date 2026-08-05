@@ -16,6 +16,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Sentinel "part" claimed by the Motion full-preview Opt-reveal fallback (see
+/// -kkOSCBackgroundPartFallbackForActivePart:). Maps to no OSC element, so it
+/// is never hideable and never a drag target - handlers that switch on their
+/// own part constants simply ignore it.
+FOUNDATION_EXPORT const NSInteger KKOSCBackgroundPart;
+
 @interface KKOnScreenControl : NSObject
 
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
@@ -167,6 +173,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Call from mouseUp: to clear the per-interaction opt-hide arming.
 - (void)kkResetOptHideArming;
+
+/// Motion-only full-preview Opt-reveal fallback. Call at the END of your
+/// -hitTestOSCAtMousePositionX:...activePart:... override with the part you
+/// resolved: if nothing real was hit AND the host is Motion, this returns
+/// `KKOSCBackgroundPart` (so Motion keeps reporting the OPTION modifier on
+/// hover over empty canvas - it strips it when activePart is 0, which kills
+/// Opt-reveal there) and resets the cursor to the arrow (clearing any stale
+/// reveal/eye cursor left by a control you just moved off). Otherwise returns
+/// `activePart` unchanged. FCP reports the modifier over empty canvas already,
+/// so it is left at 0. One line to adopt; no other OSC changes needed.
+- (NSInteger)kkOSCBackgroundPartFallbackForActivePart:(NSInteger)activePart;
 
 @end
 

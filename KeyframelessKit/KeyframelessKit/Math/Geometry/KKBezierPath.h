@@ -39,7 +39,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Number of points.
 @property(nonatomic, readonly) NSUInteger count;
 
-/// Number of path segments (count + 1 for MagicMove, count for closed paths).
+/// Number of path segments (count + 1 for open paths, count for closed paths).
 @property(nonatomic, readonly) NSUInteger segmentCount;
 
 /// Whether the path forms a closed loop (last point connects to first).
@@ -148,7 +148,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Stroke color mode (0=solid, 1=gradient). Default 0.
 @property(nonatomic, assign) uint8_t strokeColorMode;
 
-/// Stroke gradient type (0=radial, 1=linear). Matches Glow's ordering.
+/// Stroke gradient type (0=radial, 1=linear).
 @property(nonatomic, assign) uint8_t strokeGradientType;
 
 /// Stroke gradient angle in degrees (default 0).
@@ -286,7 +286,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fill color mode (0=solid, 1=gradient). Default 0.
 @property(nonatomic, assign) uint8_t fillColorMode;
 
-/// Fill gradient type (0=radial, 1=linear). Matches Glow's ordering.
+/// Fill gradient type (0=radial, 1=linear).
 @property(nonatomic, assign) uint8_t fillGradientType;
 
 /// Fill gradient angle in degrees (default 0).
@@ -369,7 +369,7 @@ NS_ASSUME_NONNULL_BEGIN
                       end:(simd_float2)end;
 
 /// Evaluate a single path segment at local t (0-1).
-/// start/end are the anchor points for MagicMove-style relative paths.
+/// start/end are the anchor points for relative paths.
 - (simd_float2)evaluateSegment:(NSUInteger)segIndex
                            atT:(float)t
                          start:(simd_float2)start

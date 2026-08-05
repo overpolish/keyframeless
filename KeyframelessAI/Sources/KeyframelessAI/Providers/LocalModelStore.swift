@@ -7,7 +7,7 @@ import Combine
 import Foundation
 import os
 
-private let storeLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.local")
+private let storeLog = Logger(subsystem: "com.keyframeless", category: "ai.local")
 
 /// Tracks which local models are downloaded + which is selected. The actual bytes
 /// live in the shared app-group HuggingFace cache; the DOWNLOAD runs in the helper
@@ -39,7 +39,7 @@ public final class LocalModelStore: ObservableObject {
 		return downloadedModels.contains(id)
 	}
 
-	private static let selectedKey = "co.overpolish.ai.local.selectedModel"
+	private static let selectedKey = "com.keyframeless.ai.local.selectedModel"
 
 	/// True while THIS process is the one running the active download (its own socket
 	/// stream drives `downloadProgress`). When false, the helper-sync poll is free to
@@ -118,7 +118,7 @@ public final class LocalModelStore: ObservableObject {
 	public func download(_ id: String) async {
 		guard downloadingModel == nil, LocalModelCatalog.model(id: id) != nil else { return }
 		guard let runner = LocalLLM.runner as? SharedHelperRunner else {
-			lastError = "Local AI engine unavailable - install Keyframeless AI."
+			lastError = "Local AI engine unavailable - install Kai."
 			return
 		}
 		downloadingModel = id

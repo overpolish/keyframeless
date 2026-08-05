@@ -50,15 +50,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// glyphs scale with the popover size.
 @property(nonatomic, assign) CGFloat uiScale;
 
+/// Draw as the small icon-only capsule used by Mirage's mini-viewer compare
+/// controls: 18pt buttons in a 22pt translucent chip, active icons tinted with
+/// the host accent, and no Canvas-style button highlight or shortcut row.
+@property(nonatomic, assign) BOOL compactIconCapsuleStyle;
+
 /// Mirror the drawn bar vertically about its own centre. Default NO (the FxPlug
-/// viewer surface). The mini-viewer's MTKView pass is Y-flipped relative to that
-/// surface, so it sets YES to keep glyph content + the per-button layout upright
-/// without moving the bar.
+/// viewer surface). The mini-viewer's MTKView pass is Y-flipped relative to
+/// that surface, so it sets YES to keep glyph content + the per-button layout
+/// upright without moving the bar.
 @property(nonatomic, assign) BOOL flipVertical;
 
 /// Override the divider (separator) tint. Default nil = the built-in mid-grey.
-/// Set it to match a custom handle/icon tint so the dividers read as part of the
-/// same chrome.
+/// Set it to match a custom handle/icon tint so the dividers read as part of
+/// the same chrome.
 @property(nonatomic, strong, nullable) NSColor *separatorColor;
 
 /// Tag of the currently active item (0 = no highlight).

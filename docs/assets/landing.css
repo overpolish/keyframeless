@@ -1,0 +1,473 @@
+/* Same design tokens as the changelog site (docs/assets/style.css), which
+   mirror Keyframeless X (KKTokens.h, KKColors, KKPanel): accent #FF5000,
+   radius MD 8 / panel 12, capsule pills, white.opacity(0.04) panels. */
+:root {
+  --bg: #242427;
+  --panel: rgba(255, 255, 255, 0.04);
+  --panel-border: rgba(235, 235, 245, 0.15);
+  --pill-bg: rgba(255, 255, 255, 0.08);
+  --text: #ececee;
+  --muted: rgba(235, 235, 245, 0.6);
+  --accent: #ff5000;
+  --success: #30d158;
+
+  --r-md: 8px;
+  --r-panel: 12px;
+
+  --maxw: 760px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 28px 20px 72px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.brand .logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex: none;
+  display: block;
+}
+
+.brand h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.navlinks {
+  display: flex;
+  gap: 16px;
+}
+
+.navlinks a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.navlinks a:hover {
+  color: var(--text);
+}
+
+/* Hero */
+.hero {
+  padding: 48px 0 40px;
+  text-align: center;
+}
+
+.hero h2 {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+}
+
+.hero p {
+  color: var(--muted);
+  font-size: 15px;
+  margin: 0 auto 24px;
+  max-width: 30em;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* CTA = the selected-pill style (accent capsule), like PillTabBar */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: filter 0.15s ease;
+}
+
+.cta:hover {
+  filter: brightness(1.08);
+}
+
+
+/* Scoped to beat `.hero p` on specificity, which otherwise won and rendered
+   this at the subtitle's 15px. */
+.hero .trial-note {
+  color: var(--muted);
+  font-size: 12px;
+  max-width: none;
+  margin: 16px 0 0;
+  opacity: 0.85;
+}
+
+/* The artwork already carries its own title and product UI, so the showcase
+   stays quiet around it: one image, simple navigation, no auto-rotation. */
+.showcase {
+  margin: 0 0 48px;
+}
+
+.showcase-viewport {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.showcase-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  outline: none;
+}
+
+.showcase-track::-webkit-scrollbar {
+  display: none;
+}
+
+.showcase-track:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent)
+    inset;
+}
+
+.showcase-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  aspect-ratio: 6 / 5;
+  margin: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  background: #161618;
+}
+
+.showcase-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.showcase-arrow {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  margin-top: -19px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(22, 22, 24, 0.72);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 7px 22px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.showcase-arrow:hover {
+  background: rgba(35, 35, 38, 0.88);
+  transform: scale(1.05);
+}
+
+.showcase-arrow:focus-visible,
+.showcase-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.showcase-arrow.previous {
+  left: 14px;
+}
+
+.showcase-arrow.next {
+  right: 14px;
+}
+
+.showcase-arrow svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.showcase-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 12px 8px 0;
+}
+
+.showcase-tabs button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.showcase-tabs button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.showcase-tabs button[aria-selected="true"] {
+  color: #fff;
+  background: color-mix(in srgb, var(--accent) 88%, #b83800);
+}
+
+/* Sections */
+.section-head {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+/* Product cards = KKPanel */
+.products {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.product {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-panel);
+  padding: 16px 18px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.product .body {
+  flex: 1;
+  min-width: 220px;
+}
+
+.product h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.product p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+/* Fixed width so every card's button is the same size regardless of its
+   label ("Buy license" vs "Buy bundle"). */
+.product .buy {
+  flex: none;
+  align-self: center;
+  min-width: 132px;
+  justify-content: center;
+}
+
+/* tag = capsule pill, matching InfoBadge */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+}
+
+.tag.free {
+  color: var(--success);
+  background: rgba(48, 209, 88, 0.15);
+}
+
+/* Bundle sits in the same stack as the plugins, marked out by the accent
+   border rather than by a separate section. */
+.product.bundle {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--panel-border));
+  box-shadow:
+    0 0 28px rgba(255, 80, 0, 0.07),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+/* Magic UI Shiny Button treatment, saved for the highest-value action so the
+   animation still means something. The long pause keeps it from flashing. */
+.cta-shine,
+.bundle-shine {
+  background-image: linear-gradient(
+    110deg,
+    #ff5000 0% 38%,
+    #ff9a79 46%,
+    #fff0e9 50%,
+    #ff8a63 54%,
+    #ff5000 62% 100%
+  );
+  background-size: 280% 100%;
+  box-shadow: 0 6px 22px rgba(255, 80, 0, 0.2);
+  animation: cta-button-shine 5s ease-in-out infinite;
+}
+
+@keyframes cta-button-shine {
+  0%,
+  58% {
+    background-position: 100% 50%;
+  }
+  82%,
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.reqs {
+  color: var(--muted);
+  font-size: 12.5px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 18px;
+}
+
+.reqs p {
+  margin: 0 0 6px;
+}
+
+.foot {
+  color: var(--muted);
+  font-size: 12px;
+  padding-top: 22px;
+}
+
+.foot a {
+  color: var(--muted);
+}
+
+@media (max-width: 520px) {
+  .hero h2 {
+    font-size: 24px;
+  }
+  .showcase {
+    margin-bottom: 40px;
+  }
+  .showcase-viewport {
+    border-radius: 14px;
+  }
+  .showcase-arrow {
+    width: 34px;
+    height: 34px;
+    margin-top: -17px;
+  }
+  .showcase-arrow.previous {
+    left: 8px;
+  }
+  .showcase-arrow.next {
+    right: 8px;
+  }
+  .showcase-tabs {
+    gap: 3px;
+    padding-inline: 0;
+  }
+  .showcase-tabs button {
+    font-size: 11px;
+    padding: 7px 8px;
+  }
+  .product .buy {
+    align-self: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-shine,
+  .bundle-shine {
+    animation: none;
+  }
+
+  .showcase-track {
+    scroll-behavior: auto;
+  }
+  .showcase-arrow,
+  .showcase-tabs button {
+    transition: none;
+  }
+}

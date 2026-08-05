@@ -15,9 +15,9 @@ import Tokenizers
 import os
 
 /// Timing log for local inference. Lands in the unified log; view in Console.app
-/// by filtering subsystem `co.overpolish.keyframeless` category `ai.local`
+/// by filtering subsystem `com.keyframeless` category `ai.local`
 /// (the plugin runs as an XPC process, so also filter by that process name).
-private let localLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.local")
+private let localLog = Logger(subsystem: "com.keyframeless", category: "ai.local")
 
 /// In-process local inference via Apple's MLX. Loads the model once (cached
 /// across calls) and runs entirely inside the calling process - no helper, no
@@ -88,12 +88,11 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 		let container = try await loadContainer(model: model)
 		localLog.notice("load done in \(Self.ms(loadStart), privacy: .public)ms")
 
-		// On-device generation is slow enough that the pipeline's cloud-oriented
-		// per-pass label (e.g. "Reading prompt…") sits frozen for a minute, which
-		// reads as a hang. Replace it with an honest "Thinking…" once the model is
-		// actually generating. Only the local path hits this; cloud keeps its
-		// granular labels (its passes are fast HTTP calls).
-		await LocalRunnerStatus.report(AILoc("Thinking"))
+		// Leave the pipeline's per-pass label ("Planning timing", "Choosing a
+		// look", "Resolving Color 1", …) showing while we generate - it changes as
+		// passes complete, so the user sees real progress, same as cloud. (We used
+		// to overwrite it with "Thinking" here, but that raced the pipeline's label
+		// and just made it flash a step then snap back to "Thinking".)
 
 		// Qwen3 non-thinking recommended sampling (temp 0.7 / top_p 0.8 / top_k 20).
 		// NOT greedy/low-temp - Qwen warns that degrades quality + repeats. The
@@ -186,20 +185,41 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 					guard let model = LocalModelCatalog.model(id: modelID) else {
 						throw RunnerError.unknownModel(modelID)
 					}
+					localLog.notice(
+						"stream start model=\(modelID, privacy: .public) promptChars=\(system.count + user.count, privacy: .public)"
+					)
+					let loadStart = Date()
 					let container = try await loadContainer(model: model)
-					await LocalRunnerStatus.report(AILoc("Thinking"))
+					localLog.notice("stream load done in \(Self.ms(loadStart), privacy: .public)ms")
+					// Keep the pipeline's label (e.g. "Answering") showing; the
+					// answer also streams into the card, so progress is visible.
+					// This path is exclusively the 1-3 sentence help answer. A hard
+					// cap prevents a missed stop token from turning it into minutes of
+					// unnecessary decode; shader generation uses `complete` instead.
 					let params = GenerateParameters(
-						maxTokens: 4096, temperature: 0.7, topP: 0.8, topK: 20)
+						maxTokens: 256, temperature: 0.7, topP: 0.8, topK: 20)
 					let session = ChatSession(
 						container, instructions: system, generateParameters: params,
 						additionalContext: ["enable_thinking": false])
+					let generationStart = Date()
+					var chunks = 0
 					try await withError {
 						for try await chunk in session.streamResponse(
 							to: user, images: [], videos: [])
 						{
+							guard !chunk.isEmpty else { continue }
+							if chunks == 0 {
+								localLog.notice(
+									"stream first text in \(Self.ms(generationStart), privacy: .public)ms"
+								)
+							}
+							chunks += 1
 							continuation.yield(chunk)
 						}
 					}
+					localLog.notice(
+						"stream done in \(Self.ms(generationStart), privacy: .public)ms chunks=\(chunks, privacy: .public)"
+					)
 					continuation.finish()
 				} catch {
 					continuation.finish(throwing: error)

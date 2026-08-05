@@ -36,7 +36,7 @@
   KKTimeline *updated = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([lanes[i].label isEqualToString:label]) {
+    if ([lanes[i].key isEqualToString:label]) {
       lanes[i] = lane;
       break;
     }
@@ -156,9 +156,23 @@
       outEndFrac = inheritedEndFrac;
 
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
+    // Every rebuilt keypose derives from the constant lane's EXISTING keypose
+    // (the keyposeBySetting* full-copy builders), so spatial-curve state and a
+    // geometry snapshot survive the constant -> animatable flip - the
+    // Lanes-view sibling of Basic's KKBasicCopySpatial carry. Intervals are
+    // still assigned explicitly per keypose, matching the old constructor's
+    // fresh-interval default.
+    KKKeyPose *src = lane.keyposes.firstObject;
+    KKKeyPose * (^seedAt)(double) = ^KKKeyPose *(double t) {
+      if (!src)
+        return [KKKeyPose keyposeAtTime:t values:v];
+      KKKeyPose *kp = [[src keyposeBySettingValues:v] keyposeBySettingTime:t];
+      kp.outgoing = [[KKInterval alloc] init];
+      return kp;
+    };
     NSMutableArray<KKKeyPose *> *kps = [NSMutableArray array];
     if (globalIn) {
-      KKKeyPose *a = [KKKeyPose keyposeAtTime:0.0 values:v];
+      KKKeyPose *a = seedAt(0.0);
       a.outgoing = tmplIn ?: [[KKInterval alloc] init];
       [kps addObject:a];
     }
@@ -166,7 +180,7 @@
     // property's Hold pair starts linked (the two interior keyposes move
     // together) - "fresh = linked, then it's on the user". A second lane
     // joining an existing shape inherits that shape's link state via tmplHold.
-    KKKeyPose *hs = [KKKeyPose keyposeAtTime:(globalIn ? tIn : 0.0) values:v];
+    KKKeyPose *hs = seedAt(globalIn ? tIn : 0.0);
     if (tmplHold) {
       hs.outgoing = tmplHold;
     } else {
@@ -176,17 +190,19 @@
     }
     [kps addObject:hs];
     // Hold-end: at outEndFrac when Out off, at tOut when Out on.
-    KKKeyPose *he =
-        [KKKeyPose keyposeAtTime:(globalOut ? tOut : outEndFrac) values:v];
+    KKKeyPose *he = seedAt(globalOut ? tOut : outEndFrac);
     [kps addObject:he];
     if (globalOut) {
       he.outgoing = tmplOut ?: [[KKInterval alloc] init];
-      [kps addObject:[KKKeyPose keyposeAtTime:outEndFrac values:v]];
+      [kps addObject:seedAt(outEndFrac)];
     }
     lane.keyposes = kps;
   } else {
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
-    lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:v] ];
+    KKKeyPose *src = lane.keyposes.firstObject;
+    lane.keyposes =
+        @[ src ? [[src keyposeBySettingValues:v] keyposeBySettingTime:0.0]
+               : [KKKeyPose keyposeAtTime:0.0 values:v] ];
   }
   [self _replaceLane:lane forLabel:label];
 }
@@ -201,20 +217,97 @@
   // Copy the existing lane so every property survives a constant value edit -
   // aspectLinked in particular. Rebuilding a fresh lane (carrying only a subset
   // of fields) dropped aspectLinked, so editing the Scale constant cleared the
-  // aspect lock. Just replace the single constant keypose.
+  // aspect lock. The keypose likewise derives from the existing one
+  // (keyposeBySettingValues carries spatial state + geometry snapshot), not a
+  // from-scratch rebuild.
   KKLane *lane = [existing copy];
-  lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+  KKKeyPose *src = lane.keyposes.firstObject;
+  lane.keyposes = @[ src ? [src keyposeBySettingValues:values]
+                         : [KKKeyPose keyposeAtTime:0.0 values:values] ];
+  [self _replaceLane:lane forLabel:label];
+}
+
+// Commit a code-lane edit: replace the lane's `codeString` (its value is text,
+// not keyposes) and route through the same lane-replace / timeline-commit path.
+- (void)_setLaneCode:(NSString *)code forLabel:(NSString *)label {
+  KKLane *existing = [self _laneForLabel:label];
+  if (!existing)
+    return;
+  KKLane *lane = [existing copy];
+  lane.codeString = code;
+  // _replaceLane already persists (onTimelineMutated) + refreshes +
+  // render-nudges the edit. Do NOT persist a second time here: a duplicate
+  // onTimelineMutated makes the same code edit TWO FCP undo entries (undo needs
+  // two Cmd-Z).
+  [self _replaceLane:lane forLabel:label];
+  // Notify the host that the code changed (debounced upstream), so a host with
+  // source-derived lanes (e.g. a shader `// #color` directive) can re-derive
+  // and refresh the lane set live.
+  if (self.onCodeCommitted)
+    self.onCodeCommitted(code);
+}
+
+// Commit a tabbed code-lane edit: section 0 -> codeString (the Image pass), the
+// rest -> codeTabs (Common / Buffer A). Same lane-replace / commit path.
+- (void)_setLaneCodeSections:
+            (NSArray<NSDictionary<NSString *, NSString *> *> *)sections
+                    forLabel:(NSString *)label {
+  KKLane *existing = [self _laneForLabel:label];
+  if (!existing || sections.count == 0)
+    return;
+  KKLane *lane = [existing copy];
+  lane.codeString = sections[0][@"code"] ?: @"";
+  lane.codeTabs =
+      sections.count > 1
+          ? [sections subarrayWithRange:NSMakeRange(1, sections.count - 1)]
+          : nil;
+  // _replaceLane already persists (onTimelineMutated) + refreshes +
+  // render-nudges; persisting again below made a code edit TWO undo entries
+  // (see _setLaneCode:).
+  [self _replaceLane:lane forLabel:label];
+  if (self.onCodeCommitted)
+    self.onCodeCommitted(lane.codeString);
+}
+
+// Commit the save bar's name. Lane-level text like the code itself, so it goes
+// through the same lane-replace path - which means it persists, undoes, and
+// travels with a copied clip exactly like the source does. No
+// `onCodeCommitted`: the SOURCE didn't change, and firing it would rebuild the
+// source-derived lane set for a rename.
+- (void)_setLaneCodeSaveName:(NSString *)name forLabel:(NSString *)label {
+  KKLane *existing = [self _laneForLabel:label];
+  if (!existing)
+    return;
+  NSString *n = name.length ? name : nil;
+  if ([(existing.codeSaveName ?: @"") isEqualToString:(n ?: @"")])
+    return; // a blur with no change must not cost an undo entry
+  KKLane *lane = [existing copy];
+  lane.codeSaveName = n;
   [self _replaceLane:lane forLabel:label];
 }
 
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label {
   // The CONSTANTS popover edits the lanes view's own _timeline, not a graph, so
   // its aspect-link toggle persists here (the keypose popover routes to the
-  // active graph instead). Reuse the same helper the graphs use so the behaviour
-  // matches, then persist through onTimelineMutated like a value edit - without
-  // this the toggle only updated the row, so the next constant scrub's _refresh
-  // re-read the stale (template-default linked) lane and relocked it.
+  // active graph instead). Reuse the same helper the graphs use so the
+  // behaviour matches, then persist through onTimelineMutated like a value edit
+  // - without this the toggle only updated the row, so the next constant
+  // scrub's _refresh re-read the stale (template-default linked) lane and
+  // relocked it.
   KKTimeline *t = KKTimelineSettingAspectLinked(_timeline, label, on);
+  if (!t)
+    return;
+  _timeline = t;
+  [self _refresh];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
+// Parameter linking: the lane's transform expression is a lane-level (non-
+// fractional) property, so it persists against the lanes view's own _timeline
+// the same way the aspect lock does.
+- (void)_setLaneLinkExpression:(NSString *)expr forLabel:(NSString *)label {
+  KKTimeline *t = KKTimelineSettingLinkExpression(_timeline, label, expr);
   if (!t)
     return;
   _timeline = t;

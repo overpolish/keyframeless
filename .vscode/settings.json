@@ -140,17 +140,15 @@
     "xmark"
   ],
   "conventionalCommits.scopes": [
-    "MagicMove",
     "KeyframelessKit",
-    "FxPlug",
-    "Rounded",
-    "Glow",
-    "Canvas",
+    "FxPlug",    "Canvas",
     "Timing",
     "MotionBlur",
     "Joyride",
     "Feedback",
     "Keyframeless X - Steno",
-    "KeyframelessAI"
+    "KeyframelessAI",
+    "Mirage",
+    "Keyframeless X - Sonar"
   ]
 }

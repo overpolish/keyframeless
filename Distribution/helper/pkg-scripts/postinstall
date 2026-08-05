@@ -11,15 +11,61 @@
 
 set -e
 
-LABEL="co.overpolish.keyframeless.aihelper"
+LABEL="com.keyframeless.aihelper"
 PLIST="/Library/LaunchAgents/$LABEL.plist"
+
+# The public product name changed to Kai. Packages replaces the payload but does
+# not remove a file whose name changed, so clear the old uninstaller on upgrade.
+rm -f "/Applications/Keyframeless/Uninstall Keyframeless AI"
 
 CONSOLE_USER=$(stat -f "%Su" /dev/console)
 if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ] && [ -f "$PLIST" ]; then
 	USER_UID=$(id -u "$CONSOLE_USER")
-	# Replace any prior registration, then bootstrap into the user's GUI domain.
-	launchctl bootout "gui/$USER_UID/$LABEL" 2>/dev/null || true
-	launchctl bootstrap "gui/$USER_UID" "$PLIST" 2>/dev/null || true
+
+	# Run launchctl IN THE USER'S GUI session. This postinstall runs as ROOT, and
+	# a bare `launchctl bootstrap gui/$UID ...` from a root installer frequently
+	# fails to attach to the user's Aqua session - the service then never registers
+	# and the plugin can't launch the helper ("helper did not come up at …/kkai.sock").
+	# `launchctl asuser` runs the command in that user's context, which is reliable.
+	uctl() { launchctl asuser "$USER_UID" launchctl "$@"; }
+
+	# Unregister any prior job (bootout SIGTERMs it) then FORCE-kill any survivor.
+	# On an update the new binary is already on disk, but a helper wedged in MLX
+	# compute (holding many GB) can ignore/lag SIGTERM - it must be gone before the
+	# fresh binary serves the next request, or the stale process keeps answering.
+	uctl bootout "gui/$USER_UID/$LABEL" 2>/dev/null || true
+	pkill -TERM -f 'Keyframeless/kk-ai-helper' 2>/dev/null || true
+	for _ in 1 2 3 4 5; do
+		pgrep -f 'Keyframeless/kk-ai-helper' >/dev/null 2>&1 || break
+		sleep 0.3
+	done
+	pkill -KILL -f 'Keyframeless/kk-ai-helper' 2>/dev/null || true
+
+	# Register the (new) binary into the user's GUI domain. bootout is async, so
+	# the domain may still be settling - verify it actually registered and retry a
+	# few times rather than firing one bootstrap whose failure would go unnoticed.
+	registered=0
+	for _ in 1 2 3 4 5; do
+		uctl bootstrap "gui/$USER_UID" "$PLIST" 2>/dev/null || true
+		if uctl print "gui/$USER_UID/$LABEL" >/dev/null 2>&1; then
+			registered=1
+			break
+		fi
+		sleep 1
+	done
+	# Last resort: enable (in case it was disabled) then one more bootstrap.
+	if [ "$registered" -ne 1 ]; then
+		uctl enable "gui/$USER_UID/$LABEL" 2>/dev/null || true
+		uctl bootstrap "gui/$USER_UID" "$PLIST" 2>/dev/null || true
+	fi
+fi
+
+# One-time co.overpolish.* -> com.keyframeless.* migration. Matters most here:
+# this package installs the renamed LaunchAgent, so without it the superseded
+# agent stays loaded alongside the new one. Self-guarding and non-fatal.
+MIGRATE="$(dirname "$0")/migrate-identifiers"
+if [ -f "$MIGRATE" ]; then
+	bash "$MIGRATE" || true
 fi
 
 exit 0

@@ -148,7 +148,9 @@ void KKLaneSpatialHandlesForKeypose(KKLane *lane, NSUInteger index,
   }
 }
 
-NSArray<NSValue *> *KKLaneCoalescedAnchors(KKLane *lane, NSInteger skipIndex) {
+NSArray<NSValue *> *KKLaneCoalescedAnchorsWithFractions(
+    KKLane *lane, NSInteger skipIndex,
+    NSArray<NSNumber *> *__autoreleasing *outFractions) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   const double eps = 1.0e-4;
   NSArray<NSNumber *> *skipVal =
@@ -157,6 +159,7 @@ NSArray<NSValue *> *KKLaneCoalescedAnchors(KKLane *lane, NSInteger skipIndex) {
           ? kps[skipIndex].values
           : nil;
   NSMutableArray<NSValue *> *out = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *fracs = [NSMutableArray array];
   for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
     if (i == skipIndex || kps[i].values.count < 2)
       continue;
@@ -172,22 +175,38 @@ NSArray<NSValue *> *KKLaneCoalescedAnchors(KKLane *lane, NSInteger skipIndex) {
         break;
       }
     }
-    if (!dup)
+    if (!dup) {
       [out addObject:[NSValue valueWithPoint:NSMakePoint(vx, vy)]];
+      [fracs addObject:@(kps[i].time)];
+    }
   }
+  if (outFractions)
+    *outFractions = fracs;
   return out;
 }
 
-NSArray<NSValue *> *KKLanePositionPathPoints(KKLane *lane,
-                                             NSUInteger samplesPerSegment) {
+NSArray<NSValue *> *KKLaneCoalescedAnchors(KKLane *lane, NSInteger skipIndex) {
+  return KKLaneCoalescedAnchorsWithFractions(lane, skipIndex, NULL);
+}
+
+NSArray<NSValue *> *KKLanePositionPathPointsWithFractions(
+    KKLane *lane, NSUInteger samplesPerSegment,
+    NSArray<NSNumber *> *__autoreleasing *outFractions) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   NSMutableArray<NSValue *> *out = [NSMutableArray array];
-  if (kps.count == 0 || kps.firstObject.values.count < 2)
+  NSMutableArray<NSNumber *> *fracs = [NSMutableArray array];
+  if (kps.count == 0 || kps.firstObject.values.count < 2) {
+    if (outFractions)
+      *outFractions = fracs;
     return out;
+  }
   if (kps.count == 1) {
     [out addObject:[NSValue valueWithPoint:NSMakePoint(
                                                kps[0].values[0].doubleValue,
                                                kps[0].values[1].doubleValue)]];
+    [fracs addObject:@(kps[0].time)];
+    if (outFractions)
+      *outFractions = fracs;
     return out;
   }
   NSUInteger perSeg = MAX((NSUInteger)1, samplesPerSegment);
@@ -201,24 +220,38 @@ NSArray<NSValue *> *KKLanePositionPathPoints(KKLane *lane,
       [out addObject:[NSValue
                          valueWithPoint:NSMakePoint(a.values[0].doubleValue,
                                                     a.values[1].doubleValue)]];
+      [fracs addObject:@(a.time)];
       continue;
     }
     // Curved segment: tessellate the geometric bezier at uniform parameter
-    // (no easing), so overshooting easing curves don't loop the path.
+    // (no easing), so overshooting easing curves don't loop the path. The
+    // sample's fraction interpolates the segment's keypose times by the same
+    // parameter - approximate under easing, exact enough for a per-sample
+    // warp of the drawn path.
     for (NSUInteger j = 0; j < perSeg; j++) {
       double tt = (double)j / (double)perSeg;
       double x = 0, y = 0;
       KKLaneSpatialBezierXY(kps, i, tt, &x, &y);
       [out addObject:[NSValue valueWithPoint:NSMakePoint(x, y)]];
+      [fracs addObject:@(a.time + (b.time - a.time) * tt)];
     }
   }
   // Guard the final endpoint's component count too (the per-segment loop above
   // guards each anchor, but the last keypose is appended unconditionally) - a
   // malformed <2-component keypose would otherwise index past its values array.
   KKKeyPose *last = kps.lastObject;
-  if (last.values.count >= 2)
+  if (last.values.count >= 2) {
     [out addObject:[NSValue
                        valueWithPoint:NSMakePoint(last.values[0].doubleValue,
                                                   last.values[1].doubleValue)]];
+    [fracs addObject:@(last.time)];
+  }
+  if (outFractions)
+    *outFractions = fracs;
   return out;
+}
+
+NSArray<NSValue *> *KKLanePositionPathPoints(KKLane *lane,
+                                             NSUInteger samplesPerSegment) {
+  return KKLanePositionPathPointsWithFractions(lane, samplesPerSegment, NULL);
 }

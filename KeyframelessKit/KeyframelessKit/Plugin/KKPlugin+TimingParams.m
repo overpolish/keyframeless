@@ -7,14 +7,14 @@
 #import "KKCustomGroupHeaderView.h"
 #import "KKDataBlob.h"
 #import "KKPlugin_Private.h"
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 #import <FxPlug/FxPlugSDK.h>
 
 static BOOL KKAddParam(BOOL ok, NSError **err, NSString *desc) {
   if (ok)
     return YES;
   if (err)
-    *err = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+    *err = [NSError errorWithDomain:@"com.keyframeless.error"
                                code:1
                            userInfo:@{NSLocalizedDescriptionKey : desc}];
   return NO;
@@ -35,94 +35,94 @@ static const FxParameterFlags kHiddenNotAnim =
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation KKPlugin (TimingParams)
 
-- (BOOL)addMultiStageParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
-                                 error:(NSError **)error {
-  if (!KKAddParam([paramAPI
-                      addCustomParameterWithName:@""
-                                     parameterID:kKKParamAnimationSeparator
-                                    defaultValue:@(kKKParamAnimationSeparator)
-                                  parameterFlags:kCustomUI],
-                  error, @"Unable to add Timing group"))
-    return NO;
-
-  if (!KKAddParam([paramAPI
-                      addCustomParameterWithName:@""
-                                     parameterID:kKKParamTimingCurvePreview
-                                    defaultValue:@(kKKParamTimingCurvePreview)
-                                  parameterFlags:kCustomUIDisabled],
-                  error, @"Unable to add Curve Preview"))
-    return NO;
-
+- (nullable id<FxParameterCreationAPI_v5>)
+    kkAddStandardParametersWithInspectorUI:(UInt32)inspectorUIID
+                                   uiState:(UInt32)uiStateID
+                               renderNudge:(UInt32)renderNudgeID
+                     motionBlurDefaultJSON:(NSString *)mbDefaultJSON
+                                     error:(NSError **)error {
+  id<FxParameterCreationAPI_v5> paramAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
+  if (!paramAPI) {
+    if (error != NULL) {
+      // The kit's own domain: FxPlugErrorDomain is a data symbol in
+      // FxPlug.framework, which the kit doesn't link (plugin targets do).
+      *error = [NSError errorWithDomain:@"com.keyframeless.error"
+                                   code:kFxError_APIUnavailable
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to obtain an FxPlug API Object"
+                               }];
+    }
+    return nil;
+  }
+  if (![self addLogoBannerParameterWithAPI:paramAPI error:error])
+    return nil;
+  if (!KKAddParam([paramAPI addCustomParameterWithName:@""
+                                           parameterID:inspectorUIID
+                                          defaultValue:@(inspectorUIID)
+                                        parameterFlags:kCustomUIDisabled],
+                  error, @"Unable to add inspector custom UI"))
+    return nil;
   if (!KKAddParam(
           [paramAPI addCustomParameterWithName:@""
-                                   parameterID:kKKParamTimingExpanded
-                                  defaultValue:[KKDataBlob blobWithString:@"1"]
+                                   parameterID:uiStateID
+                                  defaultValue:[KKDataBlob blobWithData:nil]
+                                parameterFlags:kFxParameterFlag_HIDDEN],
+          error, @"Unable to add UI-state blob"))
+    return nil;
+  if (!KKAddParam(
+          [paramAPI addCustomParameterWithName:@""
+                                   parameterID:kKKParamTimelineData
+                                  defaultValue:[KKDataBlob blobWithData:nil]
+                                parameterFlags:kFxParameterFlag_HIDDEN],
+          error, @"Unable to add timeline blob"))
+    return nil;
+  if (!KKAddParam([paramAPI addCustomParameterWithName:@""
+                                           parameterID:renderNudgeID
+                                          defaultValue:[KKDataBlob
+                                                           blobWithData:nil]
+                                        parameterFlags:kHiddenNotAnim],
+                  error, @"Unable to add render nudge"))
+    return nil;
+  // The link watcher's nudge target. No parameter flag exempts a write from
+  // undo (tested: plain, DONT_SAVE - which also added ~1s propagation lag -
+  // and DISABLED all charge one entry per scoped write). Undo hygiene is
+  // handled in KKLinkWatcher instead: it wraps each nudge burst in an
+  // FxUndoAPI startUndoGroup/endUndoGroup so the entries coalesce. The blob
+  // nudge above remains for user-initiated nudges that ride inside real edit
+  // undo groups.
+  if (!KKAddParam(
+          [paramAPI addStringParameterWithName:@""
+                                   parameterID:kKKParamRenderNudgeString
+                                  defaultValue:@""
                                 parameterFlags:kHiddenNotAnim],
-          error, @"Unable to add Timing expanded toggle"))
-    return NO;
-
-  // Native bool toggle - NOT a KKDataBlob. `setBoolValue:atTime:` IS
-  // undoable (the no-undo caveat below applies to `setStringParameterValue:`,
-  // not booleans), AND native reads work from the OSC's separate apiManager
-  // scope. The pump's `KKSyncLoopFromParams` runs on every drawOSC tick and
-  // would clobber `state.loopEnabled` to NO if the read returned empty -
-  // see the matching kKKParamInstanceID note for the full failure mode.
-  // NOT_ANIMATABLE deliberately omitted so cmd-Z reverts the toggle.
-  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
-                                        parameterID:kKKParamTimingLoopEnabled
-                                       defaultValue:NO
-                                     parameterFlags:kFxParameterFlag_HIDDEN],
-                  error, @"Unable to add timing loop toggle"))
-    return NO;
-
-  // Custom parameter (KKDataBlob wrapping the lanes-JSON UTF-8 bytes).
-  // String params can't be undone in FCP - `setStringParameterValue:` has
-  // no `atTime:` variant and FCP filters those writes off its undo stack.
-  // Custom params route through `setCustomParameterValue:atTime:`, the
-  // same pipeline animatable scalars use, which IS undoable.
-  // NOT_ANIMATABLE deliberately omitted - that flag would re-exclude the
-  // param from the undo path.
-  if (!KKAddParam([paramAPI
-                      addCustomParameterWithName:@""
-                                     parameterID:kKKParamMultiStageData
-                                    defaultValue:[KKDataBlob blobWithData:nil]
-                                  parameterFlags:kFxParameterFlag_HIDDEN],
-                  error, @"Unable to add multi-stage data"))
-    return NO;
-
-  // Native string param - NOT a KKDataBlob. The OSC is a separate
-  // FxOnScreenControl principal with its own apiManager, and custom-blob
-  // reads from that scope return nil (they need an action scope, which
-  // OSCs aren't supposed to open per FxCustomParameterActionAPI docs).
-  // Since this UUID is the bootstrap key for the per-instance state
-  // map, a nil read here cascades into "OSC sees no state at all" - the
-  // sequencer's per-lane oscVisible toggle silently no-ops. Native
-  // string reads work from OSC scope. UUIDs don't need undo coverage -
-  // they're per-instance identity, never user-edited.
+          error, @"Unable to add watcher render nudge"))
+    return nil;
+  // Motion blur state lives in this blob (edited from the inspector MB row,
+  // not native controls). Read at render time via
+  // +[KKMotionBlur snapshotStateFromJSON:...]. MUST be registered or flipping
+  // the toggle crashes FCP's parameter transaction.
+  KKDataBlob *mbBlob = mbDefaultJSON.length
+                           ? [KKDataBlob blobWithString:mbDefaultJSON]
+                           : [KKDataBlob blobWithData:nil];
+  if (!KKAddParam([paramAPI addCustomParameterWithName:@""
+                                           parameterID:kKKParamMotionBlurData
+                                          defaultValue:mbBlob
+                                        parameterFlags:kHiddenNotAnim],
+                  error, @"Unable to add motion-blur blob"))
+    return nil;
+  // Per-instance identity UUID (a STRING param - the effect AND the viewer
+  // OSC read it to resolve the same KKPluginInstanceState). MUST exist before
+  // KKInstanceStateEnsureForAPI writes it (createView); an unregistered write
+  // crashes FCP's parameter transaction.
   if (!KKAddParam([paramAPI addStringParameterWithName:@""
                                            parameterID:kKKParamInstanceID
                                           defaultValue:@""
                                         parameterFlags:kHiddenNotAnim],
                   error, @"Unable to add instance ID"))
-    return NO;
-
-  // Native-string mirror of the lanes JSON - read by OSC on cold-boot
-  // (blob unreadable from OSC scope). Written in lockstep with every
-  // `KKWriteMultiStageJSONDeduped`; refreshed on cmd-Z echo.
-  if (!KKAddParam([paramAPI
-                      addStringParameterWithName:@""
-                                     parameterID:kKKParamMultiStageDataMirror
-                                    defaultValue:@""
-                                  parameterFlags:kHiddenNotAnim],
-                  error, @"Unable to add multi-stage mirror"))
-    return NO;
-
-  return YES;
-}
-
-- (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
-                                error:(NSError **)error {
-  return [self addMultiStageParametersWithAPI:paramAPI error:error];
+    return nil;
+  return paramAPI;
 }
 
 - (BOOL)addMotionBlurParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
@@ -218,50 +218,6 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
         (cur & ~kKKMutableFlagMask) | (flags & kKKMutableFlagMask);
     [setAPI setParameterFlags:merged toParameter:paramID];
   }
-}
-
-- (void)updateTimingParameterVisibility {
-  // setParameterFlags on params in the kKKParam range (9000s) crashes FCP
-  // when called synchronously from `parameterChanged:` - the host action
-  // wrapping the user's interaction (group toggle, OSC drag) ends with our
-  // flag-writes in the bulk-change list and FCP's transaction processor
-  // null-derefs walking the channel tree. Defer onto the main queue inside
-  // a fresh action scope so the writes land outside FCP's host action.
-  // See project_published_custom_ui_cascade.md.
-  __weak typeof(self) weakSelf = self;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!actAPI)
-      return;
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> paramGetAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> paramSetAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    if (!paramGetAPI || !paramSetAPI) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-
-    BOOL expandedTiming =
-        KKReadCustomParamBool(paramGetAPI, kKKParamTimingExpanded);
-    BOOL effectiveExpanded = expandedTiming;
-    if ([strongSelf forceShowAllParameters])
-      effectiveExpanded = YES;
-    _setFlagsIfNeeded(paramSetAPI, paramGetAPI,
-                      effectiveExpanded ? kCustomUI : kFxParameterFlag_HIDDEN,
-                      kKKParamTimingCurvePreview);
-    [actAPI endAction:strongSelf];
-    KKCustomGroupHeaderView *header = strongSelf.timingHeader;
-    KKRunOnMain(^{
-      if (header.isExpanded != expandedTiming)
-        header.isExpanded = expandedTiming;
-    });
-  });
 }
 
 - (void)updateMotionBlurParameterVisibility {

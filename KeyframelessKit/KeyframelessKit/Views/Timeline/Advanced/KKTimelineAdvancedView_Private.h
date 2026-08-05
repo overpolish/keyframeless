@@ -8,9 +8,47 @@
 #import "KKTimelineAdvancedView.h"
 #import "KKTimelineZoomPan.h"
 #import <KeyframelessKit/KKEasing.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+typedef NS_ENUM(NSInteger, KKAdvancedRowKind) {
+  KKAdvancedRowLane = 0,
+  KKAdvancedRowLayerHeader,
+  KKAdvancedRowCategoryHeader,
+};
+
+/// One display row of the Advanced graph: a real lane, or a collapsible
+/// layer / category header. Replaces the old sentinel-KKLane pattern (a
+/// [lane copy] with headerPlaceholder/categoryHeader flags standing in for a
+/// header row), so header state lives here and not on the KKLane model.
+@interface KKAdvancedRow : NSObject
+@property(nonatomic, readonly) KKAdvancedRowKind kind;
+/// The real lane (Lane rows only; nil for headers).
+@property(nonatomic, readonly, nullable) KKLane *lane;
+/// Header rows: the collapse identity - the layerKey for a layer header, the
+/// layer-scoped category key (-_categoryCollapseKeyForLayer:category:) for a
+/// category header.
+@property(nonatomic, readonly, nullable) NSString *collapseKey;
+/// Header rows: the raw display name (category headers localize at draw).
+@property(nonatomic, readonly, nullable) NSString *headerTitle;
+/// Header rows: SF symbol name (category icon / layer glyph). nil = default.
+@property(nonatomic, readonly, nullable) NSString *headerSymbol;
+/// Layer headers: the layer is locked (shows the lock glyph).
+@property(nonatomic, readonly) BOOL headerLocked;
+/// Category headers: indented under a layer header (multi-owner timelines).
+@property(nonatomic, readonly) BOOL headerIndented;
+@property(nonatomic, readonly) BOOL isHeader;
++ (instancetype)rowWithLane:(KKLane *)lane;
++ (instancetype)layerHeaderWithKey:(NSString *)layerKey
+                             title:(NSString *)title
+                            symbol:(nullable NSString *)symbol
+                            locked:(BOOL)locked;
++ (instancetype)categoryHeaderWithKey:(NSString *)collapseKey
+                                title:(NSString *)title
+                               symbol:(nullable NSString *)symbol
+                             indented:(BOOL)indented;
+@end
 
 // Geometry constants mirror KKTimelineBasicView so the two motion-graph
 // children look identical when stacked into KKTimelineLanesView.
@@ -84,7 +122,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSArray<KKLane *> *_availableLanes;
   KKTimeline *_timeline;
   // Labels of opted-in lanes the user hid via the lane-filter bar. Filtered out
-  // of -_animatableLanes so the whole view (rows, hit-testing, heights) skips
+  // of -_rows so the whole view (rows, hit-testing, heights) skips
   // them. View state only - never serialized.
   NSSet<NSString *> *_hiddenLaneLabels;
   BOOL _scrubbing;
@@ -106,6 +144,18 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSInteger _topKPIdx;
 
   double _currentPopoverFrac;
+  // YES while a value (keypose) popover is open: rings the keypose(s) at
+  // _currentPopoverFrac in the active layer so the user sees which keypose the
+  // fixed-position popover controls. Cleared on the shared popover's close
+  // notification. Mirrors Basic's _boundaryPopoverShowing.
+  BOOL _valuePopoverShowing;
+  // YES while a gap (curve / modulation) popover is open: highlights ONLY the
+  // clicked lane's gap (_activeGapLabel, _activeGapAIdx) in the gap-selection
+  // style so the user sees which gap the fixed-position popover controls.
+  // Cleared on the shared popover's close notification.
+  BOOL _gapPopoverShowing;
+  NSString *_activeGapLabel;
+  NSInteger _activeGapAIdx;
 
   NSMutableSet<NSString *> *_selection;
   NSMutableSet<NSString *> *_selectedGaps;
@@ -191,7 +241,10 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 @interface KKTimelineAdvancedView (Internal)
 
 // Model - pure helpers (no mutations, no UI side effects).
-- (NSArray<KKLane *> *)_animatableLanes;
+// THE display row list: real lanes interleaved with layer/category header
+// rows, honouring hidden/collapsed/mode-gated state. Every geometry,
+// drawing, hit-testing and popover method indexes into this list.
+- (NSArray<KKAdvancedRow *> *)_rows;
 - (double)_clipDuration;
 - (NSRect)_graphRect;
 - (CGFloat)_trackLeftOffset;
@@ -230,7 +283,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // row before each categorised run and hiding a collapsed run's lanes.
 - (void)_appendCategoryGroupedLanes:(NSArray<KKLane *> *)lanes
                            layerKey:(nullable NSString *)layerKey
-                               into:(NSMutableArray<KKLane *> *)result;
+                               into:(NSMutableArray<KKAdvancedRow *> *)result;
 // Largest valid _scrollY: total row height minus the visible tracks height
 // (0 when every row fits, i.e. no scrolling needed).
 - (CGFloat)_maxScrollY;
@@ -269,6 +322,8 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (void)_drawMarqueeRect;
 - (void)_drawDragSnapGuideInRect:(NSRect)g tracks:(NSRect)tracks;
 - (void)_drawLane:(KKLane *)lane inRow:(NSRect)row tracks:(NSRect)tracks;
+- (void)_drawActiveKeyposeHighlightForRows:(NSArray<KKAdvancedRow *> *)rows
+                                    tracks:(NSRect)tracks;
 - (void)_drawGapSelectionForLane:(KKLane *)lane
                            inRow:(NSRect)row
                           tracks:(NSRect)tracks;
@@ -289,17 +344,17 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // Top/bottom fade shadows over the scrolling rows (mirrors KKPaddedScrollView)
 // - top fade shown while scrolled down, bottom fade while more rows lie below.
 - (void)_drawScrollFadesInRect:(NSRect)g;
-// Draws a layer HEADER row (name + symbol + collapse glyph) for a placeholder
-// lane; `collapsed` picks the filled vs outline symbol.
-- (void)_drawLayerHeaderRowForLane:(KKLane *)lane
-                             inRow:(NSRect)row
-                         collapsed:(BOOL)collapsed;
-// Draws a CATEGORY HEADER row (icon + localized categoryKey + chevron) for a
-// placeholder lane; `collapsed` picks chevron.right vs chevron.down. Indented
-// under a layer header when the timeline has a layer level.
-- (void)_drawCategoryHeaderRowForLane:(KKLane *)lane
-                                inRow:(NSRect)row
-                            collapsed:(BOOL)collapsed;
+// Draws a layer HEADER row (name + symbol + collapse glyph); `collapsed`
+// picks the filled vs outline symbol.
+- (void)_drawLayerHeaderRow:(KKAdvancedRow *)row
+                     inRect:(NSRect)rect
+                  collapsed:(BOOL)collapsed;
+// Draws a CATEGORY HEADER row (icon + localized title + chevron); `collapsed`
+// picks chevron.right vs chevron.down. Indented under a layer header when the
+// timeline has a layer level.
+- (void)_drawCategoryHeaderRow:(KKAdvancedRow *)row
+                        inRect:(NSRect)rect
+                     collapsed:(BOOL)collapsed;
 
 // Interaction - scrub + drag + edits + keyboard + menu.
 - (BOOL)_isInScrubBand:(NSPoint)pt;
@@ -342,6 +397,9 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (void)_mutateIntervalInLaneLabel:(NSString *)label
                               aIdx:(NSInteger)aIdx
                               with:(void (^)(KKInterval *iv))mut;
+- (NSArray<NSString *> *)_menuTargetGapKeys;
+- (BOOL)_menuTargetGapsAreDurationLocked;
+- (void)_setMenuTargetGapsDurationLocked:(BOOL)locked;
 
 // Zoom notification used by the magnify/scroll handlers in the core .m.
 - (void)_notifyZoomChanged;

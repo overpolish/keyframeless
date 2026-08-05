@@ -5,23 +5,23 @@
 #
 # Dev loop that exercises the REAL launchd on-demand wake path (NSXPC Mach-service
 # lookup -> launchd launches the helper) with your local build, without building the
-# "Keyframeless AI" installer. Signs a release kk-ai-helper with the app-group
+# Kai installer. Signs a release kk-ai-helper with the app-group
 # entitlement + hardened runtime, drops a per-user LaunchAgent pointing at it, and
 # bootstraps it. After this, a local AI action in a plugin wakes THIS binary.
 #
 # Iterate: rebuild + re-sign, then
-#   launchctl kickstart -k gui/$(id -u)/co.overpolish.keyframeless.aihelper
+#   launchctl kickstart -k gui/$(id -u)/com.keyframeless.aihelper
 #
 # Tear down:
-#   launchctl bootout gui/$(id -u)/co.overpolish.keyframeless.aihelper
-#   rm ~/Library/LaunchAgents/co.overpolish.keyframeless.aihelper.plist
+#   launchctl bootout gui/$(id -u)/com.keyframeless.aihelper
+#   rm ~/Library/LaunchAgents/com.keyframeless.aihelper.plist
 #
 # Usage: install-dev-launchagent.sh
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-LABEL="co.overpolish.keyframeless.aihelper"
+LABEL="com.keyframeless.aihelper"
 ENT="$ROOT/Distribution/helper/kk-ai-helper.entitlements"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 UID_NUM="$(id -u)"
@@ -32,7 +32,7 @@ BIN="$ROOT/KeyframelessAI/.build/release/kk-ai-helper"
 [[ -x "$BIN" ]] || { echo "Error: $BIN not found"; exit 1; }
 
 codesign --force --options runtime \
-  --identifier co.overpolish.keyframeless.aihelper \
+  --identifier com.keyframeless.aihelper \
   --entitlements "$ENT" \
   --sign "Developer ID Application" \
   "$BIN"
@@ -52,7 +52,7 @@ cat >"$PLIST" <<EOF
 	</array>
 	<key>MachServices</key>
 	<dict>
-		<key>group.co.overpolish.keyframeless.aihelper</key>
+		<key>group.com.keyframeless.aihelper</key>
 		<true/>
 	</dict>
 	<key>ProcessType</key>
