@@ -383,6 +383,12 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
       [self _poll];
     return;
   }
+  // A panel that OPENED compact entered its window while suspended, so
+  // -viewDidMoveToWindow correctly skipped all monitors. Revealing that same
+  // mini does not move it to another window; explicitly arm pinch/key routing
+  // now rather than requiring the whole panel to be closed and reopened.
+  if (self.window)
+    [self _installKeyMonitor];
   [self _startPollTimer];
   if (self.window)
     [self _poll];
@@ -489,6 +495,11 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
 }
 
 - (void)_installKeyMonitor {
+  // This can be reached both when the view enters a window and when an
+  // already-hosted compact editor reveals its mini viewer. Replacing the set
+  // makes the operation idempotent: repeated compact toggles must never stack
+  // app-wide key or magnify monitors.
+  [self _teardownKeyMonitors];
   __weak typeof(self) weak = self;
   _keyMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
