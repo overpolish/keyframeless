@@ -31,6 +31,8 @@ static const CGFloat kHeaderH = 22.0;
   KKPaddedScrollView *_scrollContainer; // shared scroll + edge-fade shadows
   _MirageFlippedView *_doc;
   NSTextField *_empty;
+  NSStackView *_initialLoader;
+  NSProgressIndicator *_initialLoaderSpinner;
   NSMutableArray<_MirageCard *> *_cards;
   _MirageCard *_hovered;
   id _mouseMonitor;
@@ -159,6 +161,30 @@ static const CGFloat kHeaderH = 22.0;
   _empty.hidden = YES;
   [_well addSubview:_empty];
 
+  // The first catalogue build deliberately waits briefly for KKCommunity's
+  // cache/network answer so it can lay the gallery out once. Without a view
+  // independent of that build, the whole well is blank during that wait (and
+  // while the local catalogue is parsed). Keep this centred loader outside the
+  // scroll document so it can appear immediately, before any cards exist.
+  _initialLoaderSpinner =
+      [[NSProgressIndicator alloc] initWithFrame:NSZeroRect];
+  _initialLoaderSpinner.style = NSProgressIndicatorStyleSpinning;
+  _initialLoaderSpinner.controlSize = NSControlSizeSmall;
+  _initialLoaderSpinner.translatesAutoresizingMaskIntoConstraints = NO;
+  NSTextField *initialLoaderLabel =
+      [NSTextField labelWithString:RLoc(@"Loading community shaders…",
+                                        @"Community loading.")];
+  initialLoaderLabel.font = [NSFont systemFontOfSize:11.0];
+  initialLoaderLabel.textColor = [NSColor secondaryLabelColor];
+  _initialLoader = [NSStackView
+      stackViewWithViews:@[ _initialLoaderSpinner, initialLoaderLabel ]];
+  _initialLoader.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+  _initialLoader.alignment = NSLayoutAttributeCenterY;
+  _initialLoader.spacing = 7.0;
+  _initialLoader.translatesAutoresizingMaskIntoConstraints = NO;
+  _initialLoader.hidden = YES;
+  [_well addSubview:_initialLoader];
+
   [NSLayoutConstraint activateConstraints:@[
     [_title.topAnchor constraintEqualToAnchor:self.topAnchor
                                      constant:KKPaddingMD],
@@ -209,8 +235,24 @@ static const CGFloat kHeaderH = 22.0;
     [_empty.centerYAnchor constraintEqualToAnchor:_well.centerYAnchor],
     [_empty.widthAnchor constraintLessThanOrEqualToAnchor:_well.widthAnchor
                                                  constant:-24],
+    [_initialLoader.centerXAnchor constraintEqualToAnchor:_well.centerXAnchor],
+    [_initialLoader.centerYAnchor constraintEqualToAnchor:_well.centerYAnchor],
+    [_initialLoader.leadingAnchor
+        constraintGreaterThanOrEqualToAnchor:_well.leadingAnchor
+                                    constant:12],
+    [_initialLoader.trailingAnchor
+        constraintLessThanOrEqualToAnchor:_well.trailingAnchor
+                                 constant:-12],
   ]];
   return self;
+}
+
+- (void)_setInitialLoaderVisible:(BOOL)visible {
+  _initialLoader.hidden = !visible;
+  if (visible)
+    [_initialLoaderSpinner startAnimation:nil];
+  else
+    [_initialLoaderSpinner stopAnimation:nil];
 }
 
 - (NSTextField *)_centeredLabel:(NSString *)text {
@@ -309,6 +351,11 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
 
 - (void)_reloadForcingRefresh:(BOOL)forceRefresh {
   _fetching = YES; // show the inline loader until the fetch returns
+  // Only cover a genuinely empty first-open gallery. Refreshing an already
+  // built browser leaves its cards usable and uses the inline loader below the
+  // community section instead.
+  if (!_builtSignature && _cards.count == 0)
+    [self _setInitialLoaderVisible:YES];
   [self _fetchCommunity:forceRefresh];
   // An explicit Refresh bypasses the TTL cache, so it IS a network trip: draw
   // the spinner now rather than sitting silent for the deadline.
@@ -624,6 +671,7 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
   // this via the doc's intrinsic size (it pins width + top, not height) and
   // updates its edge-fade shadows off the resulting scroll range.
   _doc.contentHeight = y;
+  [self _setInitialLoaderVisible:NO];
   BOOL none = (keyframeless.count + custom.count) == 0 && !_fetching;
   _empty.hidden = !none;
   BOOL filtering = _query.length || _favoritesOnly || _categoryFilter.count;

@@ -242,13 +242,12 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 
 - (void)_drawCompareToolbarWithWidth:(NSInteger)width
                               height:(NSInteger)height
+                           hasSource:(BOOL)hasSource
                     destinationImage:(FxImageTile *)destinationImage {
   // The callback's width/height are logical host dimensions; toolbar layout
   // and hit testing use the backing IOSurface dimensions.
   width = (NSInteger)[destinationImage.ioSurface width];
   height = (NSInteger)[destinationImage.ioSurface height];
-  BOOL hasSource =
-      [self _compareSourceTextureForDestination:destinationImage] != nil;
   BOOL hasSelection =
       MirageSurfaceSelectionToggleForSource([self _currentShaderSource])
           .length > 0;
@@ -1621,6 +1620,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     [self _drawCompareDividerInDestination:destinationImage];
   [self _drawCompareToolbarWithWidth:width
                               height:height
+                           hasSource:(compareSource != nil)
                     destinationImage:destinationImage];
 }
 

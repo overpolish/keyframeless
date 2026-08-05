@@ -42,6 +42,10 @@ static const NSTimeInterval kPublishCoalesceInterval = 1.0 / 120.0;
 @property(nonatomic) uint64_t generation;
 @property(nonatomic) double tag; // opaque (callers store the slot's frac)
 @property(nonatomic) NSTimeInterval lastUpdate;
+// IOSurface IDs are recycled. The descriptor can briefly outlive a surface
+// while a fresh render replaces it, so consumers must verify that a lookup
+// returned THIS surface rather than an unrelated surface reusing the same ID.
+@property(nonatomic, copy) NSString *surfaceToken;
 @end
 
 @implementation _KKMiniFeedSlot
@@ -57,6 +61,9 @@ static NSString *KKMiniFeedFormatName(_KKMiniFeedSlot *slot) {
              : @"bgra8";
 }
 
+static CFStringRef const kKKMiniFeedSurfaceTokenKey =
+    CFSTR("com.keyframeless.miniviewer.surface-token");
+
 // How one surface is described to a consumer. Every published entry - slot,
 // channel 1, aux - carries exactly these keys, so a consumer resolves any of
 // them the same way.
@@ -67,6 +74,7 @@ static NSDictionary *KKMiniFeedSlotEntry(_KKMiniFeedSlot *slot) {
     @"height" : @(slot.dstH),
     @"generation" : @(slot.generation),
     @"pixelFormat" : KKMiniFeedFormatName(slot),
+    @"surfaceToken" : slot.surfaceToken ?: @"",
   };
 }
 
@@ -135,8 +143,7 @@ static NSDictionary *KKMiniFeedSlotEntry(_KKMiniFeedSlot *slot) {
       [_auxSlots addObject:[[_KKMiniFeedSlot alloc] init]];
     while (_auxSlots.count > auxTextureCount)
       [_auxSlots removeLastObject];
-    KKLogDebug(@"[MiniFeed] aux count -> %lu",
-               (unsigned long)_auxSlots.count);
+    KKLogDebug(@"[MiniFeed] aux count -> %lu", (unsigned long)_auxSlots.count);
   }
 }
 
@@ -161,9 +168,9 @@ static NSDictionary *KKMiniFeedSlotEntry(_KKMiniFeedSlot *slot) {
   slot.dstH = MAX(h & ~1u, 2u);
 }
 
-// The backing surface for one preview slot, at the element size and pixel format
-// the linear-float / display-encoded choice implies. Returns NULL (and logs) when
-// the surface could not be made.
+// The backing surface for one preview slot, at the element size and pixel
+// format the linear-float / display-encoded choice implies. Returns NULL (and
+// logs) when the surface could not be made.
 static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
                                             BOOL linearFloat) {
   size_t bytesPerElement = linearFloat ? 8 : 4;
@@ -189,11 +196,12 @@ static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
                        device:(id<MTLDevice>)device
                          srcW:(NSUInteger)sw
                          srcH:(NSUInteger)sh {
-  MTLPixelFormat expectedFormat =
-      self.linearFloat ? MTLPixelFormatRGBA16Float
-                       : MTLPixelFormatBGRA8Unorm_sRGB;
-  if (slot.surfaceTexture && slot.surfaceTexture.pixelFormat == expectedFormat &&
-      sw == slot.srcW && sh == slot.srcH)
+  MTLPixelFormat expectedFormat = self.linearFloat
+                                      ? MTLPixelFormatRGBA16Float
+                                      : MTLPixelFormatBGRA8Unorm_sRGB;
+  if (slot.surfaceTexture &&
+      slot.surfaceTexture.pixelFormat == expectedFormat && sw == slot.srcW &&
+      sh == slot.srcH)
     return YES;
 
   [self _computeDstForSrcW:sw h:sh slot:slot];
@@ -203,20 +211,25 @@ static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
     CFRelease(slot.surface);
     slot.surface = NULL;
   }
+  slot.surfaceToken = nil;
 
   slot.surface =
       KKMiniFeedCreateSurface(slot.dstW, slot.dstH, self.linearFloat);
   if (!slot.surface)
     return NO;
 
+  slot.surfaceToken = NSUUID.UUID.UUIDString;
+  IOSurfaceSetValue(slot.surface, kKKMiniFeedSurfaceTokenKey,
+                    (__bridge CFStringRef)slot.surfaceToken);
+
   // The default feed display-encodes FCP's linear source through an sRGB-typed
   // BGRA8 target. Technical color transforms instead retain the linear float
   // values, including HDR values above one and wide-gamut negative components.
-  MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:expectedFormat
-                                   width:slot.dstW
-                                  height:slot.dstH
-                               mipmapped:NO];
+  MTLTextureDescriptor *td =
+      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:expectedFormat
+                                                         width:slot.dstW
+                                                        height:slot.dstH
+                                                     mipmapped:NO];
   td.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite |
              MTLTextureUsageRenderTarget;
   td.storageMode = MTLStorageModeShared;
@@ -260,8 +273,8 @@ static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
 }
 
 // Attach the optional second-texture keys, serialize and write. Both publish
-// shapes - the generator's dimensions-only document and the full one - carry the
-// same `channel1` / `aux` entries, absent when nothing has published them.
+// shapes - the generator's dimensions-only document and the full one - carry
+// the same `channel1` / `aux` entries, absent when nothing has published them.
 - (void)_writeDescriptorLocked:(NSMutableDictionary *)desc {
   NSDictionary *ch1 = [self _channel1EntryLocked];
   if (ch1)
@@ -315,6 +328,7 @@ static IOSurfaceRef KKMiniFeedCreateSurface(NSUInteger w, NSUInteger h,
     @"srcHeight" : @(first.srcH),
     @"generation" : @(first.generation),
     @"pixelFormat" : KKMiniFeedFormatName(first),
+    @"surfaceToken" : first.surfaceToken ?: @"",
     @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
     @"playheadFrac" : @(_playheadFrac),
     @"slots" : slotEntries,
@@ -495,12 +509,15 @@ id<MTLTexture> KKMiniViewerFeedLoadPrimarySource(NSString *descriptorPath,
   uint32_t sid = 0;
   NSArray *slots = desc[@"slots"];
   NSString *format = nil;
+  NSDictionary *entry = nil;
   if ([slots isKindOfClass:NSArray.class] && slots.count > 0 &&
       [slots[0] isKindOfClass:NSDictionary.class]) {
-    sid = (uint32_t)[slots[0][@"ioSurfaceID"] unsignedIntValue];
-    format = slots[0][@"pixelFormat"];
+    entry = slots[0];
+    sid = (uint32_t)[entry[@"ioSurfaceID"] unsignedIntValue];
+    format = entry[@"pixelFormat"];
   }
   if (sid == 0) {
+    entry = desc;
     sid = (uint32_t)[desc[@"ioSurfaceID"] unsignedIntValue];
     format = desc[@"pixelFormat"];
   }
@@ -509,6 +526,37 @@ id<MTLTexture> KKMiniViewerFeedLoadPrimarySource(NSString *descriptorPath,
   IOSurfaceRef surf = IOSurfaceLookup((IOSurfaceID)sid);
   if (!surf)
     return nil;
+
+  // A descriptor is replaced atomically, but the surface it names can be
+  // released just before the replacement descriptor is published. Usually an
+  // old lookup then fails. Rarely, IOSurface has already recycled that numeric
+  // ID for an unrelated allocation; passing its dimensions/format to Metal is
+  // a fatal assertion, not a recoverable nil return. Verify the producer's
+  // per-allocation token and shape before asking Metal to wrap it. Descriptors
+  // from an older build have no token and are deliberately ignored for this
+  // tick; the live producer republishes one immediately.
+  NSString *expectedToken =
+      [entry[@"surfaceToken"] isKindOfClass:NSString.class]
+          ? entry[@"surfaceToken"]
+          : nil;
+  NSString *actualToken =
+      CFBridgingRelease(IOSurfaceCopyValue(surf, kKKMiniFeedSurfaceTokenKey));
+  NSUInteger expectedWidth = [entry[@"width"] unsignedIntegerValue];
+  NSUInteger expectedHeight = [entry[@"height"] unsignedIntegerValue];
+  BOOL floatSurface = [format isEqualToString:@"rgba16Float"];
+  OSType expectedSurfaceFormat =
+      floatSurface ? kCVPixelFormatType_64RGBAHalf : (OSType)'BGRA';
+  size_t expectedBytesPerElement = floatSurface ? 8 : 4;
+  BOOL valid = expectedToken.length > 0 &&
+               [actualToken isEqualToString:expectedToken] &&
+               expectedWidth == IOSurfaceGetWidth(surf) &&
+               expectedHeight == IOSurfaceGetHeight(surf) &&
+               IOSurfaceGetPixelFormat(surf) == expectedSurfaceFormat &&
+               IOSurfaceGetBytesPerElement(surf) == expectedBytesPerElement;
+  if (!valid) {
+    CFRelease(surf);
+    return nil;
+  }
   MTLPixelFormat pixelFormat = [format isEqualToString:@"rgba16Float"]
                                    ? MTLPixelFormatRGBA16Float
                                    : MTLPixelFormatBGRA8Unorm;
