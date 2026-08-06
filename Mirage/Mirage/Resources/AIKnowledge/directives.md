@@ -23,12 +23,30 @@ uniform float uAmount;
 
 That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the inspector, and inside the shader `uAmount` reads the live value. Everything a built-in property can do - keyposes, easing, Basic/Advanced timing, motion blur - works on a declared control automatically.
 
+> **Critical `#percent` rule:** write `min=`, `max=` and `default=` in the
+> percentages the artist sees, but use the uniform directly as a normalized
+> value in GLSL. Mirage performs the division by 100. A `default=25` reaches
+> the shader as `0.25`; `max=150` reaches it as `1.5`. **Never divide a
+> `#percent` uniform by 100 or multiply it by `0.01` in the shader.**
+
+```glsl
+// #percent label="Radius" min=1 max=100 default=25
+uniform float uRadius;
+
+// CORRECT: uRadius is already 0.25 at its default.
+float radiusPx = uRadius * min(iResolution.x, iResolution.y);
+
+// WRONG: this double-converts 25% to 0.0025 and makes the effect invisible.
+// float radiusPx = uRadius * 0.01 * min(iResolution.x, iResolution.y);
+```
+
 **Rules that always hold:**
 
 - The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, `transition`, or `color-transform`. This drives browser classification and runtime input behavior.
 - The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The whole-shader directives (`#speed` / `#seed` / `#grain` / `#template` / `#alpha` / `#motionblur` / `#frames` / `#easing` / `#color-surface` / `#slots` / `#slots-end`) are the exception: they annotate nothing and stand on their own line.
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
+- A `#percent` uniform is **already divided by 100** when GLSL receives it. Use it directly; never apply another `/ 100` or `* 0.01`. This differs from `#float units="%"`, which is only a display suffix and does not normalize the value.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
 
 ### Multi-tab interchange: `// #tab`
@@ -132,7 +150,7 @@ Values are compared after rounding, matching choice indices and integer controls
 | `#color`         | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count                                                            |
 | `#gradient`      | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count                                      |
 | `#float`         | `float n;`         | slider                                           | the raw value                                                                                        |
-| `#percent`       | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                                                |
+| `#percent`       | `float n;`         | slider shown as `%`                              | **Already normalized by Mirage:** 25% → `0.25`; use directly, never multiply by `0.01`               |
 | `#progress`      | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** - OPT-IN reshapeable sweep; the sweep itself is the built-in `iProgress`, see below         |
 | `#int`           | `float n;`         | integer slider                                   | `int`                                                                                                |
 | `#random`        | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                                                |

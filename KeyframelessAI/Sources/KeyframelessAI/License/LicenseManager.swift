@@ -15,6 +15,7 @@ public struct LicenseRecord: Equatable {
 public enum LicenseError: LocalizedError {
 	case invalidKey
 	case disabled
+	case storageUnavailable
 	case network(String)
 	case unexpected(Int)
 	case untrustedResponse
@@ -25,6 +26,10 @@ public enum LicenseError: LocalizedError {
 			return AILoc("License key not recognized. Check it matches your receipt.")
 		case .disabled:
 			return AILoc("This license key has been disabled.")
+		case .storageUnavailable:
+			return AILoc(
+				"Activation could not access shared license storage. Reinstall the latest version and try again."
+			)
 		case .network(let msg):
 			return String(format: AILoc("Network error: %@"), msg)
 		case .unexpected(let code):
@@ -75,20 +80,19 @@ public enum LicenseManager {
 		"com.keyframeless.license.\(productID)"
 	}
 
-	/// This machine as the Worker sees it. Only used when machine binding is
-	/// switched on server-side; `gethostuuid` matches what KKLicense.m checks.
-	static func machineID() -> String? {
-		var uuid = uuid_t(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-		var wait = timespec(tv_sec: 0, tv_nsec: 0)
-		guard gethostuuid(&uuid.0, &wait) == 0 else { return nil }
-		return UUID(uuid: uuid).uuidString
-	}
-
 	/// The stored record, or nil when there is none or its signature does not
 	/// check out. Mirrors `KKLicenseIsActivated()` exactly.
 	public static func record(for productID: String) -> LicenseRecord? {
 		guard let defaults = UserDefaults(suiteName: suiteName),
-			let dict = defaults.dictionary(forKey: defaultsKey(for: productID)),
+			let dict = defaults.dictionary(forKey: defaultsKey(for: productID))
+		else { return nil }
+		return record(from: dict, for: productID)
+	}
+
+	private static func record(
+		from dict: [String: Any], for productID: String
+	) -> LicenseRecord? {
+		guard
 			let payloadB64 = dict["payload"] as? String,
 			let signatureB64 = dict["sig"] as? String,
 			let payload = Data(base64Encoded: payloadB64),
@@ -115,9 +119,9 @@ public enum LicenseManager {
 				as? [String: Any],
 			claims["product"] as? String == productID
 		else { return false }
-		if let bound = claims["machineID"] as? String, !bound.isEmpty {
-			guard let here = machineID(), bound == here else { return false }
-		}
+		guard let bound = claims["machineID"] as? String, !bound.isEmpty,
+			let here = LicenseInstallationID.current(), bound == here
+		else { return false }
 		return true
 	}
 
@@ -136,8 +140,16 @@ public enum LicenseManager {
 		request.httpMethod = "POST"
 		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 		request.timeoutInterval = 15
-		var body: [String: String] = ["licenseKey": trimmed, "product": productID]
-		if let machine = machineID() { body["machineID"] = machine }
+		guard let installationID = LicenseInstallationID.current() else {
+			throw LicenseError.storageUnavailable
+		}
+		let body: [String: String] = [
+			"licenseKey": trimmed,
+			"product": productID,
+			// Kept as `machineID` for wire compatibility with the deployed
+			// Worker. The value is an opaque shared installation UUID.
+			"machineID": installationID,
+		]
 		request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
 		let data: Data
@@ -168,18 +180,19 @@ public enum LicenseManager {
 			verify(payload: payload, signature: signature, productID: productID)
 		else { throw LicenseError.untrustedResponse }
 
-		store(
-			payloadB64: payloadB64, signatureB64: signatureB64,
-			licenseKey: trimmed, for: productID)
-		return record(for: productID)
-			?? LicenseRecord(licenseKey: trimmed, buyerEmail: nil, activatedAt: Date())
+		guard
+			let stored = store(
+				payloadB64: payloadB64, signatureB64: signatureB64,
+				licenseKey: trimmed, for: productID)
+		else { throw LicenseError.storageUnavailable }
+		return stored
 	}
 
 	static func store(
 		payloadB64: String, signatureB64: String, licenseKey: String,
 		for productID: String
-	) {
-		guard let defaults = UserDefaults(suiteName: suiteName) else { return }
+	) -> LicenseRecord? {
+		guard let defaults = UserDefaults(suiteName: suiteName) else { return nil }
 		// `key` is kept for display and for re-activation on another machine;
 		// it is NOT what grants activation - only the signature does.
 		defaults.set(
@@ -189,5 +202,12 @@ public enum LicenseManager {
 				"key": licenseKey,
 				"date": Date().timeIntervalSince1970,
 			], forKey: defaultsKey(for: productID))
+		// `synchronize()` is only a best-effort flush; its return value is not a
+		// reliable indication that an app-group write succeeded. Read back from
+		// the same preferences instance and validate the exact signed record.
+		_ = defaults.synchronize()
+		guard let stored = defaults.dictionary(forKey: defaultsKey(for: productID))
+		else { return nil }
+		return record(from: stored, for: productID)
 	}
 }

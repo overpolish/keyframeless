@@ -7,7 +7,11 @@
 
 #import <CommonCrypto/CommonDigest.h>
 #import <Security/Security.h>
+#import <fcntl.h>
 #import <os/lock.h>
+#import <sys/file.h>
+#import <sys/stat.h>
+#import <unistd.h>
 
 NSString *const KKLicenseProductMirage = @"mirage";
 NSString *const KKLicenseProductCanvas = @"canvas";
@@ -29,19 +33,64 @@ static const uint8_t kKKLicensePublicKey[65] = {
     0x61, 0xa3, 0x5e, 0x83, 0x30, 0x0d, 0x10, 0xd6, 0xe5, 0x6d, 0xb5,
     0xd1, 0xce, 0x30, 0x2c, 0x8b, 0x14, 0xea, 0xfb, 0x34, 0x95};
 
-/// This machine, as the activation Worker sees it. Only consulted when a
-/// record actually carries a `machineID`, so binding can be switched on
-/// server-side later without a client change. `gethostuuid` keeps this free of
-/// an IOKit link and is stable across boots; a sandbox that refuses it yields
-/// nil, which reads as "unbound" rather than "invalid".
-static NSString *KKLicenseMachineID(void) {
-  uuid_t uuid;
-  struct timespec wait = {0, 0};
-  if (gethostuuid(uuid, &wait) != 0)
+/// The shared per-user installation ID used by every Keyframeless process.
+///
+/// The signed claim keeps the historical wire name `machineID`, but its value
+/// is deliberately not a hardware identifier. Sandboxed FxPlug services and
+/// app extensions do not provide a reliable cross-process `gethostuuid`
+/// contract. A UUID file in the app-group container is stable in every product
+/// and avoids exposing hardware identity to the activation service.
+static NSString *KKLicenseInstallationID(void) {
+  NSFileManager *fm = NSFileManager.defaultManager;
+  NSURL *container = [fm containerURLForSecurityApplicationGroupIdentifier:
+                             @"group.com.keyframeless"];
+  if (!container)
     return nil;
-  uuid_string_t str;
-  uuid_unparse_upper(uuid, str);
-  return @(str);
+  NSURL *directory = [container URLByAppendingPathComponent:@"License"
+                                                isDirectory:YES];
+  if (![fm createDirectoryAtURL:directory
+          withIntermediateDirectories:YES
+                           attributes:nil
+                                error:NULL])
+    return nil;
+
+  NSURL *lockURL =
+      [directory URLByAppendingPathComponent:@".installation-id.lock"];
+  int lockFD = open(lockURL.fileSystemRepresentation, O_CREAT | O_RDWR,
+                    S_IRUSR | S_IWUSR);
+  if (lockFD < 0)
+    return nil;
+  if (flock(lockFD, LOCK_EX) != 0) {
+    close(lockFD);
+    return nil;
+  }
+
+  NSURL *identityURL =
+      [directory URLByAppendingPathComponent:@"installation-id"];
+  NSString *raw = [NSString stringWithContentsOfURL:identityURL
+                                           encoding:NSUTF8StringEncoding
+                                              error:NULL];
+  NSString *trimmed = [raw
+      stringByTrimmingCharactersInSet:NSCharacterSet
+                                          .whitespaceAndNewlineCharacterSet];
+  NSUUID *parsed =
+      trimmed.length ? [[NSUUID alloc] initWithUUIDString:trimmed] : nil;
+  NSString *identity = parsed.UUIDString;
+  if (!identity) {
+    identity = NSUUID.UUID.UUIDString;
+    NSString *contents = [identity stringByAppendingString:@"\n"];
+    if (![contents writeToURL:identityURL
+                   atomically:YES
+                     encoding:NSUTF8StringEncoding
+                        error:NULL])
+      identity = nil;
+    else
+      chmod(identityURL.fileSystemRepresentation, S_IRUSR | S_IWUSR);
+  }
+
+  flock(lockFD, LOCK_UN);
+  close(lockFD);
+  return identity;
 }
 
 static NSString *KKLicenseSHA256Hex(NSData *data) {
@@ -81,8 +130,7 @@ static BOOL KKLicenseSignatureValid(NSData *payload, NSData *signature) {
 }
 
 /// The signed payload's claims must match what is being asked about: the
-/// record for one product can't stand in for another, and a machine-bound
-/// record can't be copied to a second machine.
+/// record for one product can't stand in for another installation.
 static BOOL KKLicenseClaimsValid(NSData *payload, NSString *productID) {
   NSDictionary *claims = [NSJSONSerialization JSONObjectWithData:payload
                                                          options:0
@@ -94,12 +142,10 @@ static BOOL KKLicenseClaimsValid(NSData *payload, NSString *productID) {
       ![product isEqualToString:productID])
     return NO;
   NSString *machine = claims[@"machineID"];
-  if ([machine isKindOfClass:[NSString class]] && machine.length) {
-    NSString *here = KKLicenseMachineID();
-    if (!here || ![machine isEqualToString:here])
-      return NO;
-  }
-  return YES;
+  if (![machine isKindOfClass:[NSString class]] || !machine.length)
+    return NO;
+  NSString *here = KKLicenseInstallationID();
+  return here && [machine isEqualToString:here];
 }
 
 BOOL KKLicenseIsActivated(NSString *productID) {
@@ -108,8 +154,8 @@ BOOL KKLicenseIsActivated(NSString *productID) {
   // The suite is re-created per call on purpose: Foundation caches suite
   // domains via cfprefsd, so this stays cheap while still observing an
   // activation written from another process (the inspector ViewBridge).
-  NSUserDefaults *suite = [[NSUserDefaults alloc]
-      initWithSuiteName:@"group.com.keyframeless"];
+  NSUserDefaults *suite =
+      [[NSUserDefaults alloc] initWithSuiteName:@"group.com.keyframeless"];
   NSDictionary *record = [suite
       dictionaryForKey:[NSString
                            stringWithFormat:@"com.keyframeless.license.%@",

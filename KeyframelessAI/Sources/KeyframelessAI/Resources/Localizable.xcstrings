@@ -91,48 +91,6 @@
     "%lld%%" : {
 
     },
-    "Ask Kai" : {
-      "comment" : "Tab label for asking Kai to perform an action or answer a question.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kai fragen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preguntar a Kai"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Demander à Kai"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kaiに質問"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kai에게 묻기"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "问 Kai"
-          }
-        }
-      }
-    },
     "Activate" : {
       "comment" : "Button that verifies the entered license key.",
       "extractionState" : "manual",
@@ -259,6 +217,9 @@
         }
       }
     },
+    "Activation could not access shared license storage. Reinstall the latest version and try again." : {
+
+    },
     "Activation response could not be verified." : {
 
     },
@@ -384,6 +345,48 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "API 密钥"
+          }
+        }
+      }
+    },
+    "Ask Kai" : {
+      "comment" : "Tab label for asking Kai to perform an action or answer a question.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kai fragen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preguntar a Kai"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demander à Kai"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaiに質問"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kai에게 묻기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问 Kai"
           }
         }
       }
@@ -1353,48 +1356,6 @@
         }
       }
     },
-    "Key works" : {
-      "comment" : "Status shown when an API key validates successfully.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schlüssel funktioniert"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La clave funciona"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La clé fonctionne"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "キーは有効です"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "키가 작동합니다"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "密钥有效"
-          }
-        }
-      }
-    },
     "Kai %@ available" : {
       "comment" : "Update banner title in the Kai popover. %@ is the new version number.",
       "extractionState" : "manual",
@@ -1475,6 +1436,48 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kai 的回答"
+          }
+        }
+      }
+    },
+    "Key works" : {
+      "comment" : "Status shown when an API key validates successfully.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schlüssel funktioniert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La clave funciona"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La clé fonctionne"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キーは有効です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "키가 작동합니다"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "密钥有效"
           }
         }
       }

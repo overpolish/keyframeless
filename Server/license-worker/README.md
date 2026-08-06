@@ -20,7 +20,7 @@ sequenceDiagram
     participant PH as Payhip
 
     U->>P: pastes licence key
-    P->>W: POST /activate {licenseKey, product, machineID?}
+    P->>W: POST /activate {licenseKey, product, machineID}
     W->>PH: GET /license/verify (product secret, server-side only)
     PH-->>W: {enabled, buyer_email}
     alt key unknown
@@ -50,8 +50,8 @@ flowchart TD
     D -- passes --> E{claims.product matches?}
     E -- no --> N
     E -- yes --> F{claims.machineID present?}
-    F -- no --> Y
-    F -- yes --> G{matches gethostuuid?}
+    F -- no --> N
+    F -- yes --> G{matches shared installation ID?}
     G -- no --> N
     G -- yes --> Y
 ```
@@ -82,11 +82,13 @@ Exactly these bytes are signed, stored, and verified. Neither side ever re-seria
 
 `keyHash` rather than the key, so a stored record does not carry the purchase credential in the clear. The key itself is kept alongside the record for display and for re-activating on another machine, and grants nothing on its own.
 
-## Machine binding
+## Installation binding
 
-The signed payload carries the activating machine's `gethostuuid`, and both clients reject a record whose `machineID` is not this machine.
+The signed payload keeps the historical `machineID` field name, but the value is an opaque random UUID—not a hardware identifier. The client creates it once in `group.com.keyframeless/License/installation-id`, guarded by a cross-process file lock. Mirage, Canvas and Steno therefore send and verify the same value from their separate sandboxed processes.
 
-Activations are UNCAPPED. The Worker holds no state, so the same key re-signs for any machine that asks. A new machine simply activates again, needing the internet once, exactly like the first install, with nothing to reset and no support mail.
+The Worker copies that value into the signed payload exactly as supplied. It does not derive, normalize or otherwise inspect device identity. Both client verifiers reject records whose claim is missing or differs from the shared installation ID.
+
+Activations are UNCAPPED. The Worker holds no state, so the same key re-signs for any installation that asks. A new installation simply activates again, needing the internet once, exactly like the first install, with nothing to reset and no support mail.
 
 What it buys: an activated record copied to another machine stops working. What it does not: a shared _key_ still activates anywhere.
 

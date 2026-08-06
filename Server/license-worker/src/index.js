@@ -20,12 +20,13 @@
 
 const PRODUCTS = ['mirage', 'canvas', 'steno']
 
-// Binds each record to the machine that activated it, so a copied activation
-// record fails on the machine it was copied to. Activations stay UNCAPPED: this
-// Worker holds no state, so the same key re-signs for any machine that asks. A
-// new machine just activates again, needing the internet once, exactly like the
-// first install. It does not stop a shared KEY, which would need a cap, which
-// would need state.
+// Binds each record to the Keyframeless installation that activated it, so a
+// copied activation record fails without that installation's shared identity.
+// The historical wire name is `machineID`, but clients send an opaque random
+// UUID persisted in the app-group container, never a hardware identifier.
+// Activations stay UNCAPPED: this Worker holds no state, so the same key
+// re-signs for any installation that asks. It does not stop a shared KEY, which
+// would need a cap, which would need state.
 const BIND_TO_MACHINE = true
 
 export default {
@@ -43,6 +44,8 @@ export default {
     }
     const licenseKey = String(body.licenseKey ?? '').trim()
     const product = String(body.product ?? '').trim()
+    // Opaque client installation ID. Echo it into the signed claims exactly as
+    // supplied; the Worker neither derives nor transforms device identity.
     const machineID = String(body.machineID ?? '').trim()
     if (!licenseKey || !PRODUCTS.includes(product)) return json({ error: 'bad request' }, 400)
 

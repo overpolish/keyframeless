@@ -51,4 +51,36 @@ if [ -f "$MIGRATE" ]; then
     bash "$MIGRATE" || true
 fi
 
+# ONE-RELEASE LICENSE MIGRATION (installation identity v1).
+#
+# Releases before this migration bound signed records to gethostuuid. FxPlug
+# services and app extensions can observe a different privacy-scoped value in
+# different execution contexts, leaving the inspector activated while the
+# renderer rejects the same record. The new clients use one UUID file in the
+# shared app-group container instead, so every legacy record must be removed
+# once and re-issued against that installation ID.
+#
+# Remove this block after the first release containing the installation-ID
+# clients has shipped. The marker also keeps separate product installers from
+# repeatedly signing the user out during that transition release.
+if [ -n "$CURRENT_USER" ] && [ "$CURRENT_USER" != "root" ]; then
+    LICENSE_RESET_MARKER="$USER_HOME/Library/Application Support/Keyframeless/.licenses-reset-installation-id-v1"
+    if [ ! -f "$LICENSE_RESET_MARKER" ]; then
+        as_user() { sudo -u "$CURRENT_USER" "$@"; }
+        NEW_GROUP_PREFS="$USER_HOME/Library/Group Containers/group.com.keyframeless/Library/Preferences/group.com.keyframeless"
+        OLD_GROUP_PREFS="$USER_HOME/Library/Group Containers/group.co.overpolish.keyframeless/Library/Preferences/group.co.overpolish.keyframeless"
+        for key in \
+            com.keyframeless.license.mirage \
+            com.keyframeless.license.canvas \
+            com.keyframeless.license.steno; do
+            as_user /usr/bin/defaults delete group.com.keyframeless "$key" 2>/dev/null || true
+            as_user /usr/bin/defaults delete group.co.overpolish.keyframeless "$key" 2>/dev/null || true
+            as_user /usr/bin/defaults delete "$NEW_GROUP_PREFS" "$key" 2>/dev/null || true
+            as_user /usr/bin/defaults delete "$OLD_GROUP_PREFS" "$key" 2>/dev/null || true
+        done
+        as_user mkdir -p "$(dirname "$LICENSE_RESET_MARKER")" &&
+            as_user touch "$LICENSE_RESET_MARKER"
+    fi
+fi
+
 exit 0

@@ -469,6 +469,7 @@
 		F2E2EDB72F4CA530008620D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Canvas/Plugin/CanvasPluginEntitlements.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
@@ -495,6 +496,7 @@
 		F2E2EDB82F4CA530008620D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Canvas/Plugin/CanvasPluginEntitlements.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				DEAD_CODE_STRIPPING = YES;
@@ -537,6 +539,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.keyframeless.Canvas;
 				PRODUCT_NAME = Canvas;
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "Canvas/Wrapper Application/Wrapper Application-Bridging-Header.h";
 			};
 			name = Debug;
@@ -548,11 +551,9 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = "Canvas/Wrapper Application/SandboxEntitlements.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				INFOPLIST_FILE = "Canvas/Wrapper Application/Info.plist";
@@ -561,6 +562,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.keyframeless.Canvas;
 				PRODUCT_NAME = Canvas;
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "Canvas/Wrapper Application/Wrapper Application-Bridging-Header.h";
 			};
 			name = Release;
