@@ -87,7 +87,7 @@ cd feedback-worker && npm run deploy
 
 ### Custom domain
 
-The Worker answers `keyframeless.com/feedback/submit` via Cloudflare routes, so the zone must be proxied (orange cloud) in front of GitHub Pages. Otherwise the Worker lives at `keyframeless-feedback.<account>.workers.dev` - set that URL as the production base in `KKFeedbackBaseURL()` in `KKUpdateChecker.m`.
+The Worker answers `keyframeless.com/feedback/submit` via Cloudflare routes, while Cloudflare Pages serves every other site path. The zone must remain proxied (orange cloud) for that routing to work. Otherwise the Worker lives at `keyframeless-feedback.<account>.workers.dev` - set that URL as the production base in `KKFeedbackBaseURL()` in `KKUpdateChecker.m`.
 
 ### Screenshot cleanup
 

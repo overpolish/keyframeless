@@ -22,8 +22,8 @@
   //   TURNSTILE_SECRET   Cloudflare Turnstile secret key
   //   GITHUB_TOKEN       fine-grained PAT, issues:write on GITHUB_REPO only
   // EXACT paths, not /feedback/* - a wildcard would shadow the form page
-  // itself, which must keep coming from GitHub Pages. Requires keyframeless.com
-  // to be PROXIED through Cloudflare (orange cloud) in front of Pages.
+  // itself, which must keep coming from Cloudflare Pages. Requires
+  // keyframeless.com to remain proxied through Cloudflare (orange cloud).
   "routes": [
     { "pattern": "keyframeless.com/feedback/submit", "zone_name": "keyframeless.com" },
     { "pattern": "keyframeless.com/feedback/github-webhook", "zone_name": "keyframeless.com" },

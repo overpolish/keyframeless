@@ -134,12 +134,12 @@ String Catalogs are compiled at build time (`xcstringstool` emits `<lang>.lproj/
 
 Two related-but-separate systems share the docs site and the in-plugin banner.
 
-**Update checking** - changelog generated from Markdown and served by GitHub Pages (media hosted separately in R2), polled by each plugin on launch:
+**Update checking** - changelog generated from Markdown and served by Cloudflare Pages (media hosted separately in R2), polled by each plugin on launch:
 
 ```mermaid
 flowchart LR
   MD["changelog .md<br/>(one per release)"] -->|"build-changelog.py"| HTML["generated HTML<br/>+ kk-version meta"]
-  HTML -->|"commit + push"| Pages["GitHub Pages<br/>keyframeless.com"]
+  HTML -->|"push to main<br/>(native Git deployment)"| Pages["Cloudflare Pages<br/>keyframeless.com"]
   Media["images / video"] -->|"manual upload"| R2m[("R2<br/>media.keyframeless.com")]
   R2m -.->|"embedded in pages"| Pages
   Plugin["Plugin · KKUpdateChecker"] -->|"GET notes page"| Pages

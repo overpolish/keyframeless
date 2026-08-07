@@ -64,4 +64,4 @@ The in-app DEBUG build points the feedback button at `http://localhost:8787/`, s
 npm run deploy
 ```
 
-The Worker is mounted on the site's own domain via routes, so `keyframeless.com` must be on Cloudflare AND proxied (orange cloud) in front of GitHub Pages, with SSL mode Full. Same origin as the form, so no CORS. Uncomment the `routes` custom-domain block in `wrangler.jsonc`. Until then the Worker is reachable at its `*.workers.dev` URL (update the prod URL in `KKUpdateChecker.m` to match if you ship before the custom domain is live).
+The Worker is mounted on the site's own domain via exact routes, while Cloudflare Pages serves the form and every other site path. `keyframeless.com` must remain proxied (orange cloud), with SSL mode Full. The Worker and form share an origin, so no CORS is needed. Until the routes are configured, the Worker is reachable at its `*.workers.dev` URL (update the production URL in `KKUpdateChecker.m` if you ship before the custom domain is live).

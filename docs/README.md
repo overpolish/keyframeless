@@ -1,7 +1,9 @@
 # docs/ - the keyframeless.com site
 
-Served by GitHub Pages at https://keyframeless.com/ (Settings > Pages > deploy
-from `main`, folder `/docs`; the domain comes from `CNAME`).
+Served by the `keyframeless` Cloudflare Pages project at
+https://keyframeless.com/. Cloudflare's native Git integration deploys every
+push to `main` automatically, with no build command and `docs` as the build
+output directory. Pull requests and other branches receive preview deployments.
 
 - `index.html` is the hand-written landing page. The generator never touches it.
 - `<product>/index.html` are the release-notes pages. Each carries a
@@ -49,4 +51,6 @@ wrangler r2 object put keyframeless-media/<component>/<version>/demo.mp4 --file 
 
 This bucket is separate from the feedback Worker's bucket (whose uploads auto-delete) - changelog media is permanent.
 
-`CNAME` is the GitHub Pages custom domain (do not remove). See `CONTRIBUTING.md` for the local preview loop and how to test the update banner against a local server.
+The `keyframeless.com` custom domain and DNS are managed in Cloudflare, not by a
+file in this directory. See `CONTRIBUTING.md` for the local preview loop and how
+to test the update banner against a local server.

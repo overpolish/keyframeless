@@ -4,7 +4,7 @@
  */
 
 // Feedback intake. The form is a static page on the site
-// (docs/feedback/index.html, served by GitHub Pages at keyframeless.com/feedback)
+// (docs/feedback/index.html, served by Cloudflare Pages at keyframeless.com/feedback)
 // and this Worker is only the API behind it, mounted on the SAME origin via
 // Cloudflare routes: keyframeless.com/feedback/submit and .../github-webhook.
 // Everything else on the domain falls through to Pages. Verify the Turnstile
