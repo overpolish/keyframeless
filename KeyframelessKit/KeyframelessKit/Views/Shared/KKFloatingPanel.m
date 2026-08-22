@@ -6,6 +6,7 @@
 #import "KKFloatingPanel.h"
 
 #import "KKLog.h"
+#import "KKPopoverBackground.h"
 #import "KKPopoverKeepAlive.h"
 #import "KKScopedDefaults.h"
 #import "NSColor+KKColors.h"
@@ -32,6 +33,23 @@ typedef NS_OPTIONS(NSUInteger, KKResizeEdges) {
   KKResizeEdgeBottom = 1 << 2,
   KKResizeEdgeTop = 1 << 3,
 };
+
+// A child with dynamic cursor geometry (the mini-viewer OSC surface) resolves
+// its own cursor on every move. The panel's full-content resize/drag tracking
+// must yield after edge/header arbitration instead of restoring the arrow over
+// the child's result.
+@protocol KKPanelCursorOwningView <NSObject>
+- (BOOL)kk_ownsPointerCursor;
+@end
+
+static BOOL KKViewOwnsPointerCursor(NSView *view) {
+  for (NSView *candidate = view; candidate; candidate = candidate.superview) {
+    if ([candidate respondsToSelector:@selector(kk_ownsPointerCursor)] &&
+        [(id<KKPanelCursorOwningView>)candidate kk_ownsPointerCursor])
+      return YES;
+  }
+  return NO;
+}
 
 @implementation KKPanelDragHandleView
 @end
@@ -269,8 +287,7 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
     // half-opaque fill otherwise leaves a faint square outside the glass at
     // each corner. Clip the content independently to the exact same radius.
     content.wantsLayer = YES;
-    content.layer.backgroundColor =
-        [NSColor.inspectorBackground colorWithAlphaComponent:0.5].CGColor;
+    content.layer.backgroundColor = KKPanelBackingFill().CGColor;
     content.layer.cornerRadius = kCornerRadius;
     content.layer.masksToBounds = YES;
     glass.contentView = content;
@@ -289,6 +306,8 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
   fx.layer.borderWidth = 1.0;
   fx.maskImage = KKRoundedMaskImage(kCornerRadius);
   content.frame = fx.bounds;
+  content.wantsLayer = YES;
+  content.layer.backgroundColor = KKPanelBackingFill().CGColor;
   [fx addSubview:content];
   self.contentView = fx;
   [self _updatePointerTrackingArea];
@@ -314,23 +333,47 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
   [self _updatePointerTrackingArea];
 }
 
-- (NSPoint)_rememberedOrigin:(BOOL *)outFound {
-  if (outFound)
-    *outFound = NO;
-  id stored = KKScopedDefaultRead(_positionKey, kPositionScope);
+static BOOL KKReadStoredPoint(NSString *field, NSPoint *out) {
+  id stored = KKScopedDefaultRead(field, kPositionScope);
   if (![stored isKindOfClass:[NSArray class]] || [stored count] != 2)
-    return NSZeroPoint;
+    return NO;
   NSArray *pair = stored;
   if (![pair[0] respondsToSelector:@selector(doubleValue)] ||
       ![pair[1] respondsToSelector:@selector(doubleValue)])
-    return NSZeroPoint;
-  if (outFound)
-    *outFound = YES;
-  return NSMakePoint([pair[0] doubleValue], [pair[1] doubleValue]);
+    return NO;
+  *out = NSMakePoint([pair[0] doubleValue], [pair[1] doubleValue]);
+  return YES;
 }
 
-- (void)_rememberOrigin:(NSPoint)origin {
-  KKScopedDefaultWrite(@[ @(origin.x), @(origin.y) ], _positionKey,
+// The remembered position is the panel's TOP-left corner. Every host resize
+// (compact toggle, category page change, segment re-scope) holds the top edge
+// and grows downward, and a panel that reopens at a different height than it
+// was dragged at must do the same - anchoring the bottom-left let the header
+// wander up and down by the height difference on every reopen. The legacy
+// bottom-left field is read once as a fallback and converted with the height
+// the panel is about to show at.
+- (NSPoint)_rememberedTopLeft:(BOOL *)outFound forHeight:(CGFloat)height {
+  NSPoint p = NSZeroPoint;
+  NSString *topKey = [_positionKey stringByAppendingString:@".topLeft"];
+  if (KKReadStoredPoint(topKey, &p)) {
+    if (outFound)
+      *outFound = YES;
+    return p;
+  }
+  if (KKReadStoredPoint(_positionKey, &p)) {
+    if (outFound)
+      *outFound = YES;
+    return NSMakePoint(p.x, p.y + height);
+  }
+  if (outFound)
+    *outFound = NO;
+  return NSZeroPoint;
+}
+
+- (void)_rememberFramePosition {
+  NSRect frame = self.frame;
+  NSString *topKey = [_positionKey stringByAppendingString:@".topLeft"];
+  KKScopedDefaultWrite(@[ @(NSMinX(frame)), @(NSMaxY(frame)) ], topKey,
                        kPositionScope);
 }
 
@@ -401,11 +444,9 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
   // it. Keep editor panels above host chrome but below menus, matching the
   // joyride overlay's established level.
   self.level = NSPopUpMenuWindowLevel - 1;
-  BOOL found = NO;
-  NSPoint remembered = [self _rememberedOrigin:&found];
   NSRect frame = self.frame;
+  BOOL sizeFound = NO;
   if (_userResizable) {
-    BOOL sizeFound = NO;
     NSSize rememberedSize = [self _rememberedSize:&sizeFound];
     if (sizeFound) {
       frame.size.width = MAX(rememberedSize.width, self.minSize.width);
@@ -414,10 +455,13 @@ static NSImage *KKRoundedMaskImage(CGFloat radius) {
     frame.size.width = MAX(frame.size.width, self.minSize.width);
     frame.size.height = MAX(frame.size.height, self.minSize.height);
   }
-  frame.origin = remembered;
+  BOOL found = NO;
+  NSPoint remembered = [self _rememberedTopLeft:&found
+                                      forHeight:frame.size.height];
+  frame.origin = NSMakePoint(remembered.x, remembered.y - frame.size.height);
   if (!found || ![self _frameIsReachable:frame]) {
     if (found)
-      KKLogInfo(@"[Panel] %@ remembered origin %@ is off-screen, replacing it",
+      KKLogInfo(@"[Panel] %@ remembered topLeft %@ is off-screen, replacing it",
                 _positionKey, NSStringFromPoint(remembered));
     frame = [self _frameBesideCard:card];
   }
@@ -666,6 +710,8 @@ static NSCursor *KKCursorForResizeEdges(KKResizeEdges edges) {
       return;
     }
   }
+  if (KKViewOwnsPointerCursor(hit))
+    return;
   [NSCursor.arrowCursor set];
 }
 
@@ -742,7 +788,7 @@ static NSCursor *KKCursorForResizeEdges(KKResizeEdges edges) {
   _resizing = NO;
   _resizeEdges = KKResizeEdgeNone;
   [self _removeResizeMonitors];
-  [self _rememberOrigin:self.frame.origin];
+  [self _rememberFramePosition];
   [self _rememberSize:self.frame.size];
   if (self.onUserResized)
     self.onUserResized(self.frame.size);
@@ -802,7 +848,7 @@ static NSCursor *KKCursorForResizeEdges(KKResizeEdges edges) {
     return;
   _dragging = NO;
   [self _removeDragMonitors];
-  [self _rememberOrigin:self.frame.origin];
+  [self _rememberFramePosition];
   if (self.onUserMoved)
     self.onUserMoved(self.frame.origin);
 }

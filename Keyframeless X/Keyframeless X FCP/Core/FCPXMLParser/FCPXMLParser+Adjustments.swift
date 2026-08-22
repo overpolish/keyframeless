@@ -234,6 +234,29 @@ extension FCPXMLParser {
 		return found.isEmpty ? nil : found.sorted()
 	}
 
+	/// Parses the clip's active `<audio-channel-source>` elements into groups,
+	/// keeping each source's channel set and its static `<adjust-volume>`
+	/// amount. Returns nil when the clip declares no channel sources.
+	static func parseChannelSourceGroups(_ el: XMLElement) -> [ChannelSourceGroup]? {
+		let sources = el.elements(forName: "audio-channel-source")
+		guard !sources.isEmpty else { return nil }
+		var groups: [ChannelSourceGroup] = []
+		for src in sources {
+			if src.attribute(forName: "active")?.stringValue == "0" { continue }
+			let srcCh = src.attribute(forName: "srcCh")?.stringValue ?? ""
+			let channels = srcCh.split(separator: ",").compactMap {
+				Int($0.trimmingCharacters(in: .whitespaces))
+			}
+			guard !channels.isEmpty else { continue }
+			let gainDB =
+				src.elements(forName: "adjust-volume").first
+				.flatMap { $0.attribute(forName: "amount")?.stringValue }
+				.map(parseVolume) ?? 0
+			groups.append(ChannelSourceGroup(channels: channels, gainDB: gainDB))
+		}
+		return groups.isEmpty ? nil : groups
+	}
+
 	static func parseActiveSourceChannels(_ el: XMLElement) -> [Int]? {
 		let sources = el.elements(forName: "audio-channel-source")
 		guard !sources.isEmpty else { return nil }

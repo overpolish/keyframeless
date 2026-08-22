@@ -8,6 +8,7 @@
 #import "MirageDirectives.h" // MirageShaderModel (osc directives)
 #import "MirageCategory.h"
 #import "MirageLocalized.h"
+#import "MirageLocalCatalog.h"
 #import "MirageOSCBlock.h"           // // @osc custom-handling blocks
 #import "MirageOSCBlockRuntime.h" // compiled block: eval / invert (shared w/ mini)
 #import "MirageOSCSnapshot.h"     // KKProcessTimelineSnapshot via the kit
@@ -22,7 +23,6 @@
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKToolbar.h>
 #import <KeyframelessKit/KeyframelessKit.h>
-
 // The three glyph handles (KKArcOSC / KKPointOSC / KKSquarePointOSC) are
 // unrelated classes sharing this draw selector; a custom OSC picks one by
 // `style=` and draws it at the forward-expression's canvas position.
@@ -190,10 +190,6 @@ BOOL MirageGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   // grabbed handle (no press snap) and advances by the raw delta, scaled down
   // while Cmd is held (fine mode, matching KKScaleOSC).
   CGPoint _exprBoxDragEff, _exprBoxDragLast;
-  // Diagnostic for the FCP "FFUIAction beginWithUndoState" abort-on-quit: a
-  // nested startAction (a write re-entering while another action is open)
-  // would assert in the host. Remove once the crash source is confirmed.
-  int _exprActionDepth;
   // Cmd-held snap for point handles (parity with KKPositionOSC): snaps the
   // dragged handle onto the canvas centre / edges / quarters and the other
   // point/position handles, drawing guides. Live only during an active point
@@ -219,15 +215,14 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 }
 
 - (void)_invalidateCompareRender {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!actionAPI || !setAPI)
-    return;
-  [actionAPI startAction:self];
-  KKWriteCustomParamString(setAPI, NSUUID.UUID.UUIDString, kParamRenderNudge);
-  [actionAPI endAction:self];
+  KKPerformHostCallbackParameterAccess(
+      self.apiManager,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI) {
+        if (setAPI)
+          KKWriteCustomParamString(setAPI, NSUUID.UUID.UUIDString,
+                                   kParamRenderNudge);
+      });
 }
 
 - (void)_drawCompareToolbarWithWidth:(NSInteger)width
@@ -771,8 +766,8 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
         return l.codeString;
     }
   // An ABSENT Mirage lane is a fresh instance whose timeline blob hasn't been
-  // persisted yet: the render seeds the default (Plasma) source, so the OSC has
-  // to as well, or a fresh Plasma draws NO handles (its `#point`/`osc=ring`
+  // persisted yet: the render seeds the chosen default source, so the OSC has
+  // to as well, or a fresh template draws NO handles (its `#point`/`osc=ring`
   // controls never build) - which is exactly what starves the timing guide's
   // OSC step. A PRESENT-but-empty lane means the user cleared the code
   // (passthrough), so it correctly has no controls. Mirrors MirageStateBlob's
@@ -781,14 +776,30 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   // The seed is the SENTINEL's alone, matching -_customShaderSourceForEntry: in
   // the mini: a later rack entry exists only because its registry slot was
   // persisted, so a missing code lane there means no shader, not an unwritten
-  // one - seeding Plasma would draw a second entry's handles for a shader that
+  // one - seeding the default would draw another entry's handles for a shader that
   // isn't running.
   if (hasShaderLane)
     return nil;
   return [(_rackEntryID ?: kMirageRackSentinelEntryID)
              isEqualToString:kMirageRackSentinelEntryID]
-             ? MirageCustomDefaultShaderSource()
+             ? MirageDefaultShaderSource()
              : nil;
+}
+
+// Original/Split compare the WHOLE rack with the incoming frame, so their
+// availability cannot be inferred from only the selected entry. A generator
+// selected after Selective/Qualifier is still sitting in a source-processing
+// rack: using its category alone removed the entire toolbar even while the
+// earlier entries' OSCs remained visible. Matte is intentionally different and
+// continues to come from the selected entry's own declaration.
+- (BOOL)_rackHasCompareSource {
+  KKTimeline *timeline = KKProcessTimelineSnapshot();
+  return MirageRackHasSourceMatching(
+      timeline, kMirageCodeLaneLabel, [self _currentShaderSource],
+      ^BOOL(NSString *source) {
+        return ![MirageCategoryForSource(source)
+            isEqualToString:kMirageCategoryGenerator];
+      });
 }
 
 // Rebuild every OSC control to match the shader source. The runtimes are the
@@ -1072,7 +1083,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 }
 
 // Write a block's new bound value (EXPR units) back to its lane: denormalize to
-// lane units, clamp, set the keypose nearest the playhead in an action scope
+// lane units, clamp, set the keypose nearest the playhead in the host callback
 // (seed from the template when the lane isn't materialized).
 - (void)_writeExprValue:(KKExprVal)val
                forBlock:(MirageOSCBlockRuntime *)b
@@ -1083,16 +1094,11 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   values = [self _exprEffectiveValues:values
                               forLane:[self _exprLaneForBlock:b]
                            atFraction:writeFraction];
-  _exprActionDepth++;
-  if (_exprActionDepth > 1)
-    KKLogError(@"[ExprWrite] NESTED action (depth=%d) writing %@ via %@ - "
-               @"this would assert FFUIAction in the host",
-               _exprActionDepth, b.laneKey, b.elementKey);
   __block BOOL wrote = NO;
-  KKPerformUndoable(
-      self.apiManager, self, nil,
+  KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         if (!setAPI)
           return;
         double frac = [self fractionAtTime:time];
@@ -1110,11 +1116,10 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
           [lanes addObject:seed];
           tl.lanes = lanes;
         }
-        KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                                 kKKParamTimelineData);
+        NSString *json = [KKTimeline jsonFromTimeline:tl];
+        KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
         wrote = YES;
       });
-  _exprActionDepth--;
   if (wrote && forceUpdate)
     *forceUpdate = YES;
 }
@@ -1431,16 +1436,29 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
-  [self encodeRenderCommandsForDestinationImage:destinationImage
-                                 canvasPosition:CGPointZero
-                               clearDestination:YES
-                                       commands:^(id<MTLRenderCommandEncoder> e,
-                                                  CGPoint p, simd_uint2 v){
-                                       }];
-
-  BOOL hasCompareSource = ![MirageCategoryForSource([self _currentShaderSource])
-      isEqualToString:kMirageCategoryGenerator];
   [self _syncOSCControllers];
+  BOOL hasCompareSource = [self _rackHasCompareSource];
+
+  // Clear and draw every shader-authored OSC in one ordered Metal pass. The
+  // former standalone clear only waited until SCHEDULED before the individual
+  // controls and compare toolbar were submitted on other pooled queues. Under
+  // load it could therefore execute after the toolbar: the pills flashed, then
+  // vanished while later ring/position draws survived. The batch makes the
+  // clear the load action of the same pass as those controls. Compare chrome is
+  // submitted only after the batch is closed below.
+  BOOL oscBatch =
+      [self beginOSCDrawBatchForDestinationImage:destinationImage
+                                clearDestination:YES];
+  if (!oscBatch) {
+    // Preserve the old clear when a batch cannot be opened; the controls still
+    // retain their existing unbatched fallback drawing path.
+    [self encodeRenderCommandsForDestinationImage:destinationImage
+                                   canvasPosition:CGPointZero
+                                 clearDestination:YES
+                                         commands:^(id<MTLRenderCommandEncoder> e,
+                                                    CGPoint p, simd_uint2 v){
+                                         }];
+  }
   double ringFrac = [self fractionAtTime:time];
 
   // Rotate blocks draw FIRST, so the small position handles + rings/boxes stay
@@ -1581,6 +1599,26 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     }
   }
 
+  if (oscBatch)
+    [self endOSCDrawBatch];
+
+  // The compare seam and toolbar are final viewer chrome. Neither belongs
+  // behind the guide bridge's optional geometry gate below; Final Cut can
+  // decline that query on a tick where shader OSCs still draw from cached
+  // geometry. The divider makes its own guarded canvas query, then the toolbar
+  // is drawn last so the seam cannot cut through its pills.
+  if (hasCompareSource)
+    [self _drawCompareDividerInDestination:destinationImage];
+  // This toolbar needs only the destination IOSurface dimensions. Draw it
+  // before the guide bridge's optional canvas-geometry query below: Final Cut
+  // can decline that query on a tick where the shader OSCs still have enough
+  // cached geometry to draw. Keeping the toolbar after that early return made
+  // rings/positions visible while the compare pill bar disappeared.
+  [self _drawCompareToolbarWithWidth:width
+                              height:height
+                           hasSource:hasCompareSource
+                    destinationImage:destinationImage];
+
   // Feed the guide bridge this tick's canvas geometry (zoom-invariant
   // CANVAS->screen affine + viewer-rect recompute) so MirageHasCanvasReference
   // and the timing guide's screen<->object map keep working. During a guide,
@@ -1589,8 +1627,9 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   // glowing goal - not the frame centre. Outside a guide the handle is just the
   // frame centre (the bridge only needs the viewer geometry then).
   CGPoint trC = {0, 0}, blC = {0, 0};
-  if (![self getCanvasTopRight:&trC bottomLeft:&blC])
+  if (![self getCanvasTopRight:&trC bottomLeft:&blC]) {
     return;
+  }
   id<FxOnScreenControlAPI_v2> oscAPI2 =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
   double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 0.0;
@@ -1635,25 +1674,6 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   // handleScreen empty / off means the bridge couldn't map the handle to the
   // viewer (geometry), so the spotlight can't land on it. Remove once
   // confirmed.
-  if (inGuide) {
-    NSRect hs = MirageGuideBridge().estimatedHandleScreenRect;
-    KKLogDebug(
-        @"[GuideOSC] step=%ld pts=%lu handleCanvas=(%.1f,%.1f) "
-        @"tr=(%.1f,%.1f) bl=(%.1f,%.1f) handleScreen=(%.0f,%.0f %.0fx%.0f)",
-        (long)MirageGuideBridge().guideStep, (unsigned long)_posOrder.count,
-        handleCanvas.x, handleCanvas.y, trC.x, trC.y, blC.x, blC.y, NSMinX(hs),
-        NSMinY(hs), NSWidth(hs), NSHeight(hs));
-  }
-  // Like the mini viewer, the compare seam is final viewer chrome: draw it
-  // after shader-authored OSCs so a large control cannot erase it. Before
-  // bypass gates it off in `_drawCompareDivider...`, leaving one clean source
-  // frame while the eye is held.
-  if (hasCompareSource)
-    [self _drawCompareDividerInDestination:destinationImage];
-  [self _drawCompareToolbarWithWidth:width
-                              height:height
-                           hasSource:hasCompareSource
-                    destinationImage:destinationImage];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -1880,8 +1900,9 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   // guide bridge (viewer-rect recompute + velocity-gated re-anchor) so the
   // timing guide's mapping survives for a future OSC.
   CGPoint tr = {0, 0}, bl = {0, 0};
-  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl]) {
     return;
+  }
   CGPoint centre = CGPointMake((tr.x + bl.x) * 0.5, (tr.y + bl.y) * 0.5);
   id<FxOnScreenControlAPI_v2> oscAPI2 =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];

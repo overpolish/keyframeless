@@ -119,8 +119,9 @@
                              y:positionY
                      modifiers:modifiers
                    forceUpdate:forceUpdate
-                        atTime:time])
+                        atTime:time]) {
     return;
+  }
   [super mouseDraggedAtPositionX:positionX
                        positionY:positionY
                       activePart:activePart

@@ -6,7 +6,7 @@
 #import "MirageInspectorView.h"
 #import "MirageOSCSnapshot.h" // publish the OSC timeline snapshot
 
-#import "Constants.h"        // MirageCustomDefaultShaderSource
+#import "Constants.h"
 #import "KKGLSLTranspiler.h" // MirageMotionBlurDefaultsOnForSource
 #import "MirageCategory.h"
 #import "MirageColorSurfaceProps.h" // #color-surface opt-in
@@ -28,6 +28,24 @@
 @import KKCommunity;
 
 static NSString *const kMirageIntroSeenKey = @"MirageIntroSeen";
+
+// The rack-derived lane templates carry each entry's display name into the
+// Animated owner menu, filter, Advanced headers, Parameter Order and the OSC
+// owner dropdown. A save-name edit changes none of the source/slot signatures
+// that normally rebuild those templates, so fingerprint the persisted names
+// separately. Length-prefixing keeps the signature unambiguous even when a
+// user puts punctuation in a name.
+static NSString *MirageRackNameSignature(KKTimeline *timeline) {
+  NSMutableString *signature = [NSMutableString string];
+  for (NSString *entryID in MirageRackEntryIDs(timeline)) {
+    NSString *name = MirageRackCodeLaneForEntry(
+                         timeline, entryID, kMirageCodeLaneLabel)
+                         .codeSaveName ?: @"";
+    [signature appendFormat:@"%lu:%@=%lu:%@;", (unsigned long)entryID.length,
+                            entryID, (unsigned long)name.length, name];
+  }
+  return signature;
+}
 
 // Default keypose values a directive lane seeds for `label`, given a shader
 // `source` - the SAME seed the lane catalog uses (MirageMakeColorLane /
@@ -152,9 +170,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     _miniViewerRenderer.clipTimelineStartSec = -1.0;
     // On a fresh instance the persisted param timeline is nil, but the super
     // reconstructs a working timeline from availableLanes (carrying the
-    // plasma-seeded Mirage lane) - that's what the editor shows. Seed the mini
+    // chosen default's Mirage lane) - that's what the editor shows. Seed the mini
     // from that reconstructed timeline, not the raw nil arg, so the mini
-    // renders the default plasma (and _loadEntry, which bails on a nil mini
+    // renders the same default (and _loadEntry, which bails on a nil mini
     // timeline, works for browser swaps on a never-touched instance).
     _miniViewerRenderer.timeline =
         self.basicLanesView.currentTimeline ?: timeline;
@@ -589,7 +607,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // alone - they're a global feel the user dials in, not part of any shader's
   // look, so the helper returns nil for them and we skip them.
   NSString *newSource =
-      image.length ? image : MirageCustomDefaultShaderSource();
+      image.length ? image : MirageDefaultShaderSource();
   for (NSUInteger i = 0; i < lanes.count; i++) {
     KKLane *lane = lanes[i];
     if (lane.valueType == KKLaneValueTypeCode)
@@ -619,9 +637,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // builds its controls from that snapshot, and it is otherwise only refreshed
   // by parameterChanged - i.e. after FCP round-trips the write below. Until
   // then the snapshot still has the OLD code lane (or, on a fresh instance,
-  // none at all, so -_currentShaderSource falls back to the default Plasma
+  // none at all, so -_currentShaderSource falls back to the chosen default
   // source). Either way the OSC keeps the PREVIOUS shader's controls: applying
-  // MagicMove left Plasma's single position handle + ring registered, so a
+  // MagicMove could leave the previous template's controls registered, so a
   // click on the new shader's rotation ring hit nothing and the control looked
   // dead until something forced a resync.
   MirageSetTimelineSnapshot(updated);
@@ -764,7 +782,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
-  // The SELECTED rack entry's code lane, or the baked default when it has none
+  // The SELECTED rack entry's code lane, or the chosen default when it has none
   // (a guide seed drops the code lane, so it resolves to the default). "The"
   // shader for everything below - the editor, the OSC set, `#motionblur` and
   // the Color panel are all statements about the link the user is standing on,
@@ -774,7 +792,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
                                 : kMirageRackSentinelEntryID;
   NSString *codeKey =
       MirageRackCodeLaneKey(selectedEntry, kMirageCodeLaneLabel);
-  NSString *effective = MirageCustomDefaultShaderSource();
+  NSString *effective = MirageDefaultShaderSource();
   for (KKLane *l in timeline.lanes)
     if ([l.key isEqualToString:codeKey] && l.codeString.length) {
       effective = l.codeString;
@@ -782,6 +800,20 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     }
   BOOL sourceChanged =
       ![effective isEqualToString:(_lastEffectiveShaderSource ?: @"")];
+
+  NSString *rackNameSignature = MirageRackNameSignature(timeline);
+  BOOL rackNameChanged =
+      ![rackNameSignature isEqualToString:(_lastRackNameSignature ?: @"")];
+  // Rename-only changes used to refresh just the rack strip because it reads
+  // codeSaveName directly. Every other surface reads layerLabel from the
+  // derived templates, so replace those BEFORE super filters/rebuilds the
+  // incoming timeline. A simultaneous source change takes the existing
+  // source-commit route below, which derives the same metadata once.
+  if (rackNameChanged && !sourceChanged && self.availableLanesProvider) {
+    NSArray<KKLane *> *lanes = self.availableLanesProvider(effective, timeline);
+    [self applyAvailableLanes:lanes];
+  }
+  _lastRackNameSignature = [rackNameSignature copy];
 
   NSString *restoredInstance =
       sourceChanged

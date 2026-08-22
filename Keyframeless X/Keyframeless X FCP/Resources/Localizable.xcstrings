@@ -2616,6 +2616,46 @@
         }
       }
     },
+    "Deleting is safe - plugins remember which clips a source used, and Sonar reselects them when you drop the project again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen ist unbedenklich - Plugins merken sich, welche Clips eine Quelle verwendet hat, und Sonar wählt sie wieder aus, wenn du das Projekt erneut ablegst"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar es seguro - los plugins recuerdan qué clips usaba una fuente y Sonar los vuelve a seleccionar cuando sueltas el proyecto de nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer est sans risque - les plugins retiennent les clips utilisés par une source et Sonar les resélectionne quand vous déposez à nouveau le projet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除しても安全です - プラグインはソースに使われたクリップを記憶しており、プロジェクトを再度ドロップすると Sonar が自動的に再選択します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "삭제해도 안전합니다 - 플러그인이 소스에 사용된 클립을 기억하므로 프로젝트를 다시 드롭하면 Sonar가 자동으로 다시 선택합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除是安全的 - 插件会记住来源使用过的片段，再次拖入项目时 Sonar 会自动重新选中它们"
+          }
+        }
+      }
+    },
     "Deselect All": {
       "localizations": {
         "de": {

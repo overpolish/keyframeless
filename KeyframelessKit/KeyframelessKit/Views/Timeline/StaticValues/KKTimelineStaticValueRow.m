@@ -866,6 +866,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     editor.translatesAutoresizingMaskIntoConstraints = NO;
     editor.codeValidator =
         lane.codeValidator; // set before text so it validates
+    editor.saveValidator = lane.codeSaveValidator;
     editor.validationSourceComposer = lane.codeValidationComposer;
     editor.codeFormatter = lane.codeFormatter;
     editor.schemaProvider = lane.codeSchemaProvider;

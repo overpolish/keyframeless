@@ -15,9 +15,44 @@ extension AIPluginAgent {
 	/// non-empty, the model EDITS it - preserving what works and its controls -
 	/// rather than replacing it wholesale. A multi-pass shader arrives (and comes
 	/// back) as one flat `// #tab` blob, which the host splits into sections.
+	/// How many compile-and-repair rounds follow the first draft. Each round
+	/// hands the model the host's exact compiler message and asks for the whole
+	/// shader back; three is enough that a slip (a reserved identifier, a
+	/// mistyped builtin) never reaches the editor, without turning a genuinely
+	/// confused answer into a long wait.
+	static let shaderRepairAttempts = 3
+
+	/// `validate` is the host's compiler: it returns a human-readable error (with
+	/// section and line where it has them) for source that won't compile or
+	/// can't be saved, nil when the shader is good. When it is provided, the
+	/// draft is validated before it is returned and repaired on failure, so the
+	/// user only ever sees working code.
 	@MainActor
 	static func generateShaderCode(
-		prompt: String, productContext: String, currentShaderSource: String
+		prompt: String, productContext: String, currentShaderSource: String,
+		validate: ((String) -> String?)? = nil
+	) async throws -> String {
+		var source = try await draftShaderCode(
+			prompt: prompt, productContext: productContext,
+			currentShaderSource: currentShaderSource, repairing: nil)
+		guard let validate else { return source }
+		var attempt = 0
+		while let problem = validate(source), attempt < shaderRepairAttempts {
+			attempt += 1
+			AIDraftState.shared.routingStatus = AILoc("Fixing compile error")
+			source = try await draftShaderCode(
+				prompt: prompt, productContext: productContext,
+				currentShaderSource: source, repairing: problem)
+		}
+		return source
+	}
+
+	/// One model round: a fresh draft, an edit of the current shader, or (when
+	/// `repairing` carries a compiler message) a fix of the shader that failed.
+	@MainActor
+	private static func draftShaderCode(
+		prompt: String, productContext: String, currentShaderSource: String,
+		repairing: String?
 	) async throws -> String {
 		let editing = !currentShaderSource.trimmingCharacters(
 			in: .whitespacesAndNewlines
@@ -52,23 +87,78 @@ extension AIPluginAgent {
 			  magic numbers.
 			- Self-contained only: no #include, no textures beyond iChannel0/iChannel1, \
 			  no compute. Animate with iTime so the effect moves.
+			- The source is compiled as GLSL 4.50 core, which is stricter than WebGL. \
+			  Never use a reserved word as a variable or function name: sample, \
+			  filter, input, output, common, partition, active, superp, asm, class, \
+			  union, enum, typedef, template, this, goto, inline, noinline, volatile, \
+			  public, static, extern, external, interface, long, short, half, fixed, \
+			  unsigned, sizeof, cast, namespace, using, resource, patch, subroutine. \
+			  Name a fetched texel `tap`, `col`, or `src`, never `sample`.
+			- Every variable must be declared before use, every function before its \
+			  first call (or forward-declared), and float literals need the decimal \
+			  point (`1.0`, not `1`) where a float is expected.
+			- Directive uniforms arrive in the value space the reference states, not \
+			  the one the control displays: a `#percent` uniform is already divided \
+			  by 100 (never divide again), and a `#point` uniform is already in \
+			  PIXELS (fragCoord space, multiplied by `iResolution.xy`) - divide it \
+			  by `iResolution.xy` before using it against 0..1 UVs, or every sample \
+			  lands off-frame and the output goes black while compiling fine.
+			- A fragment shader has NO memory: globals are re-created for every pixel \
+			  of every frame, so never store state in global arrays, never "initialise \
+			  on iFrame == 0", never expect a value to survive to the next frame. \
+			  Derive everything from fragCoord/uv, iTime, the uniforms and hash \
+			  functions of those (a buffer pass is the only persistent state).
+			- Loops need an int counter against a compile-time constant bound; when a \
+			  uniform sets the count, loop to the constant maximum and `break` past \
+			  `int(uCount)`.
+			- The result must be the clip VISIBLY transformed at the default control \
+			  values: sample iChannel0 at displaced/warped coordinates and keep that \
+			  footage in the output. Never end with the whole frame replaced by a flat \
+			  colour, and never use a mix factor that is always 1.0.
+			- Before writing, decide what one frame looks like at the DEFAULT values \
+			  and check the numbers make it unmistakable on a 1920x1080 clip: a \
+			  displacement reads only when it is a few percent of the frame (0.02 to \
+			  0.2 in uv, not 0.001), an edge/feature mask must be 0 over most of the \
+			  frame and 1 only on the feature (for an edge at `f` near 0 or 1 use \
+			  `1.0 - smoothstep(0.0, w, f)` and `smoothstep(1.0 - w, 1.0, f)`, never \
+			  `smoothstep(0.0, w, f)` which is 1 almost everywhere), and anything \
+			  "flying apart" or "breaking" needs per-piece random offsets, rotation \
+			  and visible gaps (background or black between pieces), not a uniform \
+			  shift. Choose defaults that show the effect clearly, not subtly.
 			- Output ONLY the shader source. No prose, no explanation.
 			"""
 		let cachedPrefix = docs.isEmpty ? rules : (docs + "\n\n" + rules)
 
-		let editInstruction =
-			editing
-			? """
-			The user is editing the CURRENT shader below. Modify it to satisfy the \
-			request while preserving everything that already works and its existing \
-			`// #` controls. Return the COMPLETE updated shader, not a diff. If it \
-			carries `// #tab` markers it is a multi-pass shader: keep the markers, \
-			return every tab whole, and never flatten them into one pass.
+		let editInstruction: String
+		if let repairing {
+			editInstruction = """
+				The shader below was written for the user's request but FAILED TO \
+				COMPILE. Fix the error while keeping the look, the structure and every \
+				`// #` control the same. Check the whole source for the same class of \
+				mistake, not only the reported line. Return the COMPLETE corrected \
+				shader, not a diff. If it carries `// #tab` markers it is a multi-pass \
+				shader: keep the markers and return every tab whole.
 
-			CURRENT SHADER:
-			\(currentShaderSource)
-			"""
-			: "Write a new shader for the user's request."
+				COMPILER ERROR:
+				\(repairing)
+
+				SHADER THAT FAILED:
+				\(currentShaderSource)
+				"""
+		} else if editing {
+			editInstruction = """
+				The user is editing the CURRENT shader below. Modify it to satisfy the \
+				request while preserving everything that already works and its existing \
+				`// #` controls. Return the COMPLETE updated shader, not a diff. If it \
+				carries `// #tab` markers it is a multi-pass shader: keep the markers, \
+				return every tab whole, and never flatten them into one pass.
+
+				CURRENT SHADER:
+				\(currentShaderSource)
+				"""
+		} else {
+			editInstruction = "Write a new shader for the user's request."
+		}
 
 		// Local: emit the shader as PLAIN TEXT. Small models write GLSL fine but
 		// routinely mis-escape it inside a JSON string, which then fails to parse -
@@ -105,6 +195,9 @@ extension AIPluginAgent {
 				"Emit the complete GLSL source for the requested shader look/effect - "
 				+ "one blob, with `// #tab` markers only when it is multi-pass.",
 			jsonSchema: schema,
+			// The small models on purpose: Kai's cloud path is meant to stay cheap
+			// for the user, and the compile-and-repair loop plus the rules above are
+			// what make a small model's shader land, not a bigger model.
 			modelOverride: AIKeyState.shared.activeProvider == .anthropic
 				? "claude-haiku-4-5-20251001"
 				: "gpt-4o-mini",

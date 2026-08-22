@@ -272,8 +272,9 @@
 // Commit the save bar's name. Lane-level text like the code itself, so it goes
 // through the same lane-replace path - which means it persists, undoes, and
 // travels with a copied clip exactly like the source does. No
-// `onCodeCommitted`: the SOURCE didn't change, and firing it would rebuild the
-// source-derived lane set for a rename.
+// `onCodeCommitted`: the SOURCE didn't change, and firing it would also notify
+// source-only consumers. Hosts whose derived lane metadata includes this name
+// observe the resulting timeline mutation separately.
 - (void)_setLaneCodeSaveName:(NSString *)name forLabel:(NSString *)label {
   KKLane *existing = [self _laneForLabel:label];
   if (!existing)

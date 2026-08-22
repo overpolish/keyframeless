@@ -169,8 +169,7 @@
 #pragma mark - Interaction
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
-  return [self _handleHitAtPoint:p contentRect:cr] != nil ||
-         [self _pathHitAtPoint:p contentRect:cr] != nil;
+  return [self cursorAtPoint:p contentRect:cr] != nil;
 }
 
 - (NSCursor *)cursorAtPoint:(CGPoint)p contentRect:(CGRect)cr {

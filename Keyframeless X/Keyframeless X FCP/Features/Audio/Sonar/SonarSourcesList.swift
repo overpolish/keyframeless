@@ -58,6 +58,18 @@ struct SonarSourcesList: View {
 				}
 			}
 			.kkPanel()
+			// Users hoard sources out of caution, so the safety net has to be
+			// said out loud: the ticket in the plugin's own parameters is what
+			// makes deletion recoverable, and nothing else in the UI hints at it.
+			if !sources.isEmpty {
+				HelperText(
+					String(
+						localized:
+							"Deleting is safe - plugins remember which clips a source used, and Sonar reselects them when you drop the project again"
+					),
+					systemImage: "arrow.uturn.backward"
+				)
+			}
 		}
 	}
 }

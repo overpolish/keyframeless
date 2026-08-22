@@ -765,12 +765,13 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
     ]];
   }
 
-  // Close then composition peek, leftmost in the band - always present (both
-  // modes). Nav + header follow.
+  // Close, pin, then composition peek, leftmost in the band - always present
+  // (both modes). Nav + header follow.
   NSLayoutXAxisAnchor *bandLead = self.leadingAnchor;
   CGFloat bandLeadInset = KKPaddingMD;
   if (hasBand) {
     _closeButton = [self _makeCloseButton];
+    _pinButton = KKCreateEditorPinButton();
     _compositionPeekButton = [self _makeCompositionPeekButton];
     _sidebarButton = [self _makeSidebarButton];
     if (showsRightPanelToggle)
@@ -778,6 +779,7 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
     if (descriptorPath.length > 0)
       _compactButton = [self _makeCompactButton];
     [self addSubview:_closeButton];
+    [self addSubview:_pinButton];
     [self addSubview:_compositionPeekButton];
     [self addSubview:_sidebarButton];
     if (_rightPanelButton)
@@ -791,8 +793,15 @@ static const CGFloat kKKStaticPopoverMinHeight = 160.0;
                                                  constant:bandCenterOffset],
       [_closeButton.widthAnchor constraintEqualToConstant:bandH],
       [_closeButton.heightAnchor constraintEqualToConstant:bandH],
-      [_compositionPeekButton.leadingAnchor
+      [_pinButton.leadingAnchor
           constraintEqualToAnchor:_closeButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [_pinButton.centerYAnchor
+          constraintEqualToAnchor:_closeButton.centerYAnchor],
+      [_pinButton.widthAnchor constraintEqualToConstant:bandH],
+      [_pinButton.heightAnchor constraintEqualToConstant:bandH],
+      [_compositionPeekButton.leadingAnchor
+          constraintEqualToAnchor:_pinButton.trailingAnchor
                          constant:KKPaddingSM],
       [_compositionPeekButton.centerYAnchor
           constraintEqualToAnchor:_closeButton.centerYAnchor],

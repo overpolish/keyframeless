@@ -19,6 +19,7 @@
 @class KKPillToggleRowView;
 @class KKPopoverHeaderView;
 @class KKPopoverPeekButton;
+@class KKPopoverPinButton;
 @class KKPopoverSidebarButton;
 @class KKPanelDragHandleView;
 
@@ -161,6 +162,7 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   NSButton *_navPrevButton;
   NSButton *_navNextButton;
   NSButton *_closeButton;
+  KKPopoverPinButton *_pinButton;
   KKPopoverPeekButton *_compositionPeekButton;
   KKPopoverSidebarButton *_sidebarButton;
   KKPopoverSidebarButton *_rightPanelButton;

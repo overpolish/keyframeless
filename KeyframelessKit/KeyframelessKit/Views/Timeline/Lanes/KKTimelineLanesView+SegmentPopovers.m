@@ -205,6 +205,7 @@
   // constants popover so a fixed-position companion is easy to dismiss (the
   // default close-on-focus-loss still applies).
   NSButton *closeButton = [self _makePopoverCloseButton];
+  KKPopoverPinButton *pinButton = KKCreateEditorPinButton();
   KKPopoverPeekButton *peekButton = [self _makePopoverPeekButton];
   KKPopoverSidebarButton *rightPanelButton =
       self.editorRightPanelToggleSupported &&
@@ -212,6 +213,7 @@
           ? [self _makePopoverRightPanelButton]
           : nil;
   [container addSubview:closeButton];
+  [container addSubview:pinButton];
   [container addSubview:peekButton];
   if (rightPanelButton)
     [container addSubview:rightPanelButton];
@@ -247,7 +249,12 @@
     // Match the keypose / constants popover close button (22pt square).
     [closeButton.widthAnchor constraintEqualToConstant:22.0],
     [closeButton.heightAnchor constraintEqualToConstant:22.0],
-    [peekButton.leadingAnchor constraintEqualToAnchor:closeButton.trailingAnchor
+    [pinButton.leadingAnchor constraintEqualToAnchor:closeButton.trailingAnchor
+                                            constant:KKPaddingSM],
+    [pinButton.centerYAnchor constraintEqualToAnchor:closeButton.centerYAnchor],
+    [pinButton.widthAnchor constraintEqualToConstant:22.0],
+    [pinButton.heightAnchor constraintEqualToConstant:22.0],
+    [peekButton.leadingAnchor constraintEqualToAnchor:pinButton.trailingAnchor
                                              constant:KKPaddingSM],
     [peekButton.centerYAnchor
         constraintEqualToAnchor:closeButton.centerYAnchor],
@@ -385,6 +392,7 @@
     _openGapRebuilder = [partRebuilder copy];
     _openGapIntervalReader = [intervalReader copy];
     [self _resizeOpenSegmentPopoverToEditor:_openGapEditor];
+    [self _noteEditorPresented];
     return;
   }
   KKSegmentEditView *edit =
@@ -541,6 +549,7 @@
     _openHoldModRebuilder = [partRebuilder copy];
     _openHoldModIntervalReader = [intervalReader copy];
     [self _resizeOpenSegmentPopoverToEditor:_openHoldModEditor];
+    [self _noteEditorPresented];
     return;
   }
 

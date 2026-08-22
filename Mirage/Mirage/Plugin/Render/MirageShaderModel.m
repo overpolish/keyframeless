@@ -322,7 +322,12 @@ static NSString *MirageSlotLaneKeyForUniform(const char *group,
     recency = [NSMutableOrderedSet orderedSet];
     lock = [NSLock new];
   });
-  NSString *key = source ?: @"";
+  // Snapshot the key. The ordered set RETAINS what it is given (unlike the
+  // dictionary, which copies), and at least one caller hands over a live
+  // mutable string - the code editor's text storage. A key whose hash changes
+  // under the set leaves a dangling entry in its hash table after eviction,
+  // and the next lookup then messages freed memory.
+  NSString *key = [source copy] ?: @"";
   [lock lock];
   MirageShaderModel *hit = cache[key];
   if (hit) {

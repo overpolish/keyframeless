@@ -250,6 +250,22 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   }
 }
 
+// Joyride forwarding panels sit above an editor during a guide - a Next click
+// in one must not read as an outside click. Identified by class name to avoid
+// coupling to a private joyride header.
+static BOOL KKPointInJoyridePanel(NSPoint p) {
+  for (NSWindow *w in NSApp.windows) {
+    if (!w.isVisible)
+      continue;
+    if (![NSStringFromClass(w.class)
+            isEqualToString:@"_KKJoyrideForwardingPanel"])
+      continue;
+    if (NSPointInRect(p, w.frame))
+      return YES;
+  }
+  return NO;
+}
+
 // PID of the app owning the topmost normal window under `screenPoint`
 // (NSEvent.mouseLocation coords). 0 if none/unknown. Used so an outside-click
 // in ANOTHER app (e.g. clicking Finder to drag in a file) doesn't dismiss the
@@ -406,7 +422,142 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   return _openEditorPanel && _openEditorPanel.isVisible;
 }
 
+// Unpinned editors close on a click outside the panel and its companions,
+// including a click in the inspector's own UI. Keep-alive windows and joyride
+// panels are "inside", and a click in another app is ignored.
+//
+// The close is DEFERRED past the click: mouseDown arms it, and it fires after
+// the matching mouseUp (or a short fallback, since ViewBridge can lose a
+// mouseUp) on the next runloop turn - by which time whatever the click hit has
+// run. If that was a control that presented or re-targeted an editor (the
+// Constants button, a keypose cell, a curve segment, a layer switch), the
+// present generation has moved on and the armed dismiss is dropped, so the
+// existing in-place switch paths run exactly as they do when pinned.
+- (void)_installEditorDismissMonitors {
+  [self _removeEditorDismissMonitors];
+  if (KKEditorPanelsPinned() || ![self _editorPanelIsVisible])
+    return;
+  __weak typeof(self) weak = self;
+  NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp;
+  _editorDismissLocalMonitor = [NSEvent
+      addLocalMonitorForEventsMatchingMask:mask
+                                   handler:^NSEvent *(NSEvent *e) {
+                                     __strong typeof(weak) s = weak;
+                                     if (!s)
+                                       return e;
+                                     if (e.type == NSEventTypeLeftMouseUp)
+                                       [s _resolveArmedEditorDismiss];
+                                     else if (e.window != s->_openEditorPanel)
+                                       [s _armEditorDismissForClickOutside];
+                                     return e;
+                                   }];
+  _editorDismissGlobalMonitor = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:mask
+                                     handler:^(NSEvent *e) {
+                                       __strong typeof(weak) s = weak;
+                                       if (!s)
+                                         return;
+                                       if (e.type == NSEventTypeLeftMouseUp)
+                                         [s _resolveArmedEditorDismiss];
+                                       else
+                                         [s _armEditorDismissForClickOutside];
+                                     }];
+}
+
+- (void)_removeEditorDismissMonitors {
+  _editorDismissArmed = NO;
+  if (_editorDismissLocalMonitor) {
+    [NSEvent removeMonitor:_editorDismissLocalMonitor];
+    _editorDismissLocalMonitor = nil;
+  }
+  if (_editorDismissGlobalMonitor) {
+    [NSEvent removeMonitor:_editorDismissGlobalMonitor];
+    _editorDismissGlobalMonitor = nil;
+  }
+}
+
+- (void)_noteEditorPresented {
+  _editorPresentGeneration++;
+}
+
+- (void)_armEditorDismissForClickOutside {
+  if (![self _clickIsOutsideEditorPanel])
+    return;
+  _editorDismissArmed = YES;
+  _editorDismissArmedGeneration = _editorPresentGeneration;
+  __weak typeof(self) weak = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+                 dispatch_get_main_queue(), ^{
+                   [weak _resolveArmedEditorDismiss];
+                 });
+}
+
+- (void)_resolveArmedEditorDismiss {
+  if (!_editorDismissArmed)
+    return;
+  __weak typeof(self) weak = self;
+  // Next turn: the click's own action (button target, cell click) has run.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weak) s = weak;
+    if (!s || !s->_editorDismissArmed)
+      return;
+    s->_editorDismissArmed = NO;
+    if (![s _editorPanelIsVisible])
+      return;
+    if (s->_editorPresentGeneration != s->_editorDismissArmedGeneration)
+      return; // the click opened / re-targeted an editor: a switch, not a close
+    if (s->_openContentPopover.isShown)
+      return; // the click opened an option picker above the editor
+    [s _closeEditorPanel];
+  });
+}
+
+- (BOOL)_clickIsOutsideEditorPanel {
+  if (![self _editorPanelIsVisible])
+    return NO;
+  // ViewBridge re-delivers the opening click as a local event shortly after
+  // the show; don't let it close what it just opened.
+  if (CACurrentMediaTime() - _openEditorShownAt < 0.2)
+    return NO;
+  // A temporary option picker above the editor owns outside clicks until it
+  // closes (its own monitors dismiss it).
+  if (_openContentPopover.isShown)
+    return NO;
+  id content = _openEditorContentView;
+  if ([content respondsToSelector:@selector(suppressesPopoverDismiss)] &&
+      [content suppressesPopoverDismiss])
+    return NO;
+  NSPoint p = NSEvent.mouseLocation;
+  if (NSPointInRect(p, _openEditorPanel.frame))
+    return NO;
+  if (KKPopoverPointInKeepAliveWindow(p) || KKPointInJoyridePanel(p))
+    return NO;
+  if (_editorHostPID != 0 && KKWindowOwnerPIDAtScreenPoint(p) != _editorHostPID)
+    return NO;
+  return YES;
+}
+
+- (void)_editorPanelsPinnedDidChange:(NSNotification *)note {
+  [self _installEditorDismissMonitors];
+}
+
+- (void)_noteConsumedKeyDown:(NSString *)ch {
+  if (!ch.length)
+    return;
+  if (!_editorConsumedKeyDowns)
+    _editorConsumedKeyDowns = [NSMutableSet set];
+  [_editorConsumedKeyDowns addObject:ch];
+}
+
+- (BOOL)_takeConsumedKeyDown:(NSString *)ch {
+  if (!ch.length || ![_editorConsumedKeyDowns containsObject:ch])
+    return NO;
+  [_editorConsumedKeyDowns removeObject:ch];
+  return YES;
+}
+
 - (void)_removeEditorKeyMonitors {
+  [_editorConsumedKeyDowns removeAllObjects];
   if (_editorKeyMonitor) {
     [NSEvent removeMonitor:_editorKeyMonitor];
     _editorKeyMonitor = nil;
@@ -435,6 +586,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
     [_openContentPopover close];
   [self _cancelCompositionPeek];
   [self _removeEditorKeyMonitors];
+  [self _removeEditorDismissMonitors];
 
   void (^onClose)(void) = _openEditorOnClose;
   NSView *closing = _openEditorContentView;
@@ -495,14 +647,12 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                                            keyboard:YES];
                                          return nil;
                                        }
-                                       if ([ch isEqualToString:@"l"])
+                                       if ([s _takeConsumedKeyDown:ch]) {
+                                         KKLogDebug(@"[EditorKeys] swallow "
+                                                    @"keyUp %@ (local)",
+                                                    ch);
                                          return nil;
-                                       if (s.editorRightPanelToggleAvailable &&
-                                           [ch isEqualToString:@"g"])
-                                         return nil;
-                                       if (s->_openEditorIsStaticFamily &&
-                                           [ch isEqualToString:@"v"])
-                                         return nil;
+                                       }
                                        return event;
                                      }
 
@@ -576,6 +726,21 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                        if (!event.isARepeat)
                                          [s _setEditorSidebarVisible:
                                                  !s.editorSidebarVisible];
+                                       [s _noteConsumedKeyDown:ch];
+                                       return nil;
+                                     }
+                                     if ([ch isEqualToString:@"k"] &&
+                                         !(mods &
+                                           (NSEventModifierFlagCommand |
+                                            NSEventModifierFlagControl |
+                                            NSEventModifierFlagOption |
+                                            NSEventModifierFlagShift |
+                                            NSEventModifierFlagFunction)) &&
+                                         !fieldEditing) {
+                                       if (!event.isARepeat)
+                                         KKSetEditorPanelsPinned(
+                                             !KKEditorPanelsPinned());
+                                       [s _noteConsumedKeyDown:ch];
                                        return nil;
                                      }
                                      if (s.editorRightPanelToggleAvailable &&
@@ -590,6 +755,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                        if (!event.isARepeat)
                                          [s _setEditorRightPanelVisible:
                                                  !s.editorRightPanelVisible];
+                                       [s _noteConsumedKeyDown:ch];
                                        return nil;
                                      }
                                      if (s->_openEditorIsStaticFamily &&
@@ -604,6 +770,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
                                        if (!event.isARepeat)
                                          [s _setEditorCompactMode:
                                                  !s->_editorCompactMode];
+                                       [s _noteConsumedKeyDown:ch];
                                        return nil;
                                      }
                                      if (event.keyCode == 53) { // Escape
@@ -674,16 +841,22 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
       return NO;
     BOOL peekKey = [ch isEqualToString:@"p"];
     BOOL sidebarKey = [ch isEqualToString:@"l"];
+    BOOL pinKey = [ch isEqualToString:@"k"];
     BOOL rightPanelKey =
         s.editorRightPanelToggleAvailable && [ch isEqualToString:@"g"];
     BOOL compactKey = s->_openEditorIsStaticFamily && [ch isEqualToString:@"v"];
-    if (!commandZ && !peekKey && !sidebarKey && !rightPanelKey && !compactKey)
+    if (!commandZ && !peekKey && !sidebarKey && !pinKey && !rightPanelKey &&
+        !compactKey)
       return NO;
     if (event.type == NSEventTypeKeyUp) {
       if (commandZ)
         return YES;
-      if (sidebarKey || rightPanelKey || compactKey)
-        return YES;
+      if (sidebarKey || pinKey || rightPanelKey || compactKey) {
+        BOOL consumed = [s _takeConsumedKeyDown:ch];
+        if (consumed)
+          KKLogDebug(@"[EditorKeys] swallow keyUp %@ (global)", ch);
+        return consumed;
+      }
       if (!s->_compositionPeekKeyHeld)
         return NO;
       [s _setCompositionPeekHeld:NO keyboard:YES];
@@ -705,9 +878,12 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
         [NSApp.keyWindow.firstResponder isKindOfClass:[NSText class]];
     if (fieldEditing)
       return NO;
+    [s _noteConsumedKeyDown:ch];
     if (!event.isARepeat) {
       if (sidebarKey)
         [s _setEditorSidebarVisible:!s.editorSidebarVisible];
+      else if (pinKey)
+        KKSetEditorPanelsPinned(!KKEditorPanelsPinned());
       else if (rightPanelKey)
         [s _setEditorRightPanelVisible:!s.editorRightPanelVisible];
       else if (compactKey)
@@ -836,7 +1012,10 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   // bare-key shortcuts and field editor work immediately. The panel's
   // Nonactivating style means Final Cut itself remains the active app.
   [panel makeKeyWindow];
+  _openEditorShownAt = CACurrentMediaTime();
+  [self _noteEditorPresented];
   [self _installEditorKeyMonitors];
+  [self _installEditorDismissMonitors];
   [self _syncMiniViewerFeedActivity];
   return panel;
 }
@@ -1201,16 +1380,7 @@ static void KKRevealAfterPopoverResize(NSView *cover, NSView *wrapper,
   // the-popover. Identified by class name to avoid coupling to a private
   // joyride header.
   BOOL (^pointInJoyridePanel)(NSPoint) = ^BOOL(NSPoint p) {
-    for (NSWindow *w in NSApp.windows) {
-      if (!w.isVisible)
-        continue;
-      if (![NSStringFromClass(w.class)
-              isEqualToString:@"_KKJoyrideForwardingPanel"])
-        continue;
-      if (NSPointInRect(p, w.frame))
-        return YES;
-    }
-    return NO;
+    return KKPointInJoyridePanel(p);
   };
   void (^closeIfOutsidePopover)(void) = ^{
     if (contentSuppressesDismiss())

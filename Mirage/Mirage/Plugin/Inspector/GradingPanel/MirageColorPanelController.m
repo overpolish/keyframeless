@@ -16,10 +16,11 @@
 #import <KeyframelessKit/NSColor+KKColors.h>
 #import <QuartzCore/QuartzCore.h>
 
-#import "Constants.h" // MirageCustomDefaultShaderSource
+#import "Constants.h"
 #import "MirageColorPanelController_Internal.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageLocalized.h"
+#import "MirageLocalCatalog.h"
 #import "MirageRack.h" // entry ids, lane-key scope, scoped `#slots` groups
 #import "MirageScopeSampler.h"
 #import "MirageSurfaceCircleView.h"
@@ -27,12 +28,16 @@
 #import "Plugin_Private.h" // +shaderSourceFromTimeline:
 
 static const NSTimeInterval kShowRetryDelay = 0.1;
-
-/// Floor between measurements. The mini viewer can render faster than a blit +
-/// readback is worth doing, so frames are coalesced to this rate - fast enough
-/// to read as live under the cursor, cheap enough to ignore.
-static const NSTimeInterval kMinSampleInterval = 0.05;
 static const NSUInteger kToneBinCount = 96;
+/// A drag needs latency, not a publication-quality density cloud. Four
+/// thousand well-distributed pixels keep the vectorscope legible at preview
+/// size; the first settled frame restores the sampler's full 40k budget.
+// One sample budget for every frame, dragging or settled. A cheaper "live"
+// budget (4096) existed for drag fluidity, but the sparser cloud it drew on
+// every press - and the dense one that snapped back at release - read as the
+// measurement changing. The full walk is ~37k pixels per frame, comfortably
+// inside a tick.
+static const NSUInteger kSettledScopeSamples = 40000;
 
 /// The luminance span the ring's distribution covers, in stops around middle
 /// grey. Wider below than above: shadows carry more of the interesting range.
@@ -212,7 +217,7 @@ static NSWindow *MirageColorPanelHostWindow(NSWindow *editorWindow) {
 
 - (NSString *)_entrySource:(KKTimeline *)timeline {
   if (!timeline)
-    return MirageCustomDefaultShaderSource();
+    return MirageDefaultShaderSource();
   return [MiragePlugin shaderSourceFromTimeline:timeline
                                    forRackEntry:_selectedRackEntryID];
 }
@@ -507,6 +512,10 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   KKMiniViewerView *mini = MirageFindMiniViewer(_popoverContentView);
   if (!mini)
     return;
+  // A settled 256px frame supplies roughly the sampler's full 40k-pixel
+  // budget. Active puck drags switch to 128px in -_beginPuckDrag:, where speed
+  // matters more than density, and restore this size on mouse-up.
+  mini.pixelConsumerLongEdge = 256;
   if (mini != _measuredMini) {
     // This reset also tears down the availability poll, so the poll MUST be
     // installed after it. Installing it before this line produced a timer that
@@ -548,6 +557,8 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
 }
 
 - (void)_stopSampling {
+  _scopeBestLongEdge = 0;
+  _scopeDegradedRun = 0;
   [self _disarmPicking];
   if (_presentationAvailabilityTimer)
     dispatch_source_cancel(_presentationAvailabilityTimer);
@@ -557,41 +568,36 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   // the row on the preview, which is torn down by the same popover close this
   // is. Nothing to release here.
   _measuredMini = nil;
-  _samplePending = NO;
+  _scopeReadInFlight = NO;
+  _scopeResamplePending = NO;
 }
 
-// Coalesce: the preview can present faster than a readback is worth doing, and
-// a burst during a drag must not queue up one measurement per frame.
+// Follow every completed preview as fast as the analyser can consume it.
+//
+// One read stays in flight at a time, so a fast preview cannot build a queue of
+// stale scopes. Unlike the old 50ms dispatch-after throttle, a frame arriving
+// during that read is remembered: completion immediately samples the newest
+// processed texture. This is latest-frame backpressure, not debouncing - puck
+// drags stay fluid and their final fine adjustment cannot be dropped.
 - (void)_frameReady {
-  if (_samplePending)
-    return;
-  NSTimeInterval now = NSDate.timeIntervalSinceReferenceDate;
-  NSTimeInterval since = now - _lastSampleTime;
-  if (since >= kMinSampleInterval) {
-    [self _sampleOnce];
+  if (_scopeReadInFlight) {
+    _scopeResamplePending = YES;
     return;
   }
-  _samplePending = YES;
-  __weak typeof(self) weak = self;
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW,
-                    (int64_t)((kMinSampleInterval - since) * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        __strong typeof(weak) s = weak;
-        if (!s)
-          return;
-        s->_samplePending = NO;
-        [s _sampleOnce];
-      });
+  [self _sampleOnce];
 }
 
 - (void)_sampleOnce {
+  if (_scopeReadInFlight) {
+    _scopeResamplePending = YES;
+    return;
+  }
   if (!_sampler)
     _sampler = [MirageScopeSampler new];
   // Pushed here rather than at the menu, since the sampler is built lazily and
   // the declaration can be chosen before the first frame ever arrives.
   _sampler.pickDeclaration = _pickDeclaration;
-  _lastSampleTime = NSDate.timeIntervalSinceReferenceDate;
+  _sampler.maximumSampleCount = kSettledScopeSamples;
   if (!_panel.isVisible) {
     [self _stopSampling];
     return;
@@ -600,12 +606,44 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   // the renderer's live values, and that has to happen even on a tick where the
   // scope reading comes back empty or the texture is not ready - otherwise the
   // puck goes back to only moving on mouse-up whenever the frame says nothing.
-  [self _refreshPuck];
+  // The dragged circle already owns the exact cursor position and its live
+  // values. Re-deriving every puck from the timeline here costs a full frame
+  // and is redundant during that gesture; mouse-up performs the authoritative
+  // derive after the final value is committed.
+  if (!_puckDragActive)
+    [self _refreshPuck];
   KKMiniViewerView *mini =
       _measuredMini ?: MirageFindMiniViewer(_popoverContentView);
-  id<MTLTexture> graded = mini.processedTexture;
+  id<MTLTexture> graded =
+      mini.pixelConsumerTexture ?: mini.processedTexture;
   if (!graded || !mini.device)
     return; // nothing rendered yet; the axis keeps its "waiting" state
+  // FCP degrades its render resolution while a parameter gesture is open (a
+  // press publishes e.g. a 128x72 feed frame against the settled 256x144), and
+  // a degraded frame has genuinely different pixel statistics - measuring it
+  // visibly shifted the scope twice for a click that changed nothing. Only a
+  // MOVING drag measures whatever arrives (tracking beats fidelity there);
+  // otherwise a materially smaller frame than the best seen holds the previous
+  // reading, and the full-res settle that follows the gesture measures
+  // identically to the frame before it.
+  {
+    NSUInteger longEdge = MAX(graded.width, graded.height);
+    if (!(_puckDragActive && _puckDragMoved) &&
+        (double)longEdge < 0.75 * (double)_scopeBestLongEdge) {
+      // A gesture's degrade is a handful of frames; a permanent viewer-quality
+      // change is every frame from here on. Accept the smaller size as the new
+      // normal after a run of them, or the scope would hold a stale reading
+      // forever.
+      if (++_scopeDegradedRun < 30)
+        return;
+      KKLogDebug(@"[Scope] accepting %lux%lu as the scope's full quality",
+                 (unsigned long)graded.width, (unsigned long)graded.height);
+      _scopeBestLongEdge = longEdge;
+    }
+    _scopeDegradedRun = 0;
+    if (longEdge > _scopeBestLongEdge)
+      _scopeBestLongEdge = longEdge;
+  }
   // Re-read every tick rather than watching for a zoom. The mini fires
   // onProcessedFrameReady on every DRAW - a pan or a wheel-zoom forces one - so
   // the scope already follows the framing, and `onViewTransformChanged` belongs
@@ -617,6 +655,8 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   // callback - done synchronously it took a slice of the main thread out of
   // every frame, right where the popover is trying to composite. The reading
   // comes back on the main thread a beat later and lands exactly as it did.
+  _scopeReadInFlight = YES;
+  _scopeResamplePending = NO;
   __weak typeof(self) weak = self;
   [_sampler readTextureAsync:graded
                       device:mini.device
@@ -624,7 +664,15 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
                      minStop:kRingMinStop
                      maxStop:kRingMaxStop
                   completion:^(MirageScopeReading *reading) {
-                    [weak _applyScopeReading:reading];
+                    __strong typeof(weak) s = weak;
+                    if (!s)
+                      return;
+                    s->_scopeReadInFlight = NO;
+                    [s _applyScopeReading:reading];
+                    BOOL resample = s->_scopeResamplePending;
+                    s->_scopeResamplePending = NO;
+                    if (resample)
+                      [s _sampleOnce];
                   }];
 }
 
@@ -673,7 +721,12 @@ static NSRect MirageVisibleUVRectOfMini(KKMiniViewerView *mini) {
   // the source here so that arrival can reveal both the header toggle and the
   // companion panel in place, without requiring the editor to be reopened.
   self.surfaceEnabled = [self _resolveSurfaceEnabledFromLanes];
-  if (_panel.isVisible)
+  // A puck write applies a timeline on every mouse event so Final Cut's main
+  // viewer stays live. The active circle is already at that event's exact
+  // position, so deriving all circles again during the nested apply only burns
+  // the main thread and starves the scope callback. Mouse-up refreshes once
+  // from the committed timeline.
+  if (_panel.isVisible && !_puckDragActive)
     [self _refreshPuck];
 }
 

@@ -119,7 +119,8 @@ extension FCPXMLParser {
 			sourceChannels: parseActiveSourceChannels(el),
 			unhandledAdjustments: detectUnhandledAdjustments(el),
 			outer: nil,
-			role: roleName(el)
+			role: roleName(el),
+			sourceChannelGroups: parseChannelSourceGroups(el)
 		)
 	}
 
@@ -152,12 +153,13 @@ extension FCPXMLParser {
 					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
 					dialogueOnly: dialogueOnly, into: &clips)
 			} else if child.name == "ref-clip", isEnabled(child) {
-				// Connected clips (XML children of the ref-clip) are in the main XML tree;
-				// projectTime works for them as-is.
+				// Connected clips (XML children of the ref-clip) live in whatever
+				// time space `el` is in - the main tree at top level, the enclosing
+				// compound's media otherwise - so the incoming context applies.
 				walkElement(
-					child, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
-					multicamMap: multicamMap, effects: effects, dialogueOnly: dialogueOnly,
-					into: &clips)
+					child, tcStart: tcStart, compound: compound, assets: assets,
+					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
+					dialogueOnly: dialogueOnly, into: &clips)
 				// `<audio-role-source role="dialogue" active="0"/>` on the ref-clip
 				// mutes the compound's contained dialogue audio; skip the inner spine walk.
 				if dialogueOnly, isDialogueRoleDisabled(child) { continue }
@@ -172,15 +174,34 @@ extension FCPXMLParser {
 						child.attribute(forName: "start")?.stringValue ?? "0s")
 					let refDuration = parseTime(
 						child.attribute(forName: "duration")?.stringValue ?? "0s")
-					let refMainOffset = projectTime(of: child, tcStart: tcStart)
+					let localOffset = projectTime(of: child, tcStart: tcStart)
+					var mainOffset = localOffset
+					var trimStart = refTrimStart - mediaTcStart
+					var trimEnd = trimStart + refDuration
+					if let outer = compound {
+						// Nested compound: `localOffset` is in the OUTER media's time
+						// space, not the main timeline. Clip this ref-clip's span
+						// against the outer trim window and remap into main-timeline
+						// time; a ref-clip trimmed entirely away emits nothing.
+						guard localOffset < outer.internalEnd,
+							localOffset + refDuration > outer.internalStart
+						else { continue }
+						let visibleStart = max(localOffset, outer.internalStart)
+						let visibleEnd = min(localOffset + refDuration, outer.internalEnd)
+						mainOffset = outer.mainOffset + (visibleStart - outer.internalStart)
+						trimStart += visibleStart - localOffset
+						trimEnd = trimStart + (visibleEnd - visibleStart)
+					}
 					let (outerFadeIn, outerFadeOut) = parseFades(child)
 					let ctx = CompoundContext(
-						mainOffset: refMainOffset,
-						internalStart: refTrimStart - mediaTcStart,
-						internalEnd: refTrimStart - mediaTcStart + refDuration,
+						mainOffset: mainOffset,
+						internalStart: trimStart,
+						internalEnd: trimEnd,
 						tcStart: mediaTcStart,
 						outerVolumeCurve: parseVolumeCurve(child),
-						outerAuFilters: parseAudioFilters(child, effects: effects),
+						outerAuFilters: mergeFilters(
+							inner: parseAudioFilters(child, effects: effects),
+							outer: compound?.outerAuFilters),
 						outerFadeIn: outerFadeIn,
 						outerFadeOut: outerFadeOut
 					)
@@ -201,15 +222,32 @@ extension FCPXMLParser {
 							?? multicam.attribute(forName: "tcStart")?.stringValue ?? "0s")
 					let mcDuration = parseTime(
 						child.attribute(forName: "duration")?.stringValue ?? "0s")
-					let mcMainOffset = projectTime(of: child, tcStart: tcStart)
+					let localOffset = projectTime(of: child, tcStart: tcStart)
+					var mainOffset = localOffset
+					var mcTrimStart = trimStart - mcTcStart
+					var mcTrimEnd = mcTrimStart + mcDuration
+					if let outer = compound {
+						// Same remap as nested ref-clips: an mc-clip inside a
+						// compound's media is positioned in that media's time space.
+						guard localOffset < outer.internalEnd,
+							localOffset + mcDuration > outer.internalStart
+						else { continue }
+						let visibleStart = max(localOffset, outer.internalStart)
+						let visibleEnd = min(localOffset + mcDuration, outer.internalEnd)
+						mainOffset = outer.mainOffset + (visibleStart - outer.internalStart)
+						mcTrimStart += visibleStart - localOffset
+						mcTrimEnd = mcTrimStart + (visibleEnd - visibleStart)
+					}
 					let (outerFadeIn, outerFadeOut) = parseFades(child)
 					let ctx = CompoundContext(
-						mainOffset: mcMainOffset,
-						internalStart: trimStart - mcTcStart,
-						internalEnd: trimStart - mcTcStart + mcDuration,
+						mainOffset: mainOffset,
+						internalStart: mcTrimStart,
+						internalEnd: mcTrimEnd,
 						tcStart: mcTcStart,
 						outerVolumeCurve: parseVolumeCurve(child),
-						outerAuFilters: parseAudioFilters(child, effects: effects),
+						outerAuFilters: mergeFilters(
+							inner: parseAudioFilters(child, effects: effects),
+							outer: compound?.outerAuFilters),
 						outerFadeIn: outerFadeIn,
 						outerFadeOut: outerFadeOut
 					)
@@ -310,7 +348,8 @@ extension FCPXMLParser {
 					sourceChannels: parseActiveSourceChannels(child),
 					unhandledAdjustments: detectUnhandledAdjustments(child),
 					outer: nil,
-					role: connectedRoleName(child)
+					role: connectedRoleName(child),
+					sourceChannelGroups: parseChannelSourceGroups(child)
 				))
 		}
 	}
@@ -322,6 +361,9 @@ extension FCPXMLParser {
 		let mainStart: Double
 		let visibleStart: Double
 		let visibleEnd: Double
+		/// How much of the child's head the compound trim cuts off - the
+		/// child's source read must start this much later.
+		let headTrim: Double
 		var sourceDuration: Double { visibleEnd - visibleStart }
 	}
 
@@ -340,7 +382,8 @@ extension FCPXMLParser {
 		return VisibleWindow(
 			mainStart: ctx.mainOffset + (visibleStart - ctx.internalStart),
 			visibleStart: visibleStart,
-			visibleEnd: visibleEnd)
+			visibleEnd: visibleEnd,
+			headTrim: visibleStart - internalOffset)
 	}
 
 	/// Builds an `AudioClip` for an inner element of a compound. Common path
@@ -357,7 +400,7 @@ extension FCPXMLParser {
 			name: child.attribute(forName: "name")?.stringValue ?? "clip",
 			start: window.mainStart,
 			end: window.mainStart + window.sourceDuration,
-			sourceStart: sourceStart,
+			sourceStart: sourceStart + window.headTrim,
 			sourceDuration: window.sourceDuration,
 			url: asset?.url,
 			bookmark: asset?.bookmark,
@@ -371,7 +414,8 @@ extension FCPXMLParser {
 			sourceChannels: parseActiveSourceChannels(child),
 			unhandledAdjustments: detectUnhandledAdjustments(child),
 			outer: ctx.outerCompound(mainStart: window.mainStart),
-			role: connectedRoleName(child))
+			role: connectedRoleName(child),
+			sourceChannelGroups: parseChannelSourceGroups(child))
 	}
 
 	/// Concatenates inner + outer filter chains. Outer effects (on the

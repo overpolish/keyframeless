@@ -65,6 +65,7 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   // renderer with a different editFraction during their encode pass) keep
   // their own keypose values - only the active cell sees the override.
   NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *_liveValues;
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *_sessionLiveValues;
   double _liveFraction;
   BOOL _hasLiveFraction;
   // Diagnostic only: the last (label, fractions) an override was REFUSED for,
@@ -535,6 +536,9 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label {
+  NSArray<NSNumber *> *session = _sessionLiveValues[label];
+  if (session.count > 0)
+    return session;
   if (_hasLiveFraction) {
     NSArray<NSNumber *> *live = _liveValues[label];
     if (live.count > 0 && fabs(self.editFraction - _liveFraction) < 1e-4)
@@ -643,6 +647,25 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return fracs;
 }
 
+// Fraction-INDEPENDENT overrides, for session-only viewer state (Mirage's
+// matte bool and active preview key). The fraction-keyed channel below exists
+// so a stale override cannot misstate an ANIMATED value at another time, but
+// these values do not animate, and keying them by fraction meant the matte
+// died the moment the edit fraction drifted a ten-thousandth (playback
+// follow, boundary rounding) from the push.
+- (void)setSessionLiveValues:(NSArray<NSNumber *> *)values
+                    forLabel:(NSString *)label {
+  if (!label.length)
+    return;
+  if (!_sessionLiveValues)
+    _sessionLiveValues = [NSMutableDictionary dictionary];
+  if (values.count == 0) {
+    [_sessionLiveValues removeObjectForKey:label];
+  } else {
+    _sessionLiveValues[label] = [values copy];
+  }
+}
+
 - (void)setLiveValues:(NSArray<NSNumber *> *)values
              forLabel:(NSString *)label
            atFraction:(double)fraction {
@@ -661,6 +684,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 
 - (void)clearLiveValues {
   [_liveValues removeAllObjects];
+  [_sessionLiveValues removeAllObjects];
   _hasLiveFraction = NO;
 }
 
@@ -1104,8 +1128,11 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
-    handleHitAtPoint:(CGPoint)p
-         contentRect:(CGRect)cr {
+    resolveHandleHitAtPoint:(CGPoint)p
+                contentRect:(CGRect)cr
+                     cursor:(NSCursor **)outCursor {
+  if (outCursor)
+    *outCursor = nil;
   self.canvas = canvas;
   if (CGRectIsEmpty(cr))
     return NO;
@@ -1113,65 +1140,71 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   // top flips to point > rotation (see -pointHandleBeatsRotation).
   BOOL pointFirst = [self pointHandleBeatsRotation];
   if (pointFirst && [self _pointActiveForContentRect:cr] &&
-      [self pointHandleHitAtPoint:p contentRect:cr])
+      [self pointHandleHitAtPoint:p contentRect:cr]) {
+    if (outCursor)
+      *outCursor = [self kkVisibilityCursorForLabel:self.pointLabel]
+                       ?: KKPointMoveCursor();
     return YES;
-  if ([self _rotationActiveForContentRect:cr] &&
-      [self rotationHitTestAtPoint:p contentRect:cr])
-    return YES;
-  if (!pointFirst && [self _pointActiveForContentRect:cr] &&
-      [self pointHandleHitAtPoint:p contentRect:cr])
-    return YES;
-  return [self _cropActiveForContentRect:cr] &&
-         [_cropEditor partAtPoint:p
-                           values:[self valuesForLabel:self.cropLabel]
-                      contentRect:cr] >= 0;
-}
-
-// Hover hit-test for the cursor, same precedence as -handleHitAtPoint:: the
-// point handle shows the move cursor, a rotation ring the quadrant rotate
-// cursor, a crop handle the matching resize cursor. Subclasses add their own
-// handle types (scale, anchor, path) and fall back to super. rotationHitTest
-// runs on every hover via -handleHitAtPoint: already, so calling it here adds
-// no new side effect.
-- (NSCursor *)miniViewer:(KKMiniViewerView *)canvas
-           cursorAtPoint:(CGPoint)p
-             contentRect:(CGRect)cr {
-  if (CGRectIsEmpty(cr))
-    return nil;
-  self.canvas = canvas;
-  BOOL pointFirst = [self pointHandleBeatsRotation];
-  if (pointFirst && [self _pointActiveForContentRect:cr] &&
-      [self pointHandleHitAtPoint:p contentRect:cr])
-    return [self kkVisibilityCursorForLabel:self.pointLabel]
-               ?: KKPointMoveCursor();
+  }
   if ([self _rotationActiveForContentRect:cr] &&
       [self rotationHitTestAtPoint:p contentRect:cr]) {
-    // rotationHitTestAtPoint set _rotActiveAxis (0=X, 1=Y, 2=Z); the cursor
-    // encodes that axis, not the hover position.
     NSString *axis = (_rotActiveAxis == 0)   ? @"X"
                      : (_rotActiveAxis == 1) ? @"Y"
                                              : @"Z";
     NSString *ringKey =
         [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
     CGPoint rc = [self rotationCenterForContentRect:cr];
-    return [self kkVisibilityCursorForLabel:ringKey]
-               ?: KKRotationAxisCursor(_rotActiveAxis,
-                                       atan2(p.y - rc.y, p.x - rc.x));
+    if (outCursor)
+      *outCursor = [self kkVisibilityCursorForLabel:ringKey]
+                       ?: KKRotationAxisCursor(
+                              _rotActiveAxis,
+                              atan2(p.y - rc.y, p.x - rc.x));
+    return YES;
   }
   if (!pointFirst && [self _pointActiveForContentRect:cr] &&
-      [self pointHandleHitAtPoint:p contentRect:cr])
-    return [self kkVisibilityCursorForLabel:self.pointLabel]
-               ?: KKPointMoveCursor();
+      [self pointHandleHitAtPoint:p contentRect:cr]) {
+    if (outCursor)
+      *outCursor = [self kkVisibilityCursorForLabel:self.pointLabel]
+                       ?: KKPointMoveCursor();
+    return YES;
+  }
   if ([self _cropActiveForContentRect:cr]) {
     NSInteger part =
         [_cropEditor partAtPoint:p
                           values:[self valuesForLabel:self.cropLabel]
                      contentRect:cr];
-    if (part >= 1)
-      return [self kkVisibilityCursorForLabel:self.cropLabel]
-                 ?: KKResizeCursorOfKind(KKMiniCropResizeKind(part - 1));
+    if (part >= 0) {
+      if (outCursor) {
+        NSCursor *visibility =
+            [self kkVisibilityCursorForLabel:self.cropLabel];
+        *outCursor = visibility ?: (part == 0 ? KKPointMoveCursor()
+                                             : KKResizeCursorOfKind(
+                                                   KKMiniCropResizeKind(part - 1)));
+      }
+      return YES;
+    }
   }
-  return nil;
+  return NO;
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    handleHitAtPoint:(CGPoint)p
+         contentRect:(CGRect)cr {
+  return [self miniViewer:canvas
+      resolveHandleHitAtPoint:p
+                  contentRect:cr
+                       cursor:NULL];
+}
+
+- (NSCursor *)miniViewer:(KKMiniViewerView *)canvas
+           cursorAtPoint:(CGPoint)p
+             contentRect:(CGRect)cr {
+  NSCursor *cursor = nil;
+  [self miniViewer:canvas
+      resolveHandleHitAtPoint:p
+                  contentRect:cr
+                       cursor:&cursor];
+  return cursor;
 }
 
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas

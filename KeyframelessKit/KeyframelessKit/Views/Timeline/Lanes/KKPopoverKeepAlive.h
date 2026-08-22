@@ -98,6 +98,23 @@ FOUNDATION_EXPORT KKPopoverSidebarButton *
 KKCreateRightPanelVisibilityButton(BOOL visible,
                                    void (^onVisibilityChanged)(BOOL visible));
 
+/// Kit-wide "pinned" state of the editor panels (constants / keypose / curve /
+/// gap). Pinned (the default) means a panel only closes on its X, Esc, or an
+/// in-place replacement. Unpinned, a click outside the panel and its companions
+/// closes it as if X had been pressed. One flag for every panel: it describes
+/// how the user likes panels to behave, not any one panel. Persisted.
+FOUNDATION_EXPORT BOOL KKEditorPanelsPinned(void);
+FOUNDATION_EXPORT void KKSetEditorPanelsPinned(BOOL pinned);
+/// Posted (object nil) after KKSetEditorPanelsPinned changes the value, so an
+/// open panel can switch its dismissal and its pin button can mirror.
+extern NSNotificationName const KKEditorPanelsPinnedDidChangeNotification;
+
+/// Header toggle beside close: the pin. Reads/writes the kit-wide flag itself
+/// and mirrors external changes, so a host only builds and places it.
+@interface KKPopoverPinButton : NSButton
+@end
+FOUNDATION_EXPORT KKPopoverPinButton *KKCreateEditorPinButton(void);
+
 /// Post `KKStaticValuesPopoverDidOpenNotification` for `popover` with the
 /// standard companion-panel userInfo - `window`, `contentView`, and the visible
 /// card's screen rect `contentRect` (the window frame includes shadow/arrow

@@ -157,6 +157,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// skips materially-smaller frames. Not persisted.
 @property(nonatomic) CGSize largestSourceSizeSeen;
 
+/// Consecutive frames skipped for being a GESTURE-DEGRADED size (between the
+/// hard thumbnail floor and the degrade threshold). FCP drops its render
+/// resolution while a parameter gesture is open; publishing those frames made
+/// the preview and the vectorscope visibly change resolution twice per click.
+/// A long run means the smaller size is a real setting change (proxy media,
+/// viewer quality) and is accepted as the new normal. Not persisted.
+@property(nonatomic) NSUInteger degradedSourceRun;
+
 /// Publish whatever state the feed currently has (no surface update). Used
 /// when only `slotCount` changes - consumers need a fresh descriptor.
 - (void)publishDescriptor;

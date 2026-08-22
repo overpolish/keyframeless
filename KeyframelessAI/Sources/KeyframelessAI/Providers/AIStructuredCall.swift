@@ -36,7 +36,11 @@ enum AIStructuredCall {
 		schemaDescription: String,
 		jsonSchema: [String: Any],
 		modelOverride: String? = nil,
-		enableThinking: Bool = false
+		enableThinking: Bool = false,
+		/// How hard a thinking model should reason: "high" for the passes where
+		/// correctness beats latency (writing a whole shader). nil = provider
+		/// default. Ignored without thinking.
+		effort: String? = nil
 	) async throws -> String {
 		let provider = AIKeyState.shared.activeProvider
 		if provider == .local {
@@ -77,7 +81,8 @@ enum AIStructuredCall {
 				schemaDescription: schemaDescription,
 				jsonSchema: jsonSchema,
 				model: modelOverride ?? "claude-sonnet-4-6",
-				enableThinking: enableThinking
+				enableThinking: enableThinking,
+				effort: effort
 			)
 		case .openai:
 			// OpenAI's "thinking" is per-model (the o-series reasoning models)
@@ -104,7 +109,8 @@ enum AIStructuredCall {
 				schemaName: schemaName,
 				jsonSchema: jsonSchema,
 				model: openaiModel,
-				isReasoningModel: enableThinking && modelOverride == nil
+				isReasoningModel: enableThinking && modelOverride == nil,
+				effort: effort
 			)
 		case .local:
 			throw AITransformError.localUnavailable
@@ -118,7 +124,7 @@ enum AIStructuredCall {
 		key: String, system: String, cachedPrefix: String?, userMessage: String,
 		schemaName: String, schemaDescription: String,
 		jsonSchema: [String: Any], model: String,
-		enableThinking: Bool
+		enableThinking: Bool, effort: String?
 	) async throws -> String {
 		var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
 		request.httpMethod = "POST"
@@ -182,10 +188,14 @@ enum AIStructuredCall {
 			],
 		]
 		if enableThinking {
-			body["thinking"] = [
-				"type": "enabled",
-				"budget_tokens": 4_000,
-			]
+			let thinking = anthropicThinkingParam(model: model)
+			body["thinking"] = thinking
+			// `effort` only exists on the adaptive-thinking generations.
+			if let effort, thinking["type"] as? String == "adaptive" {
+				body["output_config"] = ["effort": effort]
+			}
+			// A reasoning model writing a whole shader can take well over a minute.
+			request.timeoutInterval = 300
 		}
 		request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -219,20 +229,38 @@ enum AIStructuredCall {
 		return str
 	}
 
+	/// The thinking shape Anthropic accepts depends on the model generation:
+	/// 4.5 and older take a token budget, everything from 4.6 on (Sonnet 4.6,
+	/// Opus 4.6+, Sonnet 5, Opus 5, Fable 5) takes adaptive thinking and REJECTS
+	/// `budget_tokens` with a 400 on the newest models.
+	private static func anthropicThinkingParam(model: String) -> [String: Any] {
+		// Only the generations that still take a budget are listed; anything
+		// newer (or unknown) gets adaptive, which is where the API is heading.
+		let legacy = [
+			"claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5",
+			"claude-opus-4-1", "claude-opus-4-2025", "claude-sonnet-4-2025",
+			"claude-3",
+		]
+		if legacy.contains(where: { model.hasPrefix($0) }) {
+			return ["type": "enabled", "budget_tokens": 4_000]
+		}
+		return ["type": "adaptive"]
+	}
+
 	// MARK: - OpenAI
 
 	@MainActor
 	private static func callOpenAI(
 		key: String, system: String, userMessage: String,
 		schemaName: String, jsonSchema: [String: Any], model: String,
-		isReasoningModel: Bool
+		isReasoningModel: Bool, effort: String? = nil
 	) async throws -> String {
 		var request = URLRequest(
 			url: URL(string: "https://api.openai.com/v1/chat/completions")!)
 		request.httpMethod = "POST"
 		request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
 		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-		request.timeoutInterval = isReasoningModel ? 120 : 60
+		request.timeoutInterval = isReasoningModel ? (effort == "high" ? 300 : 120) : 60
 
 		// Reasoning models (o-series) have a few API quirks:
 		// - the system role becomes "developer"
@@ -257,7 +285,7 @@ enum AIStructuredCall {
 			],
 		]
 		if isReasoningModel {
-			body["reasoning_effort"] = "medium"
+			body["reasoning_effort"] = effort ?? "medium"
 		}
 		request.httpBody = try JSONSerialization.data(withJSONObject: body)
 

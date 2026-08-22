@@ -102,8 +102,8 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// with the updated timeline INSTEAD of writing the single
 /// `kKKParamTimelineData` param - so a multi-owner host (e.g. Canvas, whose
 /// layers each carry their own `animationJSON`) can route the write to the
-/// owning layer. The block is invoked inside the control's open action scope,
-/// so the host's get/set API (same apiManager) resolves there. The lane carries
+/// owning layer. The block is invoked inside the host's OSC callback, so its
+/// get/set API (same apiManager) resolves there. The lane carries
 /// its owner via `layerKey`. nil = default single-param write
 /// (single-param plugins unchanged).
 @property(nonatomic, copy, nullable) void (^onTimelinePersist)

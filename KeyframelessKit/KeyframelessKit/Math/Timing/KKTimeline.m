@@ -424,6 +424,8 @@ static const KKLaneField kKKLaneFields[] = {
      KKLaneFieldTemplateCanonical}, // static config
     {@"codeValidator", nil, nil, KKLaneFieldObject,
      KKLaneFieldTemplateCanonical}, // block
+    {@"codeSaveValidator", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical}, // block
     {@"codeValidationComposer", nil, nil, KKLaneFieldObject,
      KKLaneFieldTemplateCanonical}, // block
     {@"codeFormatter", nil, nil, KKLaneFieldObject,

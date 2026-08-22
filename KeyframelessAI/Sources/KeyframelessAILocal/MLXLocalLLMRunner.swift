@@ -78,7 +78,7 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 		modelID: String, system: String, user: String, jsonSchemaJSON: String?,
 		enableThinking: Bool
 	) async throws -> String {
-		guard let model = LocalModelCatalog.model(id: modelID) else {
+		guard let model = LocalModelCatalog.resolve(id: modelID) else {
 			throw RunnerError.unknownModel(modelID)
 		}
 		localLog.notice(
@@ -182,7 +182,7 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 		AsyncThrowingStream { continuation in
 			let task = Task {
 				do {
-					guard let model = LocalModelCatalog.model(id: modelID) else {
+					guard let model = LocalModelCatalog.resolve(id: modelID) else {
 						throw RunnerError.unknownModel(modelID)
 					}
 					localLog.notice(
@@ -352,6 +352,22 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 			loaded = try await VLMModelFactory.shared.loadContainer(
 				from: #hubDownloader(hub), using: #huggingFaceTokenizerLoader(),
 				configuration: ModelConfiguration(id: model.repoID))
+		} else if LocalModelCatalog.customRepoID(id: model.id) != nil {
+			// A custom (adopted) model: try the text-LLM factory, and fall back to
+			// the VLM factory for the MoE/multimodal architectures that live there
+			// (the same split the catalog encodes per-entry with usesVLMFactory).
+			do {
+				loaded = try await loadModelContainer(
+					from: #hubDownloader(hub), using: #huggingFaceTokenizerLoader(),
+					id: model.repoID)
+			} catch {
+				localLog.notice(
+					"custom model \(model.repoID, privacy: .public) failed LLM factory (\(error.localizedDescription, privacy: .public)); trying VLM factory"
+				)
+				loaded = try await VLMModelFactory.shared.loadContainer(
+					from: #hubDownloader(hub), using: #huggingFaceTokenizerLoader(),
+					configuration: ModelConfiguration(id: model.repoID))
+			}
 		} else {
 			loaded = try await loadModelContainer(
 				from: #hubDownloader(hub), using: #huggingFaceTokenizerLoader(), id: model.repoID)

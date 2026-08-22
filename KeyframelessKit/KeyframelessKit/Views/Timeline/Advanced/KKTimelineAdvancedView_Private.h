@@ -180,6 +180,10 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   BOOL _marqueeShift;
 
   NSMutableDictionary<NSString *, NSNumber *> *_dragOriginTimes;
+  // Header collapse hit zones, rebuilt each draw: collapseKey -> [label
+  // cluster rect, chevron rect]. A header click toggles only inside these
+  // (the label or the chevron), never on the row's empty middle.
+  NSMutableDictionary<NSString *, NSArray<NSValue *> *> *_headerToggleRects;
   double _dragOriginFrac;
 
   // Snapshot of the pressed lane's keypose times, captured at the start of a
@@ -204,6 +208,17 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
   NSInteger _hoverLaneRow;
   NSTrackingArea *_hoverTrackingArea;
+
+  // Cursor the modifier affordance resolved to (nil = plain arrow). Held so
+  // -resetCursorRects can re-register it: without a registered cursor rect
+  // AppKit restores the window's inherited arrow as soon as mouseMoved:
+  // returns.
+  NSCursor *_resolvedCursor;
+
+  // Runs only while the pointer is inside the view: flagsChanged: reaches us
+  // only while we're first responder, so a modifier pressed during a hover that
+  // never clicked would otherwise leave the cursor stale.
+  NSTimer *_modifierPollTimer;
 
   KKTimelineZoomPan *_zp;
   BOOL _zoomedNotified;

@@ -253,6 +253,27 @@ int main(void) {
     KKLane *foundRacked = MirageRackCodeLaneForEntry(tl, @"7f3a01", @"Mirage");
     KKRequire(foundRacked == rackedCode,
               @"racked entry's code lane found by prefixed key");
+
+    // Compare is a capability of the whole rack, not whichever entry happens
+    // to be selected. This is the compact-view shortcut/main-pill case: a
+    // generator at the end must not hide B/S while an earlier filter still
+    // consumes the incoming frame.
+    tl.slotGroups = @{kMirageRackGroupName : @[ @"0", @"7f3a01" ]};
+    sentinelCode.codeString = @"// #template generator\nvoid mainImage() {}";
+    rackedCode.codeString = @"// #template filter\nvoid mainImage() {}";
+    BOOL (^isFilter)(NSString *) = ^BOOL(NSString *source) {
+      return [source containsString:@"#template filter"];
+    };
+    KKRequire(MirageRackHasSourceMatching(tl, @"Mirage", nil, isFilter),
+              @"a filter anywhere in the rack enables Original/Split");
+    rackedCode.codeString = @"// #template generator\nvoid mainImage() {}";
+    KKRequire(!MirageRackHasSourceMatching(tl, @"Mirage", nil, isFilter),
+              @"an all-generator rack has no incoming-frame comparison");
+    KKTimeline *freshCompare = [KKTimeline timeline];
+    KKRequire(MirageRackHasSourceMatching(
+                  freshCompare, @"Mirage",
+                  @"// #template filter\nvoid mainImage() {}", isFilter),
+              @"a fresh legacy entry uses its unpersisted source fallback");
     KKRequire(MirageRackCodeLaneForEntry(tl, @"nosuch", @"Mirage") == nil,
               @"an unregistered entry has no code lane");
 
@@ -346,6 +367,12 @@ int main(void) {
               @"registering twice is a no-op");
     KKRequire(!MirageRackSetEntryIDs(legacy, @[]),
               @"an empty registry is refused, never written");
+    KKRequire(!MirageRackRequiresExplicitBlob(@[ @"0" ]),
+              @"a lone sentinel keeps the legacy render blob");
+    KKRequire(MirageRackRequiresExplicitBlob(@[ @"7f3a01" ]),
+              @"a lone minted survivor keeps explicit rack identity");
+    KKRequire(MirageRackRequiresExplicitBlob(@[ @"0", @"7f3a01" ]),
+              @"a multi-entry chain uses the rack render blob");
 
     // --- MirageRackRemoveEntry --------------------------------------------
     KKTimeline *rack = [KKTimeline timeline];

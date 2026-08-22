@@ -7,6 +7,7 @@
 #import "MirageAudioPool.h" // MirageFillAudioPool (the Sonar spectrogram)
 #import "MirageDirectives.h"
 #import "MirageInspectorView.h"
+#import "MirageLocalCatalog.h"
 #import "MirageLocalized.h"
 #import "MirageRack.h"
 #import "MirageStateBlob.h"
@@ -140,7 +141,7 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   NSString *shaderSrc =
       shaderLane.codeString.length
           ? shaderLane.codeString
-          : ((!shaderLane && sentinel) ? MirageCustomDefaultShaderSource()
+          : ((!shaderLane && sentinel) ? MirageDefaultShaderSource()
                                        : nil);
   // The controls the Color panel owns read their DECLARED DEFAULT here and
   // nothing else, whatever the timeline happens to contain.
@@ -564,7 +565,7 @@ static NSString *MirageRackFallbackEntryName(void) {
   if (outRackEntries) {
     NSArray<NSString *> *entryIDs = MirageRackEntryIDs(timeline);
     *outRackEntries = nil;
-    if (entryIDs.count > 1) {
+    if (MirageRackRequiresExplicitBlob(entryIDs)) {
       NSMutableArray<MirageStateBlobEntry *> *rack =
           [NSMutableArray arrayWithCapacity:entryIDs.count];
       for (NSString *entryID in entryIDs) {
@@ -654,7 +655,7 @@ static NSString *MirageRackFallbackEntryName(void) {
   // bytes for a lone sentinel entry anyway, so this only decides which call to
   // make, not which layout comes out.
   NSData *data =
-      rackEntries.count > 1
+      rackEntries.count > 0
           ? MirageStateBlobEncodeRack(&mbState, rackEntries, timeline)
           : MirageStateBlobEncode(&mbState, states, n, timeline);
   free(states);

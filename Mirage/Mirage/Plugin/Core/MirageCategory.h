@@ -43,6 +43,12 @@ static NSString *const kMirageCategoryColorTransform = @"color-transform";
 /// Absent or unknown resolves here.
 #define kMirageCategoryDefault kMirageCategoryGenerator
 
+/// NOT a category: a semantic capability, like `grading` - the shader reacts
+/// to the clip's audio (`// #audio`). Published in the generated manifest so
+/// remote cards filter correctly before their GLSL exists locally, derived
+/// from source for local entries, and shown as its own filter pill.
+static NSString *const kMirageFilterAudio = @"audio";
+
 /// Every category id, in the order pickers and filters show them. The default
 /// leads, so a picker's index 0 is the value a shader gets when nobody chooses.
 static inline NSArray<NSString *> *MirageCategoryIDs(void) {
@@ -50,6 +56,13 @@ static inline NSArray<NSString *> *MirageCategoryIDs(void) {
     kMirageCategoryGenerator, kMirageCategoryFilter, kMirageCategoryTransition,
     kMirageCategoryLayout, kMirageCategoryColorTransform
   ];
+}
+
+/// What the browser's filter row shows: every category plus the capability
+/// pills. Separate from MirageCategoryIDs() because a capability is not a
+/// value a shader's `#template` (or metadata category) may take.
+static inline NSArray<NSString *> *MirageBrowserFilterIDs(void) {
+  return [MirageCategoryIDs() arrayByAddingObject:kMirageFilterAudio];
 }
 
 /// The mandatory Image-source directive is the category's source of truth.
@@ -82,7 +95,10 @@ static inline NSString *MirageCategoryNormalize(NSString *_Nullable raw) {
 /// under `filter`, because its type is the more specific answer.
 static inline BOOL MirageCategoryMatchesFilter(NSString *_Nullable category,
                                                BOOL gradingTool,
+                                               BOOL audioReactive,
                                                NSString *filterID) {
+  if ([filterID isEqualToString:kMirageFilterAudio])
+    return audioReactive;
   if ([MirageCategoryNormalize(category) isEqualToString:filterID])
     return YES;
   return gradingTool &&
@@ -91,6 +107,8 @@ static inline BOOL MirageCategoryMatchesFilter(NSString *_Nullable category,
 
 /// The SF Symbol that stands for a category on a card badge / filter row.
 static inline NSString *MirageCategorySymbol(NSString *_Nullable categoryID) {
+  if ([categoryID isEqualToString:kMirageFilterAudio])
+    return @"waveform";
   NSString *c = MirageCategoryNormalize(categoryID);
   if ([c isEqualToString:kMirageCategoryFilter])
     return @"camera.filters";
@@ -106,6 +124,8 @@ static inline NSString *MirageCategorySymbol(NSString *_Nullable categoryID) {
 /// The category's user-facing name.
 static inline NSString *
 MirageCategoryDisplayName(NSString *_Nullable categoryID) {
+  if ([categoryID isEqualToString:kMirageFilterAudio])
+    return RLoc(@"Audio", @"Mirage category: reacts to audio.");
   NSString *c = MirageCategoryNormalize(categoryID);
   if ([c isEqualToString:kMirageCategoryFilter])
     return RLoc(@"Filter", @"Mirage category: processes the clip.");

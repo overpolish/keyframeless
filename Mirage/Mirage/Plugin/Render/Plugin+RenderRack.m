@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "KKGLSLTranspiler_Internal.h"
 #import "MirageCustomShader.h"
 #import "MirageDirectives.h" // MirageCommonDefault + the #motionblur mode
 #import "MirageRack.h"
@@ -38,15 +39,21 @@
 
 static void MirageApplyRackSelectionPreview(MirageShaderModel *model,
                                             NSString *source,
-                                            MiragePluginState *state) {
-  NSString *key = MirageSurfaceSelectionToggleForSource(source);
+                                            MiragePluginState *state,
+                                            NSInteger activeKey) {
+  NSString *selectionKey = MirageSurfaceSelectionToggleForSource(source);
+  NSString *activeKeyControl =
+      MirageSurfaceActiveKeyControlForSource(source);
   const MirageScalarProp *props = model.scalarProps;
-  for (int i = 0; key.length && i < model.scalarCount; i++)
-    if ([key isEqualToString:@(props[i].name)] && props[i].isBool &&
+  for (int i = 0; i < model.scalarCount; i++)
+    if ([selectionKey isEqualToString:@(props[i].name)] && props[i].isBool &&
         props[i].poolOffset >= 0 &&
         props[i].poolOffset < state->colorPoolCount) {
       state->colorPool[props[i].poolOffset].x = 1.0f;
-      return;
+    } else if ([activeKeyControl isEqualToString:@(props[i].name)] &&
+               props[i].isChoice && props[i].poolOffset >= 0 &&
+               props[i].poolOffset < state->colorPoolCount) {
+      state->colorPool[props[i].poolOffset].x = (float)activeKey;
     }
 }
 
@@ -99,7 +106,8 @@ static void MirageApplyRackSelectionPreview(MirageShaderModel *model,
   BOOL showSelection = compareState.mirageCompareSelectionEnabled &&
                        [selectedEntry isEqualToString:thisEntry];
   if (showSelection)
-    MirageApplyRackSelectionPreview(pxModel, imageSrc, &base);
+    MirageApplyRackSelectionPreview(pxModel, imageSrc, &base,
+                                    compareState.mirageCompareActiveKey);
   MirageScalePixelProps(pxModel, base.colorPool, base.colorPoolCount,
                         pixelScale);
 
@@ -140,7 +148,9 @@ static void MirageApplyRackSelectionPreview(MirageShaderModel *model,
     if (MirageStateBlobReadStatesAtIndex(pluginState, index, mpStates, n)) {
       for (NSInteger si = 0; si < n; si++)
         if (showSelection)
-          MirageApplyRackSelectionPreview(pxModel, imageSrc, &mpStates[si]);
+          MirageApplyRackSelectionPreview(
+              pxModel, imageSrc, &mpStates[si],
+              compareState.mirageCompareActiveKey);
       for (NSInteger si = 0; si < n; si++)
         MirageScalePixelProps(pxModel, mpStates[si].colorPool,
                               mpStates[si].colorPoolCount, pixelScale);
@@ -163,10 +173,13 @@ static void MirageApplyRackSelectionPreview(MirageShaderModel *model,
     entryMB.enabled = NO;
   }
 
+  NSString *renderImageSource = withCommon(imageSrc);
+  if (chain.input)
+    renderImageSource = KKGLSLSourcePreservingInputAlpha(renderImageSource);
   BOOL ok = [self renderCustomMultipassWithUniforms:u
                                           colorPool:base.colorPool
                                           poolCount:base.colorPoolCount
-                                        imageSource:withCommon(imageSrc)
+                                        imageSource:renderImageSource
                                       bufferSources:bufSources
                                          frameIndex:frameIndex
                                          dtPerFrame:dtPerFrame

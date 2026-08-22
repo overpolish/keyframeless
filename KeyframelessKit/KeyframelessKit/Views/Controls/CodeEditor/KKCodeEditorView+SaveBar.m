@@ -56,10 +56,17 @@ static const CGFloat kSaveCategoryListMaxBody = 168.0;
   if (_saveNameField.currentEditor)
     return;
   _saveNameField.stringValue = n;
+  [self _refreshSaveButtonEnabled];
+}
+
+// Save needs a name AND code the host is willing to save (see saveValidator).
+- (void)_refreshSaveButtonEnabled {
   _saveButton.enabled =
-      [n stringByTrimmingCharactersInSet:NSCharacterSet
-                                             .whitespaceAndNewlineCharacterSet]
-          .length > 0;
+      !_saveBlocked &&
+      [_saveNameField.stringValue
+          stringByTrimmingCharactersInSet:NSCharacterSet
+                                              .whitespaceAndNewlineCharacterSet]
+              .length > 0;
 }
 
 - (NSArray<NSString *> *)saveCategoryLabels {
@@ -166,11 +173,7 @@ static const CGFloat kSaveCategoryListMaxBody = 168.0;
 
 - (void)controlTextDidChange:(NSNotification *)note {
   if (note.object == _saveNameField)
-    _saveButton.enabled =
-        [_saveNameField.stringValue
-            stringByTrimmingCharactersInSet:
-                NSCharacterSet.whitespaceAndNewlineCharacterSet]
-            .length > 0;
+    [self _refreshSaveButtonEnabled];
 }
 
 // Commit the name on blur. Enter routes here too, via the doCommandBySelector

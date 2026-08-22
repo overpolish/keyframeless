@@ -32,6 +32,7 @@ BOOL KKLooksLikeGLTransition(NSString *src);
 
 // Does this source carry `// #alpha` (its own alpha is authoritative)?
 BOOL KKWantsAlphaOutput(NSString *src);
+BOOL KKLooksLikeGeneratorShader(NSString *src);
 
 // Is this a two-image transition whose output alpha must remain authoritative?
 // Besides the GL-Transitions signature, Mirage-native transitions are
@@ -68,6 +69,12 @@ NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, KKGLSLPassKind pass);
 NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                      NSInteger *_Nullable outUserLineOffset,
                      KKGLSLPassKind pass);
+
+// Mark one rack entry's image source so an ordinary downstream filter keeps
+// the alpha carried by iChannel0 instead of applying the standalone
+// Shadertoy convention (forced opaque). `// #alpha` still wins when the entry
+// explicitly authors new coverage. Internal render marker, never persisted.
+NSString *KKGLSLSourcePreservingInputAlpha(NSString *userSource);
 
 #ifdef __cplusplus
 }

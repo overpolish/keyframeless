@@ -421,6 +421,12 @@ static inline void MirageScopeAccumulatePixel(MirageScopeAccumulator *acc,
 /// pixels.
 @interface MirageScopeSampler : NSObject
 
+/// Upper bound on pixels analysed for one reading. The sampler downsizes on
+/// the GPU before readback, so lowering this reduces both the transfer and the
+/// Oklab CPU walk rather than merely skipping pixels after a full-frame copy.
+/// Defaults to the full-quality scope budget.
+@property(nonatomic) NSUInteger maximumSampleCount;
+
 /// Measure `texture` on `device`, binning luminance into `binCount` bins
 /// spanning `minStop`..`maxStop` around middle grey. Returns nil when the
 /// texture cannot be read. Synchronous and main-thread: the preview textures

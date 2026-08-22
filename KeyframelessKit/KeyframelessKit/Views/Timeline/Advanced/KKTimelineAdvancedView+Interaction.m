@@ -108,6 +108,16 @@
     NSArray<KKAdvancedRow *> *anim = [self _rows];
     NSInteger row = [self _laneRowAtPoint:pt];
     if (row >= 0 && row < (NSInteger)anim.count && anim[row].isHeader) {
+      // Only the label cluster or the chevron toggles (zones recorded at
+      // draw time); a click on the header's empty middle does nothing.
+      BOOL hitToggle = NO;
+      for (NSValue *v in _headerToggleRects[anim[row].collapseKey ?: @""])
+        if (NSPointInRect(pt, v.rectValue)) {
+          hitToggle = YES;
+          break;
+        }
+      if (!hitToggle)
+        return;
       if (anim[row].kind == KKAdvancedRowCategoryHeader) {
         NSString *ck = anim[row].collapseKey;
         if ([_collapsedCategoryKeys containsObject:ck])

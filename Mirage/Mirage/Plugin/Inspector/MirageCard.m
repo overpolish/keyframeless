@@ -19,6 +19,8 @@ const CGFloat kMirageCardNameH = 16.0;
   NSTextField *_name;
   NSMutableArray<NSButton *> *_hoverButtons; // delete + primary (hover-only)
   NSButton *_favButton;
+  NSButton *_defaultButton;
+  NSView *_defaultBeam;
   BOOL _hovered;
   CGFloat _w, _imgH;  // card width + thumbnail height (16:9), set per rebuild
   id _keyMonitor;     // forwards keyDown to the rename field editor
@@ -49,6 +51,78 @@ const CGFloat kMirageCardNameH = 16.0;
       [NSColor colorWithWhite:0.0 alpha:0.25].CGColor;
   _thumb.image = item.thumbnail;
   [self addSubview:_thumb];
+
+  if (item.defaultTemplate) {
+    // A restrained AppKit interpretation of Magic UI's border beam: one soft
+    // accent highlight makes a slow lap of the thumbnail border. It confirms
+    // state without making the template look selected, premium or promoted.
+    _defaultBeam = [[NSView alloc] initWithFrame:_thumb.frame];
+    _defaultBeam.wantsLayer = YES;
+    _defaultBeam.layer.cornerRadius = KKRadiusMD;
+    _defaultBeam.layer.masksToBounds = YES;
+    CAGradientLayer *beam = [CAGradientLayer layer];
+    // Keep the rounded border itself stationary. Only an oversized gradient
+    // underneath it rotates; sizing it to the thumbnail's diagonal keeps every
+    // corner covered throughout the lap.
+    CGFloat beamSide = ceil(hypot(NSWidth(_defaultBeam.bounds),
+                                  NSHeight(_defaultBeam.bounds)));
+    beam.bounds = NSMakeRect(0.0, 0.0, beamSide, beamSide);
+    beam.position = NSMakePoint(NSMidX(_defaultBeam.bounds),
+                                NSMidY(_defaultBeam.bounds));
+    beam.type = kCAGradientLayerConic;
+    NSColor *accent = [NSColor accentMatchingHost];
+    beam.colors = @[
+      (__bridge id)[accent colorWithAlphaComponent:0.0].CGColor,
+      (__bridge id)[accent colorWithAlphaComponent:0.12].CGColor,
+      (__bridge id)[accent colorWithAlphaComponent:0.88].CGColor,
+      (__bridge id)[accent colorWithAlphaComponent:0.12].CGColor,
+      (__bridge id)[accent colorWithAlphaComponent:0.0].CGColor,
+    ];
+    beam.locations = @[ @0.0, @0.62, @0.76, @0.90, @1.0 ];
+    const CGFloat borderInset = 1.5;
+    CGRect borderRect = NSInsetRect(_defaultBeam.bounds, borderInset,
+                                    borderInset);
+    CGFloat borderRadius = MAX(0.0, KKRadiusMD - borderInset);
+    CGPathRef borderPath = CGPathCreateWithRoundedRect(
+        borderRect, borderRadius, borderRadius, NULL);
+
+    // The quiet full outline makes the state legible even while the travelling
+    // highlight is on the far side of a dark or saturated thumbnail.
+    CAShapeLayer *outline = [CAShapeLayer layer];
+    outline.frame = _defaultBeam.bounds;
+    outline.fillColor = NSColor.clearColor.CGColor;
+    outline.strokeColor =
+        [accent colorWithAlphaComponent:0.24].CGColor;
+    outline.lineWidth = 1.25;
+    outline.path = borderPath;
+    [_defaultBeam.layer addSublayer:outline];
+
+    // Clip only the moving gradient. The outline and rounded border stay fixed.
+    CALayer *beamClip = [CALayer layer];
+    beamClip.frame = _defaultBeam.bounds;
+    CAShapeLayer *mask = [CAShapeLayer layer];
+    mask.frame = beamClip.bounds;
+    mask.fillColor = NSColor.clearColor.CGColor;
+    mask.strokeColor = NSColor.whiteColor.CGColor;
+    mask.lineWidth = 2.0;
+    mask.path = borderPath;
+    CGPathRelease(borderPath);
+    beamClip.mask = mask;
+    [beamClip addSublayer:beam];
+    [_defaultBeam.layer addSublayer:beamClip];
+    if (!NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion) {
+      CABasicAnimation *lap =
+          [CABasicAnimation animationWithKeyPath:@"transform.rotation.z"];
+      lap.fromValue = @0.0;
+      lap.toValue = @(M_PI * 2.0);
+      lap.duration = 11.0;
+      lap.repeatCount = HUGE_VALF;
+      lap.timingFunction = [CAMediaTimingFunction
+          functionWithName:kCAMediaTimingFunctionLinear];
+      [beam addAnimation:lap forKey:@"default-border-lap"];
+    }
+    [self addSubview:_defaultBeam];
+  }
 
   // Author (right end of the name row), when the shader names one. Built before
   // the name field so the name can give way to it - the name row is also the
@@ -183,6 +257,27 @@ const CGFloat kMirageCardNameH = 16.0;
     dl.frame = NSMakeRect(_w - 22 - KKPaddingMD, botY, 22, 22);
     [_hoverButtons addObject:dl];
   }
+  // Default (bottom-left): a pin. Filled + accent and always visible on the
+  // current default, outline + hover-only elsewhere. Icon-only like the other
+  // card actions - the labelled button ate the corner and was easy to hit by
+  // accident.
+  if (item.defaultEligible) {
+    BOOL isDefault = item.defaultTemplate;
+    NSString *tip = isDefault ? RLoc(@"Default template",
+                                     @"Default template tooltip.")
+                              : RLoc(@"Use for new Mirage effects",
+                                     @"Set default template tooltip.");
+    _defaultButton =
+        [self _iconFor:(isDefault ? @"pin.fill" : @"pin")
+                 point:12.0
+                 color:(isDefault ? [NSColor accentMatchingHost]
+                                  : [NSColor secondaryLabelColor])
+                action:(isDefault ? nil : @selector(_makeDefault:))
+               tooltip:tip];
+    _defaultButton.frame = NSMakeRect(KKPaddingMD, botY, 18, 18);
+    _defaultButton.hidden = !(isDefault || _hovered);
+    [self addSubview:_defaultButton];
+  }
   for (NSButton *b in _hoverButtons) {
     b.hidden = YES;
     [self addSubview:b];
@@ -214,6 +309,7 @@ const CGFloat kMirageCardNameH = 16.0;
   for (NSButton *b in _hoverButtons)
     b.hidden = !hovered;
   _favButton.hidden = !(_favorite || hovered);
+  _defaultButton.hidden = !(_item.defaultTemplate || hovered);
   if (!hovered)
     [_authorBadge setExpanded:NO animated:YES];
 }
@@ -297,6 +393,9 @@ const CGFloat kMirageCardNameH = 16.0;
 }
 - (void)_download:(id)sender {
   [_owner cardDownload:self];
+}
+- (void)_makeDefault:(id)sender {
+  [_owner cardMakeDefault:self];
 }
 
 // The browser lives in a non-activating panel; without this a body click just

@@ -199,6 +199,14 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// -seededFrom: like a piece of static config, not clip data.
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeValidator)
     (NSString *code, NSInteger *outLine);
+/// For a `KKLaneValueTypeCode` lane: optional check run only when
+/// `codeValidator` found nothing wrong. Return a message when the code RENDERS
+/// but cannot be saved as a template (Mirage: no `#template` line), or nil.
+/// The editor shows it as an amber warning rather than a red error and
+/// disables Save while it stands. Sees the same composed source as
+/// `codeValidator`. Not serialized (a block), carried template->reconciled.
+@property(nonatomic, copy, nullable) NSString *_Nullable (^codeSaveValidator)
+    (NSString *code);
 /// For a `KKLaneValueTypeCode` lane: optional pre-pass composing the source
 /// that `codeValidator` sees from the section set (e.g. prepending a shared
 /// "Common" section, or appending a stub entry point when validating that

@@ -322,9 +322,18 @@
     if (!overToolbar)
       return [d miniViewer:self toolCursorAtPoint:vp contentRect:cr];
   }
-  if (![d respondsToSelector:@selector(miniViewer:cursorAtPoint:contentRect:)])
-    return nil;
-  return [d miniViewer:self cursorAtPoint:vp contentRect:cr];
+  if ([d respondsToSelector:@selector(
+                                miniViewer:resolveHandleHitAtPoint:contentRect:cursor:)]) {
+    NSCursor *cursor = nil;
+    [d miniViewer:self
+        resolveHandleHitAtPoint:vp
+                    contentRect:cr
+                         cursor:&cursor];
+    return cursor;
+  }
+  if ([d respondsToSelector:@selector(miniViewer:cursorAtPoint:contentRect:)])
+    return [d miniViewer:self cursorAtPoint:vp contentRect:cr];
+  return nil;
 }
 
 - (void)beginPointHandleDragAtScreenPoint:(NSPoint)screenPoint {

@@ -201,6 +201,12 @@ public enum LocalAIHelperServer {
 			if let control = req.control {
 				switch control {
 				case "status":
+					// Piggyback the adoption scan on the poll every models UI runs:
+					// cheap (a stat per catalog model once adopted), and it means a
+					// model the user pulled with mlx_lm shows up as downloaded the
+					// next time the models list is open. Sandboxed plugins cannot
+					// scan ~/.cache themselves, so the helper is where this lives.
+					Self.adoptExternalModels()
 					let dl = DownloadRegistry.shared.current
 					_ = writeFrame(
 						HelperResponse(
@@ -262,7 +268,61 @@ public enum LocalAIHelperServer {
 	/// here from the plugin so the plugins don't have to link swift-huggingface/NIO
 	/// (~7-8 MB each). Progress is polled from real bytes on disk - the Hub counter
 	/// only jumps when a whole shard finishes - so the bar moves smoothly.
+	/// One adoption pass over the standard external HF caches for catalog models
+	/// the shared cache doesn't have. Rate-limited: the models UI polls status
+	/// once a second and the scan only changes when the user downloads something
+	/// outside Keyframeless, so once per 10s is plenty.
+	private static let adoptScanLock = NSLock()
+	nonisolated(unsafe) private static var lastAdoptScan = Date.distantPast
+	static func adoptExternalModels() {
+		adoptScanLock.lock()
+		defer { adoptScanLock.unlock() }
+		guard Date().timeIntervalSince(lastAdoptScan) > 10 else { return }
+		lastAdoptScan = Date()
+		guard let base = LocalAIHelperSocket.modelCacheBase() else { return }
+		let externals = ModelAdoption.externalHubCaches()
+		guard !externals.isEmpty else { return }
+		let adopted = ModelAdoption.adopt(
+			repoIDs: LocalModelCatalog.models.map(\.repoID), into: base,
+			scanning: externals)
+		for repoID in adopted {
+			helperLog.notice(
+				"helper: adopted external model \(repoID, privacy: .public)")
+		}
+		// Then ANY other MLX text model the runner can load, so a user's own
+		// mlx_lm / hf downloads appear as selectable custom rows. Filtered by
+		// model_type against what this helper's mlx-swift-lm actually supports -
+		// an embedding model or a Whisper checkpoint never shows up.
+		let customs = ModelAdoption.adoptCustom(
+			into: base, scanning: externals,
+			supportedTypes: Self.supportedCustomModelTypes,
+			excludingRepoIDs: Set(LocalModelCatalog.models.map(\.repoID)))
+		for model in customs {
+			helperLog.notice(
+				"helper: adopted custom model \(model.repoID, privacy: .public) (\(model.modelType, privacy: .public))"
+			)
+		}
+	}
+
+	/// The text-LLM `model_type`s this helper's mlx-swift-lm build can load
+	/// (LLMTypeRegistry's keys - the registry keeps them private, so this is a
+	/// snapshot; it ships and drifts WITH the mlx dependency in this same
+	/// binary). A type missing here only means a custom model stays unlisted.
+	static let supportedCustomModelTypes: Set<String> = [
+		"mistral", "llama", "phi", "phi3", "phimoe", "gemma", "gemma2", "gemma3",
+		"gemma3_text", "gemma3n", "gemma4", "gemma4_text", "qwen2", "qwen3",
+		"qwen3_moe", "qwen3_next", "qwen3_5", "qwen3_5_moe", "qwen3_5_text",
+		"minicpm", "starcoder2", "cohere", "openelm", "internlm2", "deepseek_v3",
+		"granite", "granitemoehybrid", "mimo", "mimo_v2_flash", "minimax", "glm4",
+		"glm4_moe", "glm4_moe_lite", "acereason", "falcon_h1", "bitnet", "smollm3",
+		"ernie4_5", "lfm2", "baichuan_m1", "exaone4", "gpt_oss", "olmoe", "olmo2",
+		"olmo3", "bailing_moe", "lfm2_moe", "nanochat", "nemotron_h", "afmoe",
+		"jamba_3b", "mistral3", "apertus",
+	]
+
 	private static func handleDownload(_ req: HelperRequest, to h: FileHandle) {
+		// Deliberately NOT `resolve`: customs exist only by adoption, there is
+		// nothing to download.
 		guard let model = LocalModelCatalog.model(id: req.modelID),
 			let repo = Repo.ID(rawValue: model.repoID),
 			let cacheBase = LocalAIHelperSocket.modelCacheBase(),
@@ -272,6 +332,10 @@ public enum LocalAIHelperServer {
 				HelperResponse(result: nil, error: "helper: cannot download \(req.modelID)"), to: h)
 			return
 		}
+		// An explicit download is the user overriding a previous "delete the
+		// adopted copy" - clear the tombstone so a later scan may adopt again.
+		try? FileManager.default.removeItem(
+			at: ModelAdoption.tombstoneURL(repoID: model.repoID, base: cacheBase))
 		helperLog.notice("helper: download \(model.repoID, privacy: .public)")
 		// Publish this download so a "status" query from ANY client (a plugin that
 		// didn't start it) can mirror its live progress. Cleared on completion/error.

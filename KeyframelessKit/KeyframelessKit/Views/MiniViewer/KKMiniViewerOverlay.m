@@ -4,6 +4,7 @@
  */
 
 #import "KKLog.h"
+#import "KKHostInfo.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView_Private.h"
 #import "KKViewHelpers.h" // KKTrackingAreaMatches
@@ -13,6 +14,11 @@
   BOOL _dragging;
   BOOL _toolbarDragging;
   BOOL _toolDrawing;
+  // The overlay is the mini-viewer's sole pointer responder. Background
+  // presses are forwarded to the Metal canvas through the complete
+  // down/drag/up session so panning, filmstrip selection and background picks
+  // keep their existing implementation without giving AppKit two event owners.
+  BOOL _forwardingCanvasDrag;
   // The compare divider drag. Deliberately NOT routed through `_dragging`: that
   // path opens the host's undo group around the delegate's value writes, and
   // the divider writes no value at all - it is view state.
@@ -26,10 +32,58 @@
   // open and aborts FCP's next undo.
   id _dragGlobalMonitor;
   id _dragLocalMonitor;
+  // One semantic cursor owned by this responder. No cursor rectangles are
+  // mirrored onto the canvas and no asynchronous cursor writes are queued.
+  NSCursor *_resolvedCursor;
+}
+
+- (instancetype)initWithFrame:(NSRect)frameRect {
+  self = [super initWithFrame:frameRect];
+  if (self) {
+    _resolvedCursor = [NSCursor arrowCursor];
+    // Tracking areas do not promise a fresh mouseMoved when an inactive app is
+    // brought forward with the pointer already parked over the view. AppKit
+    // restores the host cursor during activation, so without an explicit
+    // refresh a mini OSC can remain an arrow until the pointer leaves and
+    // re-enters. The main viewer is host-owned and gets this refresh from FCP;
+    // the mini overlay has to do it itself.
+    [NSWorkspace.sharedWorkspace.notificationCenter
+        addObserver:self
+           selector:@selector(_workspaceApplicationDidActivate:)
+               name:NSWorkspaceDidActivateApplicationNotification
+             object:nil];
+  }
+  return self;
+}
+
+- (void)_setResolvedCursor:(NSCursor *)cursor {
+  NSCursor *target = cursor ?: [NSCursor arrowCursor];
+  BOOL changed = _resolvedCursor != target;
+  _resolvedCursor = target;
+  if (changed && self.window)
+    [self.window invalidateCursorRectsForView:self];
+  [target set];
+}
+
+- (void)resetCursorRects {
+  [super resetCursorRects];
+  // The overlay is the sole hit view for the mini surface, so this is the one
+  // and only AppKit cursor region. Without a registered region AppKit restores
+  // the window's inherited arrow after mouseMoved: returns; previously both
+  // this overlay and the Metal canvas registered competing full-view regions.
+  [self addCursorRect:self.bounds
+               cursor:(_resolvedCursor ?: [NSCursor arrowCursor])];
 }
 
 - (BOOL)isFlipped {
   return NO;
+}
+
+// KKFloatingPanel also tracks the full content area for its resize edges and
+// drag handle. Once neither of those owns the point it must leave this view's
+// dynamic OSC cursor untouched.
+- (BOOL)kk_ownsPointerCursor {
+  return YES;
 }
 
 // Act on the FIRST click even when the popover window isn't key yet (same
@@ -74,48 +128,12 @@
 }
 
 - (NSView *)hitTest:(NSPoint)pt {
-  KKMiniViewerView *c = self.canvas;
-  id<KKMiniViewerDelegate> d = c.canvasDelegate;
   NSPoint p = [self convertPoint:pt fromView:self.superview];
-  // Live playback draws NO on-screen controls (-drawRect: here and the whole
-  // overlay span in -drawInMTKView:), so nothing this overlay owns may be
-  // grabbed either - otherwise the pointer catches handles, the toolbar and the
-  // compare divider that are not on screen. This is the ONE place a pointer
-  // resolves to a mini control, so declining the point here disables every
-  // set's hit-test at once. Falling through to the canvas keeps the surface
-  // behaving like empty preview: click-drag pan, scroll/pinch zoom,
-  // double-click reset and the background pick all live on KKMiniViewerView.
-  if (c.livePlaybackActive)
-    return nil;
-  // The toolbar (chrome) sits on top: claim its hits before the handles so the
-  // click doesn't fall through to a layer drag / pan.
-  if ([d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
-      [d miniViewer:c toolbarTagAtPoint:p] != 0)
-    return self;
-  // A drawing tool (pen) claims the whole canvas, so a click places a point
-  // instead of click-drag panning the view. Two-finger / scroll pan still works
-  // (scrollWheel bubbles to the canvas regardless of this hit-test).
-  if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
-      [d miniViewerToolDrawingActive:c])
-    return self;
-  // The compare divider is grabbable, but it only ever wins where no parameter
-  // handle wants the point (the tie-break below and in mouseDown).
-  BOOL onDivider = [c _compareDividerGrabbableAtPoint:p];
-  if (![d respondsToSelector:@selector(
-                                 miniViewer:handleHitAtPoint:contentRect:)])
-    return onDivider ? self : nil;
-  // While a pan/zoom gesture is live, skip the per-anchor handle hit-test - a
-  // two-finger scroll / pinch never targets a handle, and on a dense path this
-  // call costs ~35ms, which AppKit invokes once per scroll event and was the
-  // real throttle that dropped panning to ~24fps. Let the point fall through to
-  // the canvas (which drives the pan) for the duration of the gesture.
-  if ([c _isPanZoomGestureActive])
-    return nil;
-  if ([d miniViewer:c
-          handleHitAtPoint:p
-               contentRect:[c contentRectInViewPoints]])
-    return self;
-  return onDivider ? self : nil;
+  // One responder owns the entire mini surface. Previously this method
+  // switched between the overlay and Metal canvas as the pointer crossed OSC
+  // geometry; AppKit then ran two competing cursor-rect systems. Background
+  // mouse sessions are forwarded explicitly below.
+  return NSPointInRect(p, self.bounds) ? self : nil;
 }
 
 // Handles are drawn by the canvas's Metal pass (shared KKPointOSC shader).
@@ -197,6 +215,12 @@
 
 - (void)mouseDown:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
+  _forwardingCanvasDrag = NO;
+  if (c.livePlaybackActive) {
+    _forwardingCanvasDrag = YES;
+    [c mouseDown:e];
+    return;
+  }
   // A press means any earlier divider drag is over, even if its mouseUp was
   // lost to another window (the cross-popover case the handle drag installs
   // monitors for). Nothing is left open by a dropped divider drag, so clearing
@@ -289,11 +313,7 @@
   {
     NSPoint dp = [self convertPoint:e.locationInWindow fromView:nil];
     BOOL delegateWants =
-        [d respondsToSelector:@selector(
-                                  miniViewer:handleHitAtPoint:contentRect:)] &&
-        [d miniViewer:c
-            handleHitAtPoint:dp
-                 contentRect:[c contentRectInViewPoints]];
+        [self _resolveHandleHitAtPoint:dp cursor:NULL];
     if (!delegateWants && [c _compareDividerGrabbableAtPoint:dp]) {
       [c endFieldEditingGrabbingFocusIfNeeded];
       [self.window makeKeyWindow];
@@ -308,9 +328,18 @@
       return;
     }
   }
-  if (![d respondsToSelector:
-              @selector(miniViewer:beginHandleDragAtPoint:contentRect:)])
+  NSPoint handlePoint = [self convertPoint:e.locationInWindow fromView:nil];
+  BOOL handleHit = [self _resolveHandleHitAtPoint:handlePoint cursor:NULL];
+  if (!handleHit ||
+      ![d respondsToSelector:
+              @selector(miniViewer:beginHandleDragAtPoint:contentRect:)]) {
+    // The overlay deliberately owns hit-testing for the whole mini-viewer so
+    // passive hover has one responder. Preserve empty-preview interaction by
+    // forwarding the complete mouse session to the canvas explicitly.
+    _forwardingCanvasDrag = YES;
+    [c mouseDown:e];
     return;
+  }
   // Interacting with the canvas commits/ends any focused value field so its
   // stale text can't clobber the drag's value on focus loss.
   [c endFieldEditingGrabbingFocusIfNeeded];
@@ -364,6 +393,10 @@
 - (void)mouseDragged:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if (_forwardingCanvasDrag) {
+    [c mouseDragged:e];
+    return;
+  }
   if (_toolDrawing) {
     if ([d respondsToSelector:@selector(miniViewer:toolDraggedToPoint:
                                         contentRect:modifiers:)])
@@ -406,6 +439,11 @@
 - (void)mouseUp:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if (_forwardingCanvasDrag) {
+    _forwardingCanvasDrag = NO;
+    [c mouseUp:e];
+    return;
+  }
   if (_toolDrawing) {
     _toolDrawing = NO;
     if ([d respondsToSelector:@selector(miniViewer:toolUpAtPoint:contentRect:)])
@@ -578,16 +616,54 @@
 // end leaks the group and aborts FCP's next undo ("Adjust <effect>" crash).
 - (void)viewWillMoveToWindow:(NSWindow *)newWindow {
   [super viewWillMoveToWindow:newWindow];
+  if (!newWindow)
+    _forwardingCanvasDrag = NO;
   if (_dragging && !newWindow)
     [self _endActiveHandleDragReason:@"torn down (window->nil)"];
 }
 
 - (void)dealloc {
+  [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:self];
   [self _removeDragMonitors];
   if (_dragging)
     KKLogWarn(@"[dragundo] overlay=%p dealloc'd mid-drag - onHandleDragEnd "
               @"was DROPPED",
               self);
+}
+
+- (void)scrollWheel:(NSEvent *)event {
+  // The overlay is the hit view for the full mini surface; keep the canvas's
+  // established trackpad-pan / wheel-zoom implementation authoritative.
+  [self.canvas scrollWheel:event];
+}
+
+- (void)_workspaceApplicationDidActivate:(NSNotification *)note {
+  NSRunningApplication *activated =
+      note.userInfo[NSWorkspaceApplicationKey];
+  NSString *hostID = KKHostInfo.shared.hostID;
+  BOOL matched = hostID.length &&
+                 [activated.bundleIdentifier isEqualToString:hostID];
+  if (!matched)
+    return;
+  // Let AppKit finish restoring the application cursor, then replace it with
+  // the control cursor only when this overlay is actually under the pointer.
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weakSelf) self = weakSelf;
+    NSWindow *window = self.window;
+    if (!self)
+      return;
+    if (!window || !window.isVisible)
+      return;
+    NSPoint windowPoint =
+        [window convertPointFromScreen:[NSEvent mouseLocation]];
+    NSPoint localPoint = [self convertPoint:windowPoint fromView:nil];
+    BOOL inside = NSPointInRect(localPoint, self.bounds);
+    if (!inside)
+      return;
+    [self _refreshHoverAtWindowPoint:windowPoint
+                           modifiers:[NSEvent modifierFlags]];
+  });
 }
 
 // Opt-hold over the mini-viewer reveals hidden handles/rings as ghosts. A
@@ -602,7 +678,7 @@
   _optTrackingArea = [[NSTrackingArea alloc]
       initWithRect:self.bounds
            options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited |
-                   NSTrackingActiveInActiveApp
+                   NSTrackingCursorUpdate | NSTrackingActiveInActiveApp
              owner:self
           userInfo:nil];
   [self addTrackingArea:_optTrackingArea];
@@ -622,46 +698,62 @@
   }
 }
 
-// Mirror the viewer's resize/move cursors over the mini-canvas handles. The
-// delegate returns the cursor for the hovered point (or nil for the arrow);
-// during a drag mouseMoved doesn't fire, so the cursor set on the last hover
-// persists through the drag, then a fresh move re-evaluates it.
-- (void)_updateHoverCursorAtWindowPoint:(NSPoint)windowPoint {
+- (BOOL)_resolveHandleHitAtPoint:(NSPoint)p
+                          cursor:(NSCursor * _Nullable * _Nullable)outCursor {
+  if (outCursor)
+    *outCursor = nil;
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
-  NSCursor *cursor = nil;
-  if ([d respondsToSelector:@selector(miniViewer:cursorAtPoint:contentRect:)]) {
-    NSPoint p = [self convertPoint:windowPoint fromView:nil];
-    cursor = [d miniViewer:c
-             cursorAtPoint:p
-               contentRect:[c contentRectInViewPoints]];
-  }
-  // Only where the delegate wants nothing: the divider loses the cursor for the
-  // same reason it loses the press.
-  if (!cursor &&
-      [c _compareDividerGrabbableAtPoint:[self convertPoint:windowPoint
-                                                   fromView:nil]])
-    cursor = [NSCursor resizeLeftRightCursor];
-  [(cursor ?: [NSCursor arrowCursor]) set];
+  CGRect cr = [c contentRectInViewPoints];
+  if ([d respondsToSelector:@selector(
+                                miniViewer:resolveHandleHitAtPoint:contentRect:cursor:)])
+    return [d miniViewer:c
+        resolveHandleHitAtPoint:p
+                    contentRect:cr
+                         cursor:outCursor];
+
+  // Compatibility for delegates outside the shared renderer hierarchy.
+  BOOL hit = [d respondsToSelector:@selector(
+                                    miniViewer:handleHitAtPoint:contentRect:)] &&
+             [d miniViewer:c handleHitAtPoint:p contentRect:cr];
+  if (hit && outCursor &&
+      [d respondsToSelector:@selector(miniViewer:cursorAtPoint:contentRect:)])
+    *outCursor = [d miniViewer:c cursorAtPoint:p contentRect:cr];
+  return hit;
 }
 
-- (void)mouseMoved:(NSEvent *)e {
+// Mirror the viewer's resize/move cursors over the mini-canvas handles. OSC
+// ownership and cursor now come from the same authoritative resolution.
+- (void)_updateHoverCursorAtWindowPoint:(NSPoint)windowPoint {
+  KKMiniViewerView *c = self.canvas;
+  NSCursor *cursor = nil;
+  NSPoint p = [self convertPoint:windowPoint fromView:nil];
+  BOOL hit = [self _resolveHandleHitAtPoint:p cursor:&cursor];
+  // Only where the delegate wants nothing: the divider loses the cursor for the
+  // same reason it loses the press.
+  if (!hit && [c _compareDividerGrabbableAtPoint:p])
+    cursor = [NSCursor resizeLeftRightCursor];
+  [self _setResolvedCursor:cursor];
+}
+
+- (void)_refreshHoverAtWindowPoint:(NSPoint)windowPoint
+                         modifiers:(NSEventModifierFlags)modifiers {
   KKMiniViewerView *c = self.canvas;
   // Tracking-area moves are delivered to the owner whether or not -hitTest:
   // claimed the point, so the playback gate is repeated here: no resize/move
   // cursor over an invisible handle, and no Opt-peek reveal of hidden ones.
   if (c.livePlaybackActive) {
     [self _setOptReveal:NO];
-    [[NSCursor arrowCursor] set];
+    [self _setResolvedCursor:nil];
     return;
   }
-  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
+  [self _setOptReveal:(modifiers & NSEventModifierFlagOption) != 0];
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   // Drawing tool active: feed the cursor (rubber-band + snap ghost) + redraw,
   // but still let the toolbar own the cursor when hovering it (below).
   if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
       [d miniViewerToolDrawingActive:c]) {
-    NSPoint p = [self convertPoint:e.locationInWindow fromView:nil];
+    NSPoint p = [self convertPoint:windowPoint fromView:nil];
     BOOL overToolbar =
         [d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
         [d miniViewer:c toolbarTagAtPoint:p] != 0;
@@ -678,13 +770,13 @@
       if ([d respondsToSelector:@selector(
                                     miniViewer:toolCursorAtPoint:contentRect:)])
         cur = [d miniViewer:c toolCursorAtPoint:p contentRect:cr];
-      [(cur ?: [NSCursor arrowCursor]) set];
+      [self _setResolvedCursor:cur];
       return;
     }
   }
   if ([d respondsToSelector:@selector(miniViewer:toolbarHoverTag:)] &&
       [d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)]) {
-    NSPoint p = [self convertPoint:e.locationInWindow fromView:nil];
+    NSPoint p = [self convertPoint:windowPoint fromView:nil];
     NSInteger tag = [d miniViewer:c toolbarTagAtPoint:p];
     [d miniViewer:c toolbarHoverTag:tag];
     if (tag != 0) {
@@ -693,17 +785,38 @@
       NSCursor *cur = nil;
       if ([d respondsToSelector:@selector(miniViewer:toolbarCursorForTag:)])
         cur = [d miniViewer:c toolbarCursorForTag:tag];
-      [(cur ?: [NSCursor arrowCursor]) set];
+      [self _setResolvedCursor:cur];
       return;
     }
   }
-  [self _updateHoverCursorAtWindowPoint:e.locationInWindow];
+  [self _updateHoverCursorAtWindowPoint:windowPoint];
+}
+
+- (void)mouseMoved:(NSEvent *)e {
+  [self _refreshHoverAtWindowPoint:e.locationInWindow
+                         modifiers:e.modifierFlags];
+}
+
+// AppKit may perform its own cursor update after mouseMoved: returns. Resolve
+// from the exact same OSC hit test in that final cursor-update phase as well,
+// instead of trying to out-time the window with a delayed cursor write.
+- (void)cursorUpdate:(NSEvent *)e {
+  if (e.window != self.window) {
+    [self _setResolvedCursor:nil];
+    return;
+  }
+  [self _refreshHoverAtWindowPoint:e.locationInWindow
+                         modifiers:e.modifierFlags];
+}
+
+- (void)mouseEntered:(NSEvent *)e {
+  [self _refreshHoverAtWindowPoint:e.locationInWindow
+                         modifiers:e.modifierFlags];
 }
 
 - (void)flagsChanged:(NSEvent *)e {
-  [self _setOptReveal:self.canvas.livePlaybackActive
-                          ? NO
-                          : (e.modifierFlags & NSEventModifierFlagOption) != 0];
+  [self _refreshHoverAtWindowPoint:e.locationInWindow
+                         modifiers:e.modifierFlags];
 }
 
 - (void)mouseExited:(NSEvent *)e {
@@ -712,7 +825,7 @@
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   if ([d respondsToSelector:@selector(miniViewer:toolbarHoverTag:)])
     [d miniViewer:c toolbarHoverTag:0];
-  [[NSCursor arrowCursor] set];
+  [self _setResolvedCursor:nil];
 }
 
 @end

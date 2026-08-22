@@ -51,6 +51,18 @@ NS_ASSUME_NONNULL_BEGIN
   /// because the panel's other writes (recentre, eyedropper) open the same
   /// group without being a gesture that can lose its mouse-up.
   BOOL _puckDragActive;
+  /// Whether the active drag has actually MOVED the puck. The scope drops to
+  /// its cheaper live sample count only then: a click-in-place used to flip
+  /// low-density at press and full-density at release, visibly changing the
+  /// measurements without any value changing.
+  BOOL _puckDragMoved;
+  /// Largest graded-frame long edge measured this sampling session; frames
+  /// materially below it are FCP's interactive-degrade renders and are not
+  /// re-measured outside a moving drag (see -_sampleOnce).
+  NSUInteger _scopeBestLongEdge;
+  /// Consecutive skipped-degraded frames; a long run means the quality drop is
+  /// permanent (viewer quality change), not a gesture, and is accepted.
+  NSUInteger _scopeDegradedRun;
   NSUInteger _puckDragIndex;
   /// Which declared surface the open drag belongs to, so the log names the ring
   /// and the OTHER ring's view can be dropped without touching this one.
@@ -154,12 +166,23 @@ NS_ASSUME_NONNULL_BEGIN
   /// Like the Help window's guide gate, the disable edge must be polled: when
   /// Final Cut stops drawing the OSC there is deliberately no final event.
   dispatch_source_t _presentationAvailabilityTimer;
-  NSTimeInterval _lastSampleTime;
-  BOOL _samplePending;
-  /// When the previous puck-drag tick started, so the log reports the rate the
-  /// gesture is actually managing rather than only the cost of one write.
-  /// Legacy deferred-commit slot, normally nil now that wheel ticks update the
-  /// main FCP viewer live. Kept for the balanced drag-end cleanup path.
+  /// Scope analysis backpressure. Only one GPU readback/CPU walk runs at a
+  /// time; a preview completed meanwhile requests one latest-frame follow-up.
+  /// This stays smooth without ever queueing stale intermediate frames.
+  BOOL _scopeReadInFlight;
+  BOOL _scopeResamplePending;
+  /// Last timeline blob write sent through Final Cut during a puck gesture.
+  /// The local override is frame-rate; host parameter actions are deliberately
+  /// bounded because they can take tens of milliseconds and have crashed FCP
+  /// when driven at raw mouse-event cadence.
+  CFTimeInterval _puckLastPersistAt;
+  /// Numeric readout text does not need mouse-reporting cadence. Rebuilding it
+  /// walks and formats every mapped lane, so cap it separately while the puck,
+  /// preview and scope continue to follow every event.
+  CFTimeInterval _puckLastReadoutAt;
+  /// Latest absolute timeline that has not yet crossed the bounded host-write
+  /// channel. Always flushed on drag end, so coalescing cannot lose the final
+  /// fine adjustment.
   KKTimeline *_pendingPuckCommit;
   /// What that same tick would have committed, keyed by lane. Read by
   /// -_valuesForLane: so the readout, the derive and the preview are all

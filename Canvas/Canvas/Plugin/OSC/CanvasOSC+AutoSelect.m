@@ -75,7 +75,7 @@
 }
 
 // Merge the picked layer id into the current UIState (snapshot base, since the
-// OSC can't read the custom param) and write it back inside an action scope. The
+// OSC can't read the custom param) and write it back inside the host callback. The
 // write fires the effect's parameterChanged, which re-selects the layer in the
 // inspector + drives the per-layer OSC/mini state. Mirrors the kit's OSC opt-hide
 // write (kkToggleOSCElementHidden).

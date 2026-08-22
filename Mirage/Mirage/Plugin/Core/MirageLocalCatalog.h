@@ -112,6 +112,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// able to tell that a favourite moved without asking about every entry.
 - (NSString *)favoritesFingerprint;
 
+/// Template used by a brand-new Mirage instance. Stored in the shared app
+/// group so the inspector, render process and wrapper agree. Missing/deleted
+/// entries safely fall back to the shipped Plasma template.
+@property(nonatomic, copy) NSString *defaultEntryID;
+- (BOOL)isDefaultEntryID:(NSString *)entryID;
+- (MirageCatalogEntry *)defaultEntry;
+
 /// The files a publish needs: filename -> bytes (`.glsl` per section +
 /// `preview.jpg`), NOT including metadata.json (the caller builds that).
 - (NSDictionary<NSString *, NSData *> *)publishFilesForEntry:
@@ -122,5 +129,9 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT NSString *MirageSectionFileName(NSString *sectionName);
 FOUNDATION_EXPORT NSString *_Nullable MirageSectionNameForFile(
     NSString *fileName);
+FOUNDATION_EXPORT MirageCatalogEntry *MirageDefaultShaderEntry(void);
+FOUNDATION_EXPORT NSString *MirageDefaultShaderSource(void);
+FOUNDATION_EXPORT NSDictionary<NSString *, NSString *> *
+MirageDefaultShaderSections(void);
 
 NS_ASSUME_NONNULL_END

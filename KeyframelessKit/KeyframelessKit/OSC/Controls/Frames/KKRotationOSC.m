@@ -499,10 +499,10 @@ static const float kHitThresholdPixels = 10.0f;
                       atTime:(CMTime)time
                  forceUpdate:(BOOL *)forceUpdate {
   __block BOOL wrote = NO;
-  KKPerformUndoable(
-      self.apiManager, self, nil,
+  KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         if (!setAPI)
           return;
 

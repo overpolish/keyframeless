@@ -80,6 +80,16 @@ MirageRackEntryIDs(KKTimeline *_Nullable timeline) {
   return ids.count ? ids : @[ kMirageRackSentinelEntryID ];
 }
 
+/// Whether the transient render blob must retain explicit rack identity.
+/// A lone sentinel is the legacy layout. A lone MINTED entry is different: it
+/// is what remains after deleting entry 1, and its scoped code lane must not be
+/// evaluated/encoded as the now-absent sentinel (which would seed Plasma).
+static inline BOOL
+MirageRackRequiresExplicitBlob(NSArray<NSString *> *entryIDs) {
+  return entryIDs.count != 1 ||
+         ![entryIDs.firstObject isEqualToString:kMirageRackSentinelEntryID];
+}
+
 /// One control's lane key for one rack entry: `bareKey` unchanged for the
 /// sentinel (so every pre-rack project's lanes - and every link expression,
 /// palette group, or OSC element key that names one - keep matching byte for
@@ -319,6 +329,31 @@ static inline KKLane *_Nullable MirageRackCodeLaneForEntry(
     if ([lane.key isEqualToString:key])
       return lane;
   return nil;
+}
+
+/// Whether Original/Split have an incoming-frame comparison anywhere in the
+/// rack. This is deliberately rack-wide: selecting a generator after one or
+/// more filters does not turn the whole chain into a generator. `fallbackSource`
+/// covers the legacy/fresh sentinel before its code lane has been persisted.
+static inline BOOL MirageRackHasSourceMatching(
+    KKTimeline *_Nullable timeline, NSString *codeLaneLabel,
+    NSString *_Nullable fallbackSource,
+    BOOL (^matches)(NSString *_Nullable source)) {
+  if (!matches)
+    return NO;
+  NSArray<NSString *> *entryIDs = MirageRackEntryIDs(timeline);
+  if (!entryIDs.count)
+    return matches(fallbackSource);
+  for (NSString *entryID in entryIDs) {
+    KKLane *lane =
+        MirageRackCodeLaneForEntry(timeline, entryID, codeLaneLabel);
+    NSString *source = lane ? lane.codeString : nil;
+    if (!lane && [entryID isEqualToString:kMirageRackSentinelEntryID])
+      source = fallbackSource;
+    if (source.length && matches(source))
+      return YES;
+  }
+  return NO;
 }
 
 /// One entry's code as the section array `MirageSchemaDocument` and the AI

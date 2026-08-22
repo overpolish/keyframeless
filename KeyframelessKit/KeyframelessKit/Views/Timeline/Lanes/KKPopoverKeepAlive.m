@@ -7,6 +7,7 @@
 
 #import "KKLocalized.h"
 #import "KKLog.h"
+#import "KKScopedDefaults.h"
 #import "NSColor+KKColors.h"
 
 NSNotificationName const KKStaticValuesPopoverDidOpenNotification =
@@ -248,6 +249,88 @@ KKCreateRightPanelVisibilityButton(BOOL visible,
   button.accessibilityLabel = label;
   button.toolTip = KKLoc(@"Show or hide the grading panel. (G)",
                          @"Tooltip for Mirage's grading-panel toggle.");
+  return button;
+}
+
+NSNotificationName const KKEditorPanelsPinnedDidChangeNotification =
+    @"KKEditorPanelsPinnedDidChangeNotification";
+static NSString *const kEditorPanelsPinnedKey = @"timeline.editorPanels.pinned";
+static NSString *const kEditorPanelsPinnedScope = @"ui";
+
+BOOL KKEditorPanelsPinned(void) {
+  id stored = KKScopedDefaultRead(kEditorPanelsPinnedKey,
+                                  kEditorPanelsPinnedScope);
+  return [stored respondsToSelector:@selector(boolValue)] ? [stored boolValue]
+                                                          : YES;
+}
+
+void KKSetEditorPanelsPinned(BOOL pinned) {
+  if (KKEditorPanelsPinned() == pinned)
+    return;
+  KKScopedDefaultWrite(@(pinned), kEditorPanelsPinnedKey,
+                       kEditorPanelsPinnedScope);
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:KKEditorPanelsPinnedDidChangeNotification
+                    object:nil];
+}
+
+@interface KKPopoverPinButton ()
+- (void)_mirror;
+@end
+
+@implementation KKPopoverPinButton
+
+- (void)_pinClicked:(id)sender {
+  KKSetEditorPanelsPinned(!KKEditorPanelsPinned());
+  [self _mirror];
+}
+
+- (void)_pinnedChanged:(NSNotification *)note {
+  [self _mirror];
+}
+
+- (void)_mirror {
+  BOOL pinned = KKEditorPanelsPinned();
+  self.image = [NSImage imageWithSystemSymbolName:(pinned ? @"pin.fill" : @"pin")
+                        accessibilityDescription:self.accessibilityLabel];
+  self.contentTintColor = pinned ? [NSColor accentMatchingHost] : nil;
+  self.toolTip =
+      pinned ? KKLoc(@"Pinned: closes only from X or Esc. Click to let a "
+                     @"click outside close it. (K)",
+                     @"Tooltip for the editor panel pin button when pinned.")
+             : KKLoc(@"Unpinned: a click outside closes the panel. Click to "
+                     @"keep it open. (K)",
+                     @"Tooltip for the editor panel pin button when unpinned.");
+}
+
+- (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+@end
+
+KKPopoverPinButton *KKCreateEditorPinButton(void) {
+  KKPopoverPinButton *button = [KKPopoverPinButton buttonWithTitle:@""
+                                                            target:nil
+                                                            action:nil];
+  button.translatesAutoresizingMaskIntoConstraints = NO;
+  button.bordered = NO;
+  button.bezelStyle = NSBezelStyleShadowlessSquare;
+  button.imageScaling = NSImageScaleProportionallyDown;
+  NSString *label = KKLoc(@"Keep panel open",
+                          @"Accessibility label for the editor panel pin.");
+  button.accessibilityLabel = label;
+  button.target = button;
+  button.action = @selector(_pinClicked:);
+  // Fires on mouseDOWN like the close button: after a ViewBridge reopen the
+  // matching mouseUp can be swallowed by the host.
+  [button.cell sendActionOn:NSEventMaskLeftMouseDown];
+  [NSNotificationCenter.defaultCenter
+      addObserver:button
+         selector:@selector(_pinnedChanged:)
+             name:KKEditorPanelsPinnedDidChangeNotification
+           object:nil];
+  [button _mirror];
   return button;
 }
 

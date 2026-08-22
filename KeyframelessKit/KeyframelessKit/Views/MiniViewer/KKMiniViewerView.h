@@ -387,10 +387,17 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     rotationHitAtPoint:(CGPoint)point
            contentRect:(CGRect)contentRect;
-/// The cursor to show while hovering `point` (overlay points), or nil for the
-/// default arrow - lets the mini-canvas mirror the viewer's resize / move
-/// cursors over its handles. Must be a pure hit-test (no drag-state side
-/// effects); the overlay calls it on every mouseMoved.
+/// Resolve OSC ownership and its cursor in ONE hit-test. YES means a control
+/// owns the point; `outCursor == nil` means that control deliberately uses the
+/// default arrow. Hover, divider arbitration, and drag routing all consult this
+/// result so they cannot disagree about the same geometry.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    resolveHandleHitAtPoint:(CGPoint)point
+                contentRect:(CGRect)contentRect
+                     cursor:(NSCursor * _Nullable * _Nullable)outCursor;
+/// Compatibility projection of `resolveHandleHitAtPoint`: the cursor to show
+/// while hovering `point`, or nil for the default arrow / no hit. New delegate
+/// implementations should implement the resolver above.
 - (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
                     cursorAtPoint:(CGPoint)point
                       contentRect:(CGRect)contentRect;
@@ -416,7 +423,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
                 scaleHandleCentersForValues:(NSArray<NSNumber *> *)values
                                 contentRect:(CGRect)contentRect;
-/// YES if `point` (overlay points, y-up) grabs a handle.
+/// Compatibility projection of `resolveHandleHitAtPoint`. New delegate
+/// implementations should implement the resolver above.
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)point
          contentRect:(CGRect)contentRect;
@@ -559,6 +567,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// pixels re-renders from `sourceTexture` instead.
 @property(nonatomic, readonly, nullable) id<MTLTexture> processedTexture;
 
+/// Latest completed dedicated offscreen pixel-consumer frame. Unlike
+/// `processedTexture`, its size is controlled by `pixelConsumerLongEdge` and it
+/// remains independent of whether AppKit considers the MTKView visible.
+@property(nonatomic, readonly, nullable) id<MTLTexture> pixelConsumerTexture;
+
 /// Where the image is actually drawn inside this view, in view points,
 /// honouring aspect, zoom and pan. Public so a host can map a click in the
 /// preview to a position in the frame - the Grading surface's grey picker needs
@@ -693,11 +706,18 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// resolves an IOSurface; the current source is resolved when expanded again.
 @property(nonatomic, getter=isActivitySuspended) BOOL activitySuspended;
 
-/// Keep producing `processedTexture` for a headless pixel consumer while this
-/// view is hidden (for example a compact editor's vectorscope). The offscreen
-/// pass has no drawable or OSC/chrome and is coalesced to one frame in flight.
-/// Default NO.
+/// Keep producing `pixelConsumerTexture` for a measuring consumer (for example
+/// a compact editor's vectorscope). The offscreen pass has no drawable or
+/// OSC/chrome and is coalesced to one frame in flight. It runs independently
+/// of AppKit visibility because clipped ViewBridge content can report visible
+/// without receiving useful draw callbacks. Default NO.
 @property(nonatomic) BOOL pixelConsumerActive;
+
+/// Long edge of the offscreen texture produced for a hidden pixel consumer.
+/// Zero uses the conservative 1024px default. A consumer may lower this while
+/// interacting when its own analysis needs far fewer pixels, then restore its
+/// settled-quality size afterwards. Has no effect while the view is visible.
+@property(nonatomic) NSUInteger pixelConsumerLongEdge;
 
 /// When YES, a click in the mini makes the mini the window's first responder
 /// (instead of resigning to nil), so an NSPopover-hosted mini becomes the key

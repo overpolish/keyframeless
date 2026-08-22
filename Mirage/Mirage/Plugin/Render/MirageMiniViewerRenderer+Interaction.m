@@ -101,8 +101,13 @@
 }
 
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
-    handleHitAtPoint:(CGPoint)p
-         contentRect:(CGRect)cr {
+    resolveHandleHitAtPoint:(CGPoint)p
+                contentRect:(CGRect)cr
+                     cursor:(NSCursor **)outCursor {
+  if (outCursor)
+    *outCursor = nil;
+  if (CGRectIsEmpty(cr))
+    return NO;
   // The rotation set sizes its rings from the renderer's live canvas; set it
   // before the sets run (super would set it, but we call the sets first).
   self.canvas = canvas;
@@ -114,35 +119,49 @@
   // A point glyph outranks a position handle on the same pixel - the position
   // hit-tests as a filled disc even though it draws as an arc, so an anchor at
   // the pivot is otherwise unreachable. Matches the viewer.
-  if ([[self _syncedExprSet] glyphHitAtPoint:p contentRect:cr])
+  NSCursor *cursor = nil;
+  if ([[self _syncedExprSet] glyphHitAtPoint:p contentRect:cr]) {
+    cursor = [[self _syncedExprSet] cursorAtPoint:p contentRect:cr];
+    if (cursor) {
+      if (outCursor)
+        *outCursor = cursor;
+      return YES;
+    }
+  }
+  cursor = [[self _syncedSet] cursorAtPoint:p contentRect:cr];
+  if (!cursor)
+    cursor = [[self _syncedExprSet] cursorAtPoint:p contentRect:cr];
+  if (!cursor)
+    cursor = [[self _syncedRotSet] cursorAtPoint:p contentRect:cr];
+  if (cursor) {
+    if (outCursor)
+      *outCursor = cursor;
     return YES;
-  if ([[self _syncedSet] handleHitAtPoint:p contentRect:cr])
-    return YES;
-  if ([[self _syncedExprSet] handleHitAtPoint:p contentRect:cr])
-    return YES;
-  if ([[self _syncedRotSet] handleHitAtPoint:p contentRect:cr])
-    return YES;
-  return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
+  }
+  return [super miniViewer:canvas
+      resolveHandleHitAtPoint:p
+                  contentRect:cr
+                       cursor:outCursor];
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    handleHitAtPoint:(CGPoint)p
+         contentRect:(CGRect)cr {
+  return [self miniViewer:canvas
+      resolveHandleHitAtPoint:p
+                  contentRect:cr
+                       cursor:NULL];
 }
 
 - (NSCursor *)miniViewer:(KKMiniViewerView *)canvas
            cursorAtPoint:(CGPoint)p
              contentRect:(CGRect)cr {
-  if (CGRectIsEmpty(cr))
-    return nil;
-  self.canvas = canvas; // rotation set reads the canvas for ring sizing
-  NSCursor *c = nil;
-  if ([[self _syncedExprSet] glyphHitAtPoint:p contentRect:cr])
-    c = [[self _syncedExprSet] cursorAtPoint:p contentRect:cr];
-  if (!c)
-    c = [[self _syncedSet] cursorAtPoint:p contentRect:cr];
-  if (c)
-    return c;
-  c = [[self _syncedExprSet] cursorAtPoint:p contentRect:cr];
-  if (c)
-    return c;
-  c = [[self _syncedRotSet] cursorAtPoint:p contentRect:cr];
-  return c ?: [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
+  NSCursor *cursor = nil;
+  [self miniViewer:canvas
+      resolveHandleHitAtPoint:p
+                  contentRect:cr
+                       cursor:&cursor];
+  return cursor;
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas

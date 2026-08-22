@@ -77,6 +77,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) BOOL mirageCompareSplitEnabled;
 @property(nonatomic) CGFloat mirageCompareSplitFraction;
 @property(nonatomic) BOOL mirageCompareSelectionEnabled;
+/// Which repeatable qualifier key the main viewer's selection matte shows.
+/// Zero means the union of all keys. The Color panel keeps this in sync with
+/// its active puck; like the other compare fields it is session-only.
+@property(nonatomic) NSInteger mirageCompareActiveKey;
 /// MirageViewerPickMode, kept integer here so the shared kit does not depend
 /// on Mirage's Constants.h. Session-only and cleared after one click/Escape.
 @property(nonatomic) NSInteger mirageViewerPickMode;

@@ -9,6 +9,7 @@
 #import "MirageInspectorView+Guides.h"
 #import "MirageInspectorView.h"
 #import "MirageLaneCatalog.h"
+#import "MirageLocalCatalog.h"
 #import "MirageLocalized.h"
 #import "MirageMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "MirageOSCBlockRuntime.h" // // @osc custom-handling blocks (checklist)
@@ -77,6 +78,99 @@ static NSArray<NSString *> *MirageAIShaderTabNames(void) {
       break;
     }
   return names;
+}
+
+// The compiler the AI's code route hands its draft to before the user sees it.
+// Runs the SAME composer + validator blocks the code editor runs (so the AI is
+// held to exactly the editor's rules: the transpile, the directive checks, the
+// feedback motion-blur rule) over every section of a `// #tab` blob, plus the
+// editor's save gate, because a template the user can't save is not done.
+// Returns a message naming the section and line, or nil when the shader is
+// good.
+static NSString *MirageAIValidateShaderSource(NSString *source) {
+  if (!source.length)
+    return @"The shader is empty.";
+  KKLane *tmpl = nil;
+  for (KKLane *l in MirageBuildAvailableLanes())
+    if ([l.key isEqualToString:kMirageCodeLaneLabel]) {
+      tmpl = l;
+      break;
+    }
+  if (!tmpl.codeValidator)
+    return nil;
+  NSArray<NSString *> *knownTabs = MirageAIShaderTabNames();
+  NSDictionary<NSString *, NSString *> *split =
+      KKCodeSplitTabbedText(source, knownTabs);
+  if (!split) {
+    // No split means either a plain single-pass shader or a marker naming a tab
+    // we don't have (KKCodeSplitTabbedText then treats the WHOLE blob as plain
+    // text, and the marker lines would be compiled as GLSL). Tell the two apart.
+    for (NSString *line in [source componentsSeparatedByString:@"\n"]) {
+      NSString *name = KKCodeTabMarkerName(line);
+      if (name.length)
+        return [NSString
+            stringWithFormat:@"`// #tab %@` names a tab that does not exist. "
+                             @"Use only: %@.",
+                             name, [knownTabs componentsJoinedByString:@", "]];
+    }
+  }
+  NSMutableArray<NSDictionary<NSString *, NSString *> *> *sections =
+      [NSMutableArray array];
+  if (split) {
+    for (NSString *name in knownTabs)
+      if (split[name].length)
+        [sections addObject:@{@"name" : name, @"code" : split[name]}];
+  } else {
+    [sections addObject:@{@"name" : @"Image", @"code" : source}];
+  }
+  if (split && !split[@"Image"].length)
+    return @"The Image section is empty. The Image pass is the entry point and "
+           @"must contain mainImage.";
+  for (NSDictionary<NSString *, NSString *> *section in sections) {
+    NSString *name = section[@"name"], *code = section[@"code"];
+    // The editor's validator deliberately skips a section with no entry point
+    // (an empty tab is not an error while typing). For the AI it is: a pass
+    // without mainImage renders nothing.
+    BOOL isPass = ![name isEqualToString:@"Common"];
+    if (isPass && [code rangeOfString:@"mainImage"].location == NSNotFound &&
+        [code rangeOfString:@"void main"].location == NSNotFound &&
+        [code rangeOfString:@"vec4 transition"].location == NSNotFound)
+      return [NSString
+          stringWithFormat:@"%@: no entry point. Define `void mainImage(out "
+                           @"vec4 fragColor, in vec2 fragCoord)`.",
+                           name];
+    NSInteger prepend = 0;
+    NSString *composed = code;
+    if (tmpl.codeValidationComposer) {
+      NSString *c = tmpl.codeValidationComposer(name, code, sections, &prepend);
+      if (c)
+        composed = c;
+    }
+    NSInteger line = 0;
+    NSString *err = tmpl.codeValidator(composed, &line);
+    if (err.length) {
+      if (line > 0 && prepend > 0) {
+        line -= prepend;
+        if (line < 1)
+          continue; // lives in Common; reported on the Common pass
+      }
+      // The validator may already have prefixed "Line N:" from the composed
+      // numbering; restate against this section's own numbering.
+      NSRange lp = [err rangeOfString:@"^Line \\d+: "
+                              options:NSRegularExpressionSearch];
+      if (lp.location == 0)
+        err = [err substringFromIndex:NSMaxRange(lp)];
+      return line > 0 ? [NSString stringWithFormat:@"%@, line %ld: %@", name,
+                                                   (long)line, err]
+                      : [NSString stringWithFormat:@"%@: %@", name, err];
+    }
+    if ([name isEqualToString:@"Image"] && tmpl.codeSaveValidator) {
+      NSString *gate = tmpl.codeSaveValidator(composed);
+      if (gate.length)
+        return [NSString stringWithFormat:@"Image: %@", gate];
+    }
+  }
+  return nil;
 }
 
 // Code authoring: set the AI-written GLSL on the "Mirage" code lane (creating
@@ -245,6 +339,33 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
   [KKAIDraft clearPrompt];
 }
 
+static NSArray<KKLane *> *MirageAttachDefaultTemplateMetadata(
+    NSArray<KKLane *> *lanes, BOOL usingDefault, NSString *targetCodeKey) {
+  if (!usingDefault)
+    return lanes;
+  MirageCatalogEntry *entry = MirageDefaultShaderEntry();
+  NSMutableArray<KKLane *> *out = [lanes mutableCopy];
+  for (NSUInteger i = 0; i < out.count; i++) {
+    KKLane *lane = out[i];
+    if (lane.valueType != KKLaneValueTypeCode ||
+        (targetCodeKey.length && ![lane.key isEqualToString:targetCodeKey]))
+      continue;
+    KKLane *code = [lane copy];
+    code.codeString =
+        entry.sections[@"Image"] ?: MirageCustomDefaultShaderSource();
+    NSMutableArray *tabs = [NSMutableArray array];
+    for (NSString *name in
+         @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ])
+      if ([entry.sections[name] length])
+        [tabs addObject:@{ @"name" : name, @"code" : entry.sections[name] }];
+    code.codeTabs = tabs.count ? tabs : nil;
+    code.codeSaveName = entry.name;
+    code.codeSaveID = entry.entryID;
+    out[i] = code;
+  }
+  return out;
+}
+
 @implementation MiragePlugin (CustomUI)
 
 - (BOOL)usesMotionBlur {
@@ -252,7 +373,9 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
 }
 
 + (NSArray<KKLane *> *)availableLanes {
-  return MirageBuildAvailableLanes();
+  return MirageAttachDefaultTemplateMetadata(
+      MirageBuildAvailableLanesForSource(MirageDefaultShaderSource(), nil),
+      YES, nil);
 }
 
 // Source-aware lane set: the Core lanes plus whatever dynamic lanes the given
@@ -264,8 +387,11 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
 + (NSArray<KKLane *> *)
     availableLanesForShaderSource:(NSString *)source
                      audioTickets:(NSDictionary<NSString *, id> *)tickets {
-  return MirageBuildAvailableLanesForSource(
-      source.length ? source : MirageCustomDefaultShaderSource(), tickets);
+  BOOL usingDefault = !source.length;
+  return MirageAttachDefaultTemplateMetadata(
+      MirageBuildAvailableLanesForSource(
+          usingDefault ? MirageDefaultShaderSource() : source, tickets),
+      usingDefault, nil);
 }
 
 + (NSArray<KKLane *> *)
@@ -293,11 +419,33 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
   // win over the stored code lane while the other entries still build from
   // theirs. The entry it belongs to is the one the rack strip has selected,
   // because that is the entry the editor is bound to.
-  return MirageBuildAvailableLanesForRack(timeline, tickets, source, entryID);
+  NSString *resolvedEntry = MirageRackEntryIDOrSentinel(entryID);
+  NSString *codeKey = MirageRackCodeLaneKey(resolvedEntry,
+                                            kMirageCodeLaneLabel);
+  BOOL hasCodeLane = NO;
+  for (KKLane *lane in timeline.lanes)
+    if ([lane.key isEqualToString:codeKey]) {
+      hasCodeLane = YES;
+      break;
+    }
+  BOOL missingFreshEntry =
+      !hasCodeLane &&
+      [resolvedEntry isEqualToString:kMirageRackSentinelEntryID];
+  BOOL usingDefault =
+      missingFreshEntry &&
+      (!source.length || [source isEqualToString:MirageDefaultShaderSource()]);
+  NSString *resolvedSource = source.length
+                                 ? source
+                                 : (usingDefault ? MirageDefaultShaderSource()
+                                                 : source);
+  return MirageAttachDefaultTemplateMetadata(
+      MirageBuildAvailableLanesForRack(timeline, tickets, resolvedSource,
+                                       entryID),
+      usingDefault, codeKey);
 }
 
-// The current shader source from a timeline's "Mirage" code lane (the baked
-// default when absent/empty), for deriving the source-aware lane set.
+// The current shader source from a timeline's "Mirage" code lane (the chosen
+// default when absent), for deriving the source-aware lane set.
 + (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline {
   return [self shaderSourceFromTimeline:timeline forRackEntry:nil];
 }
@@ -309,13 +457,13 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
   for (KKLane *l in timeline.lanes)
     if ([l.key isEqualToString:key] && l.codeString.length)
       return l.codeString;
-  return MirageCustomDefaultShaderSource();
+  return MirageDefaultShaderSource();
 }
 
 + (NSArray<KKLane *> *)slotPrototypeLanesForShaderSource:(NSString *)source
                                                    group:(NSString *)groupName {
   return MirageSlotPrototypeLanesForGroup(
-      source.length ? source : MirageCustomDefaultShaderSource(), groupName,
+      source.length ? source : MirageDefaultShaderSource(), groupName,
       nil);
 }
 
@@ -1018,7 +1166,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
         aiShaderSrc = (!readShaderLane ||
                        (readShaderLane.codeTabs.count == 0 &&
                         [readShaderLane.codeString
-                            isEqualToString:MirageCustomDefaultShaderSource()]))
+                            isEqualToString:MirageDefaultShaderSource()]))
                           ? @""
                           : MirageShaderTabsBlob(readShaderLane.codeString,
                                                  readShaderLane.codeTabs);
@@ -1064,6 +1212,9 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
             currentInspectorMode:currentMode
              currentShaderSource:aiShaderSrc
                 availableSources:availableSources
+                  validateShader:^NSString *(NSString *source) {
+                    return MirageAIValidateShaderSource(source);
+                  }
                       completion:^(KKAIPluginResult *result, NSError *err) {
                         dispatch_async(dispatch_get_main_queue(), ^{
                           __strong typeof(weakSelf) strong = weakSelf;

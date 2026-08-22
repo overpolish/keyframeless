@@ -11,6 +11,9 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 
 static NSMutableDictionary<NSString *, NSImage *> *sBuiltinThumbnails;
+static NSString *const kMirageDefaultTemplateField = @"defaultTemplate";
+static NSString *const kMirageDefaultsScope = @"com.keyframeless.Mirage";
+static NSString *const kMiragePlasmaEntryID = @"builtin.plasma";
 
 NSString *MirageSectionFileName(NSString *sectionName) {
   if ([sectionName isEqualToString:@"Image"])
@@ -340,6 +343,8 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
 }
 
 - (void)deleteEntryID:(NSString *)entryID {
+  if ([self isDefaultEntryID:entryID])
+    self.defaultEntryID = kMiragePlasmaEntryID;
   NSString *dir = [[self rootDirectory] stringByAppendingPathComponent:entryID];
   [[NSFileManager defaultManager] removeItemAtPath:dir error:nil];
 }
@@ -388,6 +393,10 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
                    error:nil]
       writeToFile:[dir stringByAppendingPathComponent:@"metadata.json"]
        atomically:YES];
+  // Keep the cross-process snapshot current when an installed default receives
+  // a catalogue update without changing its stable ID.
+  if ([self isDefaultEntryID:entryID])
+    self.defaultEntryID = entryID;
 }
 
 - (NSInteger)installedVersionForID:(NSString *)entryID {
@@ -417,6 +426,8 @@ NSString *MirageSectionNameForFile(NSString *fileName) {
                  options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys
                    error:nil];
   [out writeToFile:metaPath atomically:YES];
+  if ([self isDefaultEntryID:entryID])
+    self.defaultEntryID = entryID;
 }
 
 static NSString *const kFavKey = @"MirageFavorites";
@@ -443,6 +454,99 @@ static NSString *const kFavKey = @"MirageFavorites";
     return @"";
   return [[favs sortedArrayUsingSelector:@selector(compare:)]
       componentsJoinedByString:@","];
+}
+
+- (NSString *)defaultEntryID {
+  id stored = KKScopedDefaultRead(kMirageDefaultTemplateField,
+                                  kMirageDefaultsScope);
+  // Accept the short-lived ID-only representation from development builds.
+  if ([stored isKindOfClass:[NSString class]] && [stored length])
+    return stored;
+  NSString *entryID = [stored isKindOfClass:[NSDictionary class]]
+                          ? stored[@"id"]
+                          : nil;
+  return entryID.length ? entryID : kMiragePlasmaEntryID;
+}
+
+- (void)setDefaultEntryID:(NSString *)entryID {
+  NSString *wanted = entryID.length ? entryID : kMiragePlasmaEntryID;
+  MirageCatalogEntry *resolved = nil;
+  for (MirageCatalogEntry *candidate in self.builtinEntries)
+    if ([candidate.entryID isEqualToString:wanted]) {
+      resolved = candidate;
+      break;
+    }
+  if (!resolved)
+    for (MirageCatalogEntry *candidate in self.entries)
+      if ([candidate.entryID isEqualToString:wanted]) {
+        resolved = candidate;
+        break;
+      }
+  if (!resolved && ![wanted isEqualToString:kMiragePlasmaEntryID]) {
+    self.defaultEntryID = kMiragePlasmaEntryID;
+    return;
+  }
+
+  NSDictionary *snapshot = @{
+    @"id" : resolved.entryID ?: kMiragePlasmaEntryID,
+    @"name" : resolved.name ?: @"Plasma",
+    @"author" : resolved.author ?: @"",
+    @"category" : resolved.category ?: kMirageCategoryGenerator,
+    @"version" : @(resolved.version),
+    @"builtin" : @(resolved.builtin),
+    @"community" : @(resolved.community),
+    @"sections" : resolved.sections ?: @{},
+  };
+  KKScopedDefaultWrite(snapshot, kMirageDefaultTemplateField,
+                       kMirageDefaultsScope);
+}
+
+- (BOOL)isDefaultEntryID:(NSString *)entryID {
+  return entryID.length && [entryID isEqualToString:self.defaultEntryID];
+}
+
+- (MirageCatalogEntry *)defaultEntry {
+  id stored = KKScopedDefaultRead(kMirageDefaultTemplateField,
+                                  kMirageDefaultsScope);
+  if ([stored isKindOfClass:[NSDictionary class]] &&
+      [stored[@"id"] length] && [stored[@"sections"][@"Image"] length]) {
+    MirageCatalogEntry *entry = [MirageCatalogEntry new];
+    entry.entryID = stored[@"id"];
+    entry.name = stored[@"name"] ?: @"Untitled";
+    entry.author = stored[@"author"] ?: @"";
+    entry.category = stored[@"category"]
+                         ?: MirageCategoryForSource(stored[@"sections"][@"Image"]);
+    entry.version = [stored[@"version"] integerValue];
+    entry.builtin = [stored[@"builtin"] boolValue];
+    entry.community = [stored[@"community"] boolValue];
+    entry.sections = stored[@"sections"];
+    return entry;
+  }
+
+  // First launch (or migration from the ID-only development representation):
+  // resolve once, then persist the complete property-list snapshot. Render and
+  // ViewBridge processes can subsequently read it without touching the shader
+  // catalogue on every frame.
+  self.defaultEntryID = self.defaultEntryID;
+  stored = KKScopedDefaultRead(kMirageDefaultTemplateField,
+                               kMirageDefaultsScope);
+  if ([stored isKindOfClass:[NSDictionary class]])
+    return self.defaultEntry;
+  NSAssert(NO, @"Mirage must always ship the Plasma fallback");
+  return [MirageCatalogEntry new];
+}
+
+MirageCatalogEntry *MirageDefaultShaderEntry(void) {
+  return MirageLocalCatalog.shared.defaultEntry;
+}
+
+NSDictionary<NSString *, NSString *> *MirageDefaultShaderSections(void) {
+  return MirageDefaultShaderEntry().sections ?: @{};
+}
+
+NSString *MirageDefaultShaderSource(void) {
+  return MirageDefaultShaderSections()[@"Image"]
+             ?: MirageCustomDefaultShaderSource();
 }
 
 - (NSDictionary<NSString *, NSData *> *)publishFilesForEntry:

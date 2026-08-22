@@ -191,6 +191,28 @@ static CGSize KKMiniViewerPixelReferenceSize(FxImageTile *tile) {
                 (unsigned long)slotIdx, sW, sH, maxSrc.width, maxSrc.height);
       continue;
     }
+    // Gesture-degrade gate, above the thumbnail floor: FCP halves (or worse)
+    // its render resolution while a parameter gesture is open. The frame's
+    // TIME hasn't changed - only its resolution - so holding the previous
+    // full-res source keeps the preview and the vectorscope at constant
+    // quality through pucks and sliders. A RUN of smaller frames is a real
+    // setting change (proxy, viewer quality) and becomes the new normal; a
+    // browser thumbnail never runs that long and stays behind the floor above.
+    if (maxSrc.width > 0 && maxSrc.height > 0 &&
+        (sW < maxSrc.width * 0.75 || sH < maxSrc.height * 0.75)) {
+      NSUInteger run = self.miniViewerFeed.degradedSourceRun + 1;
+      self.miniViewerFeed.degradedSourceRun = run;
+      if (run < 30) {
+        KKLogDebug(@"[Boundary] slot %lu held: %dx%d gesture-degraded vs "
+                   @"%.0fx%.0f (run %lu)",
+                   (unsigned long)slotIdx, sW, sH, maxSrc.width, maxSrc.height,
+                   (unsigned long)run);
+        continue;
+      }
+      KKLogInfo(@"[Boundary] accepting %dx%d as the new source size", sW, sH);
+      self.miniViewerFeed.largestSourceSizeSeen = CGSizeMake(sW, sH);
+    }
+    self.miniViewerFeed.degradedSourceRun = 0;
     if ((double)sW * sH > (double)maxSrc.width * maxSrc.height)
       self.miniViewerFeed.largestSourceSizeSeen = CGSizeMake(sW, sH);
     // FCP's project-library preview re-runs the effect into a browser-thumb

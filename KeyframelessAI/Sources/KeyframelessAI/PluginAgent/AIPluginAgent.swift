@@ -187,7 +187,9 @@ public final class AIPluginAgent: NSObject {
 	/// wavy look", "add a glow to this". The agent returns a `.authorCode` result
 	/// whose `shaderSource` the host writes into its code lane. Q&A, animation
 	/// (mutation), and vague prompts route exactly as `run` does; only prompts that
-	/// ask to change the shader's actual look/effect become code.
+	/// ask to change the shader's actual look/effect become code. `validateShader`
+	/// is the host's compiler (error text or nil); when given, generated code is
+	/// compiled and repaired before it comes back.
 	@MainActor
 	@objc public static func runCodeAuthoring(
 		prompt: String,
@@ -198,6 +200,7 @@ public final class AIPluginAgent: NSObject {
 		currentInspectorMode: String,
 		currentShaderSource: String,
 		availableSources: String,
+		validateShader: ((String) -> String?)?,
 		completion: @escaping (AIPluginResult?, Error?) -> Void
 	) {
 		Task { @MainActor in
@@ -212,7 +215,8 @@ public final class AIPluginAgent: NSObject {
 					supportsCode: true,
 					currentShaderSource: currentShaderSource,
 					supportsExpressions: true,
-					availableSources: availableSources)
+					availableSources: availableSources,
+					validateShader: validateShader)
 				completion(result, nil)
 			} catch {
 				completion(nil, error)
@@ -262,7 +266,8 @@ public final class AIPluginAgent: NSObject {
 		supportsExpressions: Bool = false,
 		availableSources: String = "",
 		generatorTypeCatalog: String? = nil,
-		generatorMaxColors: Int = 0
+		generatorMaxColors: Int = 0,
+		validateShader: ((String) -> String?)? = nil
 	) async throws -> AIPluginResult {
 		AIDraftState.shared.routingStatus = AILoc("Reading prompt")
 		// Pass 0a: classify. No docs in this prompt - classifier is just a
@@ -286,7 +291,8 @@ public final class AIPluginAgent: NSObject {
 			AIDraftState.shared.routingStatus = AILoc("Writing shader")
 			let source = try await generateShaderCode(
 				prompt: prompt, productContext: productContext,
-				currentShaderSource: currentShaderSource)
+				currentShaderSource: currentShaderSource,
+				validate: validateShader)
 			return AIPluginResult(shaderSource: source)
 		}
 		// The user wants a property driven by a formula (procedural motion, a
@@ -389,6 +395,26 @@ public final class AIPluginAgent: NSObject {
 		}
 		guard !effectiveOperations.isEmpty else {
 			return AIPluginResult(answer: AILoc("Couldn't figure out which lanes to change."))
+		}
+		// A mutation can only touch lanes the timeline already has. When the
+		// planner targets a lane that does not exist, the user was asking for
+		// controls to be CREATED ("a Shatter slider", "an edge glow colour"), and
+		// on a code host that is a shader to write, not keyposes to place: the
+		// classifier mis-routed, so take the code route now rather than hand the
+		// host lane keys it can only drop on the floor.
+		if supportsCode {
+			let known = Set(labels.map { $0.lowercased() })
+			let invented = effectiveOperations.map(\.lane).filter {
+				!known.contains($0.lowercased())
+			}
+			if !invented.isEmpty {
+				AIDraftState.shared.routingStatus = AILoc("Writing shader")
+				let source = try await generateShaderCode(
+					prompt: prompt, productContext: productContext,
+					currentShaderSource: currentShaderSource,
+					validate: validateShader)
+				return AIPluginResult(shaderSource: source)
+			}
 		}
 
 		// Pass 2 + Pass 3 per operation, in parallel (independent given Pass 1).

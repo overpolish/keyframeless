@@ -74,7 +74,16 @@
   KKLane *prototype = [KKLane laneWithKey:kMirageCodeLaneLabel
                                     label:kMirageCodeLaneLabel];
   prototype.valueType = KKLaneValueTypeCode;
-  prototype.codeString = MirageCustomDefaultShaderSource();
+  MirageCatalogEntry *entry = MirageDefaultShaderEntry();
+  prototype.codeString = entry.sections[@"Image"] ?: MirageDefaultShaderSource();
+  NSMutableArray *tabs = [NSMutableArray array];
+  for (NSString *name in
+       @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ])
+    if ([entry.sections[name] length])
+      [tabs addObject:@{ @"name" : name, @"code" : entry.sections[name] }];
+  prototype.codeTabs = tabs.count ? tabs : nil;
+  prototype.codeSaveName = entry.name;
+  prototype.codeSaveID = entry.entryID;
   // A code lane is a text field, not a curve. `laneWithKey:` hands back an
   // ENABLED lane (the kit's default) and "enabled" means ANIMATED - a stamped
   // one therefore landed in the Animated section, with a row in the sequencer

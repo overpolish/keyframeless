@@ -10837,6 +10837,132 @@
         }
       }
     },
+    "Add `// #template generator`, `filter`, `layout`, `transition`, or `color-transform` to the Image shader before saving": {
+      "comment": "Mirage missing template-type directive warning.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge dem Image-Shader vor dem Sichern `// #template generator`, `filter`, `layout`, `transition` oder `color-transform` hinzu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade `// #template generator`, `filter`, `layout`, `transition` o `color-transform` al shader Image antes de guardar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez `// #template generator`, `filter`, `layout`, `transition` ou `color-transform` au shader Image avant d’enregistrer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存する前に、Image シェーダーに `// #template generator`、`filter`、`layout`、`transition` または `color-transform` を追加してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장하기 전에 Image 셰이더에 `// #template generator`, `filter`, `layout`, `transition` 또는 `color-transform`을 추가하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存前请在 Image 着色器中添加 `// #template generator`、`filter`、`layout`、`transition` 或 `color-transform`"
+          }
+        }
+      }
+    },
+    "Use for new Mirage effects": {
+      "comment": "Set default template tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für neue Mirage-Effekte verwenden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar para nuevos efectos Mirage"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utiliser pour les nouveaux effets Mirage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しい Mirage エフェクトに使用"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 Mirage 효과에 사용"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用于新的 Mirage 效果"
+          }
+        }
+      }
+    },
+    "Default template": {
+      "comment": "Default template tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standardvorlage"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plantilla predeterminada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modèle par défaut"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デフォルトのテンプレート"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본 템플릿"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认模板"
+          }
+        }
+      }
+    },
     "Use exactly one `#frames` directive in the Image shader": {
       "comment": "Mirage duplicate frames directive error.",
       "extractionState": "manual",
@@ -12849,6 +12975,2736 @@
           "stringUnit": {
             "state": "translated",
             "value": "迷你检视器可以预览<accent>到此为止</accent>的链，或单独<accent>独奏</accent>某个着色器（以原始片段作为输入）。这只影响迷你检视器，不会改变 Final Cut 的检视器，也不会随项目保存。"
+          }
+        }
+      }
+    },
+    "\"%@\" will be shared to the community shader catalog. It'll be reviewed before it appears.": {
+      "comment": "Publish confirm body.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ wird im Community-Shader-Katalog geteilt. Vor der Veröffentlichung wird er geprüft."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» se compartirá en el catálogo comunitario de shaders. Se revisará antes de aparecer."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« %@ » sera partagé dans le catalogue communautaire de shaders. Il sera vérifié avant d'apparaître."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」はコミュニティのシェーダカタログで共有されます。公開前に審査されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"%@\"이(가) 커뮤니티 셰이더 카탈로그에 공유됩니다. 게시 전에 검토됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@”将共享到社区着色器目录。上架前会先经过审核。"
+          }
+        }
+      }
+    },
+    "A multiple `#choice` must also use `dropdown`": {
+      "comment": "Mirage multiple-choice dropdown validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein `#choice` mit `multiple` erfordert auch `dropdown`"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un `#choice` múltiple también debe usar `dropdown`"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un `#choice` multiple doit aussi utiliser `dropdown`"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複数選択の `#choice` には `dropdown` も必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다중 `#choice`에는 `dropdown`도 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多选 `#choice` 还必须使用 `dropdown`"
+          }
+        }
+      }
+    },
+    "A multiple `#choice` needs a non-empty options list": {
+      "comment": "Mirage multiple-choice options validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein `#choice` mit `multiple` braucht eine nicht leere Optionsliste"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un `#choice` múltiple necesita una lista de opciones no vacía"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un `#choice` multiple nécessite une liste d'options non vide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複数選択の `#choice` には空でない選択肢リストが必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다중 `#choice`에는 비어 있지 않은 옵션 목록이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多选 `#choice` 需要非空的选项列表"
+          }
+        }
+      }
+    },
+    "A multiple `#choice` takes at most %d options": {
+      "comment": "Mirage multiple-choice count validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein `#choice` mit `multiple` erlaubt höchstens %d Optionen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un `#choice` múltiple admite como máximo %d opciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un `#choice` multiple accepte au plus %d options"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複数選択の `#choice` に指定できる選択肢は最大 %d 個です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다중 `#choice`에는 최대 %d개의 옵션만 지정할 수 있습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多选 `#choice` 最多支持 %d 个选项"
+          }
+        }
+      }
+    },
+    "Add exactly one `// #template generator`, `filter`, `layout`, or `transition` line to the Image shader before saving.": {
+      "comment": "Missing template directive alert detail.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge dem Image-Shader vor dem Sichern genau eine Zeile `// #template generator`, `filter`, `layout` oder `transition` hinzu."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade exactamente una línea `// #template generator`, `filter`, `layout` o `transition` al shader Image antes de guardar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez exactement une ligne `// #template generator`, `filter`, `layout` ou `transition` au shader Image avant d'enregistrer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存する前に、Image シェーダに `// #template generator`、`filter`、`layout`、`transition` のいずれかの行を 1 行だけ追加してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장하기 전에 Image 셰이더에 `// #template generator`, `filter`, `layout`, `transition` 중 한 줄만 추가하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存前，请在 Image 着色器中添加且仅添加一行 `// #template generator`、`filter`、`layout` 或 `transition`。"
+          }
+        }
+      }
+    },
+    "Author (optional)": {
+      "comment": "Publish author field placeholder.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autor (optional)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autor (opcional)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auteur (facultatif)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作者（任意）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "작성자(선택 사항)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作者（可选）"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "comment": "Cancel menu item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbrechen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンセル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "취소"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "Color Transform": {
+      "comment": "Mirage category: converts between color spaces.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbtransformation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformación de color"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformation colorimétrique"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カラー変換"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상 변환"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颜色变换"
+          }
+        }
+      }
+    },
+    "Colour \"%@\": optionsby only works with a vec4 array": {
+      "comment": "Mirage color-options array error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbe „%@“: optionsby funktioniert nur mit einem vec4-Array"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color «%@»: optionsby solo funciona con un array vec4"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couleur « %@ » : optionsby ne fonctionne qu'avec un tableau vec4"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カラー「%@」: optionsby は vec4 配列でのみ使用できます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상 \"%@\": optionsby는 vec4 배열에서만 작동합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颜色“%@”：optionsby 仅适用于 vec4 数组"
+          }
+        }
+      }
+    },
+    "Colour array \"%@\" must have one slot per optionsby choice": {
+      "comment": "Mirage color-options count error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farb-Array „%@“ braucht einen Eintrag pro optionsby-Option"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El array de colores «%@» debe tener un elemento por cada opción de optionsby"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le tableau de couleurs « %@ » doit avoir un emplacement par option de optionsby"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カラー配列「%@」には optionsby の選択肢ごとに 1 要素が必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상 배열 \"%@\"에는 optionsby 선택지마다 하나의 슬롯이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颜色数组“%@”必须为每个 optionsby 选项提供一个元素"
+          }
+        }
+      }
+    },
+    "Control \"%@\": `surface=` names a ring this shader doesn't declare": {
+      "comment": "Mirage colour-surface mapping aimed at an undeclared ring error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerelement „%@“: `surface=` verweist auf einen Ring, den dieser Shader nicht deklariert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: `surface=` nombra un anillo que este shader no declara"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : `surface=` désigne un anneau que ce shader ne déclare pas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: `surface=` が指すリングはこのシェーダで宣言されていません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": `surface=`가 이 셰이더에서 선언하지 않은 링을 가리킵니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：`surface=` 指定的圆环未在此着色器中声明"
+          }
+        }
+      }
+    },
+    "Control \"%@\": maxby and maxvalues must be used together": {
+      "comment": "Mirage reactive-max pair error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerelement „%@“: maxby und maxvalues müssen zusammen verwendet werden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: maxby y maxvalues deben usarse juntos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : maxby et maxvalues doivent être utilisés ensemble"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: maxby と maxvalues は同時に指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": maxby와 maxvalues는 함께 사용해야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：maxby 和 maxvalues 必须一起使用"
+          }
+        }
+      }
+    },
+    "Control \"%@\": maxby/maxvalues only work on float, percent or int controls": {
+      "comment": "Mirage reactive-max type error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerelement „%@“: maxby/maxvalues funktionieren nur mit float-, percent- oder int-Steuerelementen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: maxby/maxvalues solo funcionan en controles float, percent o int"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : maxby/maxvalues ne fonctionnent que sur des contrôles float, percent ou int"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: maxby/maxvalues は float・percent・int のコントロールでのみ使用できます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": maxby/maxvalues는 float, percent, int 컨트롤에서만 작동합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：maxby/maxvalues 仅适用于 float、percent 或 int 控件"
+          }
+        }
+      }
+    },
+    "Control \"%@\": visibleby and visiblevalues must be used together": {
+      "comment": "Mirage conditional-visibility pair error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerelement „%@“: visibleby und visiblevalues müssen zusammen verwendet werden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: visibleby y visiblevalues deben usarse juntos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : visibleby et visiblevalues doivent être utilisés ensemble"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: visibleby と visiblevalues は同時に指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": visibleby와 visiblevalues는 함께 사용해야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：visibleby 和 visiblevalues 必须一起使用"
+          }
+        }
+      }
+    },
+    "Control \"%@\": with two rings declared, `surface=` must start with `hue` or `light`": {
+      "comment": "Mirage unattached colour-surface mapping error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerelement „%@“: Bei zwei deklarierten Ringen muss `surface=` mit `hue` oder `light` beginnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: con dos anillos declarados, `surface=` debe empezar por `hue` o `light`"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : avec deux anneaux déclarés, `surface=` doit commencer par `hue` ou `light`"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: リングを 2 つ宣言した場合、`surface=` は `hue` か `light` で始めてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": 링을 두 개 선언한 경우 `surface=`는 `hue` 또는 `light`로 시작해야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：声明两个圆环时，`surface=` 必须以 `hue` 或 `light` 开头"
+          }
+        }
+      }
+    },
+    "Custom": {
+      "comment": "Custom shaders section.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personalizados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personnalisés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カスタム"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사용자화"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "comment": "Delete tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "삭제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除"
+          }
+        }
+      }
+    },
+    "Delete “%@”": {
+      "comment": "Delete-confirm menu item; %@ is the shader name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ löschen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar «%@»"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer « %@ »"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」を削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” 삭제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除“%@”"
+          }
+        }
+      }
+    },
+    "Download": {
+      "comment": "Download tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Télécharger"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다운로드"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载"
+          }
+        }
+      }
+    },
+    "Duplicate uniform \"%@\": give each directive a unique uniform name": {
+      "comment": "Mirage duplicate-uniform validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doppeltes Uniform „%@“: Gib jeder Direktive einen eindeutigen Uniform-Namen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uniform duplicado «%@»: da a cada directiva un nombre de uniform único"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uniform en double « %@ » : donnez à chaque directive un nom d'uniform unique"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "uniform「%@」が重複しています。各ディレクティブに一意の uniform 名を付けてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "중복된 uniform \"%@\": 각 지시문에 고유한 uniform 이름을 지정하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "uniform“%@”重复：请为每个指令使用唯一的 uniform 名称"
+          }
+        }
+      }
+    },
+    "Favourite": {
+      "comment": "Favourite tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favorit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favorito"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favori"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お気に入り"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "즐겨찾기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收藏"
+          }
+        }
+      }
+    },
+    "Favourites only": {
+      "comment": "Fav filter.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Favoriten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo favoritos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Favoris uniquement"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "お気に入りのみ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "즐겨찾기만"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅收藏"
+          }
+        }
+      }
+    },
+    "Keyframeless": {
+      "comment": "Built-in shaders section.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyframeless"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyframeless"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyframeless"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyframeless"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyframeless"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyframeless"
+          }
+        }
+      }
+    },
+    "Loading community shaders…": {
+      "comment": "Community loading.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Community-Shader werden geladen …"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargando shaders de la comunidad…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargement des shaders communautaires…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミュニティのシェーダを読み込み中…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "커뮤니티 셰이더를 불러오는 중…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在载入社区着色器…"
+          }
+        }
+      }
+    },
+    "Multiple-choice default \"%@\" isn't in its options list": {
+      "comment": "Mirage multiple-choice default validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mehrfachauswahl-Standard „%@“ steht nicht in der Optionsliste"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El valor por omisión «%@» de la selección múltiple no está en su lista de opciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La valeur par défaut « %@ » du choix multiple n'est pas dans sa liste d'options"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複数選択のデフォルト「%@」が選択肢リストにありません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다중 선택 기본값 \"%@\"이(가) 옵션 목록에 없습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多选默认值“%@”不在其选项列表中"
+          }
+        }
+      }
+    },
+    "No matching shaders": {
+      "comment": "No filter results.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine passenden Shader"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay shaders coincidentes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun shader correspondant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一致するシェーダはありません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일치하는 셰이더 없음"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的着色器"
+          }
+        }
+      }
+    },
+    "No shaders yet.": {
+      "comment": "Empty browser state.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Shader."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todavía no hay shaders."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun shader pour l'instant."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダはまだありません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 셰이더가 없습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有着色器。"
+          }
+        }
+      }
+    },
+    "Pick any color on screen to aim the selected handle at it.": {
+      "comment": "Tooltip for the Color panel's screen color sampler.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle eine beliebige Farbe auf dem Bildschirm, um den ausgewählten Regler darauf auszurichten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige cualquier color de la pantalla para apuntar el tirador seleccionado hacia él."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez une couleur à l'écran pour y diriger la poignée sélectionnée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面上の色を選ぶと、選択中のハンドルがその色に向きます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면에서 색상을 선택하면 선택한 핸들이 해당 색상을 향합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在屏幕上拾取任意颜色，使所选手柄指向该颜色。"
+          }
+        }
+      }
+    },
+    "Preview the chain up to here.": {
+      "comment": "Mirage rack: tooltip on the button that previews the shader chain truncated after this shader.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt die Kette bis hierher als Vorschau."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previsualiza la cadena hasta aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévisualiser la chaîne jusqu'ici."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここまでのチェーンをプレビューします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "여기까지의 체인을 미리 봅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览到此为止的效果链。"
+          }
+        }
+      }
+    },
+    "Preview this shader alone, on the original clip.": {
+      "comment": "Mirage rack: tooltip on the button that previews only this shader's own contribution.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt nur diesen Shader als Vorschau, auf dem Originalclip."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previsualiza este shader solo, sobre el clip original."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévisualiser ce shader seul, sur le plan d'origine."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このシェーダだけを元のクリップでプレビューします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 셰이더만 원본 클립에서 미리 봅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅预览此着色器，作用于原始片段。"
+          }
+        }
+      }
+    },
+    "Publish": {
+      "comment": "Publish tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veröffentlichen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publier"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公開"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게시"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发布"
+          }
+        }
+      }
+    },
+    "Publish failed": {
+      "comment": "Publish failure title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veröffentlichen fehlgeschlagen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error al publicar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de la publication"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公開に失敗しました"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게시 실패"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发布失败"
+          }
+        }
+      }
+    },
+    "Publish shader?": {
+      "comment": "Publish confirm title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader veröffentlichen?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Publicar el shader?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publier le shader ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダを公開しますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더를 게시하겠습니까?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要发布着色器吗？"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "comment": "Refresh shaders.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktualisieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualiser"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再読み込み"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새로 고침"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
+    "Search": {
+      "comment": "Search placeholder.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suchen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "検索"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "검색"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索"
+          }
+        }
+      }
+    },
+    "Set from screen": {
+      "comment": "Color panel button: opens the macOS screen color sampler and aims the selected handle's controls at the chosen color.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vom Bildschirm übernehmen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definir desde la pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Définir depuis l'écran"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面から設定"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면에서 설정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从屏幕设定"
+          }
+        }
+      }
+    },
+    "Shader": {
+      "comment": "Generic GLSL code lane display name (the code editor's caption).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着色器"
+          }
+        }
+      }
+    },
+    "Shader failed to compile": {
+      "comment": "Custom shader fallback error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader konnte nicht kompiliert werden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El shader no se pudo compilar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de la compilation du shader"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダをコンパイルできませんでした"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더를 컴파일하지 못했습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着色器编译失败"
+          }
+        }
+      }
+    },
+    "Shader name": {
+      "comment": "Save-shader name field placeholder.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader-Name"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre del shader"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom du shader"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダ名"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더 이름"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着色器名称"
+          }
+        }
+      }
+    },
+    "Shaders": {
+      "comment": "Browser title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shaders"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shaders"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着色器"
+          }
+        }
+      }
+    },
+    "Show the graded frame beside the original.": {
+      "comment": "Mirage viewer compare toolbar tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt das gegradete Bild neben dem Original."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra el fotograma etalonado junto al original."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher l'image étalonnée à côté de l'originale."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グレーディング後のフレームを元の映像と並べて表示します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보정된 프레임을 원본 옆에 표시합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将调色后的画面与原始画面并排显示。"
+          }
+        }
+      }
+    },
+    "Show this shader's selection.": {
+      "comment": "Mirage viewer compare toolbar tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt die Auswahl dieses Shaders."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra la selección de este shader."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher la sélection de ce shader."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このシェーダの選択範囲を表示します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 셰이더의 선택 영역을 표시합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示此着色器的选区。"
+          }
+        }
+      }
+    },
+    "Submitted": {
+      "comment": "Publish success title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingereicht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信済み"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제출됨"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已提交"
+          }
+        }
+      }
+    },
+    "Template type required": {
+      "comment": "Missing template directive alert.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlagentyp erforderlich"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se requiere el tipo de plantilla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type de modèle requis"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テンプレートタイプが必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "템플릿 유형이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要模板类型"
+          }
+        }
+      }
+    },
+    "Uninstall": {
+      "comment": "Uninstall tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desinstalar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désinstaller"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アンインストール"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제거"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卸载"
+          }
+        }
+      }
+    },
+    "Update": {
+      "comment": "Update tooltip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktualisieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre à jour"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップデート"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "업데이트"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
+          }
+        }
+      }
+    },
+    "Use exactly one `#template` directive in the Image shader": {
+      "comment": "Mirage duplicate template-type directive error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwende genau eine `#template`-Direktive im Image-Shader"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa exactamente una directiva `#template` en el shader Image"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilisez exactement une directive `#template` dans le shader Image"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image シェーダには `#template` ディレクティブを 1 つだけ指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image 셰이더에는 `#template` 지시문을 하나만 사용하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image 着色器中只能使用一个 `#template` 指令"
+          }
+        }
+      }
+    },
+    "Use one `#color-surface`, or two with `ring=hue` and `ring=light`": {
+      "comment": "Mirage duplicate colour-surface directive error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwende ein `#color-surface` oder zwei mit `ring=hue` und `ring=light`"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa un `#color-surface`, o dos con `ring=hue` y `ring=light`"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilisez un `#color-surface`, ou deux avec `ring=hue` et `ring=light`"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#color-surface` は 1 つ、または `ring=hue` と `ring=light` を付けて 2 つ指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#color-surface`는 하나만 사용하거나 `ring=hue`와 `ring=light`로 두 개 사용하세요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用一个 `#color-surface`，或配合 `ring=hue` 和 `ring=light` 使用两个"
+          }
+        }
+      }
+    },
+    "Your shader will appear once it's been reviewed.": {
+      "comment": "Publish success body.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Shader erscheint, sobald er geprüft wurde."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu shader aparecerá cuando se haya revisado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre shader apparaîtra une fois vérifié."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "審査が完了するとシェーダが表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "검토가 완료되면 셰이더가 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着色器通过审核后即会显示。"
+          }
+        }
+      }
+    },
+    "`#color-surface space=` must be linear-rec709": {
+      "comment": "Mirage invalid colour-surface space error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#color-surface space=` muss linear-rec709 sein"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#color-surface space=` debe ser linear-rec709"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#color-surface space=` doit être linear-rec709"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#color-surface space=` は linear-rec709 にしてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#color-surface space=`는 linear-rec709여야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#color-surface space=` 必须为 linear-rec709"
+          }
+        }
+      }
+    },
+    "`#template` must be generator, filter, layout, transition, or color-transform": {
+      "comment": "Mirage invalid template-type directive error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#template` muss generator, filter, layout, transition oder color-transform sein"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#template` debe ser generator, filter, layout, transition o color-transform"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#template` doit être generator, filter, layout, transition ou color-transform"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#template` には generator、filter、layout、transition、color-transform のいずれかを指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#template`는 generator, filter, layout, transition, color-transform 중 하나여야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`#template` 必须是 generator、filter、layout、transition 或 color-transform"
+          }
+        }
+      }
+    },
+    "`multiple` only works on a `#choice` control": {
+      "comment": "Mirage multiple-choice type validation error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`multiple` funktioniert nur mit einem `#choice`-Steuerelement"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`multiple` solo funciona en un control `#choice`"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`multiple` ne fonctionne que sur un contrôle `#choice`"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`multiple` は `#choice` コントロールでのみ使用できます"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`multiple`은 `#choice` 컨트롤에서만 작동합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`multiple` 仅适用于 `#choice` 控件"
+          }
+        }
+      }
+    },
+    "maxby references unknown control \"%@\"": {
+      "comment": "Mirage reactive-max controller error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxby verweist auf das unbekannte Steuerelement „%@“"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxby hace referencia a un control desconocido «%@»"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxby fait référence au contrôle inconnu « %@ »"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxby が不明なコントロール「%@」を参照しています"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxby가 알 수 없는 컨트롤 \"%@\"을(를) 참조합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxby 引用了未知控件“%@”"
+          }
+        }
+      }
+    },
+    "maxvalues must be a non-empty comma-separated list of numbers": {
+      "comment": "Mirage reactive-max malformed-values error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues muss eine nicht leere, kommagetrennte Zahlenliste sein"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues debe ser una lista de números separados por comas y no vacía"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues doit être une liste de nombres séparés par des virgules, non vide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues には空でないカンマ区切りの数値リストを指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues는 쉼표로 구분된 비어 있지 않은 숫자 목록이어야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues 必须是非空的、以逗号分隔的数字列表"
+          }
+        }
+      }
+    },
+    "maxvalues takes at most %d values": {
+      "comment": "Mirage reactive-max value-count error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues erlaubt höchstens %d Werte"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues admite como máximo %d valores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues accepte au plus %d valeurs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues に指定できる値は最大 %d 個です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues에는 최대 %d개의 값만 지정할 수 있습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "maxvalues 最多支持 %d 个值"
+          }
+        }
+      }
+    },
+    "optionsby control \"%@\" must be a multiple #choice": {
+      "comment": "Mirage color-options multiple-choice error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das optionsby-Steuerelement „%@“ muss ein #choice mit multiple sein"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El control de optionsby «%@» debe ser un #choice múltiple"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le contrôle optionsby « %@ » doit être un #choice multiple"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby のコントロール「%@」は multiple の #choice にしてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby 컨트롤 \"%@\"은(는) multiple #choice여야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby 控件“%@”必须是多选 #choice"
+          }
+        }
+      }
+    },
+    "optionsby references unknown control \"%@\"": {
+      "comment": "Mirage color-options controller error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby verweist auf das unbekannte Steuerelement „%@“"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby hace referencia a un control desconocido «%@»"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby fait référence au contrôle inconnu « %@ »"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby が不明なコントロール「%@」を参照しています"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby가 알 수 없는 컨트롤 \"%@\"을(를) 참조합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "optionsby 引用了未知控件“%@”"
+          }
+        }
+      }
+    },
+    "visibleby references unknown control \"%@\"": {
+      "comment": "Mirage conditional-visibility controller error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visibleby verweist auf das unbekannte Steuerelement „%@“"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visibleby hace referencia a un control desconocido «%@»"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visibleby fait référence au contrôle inconnu « %@ »"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visibleby が不明なコントロール「%@」を参照しています"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visibleby가 알 수 없는 컨트롤 \"%@\"을(를) 참조합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visibleby 引用了未知控件“%@”"
+          }
+        }
+      }
+    },
+    "visiblevalues must be a non-empty comma-separated list of numbers": {
+      "comment": "Mirage conditional-visibility malformed-values error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues muss eine nicht leere, kommagetrennte Zahlenliste sein"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues debe ser una lista de números separados por comas y no vacía"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues doit être une liste de nombres séparés par des virgules, non vide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues には空でないカンマ区切りの数値リストを指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues는 쉼표로 구분된 비어 있지 않은 숫자 목록이어야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues 必须是非空的、以逗号分隔的数字列表"
+          }
+        }
+      }
+    },
+    "visiblevalues takes at most %d values": {
+      "comment": "Mirage conditional-visibility value-count error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues erlaubt höchstens %d Werte"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues admite como máximo %d valores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues accepte au plus %d valeurs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues に指定できる値は最大 %d 個です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues에는 최대 %d개의 값만 지정할 수 있습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "visiblevalues 最多支持 %d 个值"
+          }
+        }
+      }
+    },
+    "waveform must be an integer sample count, for example waveform=128": {
+      "comment": "Mirage audio waveform value error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform muss eine ganzzahlige Sample-Anzahl sein, zum Beispiel waveform=128"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform debe ser un número entero de muestras, por ejemplo waveform=128"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform doit être un nombre entier d'échantillons, par exemple waveform=128"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform には整数のサンプル数を指定してください（例: waveform=128）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform은 정수 샘플 수여야 합니다(예: waveform=128)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform 必须是整数采样数，例如 waveform=128"
+          }
+        }
+      }
+    },
+    "waveform must contain 4 to %d samples": {
+      "comment": "Mirage audio waveform sample-count error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform muss 4 bis %d Samples enthalten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform debe contener entre 4 y %d muestras"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform doit contenir de 4 à %d échantillons"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform のサンプル数は 4〜%d にしてください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform은 4~%d개의 샘플을 포함해야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waveform 必须包含 4 到 %d 个采样"
+          }
+        }
+      }
+    },
+    "wavewindow must be a number of seconds": {
+      "comment": "Mirage audio waveform-window value error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow muss eine Sekundenangabe sein"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow debe ser un número de segundos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow doit être un nombre de secondes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow には秒数を指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow는 초 단위 숫자여야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow 必须是以秒为单位的数字"
+          }
+        }
+      }
+    },
+    "wavewindow must be between %.3f and %.2f seconds": {
+      "comment": "Mirage audio waveform-window range error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow muss zwischen %.3f und %.2f Sekunden liegen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow debe estar entre %.3f y %.2f segundos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow doit être compris entre %.3f et %.2f secondes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow は %.3f〜%.2f 秒の範囲で指定してください"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow는 %.3f~%.2f초 사이여야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow 必须介于 %.3f 到 %.2f 秒之间"
+          }
+        }
+      }
+    },
+    "wavewindow requires waveform=<samples>": {
+      "comment": "Mirage audio waveform-window dependency error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow erfordert waveform=<samples>"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow requiere waveform=<samples>"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow nécessite waveform=<samples>"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow には waveform=<samples> が必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow에는 waveform=<samples>가 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wavewindow 需要 waveform=<samples>"
           }
         }
       }

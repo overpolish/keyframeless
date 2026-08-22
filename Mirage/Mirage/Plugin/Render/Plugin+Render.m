@@ -32,17 +32,23 @@ NSString *const kMiragePassthroughSource =
 
 static void MirageApplySelectionPreview(MirageShaderModel *model,
                                         NSString *source,
-                                        MiragePluginState *state) {
-  NSString *key = MirageSurfaceSelectionToggleForSource(source);
-  if (!key.length || !model || !state)
+                                        MiragePluginState *state,
+                                        NSInteger activeKey) {
+  NSString *selectionKey = MirageSurfaceSelectionToggleForSource(source);
+  NSString *activeKeyControl =
+      MirageSurfaceActiveKeyControlForSource(source);
+  if (!model || !state)
     return;
   const MirageScalarProp *props = model.scalarProps;
   for (int i = 0; i < model.scalarCount; i++)
-    if ([key isEqualToString:@(props[i].name)] && props[i].isBool &&
+    if ([selectionKey isEqualToString:@(props[i].name)] && props[i].isBool &&
         props[i].poolOffset >= 0 &&
         props[i].poolOffset < state->colorPoolCount) {
       state->colorPool[props[i].poolOffset].x = 1.0f;
-      return;
+    } else if ([activeKeyControl isEqualToString:@(props[i].name)] &&
+               props[i].isChoice && props[i].poolOffset >= 0 &&
+               props[i].poolOffset < state->colorPoolCount) {
+      state->colorPool[props[i].poolOffset].x = (float)activeKey;
     }
 }
 
@@ -1084,8 +1090,10 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   // values.
   const float pixelScale = MirageRenderScale(sourceImages);
   MirageShaderModel *pxModel = [MirageShaderModel modelForSource:imageSrc];
-  if (KKInstanceStateForAPI(self.apiManager).mirageCompareSelectionEnabled)
-    MirageApplySelectionPreview(pxModel, imageSrc, &base);
+  KKPluginInstanceState *compareState = KKInstanceStateForAPI(self.apiManager);
+  if (compareState.mirageCompareSelectionEnabled)
+    MirageApplySelectionPreview(pxModel, imageSrc, &base,
+                                compareState.mirageCompareActiveKey);
   MirageScalePixelProps(pxModel, base.colorPool, base.colorPoolCount,
                         pixelScale);
 
@@ -1120,9 +1128,16 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
     if (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled && n > 1) {
       MiragePluginState *states = malloc(sizeof(MiragePluginState) * (size_t)n);
       BOOL readOK = MirageStateBlobReadStates(pluginState, states, n);
-      if (readOK)
+      // Only when the matte is ON: this decodes fresh states per render, but
+      // applying unconditionally forced uShowSelection=1 into every SAMPLE
+      // state, so with motion blur enabled the viewer rendered the matte
+      // regardless of the toggle (the base state above is correctly guarded -
+      // which is why the probe read pool=0 while the drawn frame showed the
+      // matte).
+      if (readOK && compareState.mirageCompareSelectionEnabled)
         for (NSInteger si = 0; si < n; si++)
-          MirageApplySelectionPreview(pxModel, imageSrc, &states[si]);
+          MirageApplySelectionPreview(pxModel, imageSrc, &states[si],
+                                      compareState.mirageCompareActiveKey);
       if (readOK)
         for (NSInteger si = 0; si < n; si++)
           MirageScalePixelProps(pxModel, states[si].colorPool,
@@ -1171,8 +1186,12 @@ MirageBufferSourcesFromSections(NSDictionary<NSString *, NSString *> *sections,
   if (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled && n > 1) {
     mpStates = malloc(sizeof(MiragePluginState) * (size_t)n);
     if (MirageStateBlobReadStates(pluginState, mpStates, n)) {
-      for (NSInteger si = 0; si < n; si++)
-        MirageApplySelectionPreview(pxModel, imageSrc, &mpStates[si]);
+      // Guarded like the single-pass samples above: unconditional application
+      // baked the matte into every sub-sample whenever motion blur ran.
+      if (compareState.mirageCompareSelectionEnabled)
+        for (NSInteger si = 0; si < n; si++)
+          MirageApplySelectionPreview(pxModel, imageSrc, &mpStates[si],
+                                      compareState.mirageCompareActiveKey);
       for (NSInteger si = 0; si < n; si++)
         MirageScalePixelProps(pxModel, mpStates[si].colorPool,
                               mpStates[si].colorPoolCount, pixelScale);

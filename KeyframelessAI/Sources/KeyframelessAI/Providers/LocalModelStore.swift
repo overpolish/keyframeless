@@ -37,6 +37,7 @@ public final class LocalModelStore: ObservableObject {
 	public var hasReadyModel: Bool {
 		guard let id = selectedModelID else { return false }
 		return downloadedModels.contains(id)
+			|| customModels.contains { $0.id == id }
 	}
 
 	private static let selectedKey = "com.keyframeless.ai.local.selectedModel"
@@ -54,6 +55,17 @@ public final class LocalModelStore: ObservableObject {
 		refreshDownloaded()
 	}
 
+	/// A non-catalog model adopted from the user's own HuggingFace cache,
+	/// selectable like any catalog row but never downloadable or recommended.
+	public struct CustomLocalModel: Identifiable, Sendable, Equatable {
+		public let id: String  // "custom:<repoID>"
+		public let repoID: String
+		public let displayName: String
+		public let sizeDescription: String
+	}
+
+	@Published public private(set) var customModels: [CustomLocalModel] = []
+
 	/// Re-derive the downloaded set from the shared model cache on disk (a model's
 	/// `snapshots/` dir holds files once fetched), then reconcile the selection.
 	public func refreshDownloaded() {
@@ -61,12 +73,53 @@ public final class LocalModelStore: ObservableObject {
 		for model in LocalModelCatalog.models where Self.isDownloaded(model.repoID) {
 			found.insert(model.id)
 		}
-		downloadedModels = found
-		if let cur = selectedModelID, !found.contains(cur) {
-			selectedModelID = found.first
-		} else if selectedModelID == nil {
-			selectedModelID = found.first
+		if found != downloadedModels {
+			downloadedModels = found
 		}
+		let customs = Self.scanCustomModels()
+		if customs != customModels {
+			customModels = customs
+		}
+		let selectable = found.union(customs.map(\.id))
+		if let cur = selectedModelID, !selectable.contains(cur) {
+			selectedModelID = found.first ?? customs.first?.id
+		} else if selectedModelID == nil {
+			selectedModelID = found.first ?? customs.first?.id
+		}
+	}
+
+	/// Adoption shells in the shared cache for repos OUTSIDE the catalog. Read
+	/// from the manifest the helper wrote (the plugin sandbox can't stat through
+	/// the shell's symlinks), gated on the same completion marker as catalog
+	/// models.
+	private static func scanCustomModels() -> [CustomLocalModel] {
+		guard let base = LocalAIHelperSocket.modelCacheBase(),
+			let entries = try? FileManager.default.contentsOfDirectory(
+				at: base, includingPropertiesForKeys: nil,
+				options: [.skipsHiddenFiles])
+		else { return [] }
+		let catalogRepoIDs = Set(LocalModelCatalog.models.map(\.repoID))
+		var customs: [CustomLocalModel] = []
+		for dir in entries {
+			guard let repoID = ModelAdoption.repoID(fromDirName: dir.lastPathComponent),
+				!catalogRepoIDs.contains(repoID),
+				FileManager.default.fileExists(
+					atPath: dir.appendingPathComponent(
+						LocalAIHelperSocket.completeMarkerName).path),
+				let manifest = ModelAdoption.manifest(ofShell: dir)
+			else { continue }
+			let size = manifest.sizeBytes > 0
+				? ByteCountFormatter.string(
+					fromByteCount: manifest.sizeBytes, countStyle: .file)
+				: ""
+			customs.append(
+				CustomLocalModel(
+					id: LocalModelCatalog.customID(repoID: repoID),
+					repoID: repoID,
+					displayName: repoID.components(separatedBy: "/").last ?? repoID,
+					sizeDescription: size))
+		}
+		return customs.sorted { $0.displayName < $1.displayName }
 	}
 
 	/// Begin mirroring the helper's live download state while the models UI is visible,
@@ -108,6 +161,10 @@ public final class LocalModelStore: ObservableObject {
 		} else if downloadingModel != nil {
 			downloadingModel = nil
 			downloadProgress = 0
+			refreshDownloaded()
+		} else {
+			// The status poll we just made also ran the helper's adoption scan; a
+			// model the user pulled with mlx_lm may have just gained its marker.
 			refreshDownloaded()
 		}
 	}
@@ -176,14 +233,31 @@ public final class LocalModelStore: ObservableObject {
 
 	public func uninstall(_ id: String) {
 		downloadedModels.remove(id)
-		if selectedModelID == id { selectedModelID = downloadedModels.first }
+		customModels.removeAll { $0.id == id }
+		if selectedModelID == id {
+			selectedModelID = downloadedModels.first ?? customModels.first?.id
+		}
 		// Free the disk: delete the repo's cache dir (blobs + snapshots + refs).
-		guard let model = LocalModelCatalog.model(id: id),
+		// `resolve` also covers customs, whose repoID is in the id itself.
+		guard let model = LocalModelCatalog.resolve(id: id),
 			let dir = LocalAIHelperSocket.repoCacheDir(model.repoID)
 		else { return }
+		// An ADOPTED repo is a shell of symlinks into the user's own HF cache:
+		// deleting it must remove only the shell (removeItem on a symlink removes
+		// the link, never the target) and must leave a tombstone, or the next
+		// helper scan would re-adopt it straight back.
+		let adopted = ModelAdoption.isAdopted(repoDir: dir)
 		do {
 			try FileManager.default.removeItem(at: dir)
-			storeLog.notice("uninstalled \(model.repoID, privacy: .public) (removed cache)")
+			if adopted, let base = LocalAIHelperSocket.modelCacheBase() {
+				try? Data([1]).write(
+					to: ModelAdoption.tombstoneURL(repoID: model.repoID, base: base))
+				storeLog.notice(
+					"uninstalled adopted \(model.repoID, privacy: .public) (shell removed, original kept)"
+				)
+			} else {
+				storeLog.notice("uninstalled \(model.repoID, privacy: .public) (removed cache)")
+			}
 		} catch {
 			storeLog.error(
 				"uninstall: failed to remove \(dir.path, privacy: .public): \(error.localizedDescription, privacy: .public)"
@@ -192,7 +266,8 @@ public final class LocalModelStore: ObservableObject {
 	}
 
 	public func select(_ id: String) {
-		guard downloadedModels.contains(id) else { return }
+		guard downloadedModels.contains(id) || customModels.contains(where: { $0.id == id })
+		else { return }
 		selectedModelID = id
 	}
 

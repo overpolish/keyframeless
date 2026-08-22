@@ -31,6 +31,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
 
 @implementation KKCodeEditorView
 @synthesize codeValidator = _codeValidator;
+@synthesize saveValidator = _saveValidator;
 @synthesize codeFormatter = _codeFormatter;
 @synthesize schemaProvider = _schemaProvider;
 // Accessors live in +SaveBar (backed by the name field's placeholderString,
@@ -157,7 +158,9 @@ NSNotificationName const KKCodeEditorReloadNotification =
     _errorScroll = [NSScrollView new];
     _errorScroll.translatesAutoresizingMaskIntoConstraints = NO;
     _errorScroll.drawsBackground = NO;
-    _errorScroll.hasHorizontalScroller = YES;
+    // Scroll-wheel/trackpad panning works without a scroller, and the strip
+    // is one line tall - an overlay scroller drawn on top covered the text.
+    _errorScroll.hasHorizontalScroller = NO;
     _errorScroll.hasVerticalScroller = NO;
     _errorScroll.horizontalScrollElasticity = NSScrollElasticityAllowed;
     _errorScroll.verticalScrollElasticity = NSScrollElasticityNone;
@@ -540,6 +543,11 @@ NSNotificationName const KKCodeEditorReloadNotification =
 - (void)setCodeValidator:(NSString * (^)(NSString *,
                                          NSInteger *))codeValidator {
   _codeValidator = [codeValidator copy];
+  [self _scheduleValidator];
+}
+
+- (void)setSaveValidator:(NSString * (^)(NSString *))saveValidator {
+  _saveValidator = [saveValidator copy];
   [self _scheduleValidator];
 }
 

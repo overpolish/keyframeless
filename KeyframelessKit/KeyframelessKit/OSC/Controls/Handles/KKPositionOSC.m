@@ -573,14 +573,14 @@
   }
 
   __block BOOL wrote = NO;
-  KKPerformUndoable(
-      self.apiManager, self, nil,
+  KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         if (!setAPI)
           return;
         // Snapshot is canonical - the param read returns empty inside the OSC
-        // action scope. Copy-preserves spatial-curve fields + propagates
+        // callback. Copy-preserves spatial-curve fields + propagates
         // hold-links.
         NSArray<NSNumber *> *newValues = @[ @(newX), @(newY) ];
         KKTimeline *snap = KKProcessTimelineSnapshot();
@@ -662,10 +662,10 @@
 // Double-click toggle: flip the keypose nearest `frac` between smooth and
 // corner.
 - (void)_toggleSmoothForFrac:(double)frac {
-  KKPerformUndoable(
-      self.apiManager, self, nil,
+  KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         KKTimeline *snap = KKProcessTimelineSnapshot();
         if (!setAPI || !snap)
           return;
@@ -701,10 +701,10 @@
   CGPoint cur = [self _objFromCanvasX:x y:y];
   double curX = cur.x, curY = cur.y;
   __block BOOL wrote = NO;
-  KKPerformUndoable(
-      self.apiManager, self, nil,
+  KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         KKTimeline *snap = KKProcessTimelineSnapshot();
         if (!setAPI || !snap)
           return;

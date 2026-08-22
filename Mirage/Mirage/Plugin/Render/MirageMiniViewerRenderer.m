@@ -7,13 +7,14 @@
 #import "MirageMiniViewerRenderer_Internal.h"
 #import <KeyframelessKit/KKLog.h>
 
-#import "Constants.h"        // MirageCustomDefaultShaderSource
+#import "Constants.h"
 #import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding
 #import "MirageAudioPool.h"
 #import "MirageCustomShader.h" // MirageCustomErrorShaderSource
 #import "MirageDirectives.h"
 #import "MirageExprMiniSet.h"     // // @osc custom-handling handles
 #import "MirageFrameOffsets.h"    // `// #frames` neighbour offsets
+#import "MirageLocalCatalog.h"
 #import "MirageOSCBlockRuntime.h" // rotate blocks feed the rotation set
 #import "MirageRenderUniforms.h"  // MirageMakeUniforms (shared with FCP render)
 #import "MirageTypes.h"
@@ -429,7 +430,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
 }
 
 // The Custom type's user shader source for ONE rack entry, from that entry's
-// code lane (the default plasma when the sentinel's is missing entirely),
+// code lane (the chosen default when the sentinel's is missing entirely),
 // mirroring the FCP render read.
 - (NSString *)_customShaderSourceForEntry:(NSString *)entryID {
   KKLane *shaderLane =
@@ -437,14 +438,14 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   if (shaderLane.codeString.length)
     return shaderLane.codeString;
   // Fresh instance: timeline not yet seeded. Mirror the FCP render and use the
-  // baked plasma default so the mini matches. A present-but-empty codeString
+  // chosen default so the mini matches. A present-but-empty codeString
   // means the user cleared it => passthrough. The seed is the SENTINEL's alone,
   // matching MirageEvalStateAtFrac: a later rack entry exists only because its
   // registry slot was persisted, so a missing code lane there means no shader,
   // not an unwritten one.
   if (!shaderLane &&
       (!entryID.length || [entryID isEqualToString:kMirageRackSentinelEntryID]))
-    return MirageCustomDefaultShaderSource();
+    return MirageDefaultShaderSource();
   return kMiragePassthroughSource;
 }
 
@@ -479,10 +480,10 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   KKLane *shaderLane =
       MirageRackCodeLaneForEntry(self.timeline, entryID, kMirageCodeLaneLabel);
   if (!shaderLane) {
-    // Fresh instance: seed the baked plasma default (mirrors the FCP render).
+    // Fresh instance: seed every pass of the chosen default (mirrors FCP).
     // Sentinel only - see -_customShaderSourceForEntry:.
     if (!entryID.length || [entryID isEqualToString:kMirageRackSentinelEntryID])
-      out[@"Image"] = MirageCustomDefaultShaderSource();
+      [out addEntriesFromDictionary:MirageDefaultShaderSections()];
     return out;
   }
   if (shaderLane.codeString.length)

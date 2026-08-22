@@ -107,8 +107,9 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 @implementation KKTimelineAdvancedView (Drawing)
 
 // A category HEADER row: icon + localized category name flush-left, plus a
-// trailing collapse chevron at the graph's right edge (so the row doubles as
-// the collapse affordance, mirroring the layer header). Indented under the
+// trailing collapse chevron at the graph's right edge (the label and the
+// chevron are the collapse affordances, mirroring the layer header; the empty
+// middle is inert). Indented under the
 // layer header when the timeline has a layer level, giving a layer > category
 // > lane tree.
 - (void)_drawCategoryHeaderRow:(KKAdvancedRow *)hrow
@@ -147,23 +148,33 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   }
   [name drawAtPoint:NSMakePoint(x, floor(midY - tsz.height * 0.5))
       withAttributes:attrs];
+  CGFloat clusterL = NSMinX(g) + kRowLabelInset +
+                     (hrow.headerIndented ? kCategoryHeaderIndent : 0.0);
 
   NSString *chev = collapsed ? @"chevron.right" : @"chevron.down";
   NSImage *chevImg = [[NSImage imageWithSystemSymbolName:chev
                                 accessibilityDescription:nil]
       imageWithSymbolConfiguration:cfg];
+  CGFloat chevW = 0.0;
   if (chevImg) {
     CGFloat cw = chevImg.size.width, ch = chevImg.size.height;
     [chevImg drawInRect:NSMakeRect(NSMaxX(g) - kRowLabelInset - cw,
                                    floor(midY - ch * 0.5), cw, ch)];
+    chevW = cw;
   }
+  [self _recordHeaderToggleZonesForRow:hrow
+                               rowRect:row
+                              clusterL:clusterL
+                              clusterR:x + tsz.width
+                                 chevW:chevW];
 }
 
 // A layer HEADER row (multi-owner timelines that set `layerKey`/`layerLabel`):
 // the layer's name + symbol, plus a trailing collapse glyph. Drawn heavier than
 // a lane label so the layer reads as the outer grouping level. The symbol shows
-// FILLED when the layer is collapsed, outline when expanded (so the row doubles
-// as the collapse affordance). Defaults to a stacked-squares glyph.
+// FILLED when the layer is collapsed, outline when expanded (the name cluster
+// and the chevron are the collapse affordances; the empty middle is inert).
+// Defaults to a stacked-squares glyph.
 - (void)_drawLayerHeaderRow:(KKAdvancedRow *)hrow
                      inRect:(NSRect)row
                   collapsed:(BOOL)collapsed {
@@ -226,11 +237,43 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSImage *chevImg = [[NSImage imageWithSystemSymbolName:chev
                                 accessibilityDescription:nil]
       imageWithSymbolConfiguration:cfg];
+  CGFloat chevW = 0.0;
   if (chevImg) {
     CGFloat cw = chevImg.size.width, ch = chevImg.size.height;
     [chevImg drawInRect:NSMakeRect(NSMaxX(g) - kRowLabelInset - cw,
                                    floor(midY - ch * 0.5), cw, ch)];
+    chevW = cw;
   }
+  [self _recordHeaderToggleZonesForRow:hrow
+                               rowRect:row
+                              clusterL:NSMinX(g) + kRowLabelInset
+                              clusterR:x + tsz.width
+                                 chevW:chevW];
+}
+
+// The two clickable collapse zones of a header row, from the geometry just
+// drawn: the leading icon+label cluster and the trailing chevron, each padded
+// a little and spanning the row's full height so they stay easy to hit.
+- (void)_recordHeaderToggleZonesForRow:(KKAdvancedRow *)hrow
+                               rowRect:(NSRect)row
+                              clusterL:(CGFloat)clusterL
+                              clusterR:(CGFloat)clusterR
+                                 chevW:(CGFloat)chevW {
+  CGFloat pad = 6.0;
+  NSMutableArray<NSValue *> *zones = [NSMutableArray array];
+  [zones addObject:[NSValue valueWithRect:NSMakeRect(clusterL - pad,
+                                                     NSMinY(row),
+                                                     clusterR - clusterL +
+                                                         2.0 * pad,
+                                                     NSHeight(row))]];
+  if (chevW > 0.0) {
+    CGFloat chevX = NSMaxX([self _graphRect]) - kRowLabelInset - chevW;
+    [zones addObject:[NSValue valueWithRect:NSMakeRect(chevX - pad,
+                                                       NSMinY(row),
+                                                       chevW + 2.0 * pad,
+                                                       NSHeight(row))]];
+  }
+  _headerToggleRects[hrow.collapseKey ?: @""] = zones;
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
@@ -260,6 +303,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [NSGraphicsContext saveGraphicsState];
   [track addClip];
 
+  [_headerToggleRects removeAllObjects];
   for (NSInteger i = 0; i < (NSInteger)rows.count; i++) {
     KKAdvancedRow *r = rows[i];
     KKLane *lane = r.lane;
@@ -333,9 +377,9 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [NSGraphicsContext restoreGraphicsState]; // outer rows clip
 
   // Active-keypose highlight in its own pass, drawn AFTER both clips are lifted
-  // (mirrors Basic drawing the ring unclipped) so the ring isn't shaved at the
-  // track edges or the container's top/bottom. The scroll fades and ruler paint
-  // afterwards, covering any ring that strays toward a scrolled-off edge. Rings
+  // (mirrors Basic) so the ring isn't shaved at the track edges or the
+  // container's top/bottom; it clips itself to a padded container band so it
+  // still hides when its row scrolls away or its keypose pans off-track. Rings
   // the keypose(s) the open value popover edits.
   [self _drawActiveKeyposeHighlightForRows:rows tracks:tracks];
 
@@ -592,8 +636,19 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
 - (void)_drawLane:(KKLane *)lane inRow:(NSRect)row tracks:(NSRect)tracks {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
-  if (kps.count == 0)
+  if (kps.count == 0) {
+    // No keyposes at all: there is no value to plot, but the row still has to
+    // read as a lane. Span it with the dashed "nothing happens here" stroke in
+    // the same gray the non-editable leading/trailing holds use, out to the
+    // widened track edges the per-keypose lines reach.
+    CGFloat y = round(NSMidY(row)) + 0.5;
+    NSPoint pts[2] = {NSMakePoint(NSMinX(tracks) - kPillW * 0.5, y),
+                      NSMakePoint(NSMaxX(tracks) + kPillW * 0.5, y)};
+    KKStrokeTimelineCurve(
+        pts, 2, kIntervalWidth, YES,
+        [[NSColor inspectorLabel] colorWithAlphaComponent:0.5]);
     return;
+  }
   // Geometry lanes (Points) have no scalar to plot - swap in a signature line.
   if (lane.oscEditedOnly) {
     lane = KKAdvGeometryLaneForPlot(lane);
@@ -983,6 +1038,16 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
                                     tracks:(NSRect)tracks {
   if (!_valuePopoverShowing)
     return;
+  // Clip to the container padded by the ring's own overhang (half pill + 3px
+  // ring inset + stroke) so an on-track ring at the edges draws whole, but a
+  // ring whose row scrolled out or whose keypose panned/zoomed off-track hides
+  // with its pill instead of floating over the ruler or label gutter.
+  NSRect g = [self _graphRect];
+  CGFloat overhang = kPillW * 0.5 + 5.0;
+  [NSGraphicsContext saveGraphicsState];
+  NSRectClip(NSMakeRect(NSMinX(tracks) - overhang, NSMinY(g) - 2.0,
+                        NSMaxX(g) - NSMinX(tracks) + overhang,
+                        NSHeight(g) + 4.0));
   NSColor *neutral = [NSColor accentMatchingHost];
   NSColor *warn = [NSColor warning];
   for (NSInteger li = 0; li < (NSInteger)rows.count; li++) {
@@ -1028,6 +1093,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       break;
     }
   }
+  [NSGraphicsContext restoreGraphicsState];
 }
 
 - (void)_drawRulerInRect:(NSRect)g tracks:(NSRect)tracks {

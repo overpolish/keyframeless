@@ -7,6 +7,7 @@
 
 #import "MirageBrowserInternal.h"
 #import "MirageCategory.h"
+#import "MirageAudioProps.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageLocalCatalog.h"
 #import "MirageLocalized.h"
@@ -66,6 +67,7 @@ static const CGFloat kHeaderH = 22.0;
   /// source, so it only has to survive as long as the parse above does: the
   /// whole cache is dropped with it whenever the catalogue moves.
   NSMutableDictionary<NSString *, NSNumber *> *_colorSurfaceByID;
+  NSMutableDictionary<NSString *, NSNumber *> *_audioByID;
   NSTrackingArea *_arrowCursorArea;
 }
 
@@ -101,6 +103,7 @@ static const CGFloat kHeaderH = 22.0;
   _community = @[];
   _communityThumbnails = [NSMutableDictionary dictionary];
   _colorSurfaceByID = [NSMutableDictionary dictionary];
+  _audioByID = [NSMutableDictionary dictionary];
   _query = @"";
 
   _title = [NSTextField labelWithString:RLoc(@"Shaders", @"Browser title.")];
@@ -265,7 +268,8 @@ static const CGFloat kHeaderH = 22.0;
   return l;
 }
 
-// One icon pill per category, in MirageCategoryIDs() order. Multi-select (not
+// One icon pill per filter id (categories plus the audio capability), in
+// MirageBrowserFilterIDs() order. Multi-select (not
 // radioMode): "generators and transitions" is a reasonable thing to ask for,
 // and with nothing lit the filter is simply off.
 //
@@ -279,7 +283,7 @@ static const CGFloat kHeaderH = 22.0;
   // an OS that never shipped one is not.
   NSMutableArray<NSImage *> *icons = [NSMutableArray array];
   NSMutableArray<NSNumber *> *states = [NSMutableArray array];
-  for (NSString *c in MirageCategoryIDs()) {
+  for (NSString *c in MirageBrowserFilterIDs()) {
     NSImage *img =
         [NSImage imageWithSystemSymbolName:MirageCategorySymbol(c)
                   accessibilityDescription:MirageCategoryDisplayName(c)];
@@ -297,7 +301,7 @@ static const CGFloat kHeaderH = 22.0;
     __strong typeof(weak) s = weak;
     if (!s)
       return;
-    NSArray<NSString *> *ids = MirageCategoryIDs();
+    NSArray<NSString *> *ids = MirageBrowserFilterIDs();
     if (index < 0 || index >= (NSInteger)ids.count)
       return;
     if (isOn)
@@ -417,6 +421,7 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
   _localFingerprint = [fingerprint copy];
   _localEntries = [[MirageLocalCatalog shared] entries];
   [_colorSurfaceByID removeAllObjects];
+  [_audioByID removeAllObjects];
   return _localEntries;
 }
 
@@ -443,11 +448,14 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
                         componentsJoinedByString:@","]];
   [sig appendFormat:@"stars=%@\n",
                     [[MirageLocalCatalog shared] favoritesFingerprint]];
+  [sig appendFormat:@"default=%@\n",
+                    MirageLocalCatalog.shared.defaultEntryID];
   [sig appendFormat:@"local=%@\n", fingerprint];
   for (_MirageBrowserItem *r in _community)
-    [sig appendFormat:@"c=%@|%ld|%@|%@|%@|%d\n", r.entryID ?: @"",
+    [sig appendFormat:@"c=%@|%ld|%@|%@|%@|%d|%d\n", r.entryID ?: @"",
                       (long)r.communityEntry.version, r.name ?: @"",
-                      r.author ?: @"", r.category ?: @"", (int)r.grading];
+                      r.author ?: @"", r.category ?: @"", (int)r.grading,
+                      (int)r.audio];
   return sig;
 }
 
@@ -472,6 +480,23 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
          [self _declaresColorSurface:entry];
 }
 
+// Does this local entry's Image shader declare `// #audio`? Remote cards use
+// the source-derived flag published in the generated manifest.
+- (BOOL)_isAudioReactive:(MirageCatalogEntry *_Nullable)entry {
+  if (!entry)
+    return NO;
+  NSString *key = entry.entryID;
+  NSNumber *cached = key.length ? _audioByID[key] : nil;
+  if (cached)
+    return cached.boolValue;
+  MirageAudioProp prop;
+  BOOL declares =
+      MirageParseAudioProps(entry.sections[@"Image"], &prop, 1, 0, NULL) > 0;
+  if (key.length)
+    _audioByID[key] = @(declares);
+  return declares;
+}
+
 - (BOOL)_matches:(_MirageBrowserItem *)it {
   if (_favoritesOnly && ![[MirageLocalCatalog shared] isFavorite:it.entryID])
     return NO;
@@ -480,7 +505,8 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
   if (_categoryFilter.count) {
     BOOL any = NO;
     for (NSString *filterID in _categoryFilter)
-      if (MirageCategoryMatchesFilter(it.category, it.grading, filterID)) {
+      if (MirageCategoryMatchesFilter(it.category, it.grading, it.audio,
+                                      filterID)) {
         any = YES;
         break;
       }
@@ -553,8 +579,12 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
     it.author = e.author;
     it.category = e.category;
     it.grading = [self _isGradingTool:e];
+    it.audio = [self _isAudioReactive:e];
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
+    it.defaultEligible = YES;
+    it.defaultTemplate =
+        [MirageLocalCatalog.shared isDefaultEntryID:it.entryID];
     if ([self _matches:it])
       [keyframeless addObject:it];
   }
@@ -571,10 +601,14 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
     // Installed source is authoritative. Before download, the generated
     // manifest publishes this source-derived capability for the remote card.
     it.grading = inst ? [self _isGradingTool:inst] : r.grading;
+    it.audio = inst ? [self _isAudioReactive:inst] : r.audio;
     it.communityEntry = r.communityEntry;
     if (inst) {
       it.kind = _MirageItemInstalled;
       it.localEntry = inst;
+      it.defaultEligible = YES;
+      it.defaultTemplate =
+          [MirageLocalCatalog.shared isDefaultEntryID:it.entryID];
       it.thumbnail = inst.thumbnail;
       it.updateAvailable = r.communityEntry.version > inst.version;
       [mergedIDs addObject:r.entryID];
@@ -598,8 +632,12 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
     it.author = inst.author;
     it.category = inst.category;
     it.grading = [self _isGradingTool:inst];
+    it.audio = [self _isAudioReactive:inst];
     it.thumbnail = inst.thumbnail;
     it.localEntry = inst;
+    it.defaultEligible = YES;
+    it.defaultTemplate =
+        [MirageLocalCatalog.shared isDefaultEntryID:it.entryID];
     if ([self _matches:it])
       [keyframeless addObject:it];
   }
@@ -613,8 +651,12 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
     it.author = e.author;
     it.category = e.category;
     it.grading = [self _isGradingTool:e];
+    it.audio = [self _isAudioReactive:e];
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
+    it.defaultEligible = YES;
+    it.defaultTemplate =
+        [MirageLocalCatalog.shared isDefaultEntryID:it.entryID];
     if ([self _matches:it])
       [custom addObject:it];
   }
@@ -734,6 +776,7 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
                                 it.category = MirageCategoryNormalize(
                                     e.metadata[@"category"]);
                                 it.grading = [e.metadata[@"grading"] boolValue];
+                                it.audio = [e.metadata[@"audio"] boolValue];
                                 it.communityEntry = e;
                                 [items addObject:it];
                                 [s _loadCommunityThumbnail:e];
@@ -869,6 +912,13 @@ static const NSTimeInterval kCommunityDeadline = 0.35;
 }
 - (void)cardToggleFavorite:(_MirageCard *)card {
   [[MirageLocalCatalog shared] toggleFavorite:card.item.entryID];
+  [self _setNeedsRebuild];
+}
+- (void)cardMakeDefault:(_MirageCard *)card {
+  if (!card.item.defaultEligible || !card.item.localEntry)
+    return;
+  MirageLocalCatalog.shared.defaultEntryID = card.item.entryID;
+  _builtSignature = nil;
   [self _setNeedsRebuild];
 }
 - (void)card:(_MirageCard *)card didBeginRename:(BOOL)renaming {

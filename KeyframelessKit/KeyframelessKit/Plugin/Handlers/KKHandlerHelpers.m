@@ -96,6 +96,22 @@ BOOL KKPerformUndoable(id<PROAPIAccessing> apiManager, id principal,
   return YES;
 }
 
+BOOL KKPerformHostCallbackParameterAccess(
+    id<PROAPIAccessing> apiManager,
+    void (^block)(id<FxParameterRetrievalAPI_v6> getAPI,
+                  id<FxParameterSettingAPI_v5> setAPI)) {
+  if (!apiManager || !block)
+    return NO;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!getAPI && !setAPI)
+    return NO;
+  block(getAPI, setAPI);
+  return YES;
+}
+
 NSString *KKUndoLabelAdjust(NSString *productName) {
   return [NSString
       stringWithFormat:KKLoc(@"Adjust %@", @"Host undo label; %@ is the plugin "

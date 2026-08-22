@@ -568,9 +568,15 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
     return NO;
   NSSet<NSString *> *drivable = [self _drivableKeysIn:timeline
                                              fraction:[self _editFraction]];
-  for (NSString *key in picks)
-    if ([drivable containsObject:key])
+  // `picks` speaks the shader's BARE names, while `drivable` speaks the real
+  // timeline keys. They are identical for the sentinel entry only. Cross the
+  // rack boundary through the lane, exactly as the write path below does, or
+  // every picker on a later rack entry is incorrectly declared unavailable.
+  for (KKLane *lane in timeline.lanes) {
+    NSString *bare = [self _bareKeyForLane:lane];
+    if (bare && picks[bare] && [drivable containsObject:lane.key])
       return YES;
+  }
   return NO;
 }
 
@@ -663,8 +669,9 @@ static NSString *MirageSampleTooltip(MirageMemoryColor kind) {
                                              fraction:[self _editFraction]];
   NSMutableDictionary<NSString *, NSNumber *> *out =
       [NSMutableDictionary dictionary];
-  for (NSString *key in picks) {
-    if (![drivable containsObject:key])
+  for (KKLane *lane in timeline.lanes) {
+    NSString *key = [self _bareKeyForLane:lane];
+    if (!key || !picks[key] || ![drivable containsObject:lane.key])
       continue; // gated off by a visibleby= rule, so not part of this gesture
     NSString *declared = puckNames[key];
     if (!declared.length) {

@@ -628,7 +628,18 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
   // sRGB encode, on every display path.
   [s appendString:@"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "
                   @"gl_FragCoord.xy);\n"];
-  if (KKWantsAlphaOutput(userSource) ||
+  // `// #alpha` means masking only for a template that owns its source:
+  // a filter or layout (and an untyped paste) reads the clip and its alpha
+  // REPLACES the source's coverage - Magic Move placing one region, a keyer
+  // punching out green. A `#template generator` has no source of its own to
+  // mask - its alpha instead drives the composite over the source (audio viz
+  // bars over the footage), and the combined coverage still flows out, so a
+  // transparent source stays transparent under the drawing. The type decides,
+  // not iChannel0 sampling: a multi-pass layout reads the clip through a
+  // buffer and its image pass never touches iChannel0 at all.
+  BOOL wantsAlpha = KKWantsAlphaOutput(userSource);
+  BOOL generatorAlpha = wantsAlpha && KKLooksLikeGeneratorShader(userSource);
+  if ((wantsAlpha && !generatorAlpha) ||
       KKLooksLikeTransitionShader(userSource)) {
     // `// #alpha`: premultiplied passthrough of the shader's own alpha. No
     // composite over the source (the shader is masking that source), no forced
@@ -645,7 +656,7 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
             @"  kk_outColor = (kkExtra.w == 0.0) ? vec4(pm, kka)\n"
             @"                                  : vec4(kkLinearToSrgb(pm), "
             @"kka);\n}\n"];
-  } else if (honorAlpha) {
+  } else if (honorAlpha || generatorAlpha) {
     // Composite the shader over the source using its own alpha, so transparent
     // areas show the footage (iChannel0) rather than black - the shader is a
     // filter, and its source IS the background. Output is opaque (over the
@@ -658,6 +669,17 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
             @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(comp) : comp;\n"
             @"  float outA = max(kka, kkSrc.a);\n"
             @"  kk_outColor = vec4(rgb * outA, outA);\n}\n"];
+  } else if ([userSource
+                 rangeOfString:@"// #__mirage-preserve-input-alpha"]
+                .location != NSNotFound) {
+    // A downstream rack filter owns colour but, absent `// #alpha`, does not
+    // own coverage. Preserve the premultiplied iChannel0 alpha footprint so
+    // an upstream mask / generator remains transparent through the chain.
+    [s appendString:
+            @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) : disp;\n"
+            @"  float kkSourceAlpha = clamp(texture(iChannel0, fragCoord / "
+            @"iResolution.xy).a, 0.0, 1.0);\n"
+            @"  kk_outColor = vec4(rgb, kkSourceAlpha);\n}\n"];
   } else {
     // The image convention ignores fragColor.a (always opaque): golfed shaders
     // accumulate garbage into alpha, so forcing a=1 is safest.
@@ -665,6 +687,15 @@ static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
             @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) : disp;\n"
             @"  kk_outColor = vec4(rgb, 1.0);\n}\n"];
   }
+}
+
+NSString *KKGLSLSourcePreservingInputAlpha(NSString *userSource) {
+  if (!userSource.length ||
+      [userSource rangeOfString:@"// #__mirage-preserve-input-alpha"]
+              .location != NSNotFound)
+    return userSource ?: @"";
+  return [userSource
+      stringByAppendingString:@"\n// #__mirage-preserve-input-alpha\n"];
 }
 
 NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,

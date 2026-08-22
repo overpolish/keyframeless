@@ -1,6 +1,384 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Keep panel open": {
+      "comment": "Accessibility label for the editor panel pin.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Panel offen halten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener el panel abierto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Garder le panneau ouvert"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パネルを開いたままにする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "패널 열어 두기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持面板打开"
+          }
+        }
+      }
+    },
+    "Pinned: closes only from X or Esc. Click to let a click outside close it. (K)": {
+      "comment": "Tooltip for the editor panel pin button when pinned.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angeheftet: schließt nur über X oder Esc. Klicken, damit ein Klick außerhalb es schließt. (K)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fijado: solo se cierra con X o Esc. Haz clic para que un clic fuera lo cierre. (K)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Épinglé : ne se ferme qu’avec X ou Échap. Cliquez pour qu’un clic à l’extérieur le ferme. (K)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ピン留め中: X または Esc でのみ閉じます。クリックすると、外側のクリックで閉じるようになります。 (K)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "고정됨: X 또는 Esc로만 닫힙니다. 클릭하면 바깥을 클릭했을 때 닫힙니다. (K)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已固定：仅通过 X 或 Esc 关闭。点击后可通过点击外部关闭。 (K)"
+          }
+        }
+      }
+    },
+    "Unpinned: a click outside closes the panel. Click to keep it open. (K)": {
+      "comment": "Tooltip for the editor panel pin button when unpinned.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht angeheftet: ein Klick außerhalb schließt das Panel. Klicken, um es offen zu halten. (K)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin fijar: un clic fuera cierra el panel. Haz clic para mantenerlo abierto. (K)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non épinglé : un clic à l’extérieur ferme le panneau. Cliquez pour le garder ouvert. (K)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ピン留め解除中: 外側をクリックするとパネルが閉じます。クリックすると開いたままになります。 (K)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "고정 해제됨: 바깥을 클릭하면 패널이 닫힙니다. 클릭하면 열어 둡니다. (K)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未固定：点击外部会关闭面板。点击以保持打开。 (K)"
+          }
+        }
+      }
+    },
+    "View composition": {
+      "comment": "Accessibility label for the button held to hide an editor panel and reveal Final Cut's viewer.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Komposition anzeigen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver composición"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir la composition"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンポジションを表示"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컴포지션 보기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看合成"
+          }
+        }
+      }
+    },
+    "Hold to view the full composition. (P)": {
+      "comment": "Tooltip for the composition-peek button in an editor panel header.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gedrückt halten, um die ganze Komposition zu sehen. (P)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén pulsado para ver la composición completa. (P)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez pour voir toute la composition. (P)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "長押しでコンポジション全体を表示します。(P)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "길게 누르면 전체 컴포지션을 볼 수 있습니다. (P)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住以查看完整合成。(P)"
+          }
+        }
+      }
+    },
+    "Show templates or layers": {
+      "comment": "Accessibility label for the editor sidebar toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlagen oder Ebenen anzeigen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar plantillas o capas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les modèles ou les calques"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テンプレートまたはレイヤーを表示"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "템플릿 또는 레이어 표시"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示模板或图层"
+          }
+        }
+      }
+    },
+    "Show or hide templates/layers. (L)": {
+      "comment": "Tooltip for the editor sidebar toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorlagen/Ebenen ein- oder ausblenden. (L)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar u ocultar plantillas/capas. (L)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher ou masquer les modèles/calques. (L)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テンプレート/レイヤーを表示または非表示にします。(L)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "템플릿/레이어를 표시하거나 숨깁니다. (L)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示或隐藏模板/图层。(L)"
+          }
+        }
+      }
+    },
+    "Show grading panel": {
+      "comment": "Accessibility label for a plugin's optional right editor panel toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grading-Panel anzeigen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar el panel de etalonaje"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher le panneau d’étalonnage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グレーディングパネルを表示"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그레이딩 패널 표시"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示调色面板"
+          }
+        }
+      }
+    },
+    "Show or hide the grading panel. (G)": {
+      "comment": "Tooltip for Mirage's grading-panel toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grading-Panel ein- oder ausblenden. (G)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar u ocultar el panel de etalonaje. (G)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher ou masquer le panneau d’étalonnage. (G)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グレーディングパネルを表示または非表示にします。(G)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그레이딩 패널을 표시하거나 숨깁니다. (G)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示或隐藏调色面板。(G)"
+          }
+        }
+      }
+    },
     "Unknown reference: %@ (reads 0)": {
       "comment": "Expression warning: the named ${refs} resolve to no published source, so they evaluate as zero. %@ is a comma-separated list of names.",
       "extractionState": "manual",

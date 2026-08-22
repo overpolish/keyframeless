@@ -1274,6 +1274,12 @@
         }
       }
     },
+    "Fixing compile error" : {
+
+    },
+    "Found in your HuggingFace cache" : {
+
+    },
     "Get a key" : {
       "comment" : "Link to the provider's API key console.",
       "extractionState" : "manual",
@@ -2491,6 +2497,9 @@
         }
       }
     },
+    "Remove from Kai" : {
+
+    },
     "Resolving %@" : {
 
     },
@@ -3336,6 +3345,12 @@
       }
     },
     "Writing shader" : {
+
+    },
+    "Your model" : {
+
+    },
+    "Your models" : {
 
     }
   },

@@ -6,6 +6,7 @@
 #import "KKCompanionPanelController.h"
 
 #import "KKLog.h"
+#import "KKPopoverBackground.h"
 #import "KKPopoverKeepAlive.h"
 #import "NSColor+KKColors.h"
 
@@ -134,8 +135,7 @@ static const CGFloat kSlideDistance = 12.0;
     // beside it, not see-through liquid glass. The glass clips it to the corner
     // radius, so the panel keeps its rounded shape and shadow.
     content.wantsLayer = YES;
-    content.layer.backgroundColor =
-        [NSColor.inspectorBackground colorWithAlphaComponent:0.5].CGColor;
+    content.layer.backgroundColor = KKPanelBackingFill().CGColor;
     glass.contentView = content;
     p.contentView = glass;
   } else {
@@ -156,6 +156,8 @@ static const CGFloat kSlideDistance = 12.0;
     fx.maskImage = [KKCompanionPanelController
         _roundedMaskImageWithRadius:kPanelCornerRadius];
     content.frame = fx.bounds;
+    content.wantsLayer = YES;
+    content.layer.backgroundColor = KKPanelBackingFill().CGColor;
     [fx addSubview:content];
     p.contentView = fx;
   }

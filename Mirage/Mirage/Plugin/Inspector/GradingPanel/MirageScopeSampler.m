@@ -6,6 +6,7 @@
 #import "MirageScopeSampler.h"
 
 #import <KeyframelessKit/KKLog.h>
+#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 // Cap the pixels actually inspected. The preview is small, but it is sized to
 // the popover's display resolution, so this keeps the cost flat if that grows.
@@ -15,6 +16,16 @@ static const NSUInteger kMaxSamples = 40000;
 /// Sized from measurement: a cast strong enough to be obviously wrong reads
 /// about 0.055.
 static const double kCastFullScale = 0.08;
+
+/// Scope reads are driven while AppKit is inside its mouse-tracking run loop.
+/// The main dispatch queue can be deferred by that nested loop; common-mode
+/// blocks cannot, so readback and delivery keep pace with the drag.
+static void MirageScopePerformOnMainRunLoop(void (^block)(void)) {
+  if (!block)
+    return;
+  CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, block);
+  CFRunLoopWakeUp(CFRunLoopGetMain());
+}
 
 @implementation MirageScopeReading
 @end
@@ -28,6 +39,7 @@ static const NSInteger kPickPatchRadius = 4;
   id<MTLCommandQueue> _queue;
   id<MTLTexture> _readback;
   __weak id<MTLDevice> _queueDevice;
+  MPSImageLanczosScale *_downscaler;
   /// The walk over the readback, off the main thread. Serial: one measurement
   /// is in flight at a time, and the order they were asked in is the order the
   /// panel should hear about them.
@@ -43,6 +55,7 @@ static const NSInteger kPickPatchRadius = 4;
     _pickUV = NSMakePoint(-1.0, -1.0);
     _probeUV = NSMakePoint(-1.0, -1.0);
     _visibleUVRect = NSMakeRect(0.0, 0.0, 1.0, 1.0);
+    _maximumSampleCount = kMaxSamples;
   }
   return self;
 }
@@ -217,22 +230,56 @@ static NSPoint MirageScopeCastMarker(const double linear[3],
     _queue = [device newCommandQueue];
     _queueDevice = device;
     _readback = nil;
+    _downscaler = [[MPSImageLanczosScale alloc] initWithDevice:device];
   }
   if (!_queue)
     return NO;
-  if (_readback && _readback.width == texture.width &&
-      _readback.height == texture.height &&
+  NSUInteger maxSamples = MAX((NSUInteger)1, self.maximumSampleCount);
+  double scale = texture.width * texture.height > maxSamples
+                     ? sqrt((double)maxSamples /
+                            ((double)texture.width * (double)texture.height))
+                     : 1.0;
+  NSUInteger targetW = MAX((NSUInteger)1,
+                           (NSUInteger)floor((double)texture.width * scale));
+  NSUInteger targetH = MAX((NSUInteger)1,
+                           (NSUInteger)floor((double)texture.height * scale));
+  if (_readback && _readback.width == targetW &&
+      _readback.height == targetH &&
       _readback.pixelFormat == texture.pixelFormat)
     return YES;
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:texture.pixelFormat
-                                   width:texture.width
-                                  height:texture.height
+                                   width:targetW
+                                  height:targetH
                                mipmapped:NO];
-  td.usage = MTLTextureUsageShaderRead;
+  td.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
   td.storageMode = MTLStorageModeShared;
   _readback = [device newTextureWithDescriptor:td];
   return _readback != nil;
+}
+
+/// Encode the full-size copy or GPU downsample into the reusable shared
+/// texture. Downsampling BEFORE readback is the latency win: the previous path
+/// copied every preview pixel to the CPU and only then skipped most of them.
+- (void)_encodeTexture:(id<MTLTexture>)texture
+       toReadbackUsing:(id<MTLCommandBuffer>)cb {
+  if (_readback.width == texture.width && _readback.height == texture.height) {
+    id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+    [blit copyFromTexture:texture
+              sourceSlice:0
+              sourceLevel:0
+             sourceOrigin:MTLOriginMake(0, 0, 0)
+               sourceSize:MTLSizeMake(texture.width, texture.height, 1)
+                toTexture:_readback
+         destinationSlice:0
+         destinationLevel:0
+        destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
+    return;
+  }
+  [_downscaler encodeToCommandBuffer:cb
+                       sourceTexture:texture
+                  destinationTexture:_readback];
 }
 
 /// Blit `texture` into the shared-storage copy and hand back its bytes, or nil
@@ -242,17 +289,7 @@ static NSPoint MirageScopeCastMarker(const double linear[3],
   if (![self _ensureReadbackForTexture:texture device:device])
     return nil;
   id<MTLCommandBuffer> cb = [_queue commandBuffer];
-  id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
-  [blit copyFromTexture:texture
-            sourceSlice:0
-            sourceLevel:0
-           sourceOrigin:MTLOriginMake(0, 0, 0)
-             sourceSize:MTLSizeMake(texture.width, texture.height, 1)
-              toTexture:_readback
-       destinationSlice:0
-       destinationLevel:0
-      destinationOrigin:MTLOriginMake(0, 0, 0)];
-  [blit endEncoding];
+  [self _encodeTexture:texture toReadbackUsing:cb];
   [cb commit];
   [cb waitUntilCompleted];
 
@@ -504,24 +541,14 @@ MirageScopeReadingFromBytes(NSData *data, NSUInteger w, NSUInteger h,
       MirageScopeParamsFor(self, binCount, minStop, maxStop, rIdx, bIdx);
   _readInFlight = YES;
   id<MTLCommandBuffer> cb = [_queue commandBuffer];
-  id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
-  [blit copyFromTexture:texture
-            sourceSlice:0
-            sourceLevel:0
-           sourceOrigin:MTLOriginMake(0, 0, 0)
-             sourceSize:MTLSizeMake(texture.width, texture.height, 1)
-              toTexture:_readback
-       destinationSlice:0
-       destinationLevel:0
-      destinationOrigin:MTLOriginMake(0, 0, 0)];
-  [blit endEncoding];
+  [self _encodeTexture:texture toReadbackUsing:cb];
   __weak typeof(self) weak = self;
   [cb addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
     // Back to the main thread for the COPY only: the readback texture is the
     // sampler's, and the sampler belongs to the main thread. The copy is a
     // memcpy of a preview-sized frame; the walk over it is what is worth
     // moving, and that is the hop below.
-    dispatch_async(dispatch_get_main_queue(), ^{
+    MirageScopePerformOnMainRunLoop(^{
       __strong typeof(weak) s = weak;
       if (!s) {
         completion(nil);
@@ -541,7 +568,7 @@ MirageScopeReadingFromBytes(NSData *data, NSUInteger w, NSUInteger h,
       dispatch_async(s->_analysisQueue, ^{
         MirageScopeReading *reading =
             MirageScopeReadingFromBytes(data, w, h, params);
-        dispatch_async(dispatch_get_main_queue(), ^{
+        MirageScopePerformOnMainRunLoop(^{
           __strong typeof(weak) inner = weak;
           if (inner)
             inner->_readInFlight = NO;

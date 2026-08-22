@@ -82,17 +82,47 @@ static NSArray<NSNumber *> *MirageBoundAudioKeys(NSString *source,
 
 @implementation MiragePlugin (AudioTickets)
 
+- (void)scheduleAudioTicketSyncForTimeline:(KKTimeline *)timeline {
+  if (!timeline)
+    return;
+  @synchronized(self) {
+    self.pendingAudioTicketTimeline = timeline;
+    if (self.audioTicketSyncScheduled)
+      return;
+    self.audioTicketSyncScheduled = YES;
+  }
+  __weak typeof(self) weakSelf = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(NSEC_PER_SEC / 30)),
+      dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self)
+          return;
+        KKTimeline *latest = nil;
+        @synchronized(self) {
+          latest = self.pendingAudioTicketTimeline;
+          self.pendingAudioTicketTimeline = nil;
+          self.audioTicketSyncScheduled = NO;
+        }
+        [self syncAudioTicketsForTimeline:latest];
+      });
+}
+
 - (void)syncAudioTicketsForTimeline:(KKTimeline *)timeline {
   if (!timeline) {
     return;
   }
-  KKPerformUndoable(
+  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+  NSArray<NSNumber *> *bound = MirageBoundAudioKeys(source, timeline);
+  NSString *signature =
+      [NSString stringWithFormat:@"%@\n%@", source ?: @"", bound ?: @[]];
+  if ([signature isEqualToString:self.audioTicketBindingSignature])
+    return;
+
+  BOOL scoped = KKPerformUndoable(
       self.apiManager, self, nil,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
         id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
-
-        NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
-        NSArray<NSNumber *> *bound = MirageBoundAudioKeys(source, timeline);
         NSDictionary<NSString *, id> *existing = MirageReadTicketMap(getAPI);
         // Cached even when there's nothing to sync: the lane builder reads this from
         // callbacks where the param APIs don't resolve, and it needs the tickets a
@@ -148,6 +178,8 @@ static NSArray<NSNumber *> *MirageBoundAudioKeys(NSString *source,
           }
         }
   });
+  if (scoped)
+    self.audioTicketBindingSignature = signature;
 }
 
 @end

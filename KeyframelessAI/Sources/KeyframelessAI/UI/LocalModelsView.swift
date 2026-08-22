@@ -32,6 +32,22 @@ struct LocalModelsView: View {
 				ForEach(LocalModelCatalog.models) { model in
 					LocalModelRow(model: model, store: store)
 				}
+				if !store.customModels.isEmpty {
+					HStack(alignment: .firstTextBaseline) {
+						Text(AILoc("Your models"))
+							.font(.system(size: 10, weight: .semibold))
+							.foregroundStyle(Color.aiSecondaryText)
+						Spacer()
+						Text(AILoc("Found in your HuggingFace cache"))
+							.font(.system(size: 9))
+							.foregroundStyle(Color.aiTertiaryText)
+					}
+					.padding(.top, 6)
+					.padding(.horizontal, 8)
+					ForEach(store.customModels) { model in
+						CustomModelRow(model: model, store: store)
+					}
+				}
 			}
 			.opacity(KKAIEngine.showInstallNotice ? 0.5 : 1)
 
@@ -173,6 +189,57 @@ private struct LocalModelRow: View {
 				} label: {
 					Label(AILoc("Uninstall"), systemImage: "trash")
 				}
+			}
+		}
+	}
+}
+
+/// A model adopted from the user's own HuggingFace cache: selectable, sized,
+/// removable - never downloadable, never "Recommended" (there is no RAM floor
+/// to rank it by; the user chose to have it).
+private struct CustomModelRow: View {
+	let model: LocalModelStore.CustomLocalModel
+	@ObservedObject var store: LocalModelStore
+
+	var body: some View {
+		let isSelected = store.selectedModelID == model.id
+		let accent = Color.accentColor
+		HStack(spacing: 10) {
+			Circle()
+				.fill(isSelected ? accent : Color.secondary.opacity(0.3))
+				.frame(width: 6, height: 6)
+			VStack(alignment: .leading, spacing: 1) {
+				Text(model.displayName)
+					.font(.system(size: 12, weight: isSelected ? .medium : .regular))
+					.lineLimit(1)
+					.truncationMode(.tail)
+				Text(model.repoID)
+					.font(.system(size: 10))
+					.foregroundStyle(Color.aiSecondaryText)
+					.lineLimit(1)
+					.truncationMode(.middle)
+			}
+			.layoutPriority(1)
+			Spacer(minLength: 8)
+			if !model.sizeDescription.isEmpty {
+				AIPillBadge(
+					label: model.sizeDescription,
+					systemImage: "internaldrive", color: .secondary)
+			}
+		}
+		.padding(.horizontal, 8)
+		.padding(.vertical, 7)
+		.background {
+			RoundedRectangle(cornerRadius: 6)
+				.fill(isSelected ? accent.opacity(0.10) : Color.clear)
+		}
+		.contentShape(Rectangle())
+		.onTapGesture { store.select(model.id) }
+		.contextMenu {
+			Button(role: .destructive) {
+				store.uninstall(model.id)
+			} label: {
+				Label(AILoc("Remove from Kai"), systemImage: "trash")
 			}
 		}
 	}

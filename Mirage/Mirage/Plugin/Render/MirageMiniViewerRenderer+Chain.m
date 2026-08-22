@@ -16,6 +16,7 @@
 
 #import "Constants.h"        // MirageCustomDefaultShaderSource
 #import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding
+#import "KKGLSLTranspiler_Internal.h"
 #import "MirageAudioPool.h"
 #import "MirageCustomShader.h" // MirageCustomErrorShaderSource
 #import "MirageDirectives.h"
@@ -99,9 +100,10 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
   for (NSString *entryID in entryIDs)
     if (MirageRackEntryEnabledAtFraction(self.timeline, entryID, frac))
       [enabled addObject:entryID];
-  return MirageRackViewerEntryPlan(
+  NSArray<NSString *> *plan = MirageRackViewerEntryPlan(
       entryIDs, enabled, self.rackPreviewMode, self.rackPreviewEntryID,
       self.selectionMatteActive, MirageRackEntryIDOrSentinel(self.rackEntryID));
+  return plan;
 }
 
 // A reusable RGBA16Float intermediate for chain position `index`, at the
@@ -472,6 +474,8 @@ static void MirageScaleMiniPixelProps(MirageShaderModel *model,
     bufTex[c] = setTex[prevI][c];
 
   NSString *imgSrc = withCommon(image);
+  if (chainInput)
+    imgSrc = KKGLSLSourcePreservingInputAlpha(imgSrc);
   id<MTLRenderPipelineState> imagePS = [self _customPipelineForDevice:device
                                                           pixelFormat:fmt
                                                                source:imgSrc

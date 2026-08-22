@@ -423,7 +423,13 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 - (void)setLiveValues:(nullable NSArray<NSNumber *> *)values
              forLabel:(NSString *)label
            atFraction:(double)fraction;
-/// Clear all live overrides (drag end).
+/// Push a fraction-INDEPENDENT override for `label`: session-only viewer
+/// state that does not animate (Mirage's matte bool, its active preview key).
+/// Wins over the timeline at every fraction until cleared. Pass nil/empty
+/// values to clear just this label.
+- (void)setSessionLiveValues:(nullable NSArray<NSNumber *> *)values
+                    forLabel:(NSString *)label;
+/// Clear all live overrides, session ones included (drag end).
 - (void)clearLiveValues;
 /// The crop box rect for the current crop values within `contentRect`.
 - (CGRect)cropRectForContentRect:(CGRect)contentRect;

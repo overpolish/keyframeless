@@ -106,6 +106,10 @@ NS_ASSUME_NONNULL_BEGIN
   BOOL _pixelConsumerActive;
   BOOL _pixelConsumerRenderPending;
   BOOL _pixelConsumerRenderAgain;
+  /// Dedicated output for a measuring consumer. Never aliases a filmstrip
+  /// slot: a clipped-but-technically-visible MTKView may draw concurrently,
+  /// and resizing its displayed texture for the scope is both racy and wrong.
+  id<MTLTexture> _pixelConsumerTexture;
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
                     // arrive global, like scroll/magnify)

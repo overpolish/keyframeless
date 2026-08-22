@@ -5,7 +5,9 @@
 
 #import "MirageMiniCompareControls.h"
 
+#import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -16,6 +18,7 @@
 #import "MirageCategory.h"
 #import "MirageInspectorChrome.h"
 #import "MirageLocalized.h"
+#import "MirageRack.h"
 #import "MirageSurfaceResponse.h" // MirageSurfaceSelectionToggleForSource
 #import "Plugin_Private.h"        // +shaderSourceFromTimeline:
 
@@ -301,9 +304,14 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 - (BOOL)_compareAvailable {
   if (_mini.compareAvailable)
     return YES;
-  return _mini.isActivitySuspended &&
-         ![MirageCategoryForSource([self _source])
-             isEqualToString:kMirageCategoryGenerator];
+  return _mini.isActivitySuspended && MirageRackHasSourceMatching(
+                                          _lanesView.currentTimeline,
+                                          kMirageCodeLaneLabel, [self _source],
+                                          ^BOOL(NSString *source) {
+                                            return ![MirageCategoryForSource(source)
+                                                isEqualToString:
+                                                    kMirageCategoryGenerator];
+                                          });
 }
 
 // Which buttons the row is showing, how they are tinted, and how wide that
@@ -416,6 +424,7 @@ static const CGFloat kEdgeInset = KKPaddingSM;
 // panel's, because the same override channel carries the panel's active key and
 // the two have to be asserted together - this owns WHETHER the matte shows, the
 // panel owns which key it is about, and there is one re-assert for both.
+
 - (void)_toggleShowSelection:(id)sender {
   if (![self _declaresSelectionToggle])
     return;

@@ -7,6 +7,8 @@
 
 #import "Constants.h"
 #import "KKGLSLTranspiler.h"
+#import "KKGLSLTranspiler_Internal.h"
+#import "MirageShaderModel.h"
 
 // The real glslang + SPIRV-Cross transpile, run over hand-written cases and
 // then over every installed template. A template is the only place the shipped
@@ -135,6 +137,26 @@ static void KKRunTransitionLibraryTests(void) {
                    ownsMixOnly);
 }
 
+static void KKRunRackAlphaTests(void) {
+  NSString *filter =
+      @"void mainImage(out vec4 fragColor, in vec2 fragCoord) {\n"
+      @"  fragColor = texture(iChannel0, fragCoord / iResolution.xy);\n"
+      @"}\n";
+  NSString *wrapped = KKWrapGLSL(
+      KKGLSLSourcePreservingInputAlpha(filter), 1u, NULL, KKGLSLPassImage);
+  BOOL preserves =
+      [wrapped rangeOfString:@"float kkSourceAlpha = clamp(texture(iChannel0"]
+          .location != NSNotFound &&
+      [wrapped rangeOfString:@"kk_outColor = vec4(rgb, kkSourceAlpha)"]
+          .location != NSNotFound;
+  if (!preserves) {
+    NSLog(@"FAIL: downstream rack filter does not preserve input alpha");
+    gFailures++;
+  } else {
+    NSLog(@"ok: downstream rack filter preserves input alpha");
+  }
+}
+
 static void KKRunFrameTests(void) {
   NSString *common = MirageFrameCommonSource();
   KKExpectCompiles(@"Frame image pass",
@@ -148,6 +170,29 @@ static void KKRunFrameTests(void) {
   KKExpectBufferCompiles(
       @"Frame Buffer D",
       [common stringByAppendingString:MirageFrameBufferDSource()]);
+}
+
+static void KKRunMagicMoveTests(void) {
+  NSString *source = MirageMagicMoveShaderSource();
+  KKExpectCompiles(@"Magic Move image pass", source);
+  KKExpectBufferCompiles(@"Magic Move Buffer B",
+                         MirageMagicMoveBufferBSource());
+  const MirageOSCBlock *anchor =
+      [[MirageShaderModel modelForSource:source]
+          oscBlockForUniform:"uAnchor"];
+  BOOL followsPosition =
+      anchor && strcmp(anchor->primitive, "point") == 0 &&
+      strcmp(anchor->style, "square") == 0 &&
+      strcmp(anchor->forward,
+             "uPosition + uAnchor - vec2(0.5)") == 0 &&
+      strcmp(anchor->inverse,
+             "pos - uPosition + vec2(0.5)") == 0;
+  if (!followsPosition) {
+    NSLog(@"FAIL: Magic Move Anchor OSC does not follow Position");
+    gFailures++;
+  } else {
+    NSLog(@"ok: Magic Move Anchor OSC follows Position bidirectionally");
+  }
 }
 
 static void KKRunInstalledTemplates(NSString *root) {
@@ -209,6 +254,8 @@ int main(int argc, const char **argv) {
                            @"Library/Application Support/Keyframeless/Shaders"];
     KKRunGradingLibraryTests();
     KKRunTransitionLibraryTests();
+    KKRunRackAlphaTests();
+    KKRunMagicMoveTests();
     KKRunFrameTests();
     KKRunInstalledTemplates(root);
     if (gFailures) {

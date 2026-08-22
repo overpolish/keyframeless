@@ -10,6 +10,7 @@
 #import "KKCurveDefaults.h"
 #import "KKCurvePillView.h"
 #import "KKEasing.h"
+#import "KKFloatingPanel.h"
 #import "KKLaneModulationChecklistView.h"
 #import "KKLaneParticipationChecklistView.h"
 #import "KKPopoverBackground.h"
@@ -918,7 +919,11 @@ static NSButton *KKDefaultsButton(NSString *title, NSString *symbol,
     // Prevent the popover from auto-focusing the seed field on open so
     // spacebar still controls timeline playback.
     [self.window makeFirstResponder:nil];
-    KKApplyPopoverBackground(self);
+    // In an NSPopover the wash is ours to paint. A floating panel already
+    // paints KKPanelBackingFill over its whole content, header included, so
+    // painting again here made the body darker than the header.
+    if (![self.window isKindOfClass:[KKFloatingPanel class]])
+      KKApplyPopoverBackground(self);
   }
 }
 

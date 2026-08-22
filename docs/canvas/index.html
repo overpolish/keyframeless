@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png" />
     <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
-    <meta name="kk-version" content="3.0.1" />
+    <meta name="kk-version" content="3.0.2" />
   </head>
   <body>
     <main class="wrap">
@@ -23,6 +23,38 @@
         </a>
         <a class="cta cta-shine" href="https://dl.keyframeless.com/Keyframeless.pkg">Download →</a>
       </header>
+      <section class="release">
+        <div class="release-head">
+          <h2>3.0.2</h2>
+          <span class="date">2026-08-22</span>
+        </div>
+        <div class="group">
+          <span class="tag feature">New</span>
+          <ul class="bullets">
+            <li>The keypose, Constants, curve, and modulation editors now have a pin button beside Close (or press K). Pinned, the default, an editor stays open until you close it. Unpinned, a click anywhere outside it closes it. The choice is remembered</li>
+          </ul>
+        </div>
+        <div class="group">
+          <span class="tag improvement">Improved</span>
+          <ul class="bullets">
+            <li>The editors and the layers panel now have a denser backing across the whole panel, header included, so their controls stay readable over bright footage</li>
+            <li>An open keypose editor now lets you briefly scrub elsewhere before returning to its keypose, without snapping the playhead back during playback</li>
+            <li>The Advanced timeline now previews what a modifier click will do: hold Cmd over a gap for the copy cursor to insert a keypose there, or Option over a keypose for the not-allowed cursor to delete it</li>
+            <li>Layer and category headers on the Advanced timeline now collapse only from a click on their name or chevron, so a click on the header's empty space no longer folds the group by accident</li>
+          </ul>
+        </div>
+        <div class="group">
+          <span class="tag fix">Fixed</span>
+          <ul class="bullets">
+            <li>Fixed the L key popping up the accent menu instead of typing while an editor panel was open, including in the Kai prompt</li>
+            <li>Fixed the keypose, Constants, curve, and modulation editors reopening away from where you left them</li>
+            <li>Fixed the keypose and Constants editors reopening at their natural height instead of the height you had resized them to</li>
+            <li>Fixed on-screen-control cursors being replaced by the arrow in editor previews</li>
+            <li>Fixed a lane with no keyposes drawing as an empty row on the Advanced timeline instead of showing its dashed grey placeholder line</li>
+            <li>Fixed the ring highlighting the keypose an open editor is editing staying visible over the ruler and labels after that keypose was scrolled or zoomed out of view</li>
+          </ul>
+        </div>
+      </section>
       <section class="release">
         <div class="release-head">
           <h2>3.0.1</h2>

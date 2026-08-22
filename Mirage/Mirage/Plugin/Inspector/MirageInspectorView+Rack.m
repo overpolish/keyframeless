@@ -155,7 +155,7 @@
         MirageRackCodeLaneForEntry(timeline, entryID, kMirageCodeLaneLabel)
             .codeString;
     row.symbolName = MirageCategorySymbol(MirageCategoryForSource(
-        source.length ? source : MirageCustomDefaultShaderSource()));
+        source.length ? source : MirageDefaultShaderSource()));
     row.enabled = MirageRackEntryEnabledAtFraction(timeline, entryID, frac);
     [rows addObject:row];
   }

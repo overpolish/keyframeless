@@ -13,6 +13,10 @@
 // subview names vary by OS build), paint OUR content view: it always sits on
 // top of the glass, so a flat inspector-matched fill here guarantees a legible
 // surface. The popover frame clips our corners, so no rounding needed.
+NSColor *KKPanelBackingFill(void) {
+  return [[NSColor inspectorBackground] colorWithAlphaComponent:0.75];
+}
+
 void KKApplyPopoverBackground(NSView *view) {
   if (!view)
     return;

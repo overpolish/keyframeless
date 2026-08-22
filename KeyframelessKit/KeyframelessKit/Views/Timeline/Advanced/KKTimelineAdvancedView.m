@@ -36,6 +36,7 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
     _collapsedLayerKeys = [NSMutableSet set];
     _collapsedCategoryKeys = [NSMutableSet set];
     _dragOriginTimes = [NSMutableDictionary dictionary];
+    _headerToggleRects = [NSMutableDictionary dictionary];
     _hoverLaneRow = -1;
     _hoverGapAIdx = -1;
     _zp = [[KKTimelineZoomPan alloc] init];
@@ -53,6 +54,7 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
 
 - (void)dealloc {
   [NSNotificationCenter.defaultCenter removeObserver:self];
+  [_modifierPollTimer invalidate];
 }
 
 - (void)_valuePopoverDidClose:(NSNotification *)note {
@@ -194,7 +196,8 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   _hoverTrackingArea = [[NSTrackingArea alloc]
       initWithRect:self.bounds
            options:(NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
-                    NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect)
+                    NSTrackingCursorUpdate | NSTrackingActiveInKeyWindow |
+                    NSTrackingInVisibleRect)
              owner:self
           userInfo:nil];
   [self addTrackingArea:_hoverTrackingArea];
@@ -204,6 +207,8 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   if (_interactionsBlocked == blocked)
     return;
   _interactionsBlocked = blocked;
+  if (blocked)
+    [self _clearModifierCursor];
   if (blocked && _hoverLaneRow != -1) {
     _hoverLaneRow = -1;
     [self setNeedsDisplay:YES];
@@ -264,17 +269,140 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   [self setNeedsDisplay:YES];
 }
 
+// The add/delete affordance the modifiers currently held would apply at `pt`,
+// or nil for the plain arrow. Mirrors -mouseDown: gesture-for-gesture (same
+// order, same guards) so the cursor can never promise an edit the click won't
+// perform. Reads the HID flag state rather than the event's, for the same
+// reason -mouseDown: does: FCP synthesizes clicks into this process with the
+// modifiers stripped, so the event's flags and the click's flags disagree.
+- (NSCursor *)_modifierCursorAtPoint:(NSPoint)pt {
+  if (_interactionsBlocked)
+    return nil;
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL optKey = (flags & kCGEventFlagMaskAlternate) != 0;
+  BOOL cmdKey = (flags & kCGEventFlagMaskCommand) != 0;
+  // cmd+opt is the scrub gesture, which edits nothing.
+  if (!(optKey ^ cmdKey))
+    return nil;
+  NSInteger laneIdx = -1, kpIdx = -1;
+  BOOL hitPill = [self _pillAtPoint:pt lane:&laneIdx kp:&kpIdx];
+  NSInteger row =
+      (hitPill && laneIdx >= 0) ? laneIdx : [self _laneRowAtPoint:pt];
+  NSArray<KKAdvancedRow *> *rows = [self _rows];
+  if (row < 0 || row >= (NSInteger)rows.count)
+    return nil;
+  // A header row's click toggles its collapse; a locked layer rejects every
+  // modifier edit. Neither adds or deletes.
+  if (rows[row].isHeader || rows[row].lane.locked)
+    return nil;
+  // Opt drops the keypose under the pointer, so the affordance is strictly the
+  // pill: Opt over empty track also arms the sweep-eraser, but a click there
+  // deletes nothing, so it stays the plain arrow.
+  if (optKey)
+    return hitPill ? [NSCursor operationNotAllowedCursor] : nil;
+  // Cmd inserts, but only off a pill - on one it falls through to the plain
+  // press that opens the value popover.
+  return hitPill ? nil : [NSCursor dragCopyCursor];
+}
+
+- (void)_refreshModifierCursorAtPoint:(NSPoint)pt {
+  NSCursor *target = [self _modifierCursorAtPoint:pt] ?: [NSCursor arrowCursor];
+  BOOL changed = _resolvedCursor != target;
+  _resolvedCursor = target;
+  if (changed && self.window)
+    [self.window invalidateCursorRectsForView:self];
+  [target set];
+}
+
+- (void)_refreshModifierCursorAtCurrentMouse {
+  if (!self.window) {
+    [self _clearModifierCursor];
+    return;
+  }
+  NSPoint pt = [self convertPoint:self.window.mouseLocationOutsideOfEventStream
+                         fromView:nil];
+  if (!NSPointInRect(pt, self.bounds)) {
+    [self _clearModifierCursor];
+    return;
+  }
+  [self _refreshModifierCursorAtPoint:pt];
+}
+
+// Poll, don't only listen: this view sits in FCP's ViewBridge inspector, where
+// flagsChanged: arrives only while we hold first responder - which a pointer
+// that has hovered but never clicked does not. Sample the system-wide HID state
+// while the pointer is over us (the same source -mouseDown: trusts) and stop
+// the moment it leaves. Mirrors KKCodeEditorView's option-modifier poll.
+- (void)_startModifierPolling {
+  if (_modifierPollTimer)
+    return;
+  __weak typeof(self) weakSelf = self;
+  _modifierPollTimer = [NSTimer
+      scheduledTimerWithTimeInterval:0.1
+                             repeats:YES
+                               block:^(NSTimer *t) {
+                                 [weakSelf
+                                     _refreshModifierCursorAtCurrentMouse];
+                               }];
+  [NSRunLoop.currentRunLoop addTimer:_modifierPollTimer
+                             forMode:NSRunLoopCommonModes];
+}
+
+- (void)_stopModifierPolling {
+  [_modifierPollTimer invalidate];
+  _modifierPollTimer = nil;
+}
+
+- (void)_clearModifierCursor {
+  [self _stopModifierPolling];
+  if (!_resolvedCursor)
+    return;
+  _resolvedCursor = nil;
+  if (self.window)
+    [self.window invalidateCursorRectsForView:self];
+  [[NSCursor arrowCursor] set];
+}
+
+- (void)resetCursorRects {
+  [super resetCursorRects];
+  [self addCursorRect:self.bounds
+               cursor:(_resolvedCursor ?: [NSCursor arrowCursor])];
+}
+
 - (void)mouseMoved:(NSEvent *)event {
-  [self _updateHoverFromPoint:[self convertPoint:event.locationInWindow
-                                        fromView:nil]];
+  NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
+  [self _updateHoverFromPoint:pt];
+  [self _refreshModifierCursorAtPoint:pt];
+  [self _startModifierPolling];
+}
+
+// AppKit runs its own cursor-update pass after mouseMoved: returns; resolve
+// from the same hit test there too rather than trying to out-time it.
+- (void)cursorUpdate:(NSEvent *)event {
+  [self _refreshModifierCursorAtPoint:[self convertPoint:event.locationInWindow
+                                                fromView:nil]];
+}
+
+// The modifier can go down or up while the pointer sits perfectly still, so the
+// cursor has to re-resolve against the last known mouse position, not the
+// event's (a flagsChanged carries the location it was posted at, which for a
+// stationary pointer is the same, but this also covers key-repeat and the
+// window regaining focus mid-hold).
+- (void)flagsChanged:(NSEvent *)event {
+  [super flagsChanged:event];
+  [self _refreshModifierCursorAtCurrentMouse];
 }
 
 - (void)mouseEntered:(NSEvent *)event {
-  [self _updateHoverFromPoint:[self convertPoint:event.locationInWindow
-                                        fromView:nil]];
+  NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
+  [self _updateHoverFromPoint:pt];
+  [self _refreshModifierCursorAtPoint:pt];
+  [self _startModifierPolling];
 }
 
 - (void)mouseExited:(NSEvent *)event {
+  [self _clearModifierCursor];
   if (_hoverLaneRow == -1 && _hoverGapAIdx == -1 && !_hoverEdgeLabel)
     return;
   _hoverLaneRow = -1;

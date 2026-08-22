@@ -73,7 +73,7 @@ Forward and inverse names are per-primitive but interchangeable in the parser - 
 
 ## Coordinate model
 
-Expressions run in **object space**: normalized `0..1` on each axis, origin **bottom-left, Y-up** - the same space as directive `center=`, `#point` lanes, and the shader's `fragCoord / iResolution`. It is per-axis normalized, so it is **aspect-distorted**: a circle of equal radius in x and y is an ellipse on a non-square frame. Correct for that explicitly with `aspect` when a handle is radial:
+Expressions run in **object space**: normalized `0..1` on each axis, origin **bottom-left, Y-up** - the same space as directive `center=`, `#point` lanes, and the shader's `fragCoord / iResolution`. (That is the *stored lane* value - inside GLSL a `#point` uniform arrives already multiplied into **pixels**; the 0..1 space here is for OSC expressions only.) It is per-axis normalized, so it is **aspect-distorted**: a circle of equal radius in x and y is an ellipse on a non-square frame. Correct for that explicitly with `aspect` when a handle is radial:
 
 ```
 toPos = tr - vec2(uRadius) * vec2(aspect, 1.0)   // equal pixel inset in x and y

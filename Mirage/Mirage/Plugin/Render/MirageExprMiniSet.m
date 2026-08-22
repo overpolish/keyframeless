@@ -426,7 +426,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
 }
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
-  return [self _runtimeAtPoint:p contentRect:cr] != nil;
+  return [self cursorAtPoint:p contentRect:cr] != nil;
 }
 
 - (BOOL)glyphHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
@@ -467,7 +467,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
                ? KKVisibilityShowCursor()
                : KKVisibilityHideCursor();
   if ([r ghostAlphaForLabel:hit.elementKey] < 1.0)
-    return nil; // a re-enable ghost keeps the arrow
+    return [NSCursor arrowCursor];
   if (MirageExprMiniIsRing(hit)) {
     CGPoint c = CGPointZero;
     [self _ringGeomForRuntime:hit

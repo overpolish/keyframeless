@@ -40,13 +40,37 @@ float radiusPx = uRadius * min(iResolution.x, iResolution.y);
 // float radiusPx = uRadius * 0.01 * min(iResolution.x, iResolution.y);
 ```
 
+> **Critical `#point` rule:** the uniform arrives in **pixels** (fragCoord
+> space - the stored 0..1 value is already multiplied by `iResolution.xy`),
+> never as a 0..1 UV. Compare it against `fragCoord`, or divide by
+> `iResolution.xy` before mixing it with UV coordinates. `uv - uCenter`
+> without that divide puts every sample thousands of pixels off-frame, which
+> renders as a solid black or unchanged output - a bug that compiles fine and
+> looks like broken math elsewhere.
+
+```glsl
+// #point label="Center" osc default="0.5,0.5"
+uniform vec2 uCenter;
+
+// CORRECT: bring the pixel-space point into UV space before using it there.
+vec2 center = uCenter / iResolution.xy;
+vec2 fromCenter = uv - center;
+
+// Also correct: stay in pixel space and compare against fragCoord.
+float distPx = distance(fragCoord.xy, uCenter);
+
+// WRONG: uCenter is ~(960, 540) on a 1080p clip, not 0..1.
+// vec2 fromCenter = uv - uCenter;
+```
+
 **Rules that always hold:**
 
-- The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, `transition`, or `color-transform`. This drives browser classification and runtime input behavior.
+- The Image shader must contain exactly one standalone template declaration: `// #template generator`, `filter`, `layout`, `transition`, or `color-transform`. This drives browser classification and runtime input behavior. A missing declaration is a warning, not an error: the shader renders, the editor shows an amber note, and Save is disabled until it is added. A duplicate or unknown value is an error.
 - The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search). The whole-shader directives (`#speed` / `#seed` / `#grain` / `#template` / `#alpha` / `#motionblur` / `#frames` / `#easing` / `#color-surface` / `#slots` / `#slots-end`) are the exception: they annotate nothing and stand on their own line.
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
 - Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
 - A `#percent` uniform is **already divided by 100** when GLSL receives it. Use it directly; never apply another `/ 100` or `* 0.01`. This differs from `#float units="%"`, which is only a display suffix and does not normalize the value.
+- A `#point` uniform is **already multiplied by `iResolution.xy`** when GLSL receives it - pixel space, like `fragCoord`. Divide by `iResolution.xy` before using it against UVs.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
 
 ### Multi-tab interchange: `// #tab`
@@ -146,7 +170,7 @@ Values are compared after rounding, matching choice indices and integer controls
 
 | Directive        | Uniform type       | Inspector control                                | What the shader receives                                                                             |
 | ---------------- | ------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `#color`         | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)                                                          |
+| `#color`         | `vec4 n;`          | colour swatch                                    | `vec4` RGBA as **sRGB code values** (same encoding as `iChannel0` in an ordinary shader) - `decodeToLinear` it before linear-light math |
 | `#color`         | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count                                                            |
 | `#gradient`      | `vec4 n[N];`       | gradient bar (stops up to N)                     | `nAt(t)` → `vec3` at position t; `nStops` (int) live stop count                                      |
 | `#float`         | `float n;`         | slider                                           | the raw value                                                                                        |
@@ -158,7 +182,7 @@ Values are compared after rounding, matching choice indices and integer controls
 | `#bool`          | `bool n;`          | checkbox                                         | `bool`                                                                                               |
 | `#choice`        | `int n;`           | pills or dropdown; `multiple` makes a checklist  | selected index, or an option bitmask with `multiple`                                                 |
 | `#point`         | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)                                                   |
-| `#multi`         | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                                                                       |
+| `#multi`         | `vec2` / `vec3 n;` | N-component field                                | the raw vector - except `#multi percent`, whose fields arrive pre-divided by 100 like `#percent`     |
 | `#audio`         | `vec4 n[N];`       | audio source picker                              | spectrum `nBand(i)`; optional `flow` and `waveform=N` helpers (see below)                            |
 | `#speed`         | _(none)_           | Speed slider                                     | nothing directly - scales `iTime`                                                                    |
 | `#seed`          | _(none)_           | Seed field                                       | nothing directly - offsets `iTime`                                                                   |

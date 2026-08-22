@@ -133,6 +133,13 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeValidator)
     (NSString *code, NSInteger *outLine);
 
+/// Optional check run over the same composed source when `codeValidator`
+/// reports no error. Return a message when the code is valid but cannot be
+/// saved as a template, or nil. Shown in the bar in amber (a warning, the code
+/// still runs) and Save stays disabled while it stands.
+@property(nonatomic, copy, nullable) NSString *_Nullable (^saveValidator)
+    (NSString *code);
+
 /// Optional pre-pass that builds the source actually handed to `codeValidator`
 /// from the current section set (e.g. a shader prepending a shared "Common"
 /// section, or appending a stub entry point when validating that shared section

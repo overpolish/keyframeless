@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png" />
     <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
-    <meta name="kk-version" content="3.1.1" />
+    <meta name="kk-version" content="3.1.2" />
   </head>
   <body>
     <main class="wrap">
@@ -23,6 +23,28 @@
         </a>
         <a class="cta cta-shine" href="https://dl.keyframeless.com/Keyframeless.pkg">Download →</a>
       </header>
+      <section class="release">
+        <div class="release-head">
+          <h2>3.1.2</h2>
+          <span class="date">2026-08-22</span>
+        </div>
+        <div class="group">
+          <span class="tag improvement">Improved</span>
+          <ul class="bullets">
+            <li>The published sources list in Sonar now mentions that deleting is safe - plugins remember which clips a source used, so a deleted source can always be republished later</li>
+          </ul>
+        </div>
+        <div class="group">
+          <span class="tag fix">Fixed</span>
+          <ul class="bullets">
+            <li>Projects using compound clips nested inside other compound clips now import correctly - their audio previously showed up as a stack of full-length clips all starting at zero instead of the real trimmed segments in their timeline positions</li>
+            <li>Screen recordings that carry the mic on a separate audio track now show waveforms, transcribe and play back properly - only the first track (usually near-silent system audio) was being read, so the voice was dropped</li>
+            <li>Clip audio now mixes the way Final Cut Pro does: channel sources are summed with their volume adjustments applied, where before everything was averaged together and could come out much quieter than in your project</li>
+            <li>Renaming a project no longer breaks Sonar's automatic clip reselection - a shader waiting on a deleted source now finds its clips even when the project name only matches with different capitalization</li>
+            <li>Publishing or renaming a Sonar source whose name only differed from an existing one by capitalization (like DEMO next to Demo) no longer overwrites the older source and leaves a blank row in the list - it now gets a number suffix like any other taken name</li>
+          </ul>
+        </div>
+      </section>
       <section class="release">
         <div class="release-head">
           <h2>3.1.1</h2>

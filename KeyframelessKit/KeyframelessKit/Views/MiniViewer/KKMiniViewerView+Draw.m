@@ -10,7 +10,6 @@
 #import "KKOSCShaderTypes.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
-#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKWatermark.h>
@@ -21,15 +20,26 @@
 // +Rendering encoders. MTKViewDelegate lives here.
 @implementation KKMiniViewerView (Draw)
 
-// A hidden MTKView receives no drawable, so AppKit correctly skips
-// drawInMTKView:. A compact editor's vectorscope still needs the shader result,
-// though. Render just the active frame into a modest offscreen texture: no
-// drawable, presentation, filmstrip, compare composite or OSC chrome. Mirage's
-// renderer retains its host-raster fidelity internally; the 1024px result is
-// ample for scope binning without adding another full-size BGRA texture.
+/// A mouse drag runs AppKit in NSEventTrackingRunLoopMode. Blocks submitted to
+/// the main dispatch queue can sit behind that nested loop for hundreds of
+/// milliseconds, which is fatal here: the completion clears the headless
+/// render's one-in-flight gate. Common-mode run-loop work is serviced in both
+/// the normal and tracking loops.
+static void KKMiniPerformOnMainRunLoop(void (^block)(void)) {
+  if (!block)
+    return;
+  CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, block);
+  CFRunLoopWakeUp(CFRunLoopGetMain());
+}
+
+// A hidden or clipped MTKView may receive no useful draw callback. A compact
+// editor's vectorscope still needs the shader result, though. Render just the
+// active frame into its own modest offscreen texture: no
+// drawable, presentation, filmstrip, compare composite or OSC chrome. The
+// consumer chooses the smallest useful long edge; zero keeps the conservative
+// 1024px fallback for callers that have not declared one.
 - (void)_requestPixelConsumerRender {
-  if (!_pixelConsumerActive || _activitySuspended ||
-      !self.isHiddenOrHasHiddenAncestor)
+  if (!_pixelConsumerActive || _activitySuspended)
     return;
   if (_pixelConsumerRenderPending) {
     _pixelConsumerRenderAgain = YES;
@@ -49,12 +59,13 @@
   NSUInteger sh = slot.sourceTexture.height;
   if (!sw || !sh)
     return;
-  static const NSUInteger kScopeLongEdge = 1024;
-  double scale = MIN(1.0, (double)kScopeLongEdge / (double)MAX(sw, sh));
+  NSUInteger requestedLongEdge = self.pixelConsumerLongEdge;
+  NSUInteger scopeLongEdge = requestedLongEdge ?: 1024;
+  double scale = MIN(1.0, (double)scopeLongEdge / (double)MAX(sw, sh));
   NSUInteger width = MAX((NSUInteger)1, (NSUInteger)llround(sw * scale));
   NSUInteger height = MAX((NSUInteger)1, (NSUInteger)llround(sh * scale));
-  if (!slot.processedTexture || slot.processedTexture.width != width ||
-      slot.processedTexture.height != height) {
+  if (!_pixelConsumerTexture || _pixelConsumerTexture.width != width ||
+      _pixelConsumerTexture.height != height) {
     MTLTextureDescriptor *td = [MTLTextureDescriptor
         texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
                                      width:width
@@ -63,9 +74,9 @@
     td.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget |
                MTLTextureUsagePixelFormatView;
     td.storageMode = MTLStorageModePrivate;
-    slot.processedTexture = [self.device newTextureWithDescriptor:td];
+    _pixelConsumerTexture = [self.device newTextureWithDescriptor:td];
   }
-  if (!slot.processedTexture)
+  if (!_pixelConsumerTexture)
     return;
 
   id<MTLCommandBuffer> cb = [_queue commandBuffer];
@@ -74,12 +85,11 @@
   _pixelConsumerRenderPending = YES;
   [del miniViewer:self
       processSourceTexture:slot.sourceTexture
-               intoTexture:slot.processedTexture
+               intoTexture:_pixelConsumerTexture
              commandBuffer:cb];
-  _processedTexture = slot.processedTexture;
   __weak typeof(self) weak = self;
   [cb addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-    dispatch_async(dispatch_get_main_queue(), ^{
+    KKMiniPerformOnMainRunLoop(^{
       __strong typeof(weak) s = weak;
       if (!s)
         return;
@@ -248,10 +258,11 @@
   // On the completion handler, not here: the encoder above has only been
   // ENQUEUED, so reading processedTexture now races the GPU and would measure
   // the previous frame (or a half-written one).
-  if (self.onProcessedFrameReady && _processedTexture) {
+  if (self.onProcessedFrameReady && _processedTexture &&
+      !_pixelConsumerActive) {
     void (^ready)(void) = self.onProcessedFrameReady;
     [cb addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
-      dispatch_async(dispatch_get_main_queue(), ready);
+      KKMiniPerformOnMainRunLoop(ready);
     }];
   }
 

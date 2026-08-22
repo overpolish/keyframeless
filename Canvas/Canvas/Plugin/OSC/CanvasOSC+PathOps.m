@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
+#import <KeyframelessKit/KKPlugin.h> // KKPerformHostCallbackParameterAccess
 #import "CanvasCenterline.h"    // CanvasApplyCenterlineOp
 #import "CanvasCornerFillet.h"  // CanvasPathByExpandingCorners
 #import "CanvasLayerRender.h"   // CanvasProjectLayerPointObj
@@ -249,8 +249,8 @@
 }
 
 // Write the new layer stack + select the result (single selection) in ONE undo
-// action: both the blob and the UIState selection keys go inside the same
-// action scope so an undo restores the operands AND the prior selection
+// host OSC callback: both the blob and the UIState selection keys are one
+// callback transaction so an undo restores the operands AND prior selection
 // together. Keep the snapshots in step so the next OSC draw + the inspector
 // reload see the new values before the param round-trip republishes them.
 - (void)_commitPathOpPaths:(NSArray<KKBezierPath *> *)paths
@@ -267,10 +267,10 @@
                                                      error:nil]
           encoding:NSUTF8StringEncoding];
 
-  BOOL scoped = KKPerformUndoable(
-      self.apiManager, self, nil,
+  BOOL scoped = KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         if (!setAPI)
           return;
         KKWriteCustomParamString(setAPI, newB64, kParamLayerData);

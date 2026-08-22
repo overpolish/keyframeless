@@ -179,7 +179,7 @@ actor ProcessedAudioRenderer {
 		let isVideo = videoExtensions.contains(resolved.url.pathExtension.lowercased())
 		let sourceURL: URL
 		let extractedTemp: URL?
-		let needsChannelExtraction = (clip.sourceChannels?.count ?? 0) > 0
+		let needsChannelExtraction = clip.channelWeights != nil
 		let extractedTrimmedToClip: Bool
 		if isVideo || needsChannelExtraction
 			|| (try? AVAudioFile(
@@ -187,7 +187,7 @@ actor ProcessedAudioRenderer {
 				== nil
 		{
 			let extracted = try await AudioPreparer.extractAudioTrack(
-				from: resolved.url, sourceChannels: clip.sourceChannels,
+				from: resolved.url, weights: clip.channelWeights,
 				timeRange: (clip.sourceStart, clip.sourceDuration))
 			sourceURL = extracted
 			extractedTemp = extracted

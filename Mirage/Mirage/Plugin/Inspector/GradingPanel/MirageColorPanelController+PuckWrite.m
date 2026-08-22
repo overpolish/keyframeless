@@ -13,10 +13,12 @@
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
+#import <QuartzCore/QuartzCore.h>
 
 #import "MirageColorPanelController_Internal.h"
 #import "MirageColorSurfaceProps.h"
 #import "MirageLocalized.h"
+#import "MirageRack.h"
 #import "MirageScopeSampler.h"
 #import "MirageSurfaceCircleView.h"
 #import "MirageSurfaceCircleView_Internal.h" // cancelDrag
@@ -266,6 +268,15 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
                         : 0.0;
   NSInteger number = activeKey.length ? [self _activeKeyNumber] : 0;
   BOOL showing = _showSelectionActive;
+  // The mini receives this through its live-value channel. The main FxPlug
+  // renderer cannot see that channel, so mirror the same session-only number
+  // beside the shared matte flag and nudge only when the visible matte changes
+  // key. Without it the main viewer always rendered option 0: every key.
+  KKPluginInstanceState *session = KKInstanceStateForAPI(_apiManager);
+  BOOL mainKeyChanged = session.mirageCompareActiveKey != number;
+  session.mirageCompareActiveKey = number;
+  if (mainKeyChanged && showing && _lanesView.onBoundaryPreviewNeedsRender)
+    _lanesView.onBoundaryPreviewNeedsRender();
   // The override is fraction-keyed and only answers when the renderer's own
   // edit fraction agrees, so a playhead move needs a fresh push even at the
   // same values - which is why the fraction is part of what "already asserted"
@@ -277,13 +288,36 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   _pushedActiveKey = @(number);
   _pushedSelection = showing;
   _pushedActiveKeyFraction = fraction;
-  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *push =
-      [NSMutableDictionary dictionary];
+  NSString *entryID = MirageRackEntryIDOrSentinel(self.selectedRackEntryID);
+  // The chain asks `valuesForLabel:` in the selected rack entry's namespace.
+  // A bare override only works for the legacy sentinel entry; in a real rack
+  // it misses both lookups, leaving the M button lit while the shader continues
+  // to receive its authored `false` matte value. Scope these exactly like the
+  // timeline lanes. MirageRackLaneKey leaves sentinel projects bare.
+  //
+  // SESSION overrides, not the fraction-keyed drag channel: neither value
+  // animates, and the fraction key made the matte die the moment the
+  // renderer's edit fraction drifted a ten-thousandth from the push (playback
+  // follow, boundary rounding) - the matte toggle then changed nothing in the
+  // mini beyond the chain truncation.
+  KKMiniViewerRenderer *sessionRenderer =
+      (KKMiniViewerRenderer *)_lanesView.miniViewerDelegate;
+  if (![sessionRenderer isKindOfClass:[KKMiniViewerRenderer class]])
+    return;
   if (selectionKey.length)
-    push[selectionKey] = @[ @(showing ? 1.0 : 0.0) ];
+    [sessionRenderer setSessionLiveValues:@[ @(showing ? 1.0 : 0.0) ]
+                                 forLabel:MirageRackLaneKey(entryID,
+                                                            selectionKey)];
   if (activeKey.length)
-    push[activeKey] = @[ @(number) ];
-  [self _pushLivePreviewValues:push];
+    [sessionRenderer setSessionLiveValues:@[ @(number) ]
+                                 forLabel:MirageRackLaneKey(entryID, activeKey)];
+  // Deliberately NO onBoundaryPreviewNeedsRender here. This push runs
+  // re-entrantly from the OSC toolbar's mouseDown (toggle -> notification ->
+  // compare row -> panel setShowSelectionActive -> here), and the nudge opens
+  // an FxPlug action scope; a NESTED startAction from inside an OSC event
+  // deadlocks Final Cut (sampled: mouseDown -> ... -> kkInActionScope ->
+  // mach_msg, wedged). The toggle sites that need a re-render already nudge
+  // for themselves, outside any OSC event.
 }
 
 /// Which key the active handle belongs to: the instance's own NUMBER, or zero
@@ -376,6 +410,13 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
   _puckDragIndex = puckIndex;
   _puckDragRing = ringIndex;
   _puckDragActive = YES;
+  _puckDragMoved = NO;
+  _puckLastReadoutAt = 0.0;
+  _puckLastPersistAt = CACurrentMediaTime();
+  // No pixelConsumerLongEdge drop here: the drag used to render the offscreen
+  // consumer frame at 128 for cheapness, but the scope measured it, so the
+  // cloud visibly coarsened on every press and pinged back at release. The
+  // 256 frame is well within budget per tick; the scope stays at one quality.
   [self _beginWriteGroup:[NSString stringWithFormat:@"%@ puck %lu drag", ring,
                                                     (unsigned long)puckIndex]];
   // AFTER the capture above, which is why the clear near the top of this method
@@ -496,6 +537,7 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
 - (void)_applyPuckTo:(NSPoint)position
                 puck:(NSUInteger)puckIndex
                 ring:(NSUInteger)ringIndex {
+  _puckDragMoved = YES;
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline || !_dragStartValues.count)
     return;
@@ -632,17 +674,30 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
     return;
   KKTimeline *updated = [timeline copy];
   updated.lanes = lanes;
-  // The mini keeps its zero-latency override, while the same absolute timeline
-  // is persisted on every tick so FCP's main viewer also follows the wheel.
-  // `onDragBegin/End` already wraps the burst in one undo group, matching the
-  // constants sliders. This became necessary once compact mode made the main
-  // composition the primary preview during grading.
-  _pendingPuckCommit = nil;
+  // The mini keeps its zero-latency override. Host parameter actions are much
+  // heavier and, under a fast drag, have taken 46ms and destabilised FCP. Keep
+  // only the latest absolute timeline and let at most 15 writes/sec cross that
+  // boundary; mouse-up flushes the exact final position inside the same undo
+  // group. This is coalescing at the host boundary, not at the puck or scope.
+  _pendingPuckCommit = updated;
   _liveDragValues = live;
   [self _pushLivePreviewValues:live];
-  if (self.onTimelineMutated)
+  CFTimeInterval persistRequestedAt = CACurrentMediaTime();
+  if (persistRequestedAt - _puckLastPersistAt >= (1.0 / 15.0) &&
+      self.onTimelineMutated) {
     self.onTimelineMutated(updated);
-  [self _refreshReadout];
+    _pendingPuckCommit = nil;
+    _puckLastPersistAt = CACurrentMediaTime();
+  }
+  CFTimeInterval persistDone = CACurrentMediaTime();
+  // Formatting the mapped-control readout took ~6ms on every mouse event in
+  // measurement. Thirty updates a second is visually continuous for text and
+  // leaves the unthrottled puck, renderer and vectorscope their frame budget.
+  if (_puckLastReadoutAt <= 0.0 ||
+      persistDone - _puckLastReadoutAt >= (1.0 / 30.0)) {
+    [self _refreshReadout];
+    _puckLastReadoutAt = CACurrentMediaTime();
+  }
 }
 
 // Derive where the puck must be to explain the controls as they stand.
@@ -651,6 +706,14 @@ BOOL MirageResponseBelongsToPuck(MirageSurfaceResponse r, NSString *puckName) {
 // here writes anything, so hand-editing Threshold in the inspector moves the
 // puck, and the puck can never claim a position the controls do not support.
 - (void)_refreshPuck {
+  // During this controller's own puck drag, the circle already holds the exact
+  // cursor position and live values. Several independent host notifications
+  // can request a refresh while the nested tracking loop is active; refusing
+  // them here is the single guard that keeps none of those paths spending a
+  // measured ~17ms re-deriving the position. Drag end clears the flag first
+  // and performs the authoritative refresh from the committed timeline.
+  if (_puckDragActive)
+    return;
   KKTimeline *timeline = _lanesView.currentTimeline;
   if (!timeline || !_circles.count)
     return;

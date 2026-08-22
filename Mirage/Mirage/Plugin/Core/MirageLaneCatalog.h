@@ -1188,10 +1188,9 @@ MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
       MirageTemplateDirectiveError templateError =
           MirageTemplateDirectiveErrorNone;
       MirageTemplateTypeForSource(activeTemplateSource, &templateError);
-      if (templateError == MirageTemplateDirectiveErrorMissing)
-        return RLoc(@"Add `// #template generator`, `filter`, `layout`, "
-                    @"`transition`, or `color-transform` to the Image shader",
-                    @"Mirage missing template-type directive error.");
+      // A MISSING directive is not an error: the shader renders fine without
+      // one, it just can't be saved as a template. codeSaveValidator below
+      // reports that as an amber warning + disabled Save.
       if (templateError == MirageTemplateDirectiveErrorMultiple)
         return RLoc(
             @"Use exactly one `#template` directive in the Image shader",
@@ -1643,6 +1642,21 @@ MirageBuildAvailableLanesForRackEntry(NSString *shaderSource,
                                                  @"Mirage error with line."),
                                             (long)line, msg]
                : msg;
+  };
+  // The save gate: renders without it, but the catalog files a template by
+  // its type, so Save waits until the Image shader names one.
+  shader.codeSaveValidator = ^NSString *(NSString *code) {
+    if (!activeIsImage)
+      return nil;
+    MirageTemplateDirectiveError templateError =
+        MirageTemplateDirectiveErrorNone;
+    MirageTemplateTypeForSource(activeTemplateSource, &templateError);
+    if (templateError != MirageTemplateDirectiveErrorMissing)
+      return nil;
+    return RLoc(@"Add `// #template generator`, `filter`, `layout`, "
+                @"`transition`, or `color-transform` to the Image shader "
+                @"before saving",
+                @"Mirage missing template-type directive warning.");
   };
   // Format button: reformat the section to the house style (astyle, the
   // SPIRV-Cross .clang-format translated). Pure and self-contained; leaves the

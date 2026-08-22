@@ -23,6 +23,12 @@
 - (void)_refreshResultStrip;
 @end
 
+static BOOL trimmedNonEmpty(NSString *s) {
+  return [s stringByTrimmingCharactersInSet:
+                NSCharacterSet.whitespaceAndNewlineCharacterSet]
+             .length > 0;
+}
+
 @implementation KKCodeEditorView (Validation)
 
 - (void)_formatClicked:(id)sender {
@@ -104,6 +110,20 @@
     }
   }
   _errorLine = err.length ? line : 0;
+
+  // A save veto is a WARNING, not an error: the code renders, it just can't
+  // be saved as a template yet. Only asked when the validator is happy, so a
+  // real compile error always wins the bar, and it never flags a line.
+  NSString *saveWarning = nil;
+  if (!err.length && self.saveValidator && trimmedNonEmpty(code))
+    saveWarning = self.saveValidator(code);
+  _saveBlocked = saveWarning.length > 0;
+  [self _refreshSaveButtonEnabled];
+  _errorLabel.textColor = err.length ? KKCodeError() : KKCodeWarning();
+  _errorBar.layer.backgroundColor =
+      (err.length ? KKHex(0x2d1214) : KKHex(0x2b2413)).CGColor;
+  if (!err.length && saveWarning.length)
+    err = saveWarning;
 
   // GLSL uses the tall (20px) error bar; the compact expression editor has no
   // room for it, so it surfaces the message in the result strip (with its own

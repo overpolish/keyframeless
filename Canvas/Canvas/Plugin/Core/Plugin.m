@@ -53,10 +53,9 @@
 
   if (parameterID == kParamUIState) {
     __block NSString *json = nil;
-    KKPerformUndoable(self.apiManager, self, nil,
-                      ^(id<FxParameterRetrievalAPI_v6> getAPI,
-                        id<FxParameterSettingAPI_v5> setAPI,
-                        CMTime actionTime) {
+    KKPerformHostCallbackParameterAccess(
+        self.apiManager, ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                           id<FxParameterSettingAPI_v5> setAPI) {
                         json = KKReadCustomParamString(getAPI, kParamUIState);
                       });
     // Keep the viewer OSC's UIState snapshot fresh after every write (toggle,
@@ -139,7 +138,7 @@
   if (parameterID == kKKParamTimelineData) {
     __weak typeof(self) weakSelf = self;
     KKHandleTimelineParamChanged(
-        self.apiManager, kKKParamTimelineData, self,
+        self.apiManager, kKKParamTimelineData,
         ^KKTimeline *(KKTimeline *t) {
           return [weakSelf timelineStampedWithClipDuration:t];
         },

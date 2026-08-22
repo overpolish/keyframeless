@@ -108,7 +108,7 @@
 }
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
-  return [self _ringLabelAtPoint:p contentRect:cr] != nil;
+  return [self cursorAtPoint:p contentRect:cr] != nil;
 }
 
 - (NSCursor *)cursorAtPoint:(CGPoint)p contentRect:(CGRect)cr {
@@ -124,7 +124,7 @@
   if (optToggle)
     return ghost ? KKVisibilityShowCursor() : KKVisibilityHideCursor();
   if (ghost)
-    return nil; // a re-enable ghost keeps the arrow, not a resize cursor
+    return [NSCursor arrowCursor];
   CGPoint c = CGPointZero;
   CGFloat rx = 0, ry = 0;
   [self _geomForLabel:hit contentRect:cr center:&c radiusX:&rx radiusY:&ry];

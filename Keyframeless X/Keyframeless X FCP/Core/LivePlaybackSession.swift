@@ -34,12 +34,9 @@ final class LivePlaybackSession: @unchecked Sendable {
 
 	private let playerNode = AVAudioPlayerNode()
 	private let auChain: AudioUnitChain?
-	private let reader: AVAssetReader
-	private let readerOutput: AVAssetReaderTrackOutput
+	private let source: MultichannelAudioReader.MonoPickSource
 	private let monoFormat: AVAudioFormat
-	private let trackChannels: Int
 	private let trackSampleRate: Double
-	private let pickedChannels: [Int]
 	private let mix: ClipMixState
 	private let resolvedURL: FCPXMLParser.AudioClip.ResolvedURL
 	private let producerQueue = DispatchQueue(
@@ -57,26 +54,38 @@ final class LivePlaybackSession: @unchecked Sendable {
 	{
 		let resolved = try clip.resolvedURL()
 		let asset = AVURLAsset(url: resolved.url)
-		guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
+		let tracks = try await asset.loadTracks(withMediaType: .audio)
+		guard !tracks.isEmpty else {
 			resolved.stopAccess()
 			throw NSError(domain: "LivePlaybackSession", code: 1)
 		}
-		let (sampleRate, channels) = try await MultichannelAudioReader.trackFormat(track)
-		let picked = MultichannelAudioReader.resolveChannels(
-			clip.sourceChannels, trackChannels: channels)
-		guard !picked.isEmpty else {
+		var formats: [(sampleRate: Double, channels: Int)] = []
+		for track in tracks {
+			formats.append(try await MultichannelAudioReader.trackFormat(track))
+		}
+		let picks = MultichannelAudioReader.resolveFlatWeights(
+			clip.channelWeights, trackChannelCounts: formats.map(\.channels))
+		guard picks.contains(where: { !$0.isEmpty }) else {
 			resolved.stopAccess()
 			throw NSError(domain: "LivePlaybackSession", code: 2)
 		}
+		let sampleRate = formats[picks.firstIndex(where: { !$0.isEmpty })!].sampleRate
 
 		let timescale = CMTimeScale(sampleRate)
 		let remaining = max(0, clip.sourceDuration - (time - clip.sourceStart))
-		let source = try MultichannelAudioReader.makeSource(
-			asset: asset, track: track, sampleRate: sampleRate, channels: channels,
-			timeRange: CMTimeRange(
-				start: CMTime(seconds: time, preferredTimescale: timescale),
-				duration: CMTime(seconds: remaining, preferredTimescale: timescale)))
-		source.reader.startReading()
+		let source: MultichannelAudioReader.MonoPickSource
+		do {
+			source = try MultichannelAudioReader.MonoPickSource(
+				asset: asset, tracks: tracks, trackChannelCounts: formats.map(\.channels),
+				picks: picks, sampleRate: sampleRate,
+				timeRange: CMTimeRange(
+					start: CMTime(seconds: time, preferredTimescale: timescale),
+					duration: CMTime(seconds: remaining, preferredTimescale: timescale)))
+		} catch {
+			resolved.stopAccess()
+			throw error
+		}
+		source.startReading()
 
 		guard
 			let mono = AVAudioFormat(
@@ -100,9 +109,9 @@ final class LivePlaybackSession: @unchecked Sendable {
 			clipSourceDuration: clip.sourceDuration)
 		let session = LivePlaybackSession(
 			auChain: chain,
-			reader: source.reader, readerOutput: source.output,
-			monoFormat: mono, trackChannels: channels, trackSampleRate: sampleRate,
-			pickedChannels: picked, mix: mix,
+			source: source,
+			monoFormat: mono, trackSampleRate: sampleRate,
+			mix: mix,
 			resolvedURL: resolved, sourceTimeStart: time)
 		try session.startEngine()
 		session.pump()
@@ -111,19 +120,15 @@ final class LivePlaybackSession: @unchecked Sendable {
 
 	private init(
 		auChain: AudioUnitChain?,
-		reader: AVAssetReader,
-		readerOutput: AVAssetReaderTrackOutput, monoFormat: AVAudioFormat,
-		trackChannels: Int, trackSampleRate: Double, pickedChannels: [Int],
+		source: MultichannelAudioReader.MonoPickSource,
+		monoFormat: AVAudioFormat, trackSampleRate: Double,
 		mix: ClipMixState,
 		resolvedURL: FCPXMLParser.AudioClip.ResolvedURL, sourceTimeStart: Double
 	) {
 		self.auChain = auChain
-		self.reader = reader
-		self.readerOutput = readerOutput
+		self.source = source
 		self.monoFormat = monoFormat
-		self.trackChannels = trackChannels
 		self.trackSampleRate = trackSampleRate
-		self.pickedChannels = pickedChannels
 		self.mix = mix
 		self.resolvedURL = resolvedURL
 		self._sourceTimeOfNextSample = sourceTimeStart
@@ -144,7 +149,7 @@ final class LivePlaybackSession: @unchecked Sendable {
 		stateLock.unlock()
 		playerNode.stop()
 		PlaybackEngine.shared.remove(playerNode)
-		reader.cancelReading()
+		source.cancelReading()
 		resolvedURL.stopAccess()
 	}
 
@@ -216,20 +221,9 @@ final class LivePlaybackSession: @unchecked Sendable {
 	}
 
 	private func readNextMonoChunk() -> AVAudioPCMBuffer? {
-		guard reader.status == .reading,
-			let sb = readerOutput.copyNextSampleBuffer(),
-			let block = CMSampleBufferGetDataBuffer(sb)
-		else { return nil }
-
-		var length = 0
-		var dataPtr: UnsafeMutablePointer<Int8>?
-		CMBlockBufferGetDataPointer(
-			block, atOffset: 0, lengthAtOffsetOut: nil,
-			totalLengthOut: &length, dataPointerOut: &dataPtr)
-		guard let ptr = dataPtr else { return nil }
-		let totalFloats = length / MemoryLayout<Float>.size
-		let frames = totalFloats / trackChannels
-		guard frames > 0,
+		guard let mono = source.nextMonoChunk(), !mono.isEmpty else { return nil }
+		let frames = mono.count
+		guard
 			let buffer = AVAudioPCMBuffer(
 				pcmFormat: monoFormat, frameCapacity: AVAudioFrameCount(frames))
 		else { return nil }
@@ -240,10 +234,8 @@ final class LivePlaybackSession: @unchecked Sendable {
 		let chunkStartSourceTime = _sourceTimeOfNextSample
 		stateLock.unlock()
 
-		ptr.withMemoryRebound(to: Float.self, capacity: totalFloats) { src in
-			MultichannelAudioReader.downmixToMono(
-				src, dst: dst, frames: frames,
-				trackChannels: trackChannels, pickedChannels: pickedChannels)
+		mono.withUnsafeBufferPointer { src in
+			dst.update(from: src.baseAddress!, count: frames)
 		}
 		applyGainAndFades(
 			dst: dst, frames: frames, chunkStartSourceTime: chunkStartSourceTime)

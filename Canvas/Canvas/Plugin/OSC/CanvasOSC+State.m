@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
+#import <KeyframelessKit/KKPlugin.h> // KKPerformHostCallbackParameterAccess
 #import "CanvasLayerTimeline.h"
 #import "CanvasOSC_Private.h"
 #import "Constants.h"
@@ -122,7 +122,7 @@
   return [st isKindOfClass:[NSDictionary class]] ? st : @{};
 }
 
-// Mutate kParamUIState and write it back inside an action scope. The OSC can't
+// Mutate kParamUIState and write it back inside the host's OSC callback. It can't
 // READ the custom param to merge, so `mutate` runs on a copy of the published
 // snapshot (preserving every key Canvas keeps there - selectedLayerID,
 // activeTab, oscElementsByLayer, ...); the write fires the effect's
@@ -136,10 +136,10 @@
                                                    options:0
                                                      error:nil]
           encoding:NSUTF8StringEncoding];
-  BOOL scoped = KKPerformUndoable(
-      self.apiManager, self, nil,
+  BOOL scoped = KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         if (setAPI)
           KKWriteCustomParamString(setAPI, newJSON, kParamUIState);
       });
@@ -182,8 +182,8 @@
   }];
 }
 
-// Called inside the KKPositionOSC control's open action scope (same
-// apiManager), so the get/set API resolves here. `tl` is the selected layer's
+// Called inside the host's OSC callback (same apiManager), so the get/set API
+// resolves here. `tl` is the selected layer's
 // full timeline with the Position edit applied; its lanes carry `layerKey`,
 // which tells us the owning layer. Write the edit back into that layer's
 // animationJSON in the shared layer blob, then refresh the snapshot for

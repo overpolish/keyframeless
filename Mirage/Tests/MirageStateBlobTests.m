@@ -8,12 +8,21 @@
 #import "MirageRack.h"
 #import "MirageStateBlob.h"
 
-// The one symbol MirageStateBlob.m reaches outside its own file for: the baked
+// The one symbol MirageStateBlob.m reaches outside its own file for: the chosen
 // default an ABSENT code lane seeds. Defined here rather than dragging in the
 // catalog, so the harness exercises the codec's branch on a value it can name.
 NSString *const kMirageTestDefaultSource = @"// baked default\n";
+NSString *const kMirageTestDefaultCommon = @"// default common\n";
+NSString *const kMirageTestDefaultBufferB = @"// default buffer B\n";
 NSString *MirageCustomDefaultShaderSource(void) {
   return kMirageTestDefaultSource;
+}
+NSDictionary<NSString *, NSString *> *MirageDefaultShaderSections(void) {
+  return @{
+    @"Image" : kMirageTestDefaultSource,
+    @"Common" : kMirageTestDefaultCommon,
+    @"Buffer B" : kMirageTestDefaultBufferB,
+  };
 }
 
 static void KKRequire(BOOL condition, NSString *message) {
@@ -78,12 +87,42 @@ int main(void) {
     KKRequire(MirageStateBlobEntryEnabled(old, 0, 0),
               @"a legacy blob carries no flags and is enabled");
 
-    // An ABSENT code lane still seeds the baked default, racked or not.
+    // Deleting the sentinel from a two-entry rack leaves one MINTED entry.
+    // It is still an explicit rack: its scoped source must survive rather than
+    // being reinterpreted as the absent sentinel and seeded with Plasma.
+    NSString *survivorID = @"c9d2e4";
+    KKTimeline *survivorTimeline = [KKTimeline timeline];
+    survivorTimeline.slotGroups = @{kMirageRackGroupName : @[ survivorID ]};
+    survivorTimeline.lanes = @[
+      MirageTestCodeLane(survivorID, @"SURVIVOR IMAGE", @[])
+    ];
+    MirageStateBlobEntry *survivor = [MirageStateBlobEntry new];
+    survivor.entryID = survivorID;
+    survivor.states = [NSData dataWithBytes:states length:sizeof(states)];
+    survivor.enabled = [NSData dataWithBytes:(const uint8_t[]){1, 1} length:2];
+    NSData *survivorBlob =
+        MirageStateBlobEncodeRack(&mb, @[ survivor ], survivorTimeline);
+    KKRequire([MirageStateBlobEntryIDAtIndex(survivorBlob, 0)
+                  isEqualToString:survivorID],
+              @"a lone minted survivor retains its rack identity");
+    KKRequire([MirageStateBlobReadSectionsAtIndex(survivorBlob, 0)[@"Image"]
+                  isEqualToString:@"SURVIVOR IMAGE"],
+              @"a lone minted survivor renders its scoped code, not Plasma");
+
+    // An ABSENT code lane seeds every pass of the chosen default, racked or
+    // not. This is what lets Magic Move / Frame work as defaults, not only
+    // single-pass generators such as Plasma.
     KKTimeline *bare = [KKTimeline timeline];
-    KKRequire([MirageStateBlobReadSections(
-                  MirageStateBlobEncode(&mb, states, 2, bare))[@"Image"]
+    NSDictionary *bareSections = MirageStateBlobReadSections(
+        MirageStateBlobEncode(&mb, states, 2, bare));
+    KKRequire([bareSections[@"Image"]
                   isEqualToString:kMirageTestDefaultSource],
-              @"an absent code lane seeds the baked default");
+              @"an absent code lane seeds the default Image pass");
+    KKRequire([bareSections[@"Common"]
+                  isEqualToString:kMirageTestDefaultCommon] &&
+                  [bareSections[@"Buffer B"]
+                      isEqualToString:kMirageTestDefaultBufferB],
+              @"an absent code lane seeds the default's auxiliary passes");
 
     // ...but only for the SENTINEL. A later entry with no code lane has no
     // shader at all, and must not have a plasma seeded into the middle of

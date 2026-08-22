@@ -101,13 +101,13 @@ double KKProcessFrameDurationSeconds(void);
 - (double)clipFractionAtSeconds:(double)sec;
 @end
 
-/// Handles a kKKParamTimelineData parameterChanged: reads the blob inside
-/// an action scope, optionally stamps clip duration, publishes to the
+/// Handles a kKKParamTimelineData parameterChanged: reads the blob inside the
+/// host callback (without opening a nested action), optionally stamps duration,
+/// publishes to the
 /// process snapshot, sets renderer.timeline, and dispatches applyTimeline:
 /// to the inspector view on the main queue.
 void KKHandleTimelineParamChanged(
     id<PROAPIAccessing> apiManager, UInt32 timelineParamID,
-    NSObject *actionTarget,
     KKTimeline *_Nullable (^_Nullable timelineStamper)(KKTimeline *_Nullable),
     KKMiniViewerRenderer *_Nullable miniViewerRenderer,
     KKTimelineInspectorView *_Nullable inspectorView);

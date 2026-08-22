@@ -598,10 +598,9 @@ extern void KKEndUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
                            BOOL started);
 
 /// One undoable mutation: opens an FxCustomParameterActionAPI scope for
-/// `principal` (the plugin instance, or an OSC principal with its own
-/// apiManager), begins a host undo group named `name` (nil = scope-only, for
-/// the per-tick OSC drag model that relies on FCP's implicit same-target
-/// coalescing), resolves the get/set APIs, and runs `block`. Scope and group
+/// `principal` for work initiated outside an FxOnScreenControl callback,
+/// begins a host undo group named `name` (nil = scope-only), resolves the
+/// get/set APIs, and runs `block`. Scope and group
 /// close in @finally, so nothing `block` does can leak an open scope (which
 /// wedges FCP's undo - its next beginWithUndoState aborts). Returns NO when
 /// the action API is unavailable (block not run). Free function so
@@ -620,6 +619,17 @@ extern BOOL KKPerformUndoable(
     void (^_Nonnull block)(id<FxParameterRetrievalAPI_v6> _Nullable getAPI,
                            id<FxParameterSettingAPI_v5> _Nullable setAPI,
                            CMTime actionTime));
+
+/// Resolve parameter APIs while already inside an FxOnScreenControl host
+/// callback. FxPlug explicitly forbids OSC implementations from opening a
+/// custom-parameter action: the host has already established the mutation
+/// context, and starting another action is both heavyweight and can hang FCP.
+/// Use the callback's supplied time for timed work; this helper deliberately
+/// has no `currentTime` result.
+extern BOOL KKPerformHostCallbackParameterAccess(
+    id<PROAPIAccessing> _Nullable apiManager,
+    void (^_Nonnull block)(id<FxParameterRetrievalAPI_v6> _Nullable getAPI,
+                           id<FxParameterSettingAPI_v5> _Nullable setAPI));
 
 /// Localized labels for host undo groups (FCP shows "Undo <label>" in the
 /// Edit menu). The one table for undo wording: every label lives here and in

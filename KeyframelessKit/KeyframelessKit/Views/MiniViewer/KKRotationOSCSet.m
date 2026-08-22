@@ -264,11 +264,7 @@ static NSString *kkAxisLetter(int k) {
 }
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
-  return [self _ringAtPoint:p
-                contentRect:cr
-                     canvas:self.renderer.canvas
-                    outAxis:NULL
-                   outAngle:NULL] != nil;
+  return [self cursorAtPoint:p contentRect:cr] != nil;
 }
 
 - (NSCursor *)cursorAtPoint:(CGPoint)p contentRect:(CGRect)cr {

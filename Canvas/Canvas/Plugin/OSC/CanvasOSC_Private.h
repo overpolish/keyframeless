@@ -173,7 +173,7 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 @end
 
 // Reading the inspector-published snapshots (layer blob + UIState) and writing
-// back through the OSC's action scope - the OSC can't read the custom params.
+// back through the host's OSC callback - the OSC can't read custom params.
 @interface CanvasOSC (State)
 - (NSArray<KKBezierPath *> *)_snapshotPaths;
 - (nullable KKBezierPath *)_selectedLayer;

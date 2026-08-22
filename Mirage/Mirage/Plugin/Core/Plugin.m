@@ -6,8 +6,6 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 
-#import <QuartzCore/QuartzCore.h>
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
@@ -52,10 +50,9 @@
 
   if (parameterID == kParamUIState) {
     __block NSString *json = nil;
-    KKPerformUndoable(self.apiManager, self, nil,
-                      ^(id<FxParameterRetrievalAPI_v6> getAPI,
-                        id<FxParameterSettingAPI_v5> setAPI,
-                        CMTime actionTime) {
+    KKPerformHostCallbackParameterAccess(
+        self.apiManager, ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                           id<FxParameterSettingAPI_v5> setAPI) {
                         json = KKReadCustomParamString(getAPI, kParamUIState);
                       });
     NSDictionary *state =
@@ -114,18 +111,15 @@
   if (parameterID == kKKParamTimelineData) {
     __weak typeof(self) weakSelf = self;
     KKHandleTimelineParamChanged(
-        self.apiManager, kKKParamTimelineData, self,
+        self.apiManager, kKKParamTimelineData,
         ^KKTimeline *(KKTimeline *t) {
           return [weakSelf timelineStampedWithClipDuration:t];
         },
         nil, (KKTimelineInspectorView *)self.inspectorView);
     // A source pick lands here, as a lane value. Deferred rather than done
-    // inline: this is already inside the handler's action scope, and opening a
-    // second one mid-change is what FCP complains about. By the next tick the
+    // inline: this is already inside the host's change callback. By the next tick the
     // change has settled and the snapshot is the one the user just made.
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [weakSelf syncAudioTicketsForTimeline:KKProcessTimelineSnapshot()];
-    });
+    [weakSelf scheduleAudioTicketSyncForTimeline:KKProcessTimelineSnapshot()];
   }
 
   if (parameterID == kKKParamMotionBlurData)

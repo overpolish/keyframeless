@@ -39,8 +39,8 @@ enum {
 @property(nonatomic, copy, nullable)
     NSArray<NSNumber *> *_Nullable (^valuesProvider)(CMTime time);
 
-/// Persists a new `[w, h, x, y]` from a drag. The plugin is responsible for
-/// wrapping in an action scope and any undo-coalescing.
+/// Persists a new `[w, h, x, y]` from a drag. This runs inside the host's OSC
+/// callback; the plugin must not open a custom-parameter action around it.
 @property(nonatomic, copy, nullable) void (^valuesWriter)
     (NSArray<NSNumber *> *values, CMTime time);
 

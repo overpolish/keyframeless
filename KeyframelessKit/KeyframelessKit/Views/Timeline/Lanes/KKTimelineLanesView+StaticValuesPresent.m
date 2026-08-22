@@ -510,6 +510,7 @@
     // AFTER _openStaticIsBoundary / the keypose edit state are updated above,
     // so an observer re-reading -openKeyposePopoverLayerKeys sees the NEW kind.
     KKPostStaticValuesPopoverDidNavigate(self, cfg.isBoundary, cfg.fraction);
+    [self _noteEditorPresented];
     return;
   }
 

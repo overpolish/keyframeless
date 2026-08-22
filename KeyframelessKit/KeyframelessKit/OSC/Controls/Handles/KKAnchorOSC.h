@@ -82,7 +82,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Optional persist override (see KKScaleOSC): when set, a drag writes via this
 /// block instead of the single `kKKParamTimelineData` param, so a multi-owner
 /// host (Canvas) can route the write to the owning layer. Invoked inside the
-/// control's open action scope.
+/// host's OSC callback.
 @property(nonatomic, copy, nullable) void (^onTimelinePersist)
     (KKTimeline *timeline);
 

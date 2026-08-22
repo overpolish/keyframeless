@@ -14,4 +14,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// a no-op when no NSPopoverFrame / GlassView is present.
 void KKApplyPopoverBackground(NSView *view);
 
+/// The fill every floating panel (editor panels, companion panels) paints over
+/// its glass / vibrancy backing, header included. Deliberately denser than the
+/// popover fill: these panels sit over the composition, and the same
+/// half-opaque wash that reads fine over the inspector left content illegible
+/// over bright footage. One constant, so the families stay identical.
+NSColor *KKPanelBackingFill(void);
+
 NS_ASSUME_NONNULL_END

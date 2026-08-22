@@ -53,6 +53,11 @@ NS_ASSUME_NONNULL_BEGIN
   /// and an undo brings the change back through the blob without a single
   /// character of the shader moving.
   NSString *_lastSlotSignature;
+  /// Rack entry names are persisted lane metadata, independent of shader
+  /// source and slot membership. Keep their own fingerprint so a rename can
+  /// rebuild every lane-template consumer without impersonating a source
+  /// commit (which also changes motion-blur state and OSC compounds).
+  NSString *_lastRackNameSignature;
   /// Kept so the link-thumbnail bake can resolve this instance's UUID
   /// (KKInstanceUUIDForAPI) - the SAME key the render-side manifest uses.
   id<PROAPIAccessing> _thumbAPIManager;

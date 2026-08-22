@@ -14,7 +14,7 @@
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
-#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
+#import <KeyframelessKit/KKPlugin.h> // KKPerformHostCallbackParameterAccess
 #import <KeyframelessKit/KKPluginInstanceState.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
@@ -336,10 +336,10 @@ const NSInteger KKOSCBackgroundPart = NSIntegerMax - 1;
     [hidden addObject:key];
   st.hiddenOSCElements = hidden;
 
-  KKPerformUndoable(
-      self.apiManager, self, nil,
+  KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         UInt32 paramID = [self oscVisibilityParamID];
         NSMutableDictionary *state = [st.lastUIState mutableCopy];
         if (!state) {

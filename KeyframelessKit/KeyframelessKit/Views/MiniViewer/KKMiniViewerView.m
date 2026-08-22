@@ -406,9 +406,21 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   return _pixelConsumerActive;
 }
 
+- (id<MTLTexture>)pixelConsumerTexture {
+  return _pixelConsumerTexture;
+}
+
+- (void)setPixelConsumerLongEdge:(NSUInteger)longEdge {
+  if (_pixelConsumerLongEdge == longEdge)
+    return;
+  _pixelConsumerLongEdge = longEdge;
+  if (_pixelConsumerActive)
+    [self _requestPixelConsumerRender];
+}
+
 - (void)setNeedsDisplay:(BOOL)needsDisplay {
   [super setNeedsDisplay:needsDisplay];
-  if (needsDisplay && _pixelConsumerActive && self.isHiddenOrHasHiddenAncestor)
+  if (needsDisplay && _pixelConsumerActive)
     [self _requestPixelConsumerRender];
 }
 

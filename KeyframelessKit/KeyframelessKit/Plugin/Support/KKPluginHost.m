@@ -12,7 +12,9 @@
 #import "KKTimelineInspectorView.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <errno.h>
+#import <objc/runtime.h>
 #import <signal.h>
+#import <sys/stat.h>
 
 @implementation KKRenderCache
 - (instancetype)init {
@@ -30,15 +32,58 @@
 }
 @end
 
+@interface KKMiniRequestFileCacheEntry : NSObject
+@property(nonatomic) struct timespec modified;
+@property(nonatomic) off_t size;
+@property(nonatomic, copy) NSDictionary *json;
+@end
+
+@implementation KKMiniRequestFileCacheEntry
+@end
+
+// scheduleInputs can run once per OSC drag tick. The boundary helper and the
+// viewer-active helper both consume the same tiny cross-process JSON file; do
+// one stat and only touch/read/parse the file when the writer actually replaced
+// it. Nanosecond mtime + size preserves immediate popover open/close changes.
+static NSDictionary *KKReadMiniViewerRequestJSON(NSString *path) {
+  if (path.length == 0)
+    return nil;
+  struct stat info;
+  if (stat(path.fileSystemRepresentation, &info) != 0)
+    return nil;
+  static NSMutableDictionary<NSString *, KKMiniRequestFileCacheEntry *>
+      *cache;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    cache = [NSMutableDictionary dictionary];
+  });
+  @synchronized(cache) {
+    KKMiniRequestFileCacheEntry *entry = cache[path];
+    if (entry && entry.size == info.st_size &&
+        entry.modified.tv_sec == info.st_mtimespec.tv_sec &&
+        entry.modified.tv_nsec == info.st_mtimespec.tv_nsec)
+      return entry.json;
+  }
+  NSData *data = [NSData dataWithContentsOfFile:path];
+  NSDictionary *json =
+      data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil]
+           : nil;
+  if (![json isKindOfClass:NSDictionary.class])
+    json = nil;
+  KKMiniRequestFileCacheEntry *fresh = [KKMiniRequestFileCacheEntry new];
+  fresh.modified = info.st_mtimespec;
+  fresh.size = info.st_size;
+  fresh.json = json;
+  @synchronized(cache) {
+    cache[path] = fresh;
+  }
+  return json;
+}
+
 NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   if (path.length == 0)
     return nil;
-  NSData *d = [NSData dataWithContentsOfFile:path];
-  if (!d)
-    return nil;
-  NSDictionary *j = [NSJSONSerialization JSONObjectWithData:d
-                                                    options:0
-                                                      error:nil];
+  NSDictionary *j = KKReadMiniViewerRequestJSON(path);
   if (![j isKindOfClass:[NSDictionary class]] || ![j[@"active"] boolValue])
     return nil;
   NSArray *fracs = j[@"fracs"];
@@ -53,10 +98,7 @@ NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
 BOOL KKReadMiniViewerFeedActive(NSString *path) {
   if (path.length == 0)
     return NO;
-  NSData *data = [NSData dataWithContentsOfFile:path];
-  NSDictionary *json =
-      data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil]
-           : nil;
+  NSDictionary *json = KKReadMiniViewerRequestJSON(path);
   if (![json isKindOfClass:[NSDictionary class]] ||
       ![json[@"viewerActive"] boolValue])
     return NO;
@@ -82,19 +124,70 @@ void KKSetProcessFrameDurationSeconds(double frameDurSec) {
 
 double KKProcessFrameDurationSeconds(void) { return sProcessFrameDurSec; }
 
+// Host parameter callbacks can arrive much faster than the inspector can
+// project a full timeline into all of its Basic / Advanced / detached views.
+// Keep rendering and the process snapshot per-event, but make the decorative
+// inspector projection latest-state-wins at 30 Hz. Without this, an OSC drag
+// queues hundreds of full AppKit refreshes on the same main queue that must
+// receive the next OSC mouse event, producing large periodic stalls.
+@interface KKTimelineApplyCoalescer : NSObject
+@property(nonatomic, strong) KKTimeline *latest;
+@property(nonatomic) BOOL scheduled;
+@end
+
+@implementation KKTimelineApplyCoalescer
+@end
+
+static const void *kKKTimelineApplyCoalescerKey =
+    &kKKTimelineApplyCoalescerKey;
+
+static void KKScheduleInspectorTimelineApply(KKTimelineInspectorView *view,
+                                             KKTimeline *timeline) {
+  if (!view || !timeline)
+    return;
+  @synchronized(view) {
+    KKTimelineApplyCoalescer *coalescer =
+        objc_getAssociatedObject(view, kKKTimelineApplyCoalescerKey);
+    if (!coalescer) {
+      coalescer = [KKTimelineApplyCoalescer new];
+      objc_setAssociatedObject(view, kKKTimelineApplyCoalescerKey, coalescer,
+                               OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    coalescer.latest = timeline;
+    if (coalescer.scheduled)
+      return;
+    coalescer.scheduled = YES;
+  }
+
+  __weak KKTimelineInspectorView *weakView = view;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(NSEC_PER_SEC / 30)),
+      dispatch_get_main_queue(), ^{
+        KKTimelineInspectorView *strongView = weakView;
+        if (!strongView)
+          return;
+        KKTimeline *latest = nil;
+        @synchronized(strongView) {
+          KKTimelineApplyCoalescer *coalescer = objc_getAssociatedObject(
+              strongView, kKKTimelineApplyCoalescerKey);
+          latest = coalescer.latest;
+          coalescer.latest = nil;
+          coalescer.scheduled = NO;
+        }
+        if (latest)
+          [strongView applyTimeline:latest];
+      });
+}
+
 void KKHandleTimelineParamChanged(id<PROAPIAccessing> apiManager,
                                   UInt32 timelineParamID,
-                                  NSObject *actionTarget,
                                   KKTimeline * (^timelineStamper)(KKTimeline *),
                                   KKMiniViewerRenderer *miniViewerRenderer,
                                   KKTimelineInspectorView *inspectorView) {
-  id<FxCustomParameterActionAPI_v4> act =
-      [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!act)
-    return;
-  [act startAction:actionTarget];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
   NSString *json = KKReadCustomParamString(getAPI, timelineParamID);
   KKTimeline *timeline =
       (json.length ? [KKTimeline timelineFromJSON:json] : nil)
@@ -102,14 +195,9 @@ void KKHandleTimelineParamChanged(id<PROAPIAccessing> apiManager,
   if (timelineStamper)
     timeline = timelineStamper(timeline) ?: timeline;
   KKSetProcessTimelineSnapshot(timeline);
-  [act endAction:actionTarget];
 
   miniViewerRenderer.timeline = timeline;
-  if (inspectorView) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [inspectorView applyTimeline:timeline];
-    });
-  }
+  KKScheduleInspectorTimelineApply(inspectorView, timeline);
 }
 
 NSArray *KKBuildSourceRequests(CMTime renderTime, NSString *boundaryRequestPath,

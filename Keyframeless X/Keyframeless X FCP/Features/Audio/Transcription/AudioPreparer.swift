@@ -28,7 +28,7 @@ struct AudioPreparer {
 		let sourceName: String
 		let range: SourceRange
 		let clipMappings: [ClipMapping]
-		let sourceChannels: [Int]?
+		let channelWeights: [FCPXMLParser.ChannelWeight]?
 	}
 
 	struct ClipMapping {
@@ -56,9 +56,7 @@ struct AudioPreparer {
 		}
 
 		let grouped = Dictionary(grouping: selected) { _, clip in
-			let channelKey =
-				clip.sourceChannels?.map(String.init).joined(separator: ",") ?? "default"
-			return (clip.url?.absoluteString ?? clip.name) + "#" + channelKey
+			(clip.url?.absoluteString ?? clip.name) + "#" + weightsKey(clip.channelWeights)
 		}
 
 		var segments: [ProcessingSegment] = []
@@ -96,7 +94,7 @@ struct AudioPreparer {
 						sourceName: representative.name,
 						range: mergedRange,
 						clipMappings: mappings,
-						sourceChannels: representative.sourceChannels
+						channelWeights: representative.channelWeights
 					)
 				)
 			}
@@ -123,8 +121,7 @@ struct AudioPreparer {
 				throw CancellationError()
 			}
 			let sourceKey = segment.sourceURL?.absoluteString ?? segment.sourceName
-			let channelKey =
-				segment.sourceChannels?.map(String.init).joined(separator: ",") ?? "default"
+			let channelKey = weightsKey(segment.channelWeights)
 			let extractKey = sourceKey + "#" + channelKey
 
 			print(
@@ -156,7 +153,7 @@ struct AudioPreparer {
 			let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf", "mts", "avi"]
 			let isVideo = videoExtensions.contains(
 				sourceFileURL.pathExtension.lowercased())
-			let needsChannelExtract = (segment.sourceChannels?.count ?? 0) > 0
+			let needsChannelExtract = segment.channelWeights != nil
 
 			let audioURL: URL
 			let extractedTrimmedToSegment: Bool
@@ -178,7 +175,7 @@ struct AudioPreparer {
 					"[AudioPreparer] extracting \(segment.range.start)..\(segment.range.end)s from \(sourceFileURL.lastPathComponent)"
 				)
 				let wavURL = try await extractAudioTrack(
-					from: sourceFileURL, sourceChannels: segment.sourceChannels,
+					from: sourceFileURL, weights: segment.channelWeights,
 					timeRange: (segment.range.start, segment.range.duration))
 				let size =
 					(try? FileManager.default.attributesOfItem(atPath: wavURL.path)[.size] as? Int)
@@ -278,11 +275,18 @@ struct AudioPreparer {
 	}
 
 	static func extractAudioTrack(
-		from url: URL, sourceChannels: [Int]? = nil,
+		from url: URL, weights: [FCPXMLParser.ChannelWeight]? = nil,
 		timeRange: (start: Double, duration: Double)? = nil
 	) async throws -> URL {
 		try await AssetAudioExtractor.extract(
-			from: url, sourceChannels: sourceChannels, timeRange: timeRange)
+			from: url, weights: weights, timeRange: timeRange)
+	}
+
+	/// Stable string for a clip's channel weighting, used to group clips into
+	/// segments and key the per-source extraction cache - two clips may only
+	/// share an extracted WAV when they downmix identically.
+	static func weightsKey(_ weights: [FCPXMLParser.ChannelWeight]?) -> String {
+		weights?.map { "\($0.channel)@\($0.weight)" }.joined(separator: ",") ?? "default"
 	}
 
 	static func cleanUp(segments: [PreparedSegment]) {

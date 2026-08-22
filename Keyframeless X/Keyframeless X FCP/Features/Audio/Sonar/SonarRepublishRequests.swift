@@ -39,7 +39,7 @@ enum SonarRepublishRequests {
 		}
 		for request in requests
 		where isOutstanding(request, in: published)
-			&& KKSonarTicketProjectName(request) == project
+			&& sameProject(KKSonarTicketProjectName(request), project)
 		{
 			let keys = KKSonarTicketClipKeys(request)
 			guard !keys.isEmpty else { continue }
@@ -64,6 +64,19 @@ enum SonarRepublishRequests {
 		for request in KKSonarPendingRepublishRequests()
 		where !isOutstanding(request, in: published) {
 			KKSonarClearRepublishRequest(KKSonarTicketKey(request))
+		}
+	}
+
+	/// Ticket vs dropped project, case-insensitively. Everywhere else that
+	/// project names scope anything (source ids, name collisions) they go
+	/// through a case-folding slug, so "Project" renamed to "PROJECT" is the
+	/// same project here too - an exact compare would silently drop the
+	/// preselection and look like the ticket never existed.
+	private static func sameProject(_ a: String?, _ b: String?) -> Bool {
+		switch (a, b) {
+		case (nil, nil): return true
+		case let (a?, b?): return a.caseInsensitiveCompare(b) == .orderedSame
+		default: return false
 		}
 	}
 

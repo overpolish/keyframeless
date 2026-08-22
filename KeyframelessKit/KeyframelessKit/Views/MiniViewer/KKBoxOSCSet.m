@@ -143,7 +143,7 @@ static void kkBoxHandleCenters(CGPoint c, CGFloat hw, CGFloat hh,
 }
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
-  return [self _handleAtPoint:p contentRect:cr outIndex:NULL] != nil;
+  return [self cursorAtPoint:p contentRect:cr] != nil;
 }
 
 - (NSCursor *)cursorAtPoint:(CGPoint)p contentRect:(CGRect)cr {
@@ -157,7 +157,7 @@ static void kkBoxHandleCenters(CGPoint c, CGFloat hw, CGFloat hh,
   if (optToggle)
     return ghost ? KKVisibilityShowCursor() : KKVisibilityHideCursor();
   if (ghost)
-    return nil; // a re-enable ghost keeps the arrow, not a resize cursor
+    return [NSCursor arrowCursor];
   return KKResizeCursorForBoxHandle(idx);
 }
 

@@ -62,6 +62,7 @@
   NSView *_saveBar;    // optional name + Save strip (height toggled 0/on)
   NSTextField *_saveNameField;
   NSButton *_saveButton;
+  BOOL _saveBlocked; // saveValidator vetoed the current code
   NSLayoutConstraint *_saveBarHeight;
   id _nameOutsideClickMon; // blur the name field on an outside click
   // Optional category picker between the name field and Save. Width collapses
@@ -127,4 +128,7 @@
 - (void)_toggleSaveCategoryList;
 // +SaveBar - Save button target wired from the core-built save strip.
 - (void)_saveClicked:(id)sender;
+// +SaveBar - Save = name present AND no saveValidator veto (+Validation sets
+// _saveBlocked and calls this).
+- (void)_refreshSaveButtonEnabled;
 @end

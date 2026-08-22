@@ -130,6 +130,23 @@ extension FCPXMLParser {
 		var hasFade: Bool { fadeIn != nil || fadeOut != nil }
 	}
 
+	/// One active `<audio-channel-source>` on a clip: the 1-indexed source
+	/// channels it covers (flat across the file's audio tracks) plus its
+	/// static `<adjust-volume>` gain. FCP mixes each channel source as its
+	/// own component, so groups SUM against each other while the channels
+	/// within a group average down to mono.
+	struct ChannelSourceGroup: Codable {
+		let channels: [Int]
+		let gainDB: Double
+	}
+
+	/// A flat per-channel weight for the mono downmix, derived from
+	/// `ChannelSourceGroup`s. Not persisted - always recomputed.
+	struct ChannelWeight {
+		let channel: Int
+		let weight: Float
+	}
+
 	struct AudioClip: Codable {
 		let name: String
 		let start: Double
@@ -150,6 +167,34 @@ extension FCPXMLParser {
 		/// label on the Sonar timeline. Optional so previously-persisted clips
 		/// still decode.
 		var role: String?
+		/// Active channel sources with their per-source gains. Optional so
+		/// previously-persisted clips still decode; those fall back to the
+		/// flat `sourceChannels` average.
+		var sourceChannelGroups: [ChannelSourceGroup]?
+
+		/// Flat 1-indexed channel weights for the mono downmix. FCP mixes each
+		/// active `audio-channel-source` as its own component - channels within
+		/// a source average to mono, the sources SUM, and a source's static
+		/// `adjust-volume` scales it. Averaging everything together instead
+		/// buries a mic behind silent siblings (screen recordings).
+		var channelWeights: [ChannelWeight]? {
+			if let groups = sourceChannelGroups, !groups.isEmpty {
+				var out: [ChannelWeight] = []
+				for group in groups where !group.channels.isEmpty {
+					let weight =
+						Float(pow(10.0, group.gainDB / 20.0)) / Float(group.channels.count)
+					for ch in group.channels {
+						out.append(ChannelWeight(channel: ch, weight: weight))
+					}
+				}
+				return out.isEmpty ? nil : out
+			}
+			if let channels = sourceChannels, !channels.isEmpty {
+				let weight = 1.0 / Float(channels.count)
+				return channels.map { ChannelWeight(channel: $0, weight: weight) }
+			}
+			return nil
+		}
 
 		struct ResolvedURL {
 			let url: URL

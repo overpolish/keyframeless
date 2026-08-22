@@ -38,6 +38,12 @@ typedef NS_ENUM(NSInteger, _MirageItemKind) {
 /// type says. Remote entries receive this from the generated manifest; local
 /// entries derive it from their source.
 @property(nonatomic) BOOL grading;
+/// Whether the shader reacts to the clip's audio (`// #audio`), whatever its
+/// template type says. Remote entries receive this from the generated
+/// manifest; local entries derive it from their source.
+@property(nonatomic) BOOL audio;
+@property(nonatomic) BOOL defaultEligible;
+@property(nonatomic) BOOL defaultTemplate;
 @property(nonatomic, strong, nullable) NSImage *thumbnail;
 @property(nonatomic)
     BOOL updateAvailable; // installed + remote has newer version
@@ -65,6 +71,7 @@ typedef NS_ENUM(NSInteger, _MirageItemKind) {
 - (void)cardPublish:(_MirageCard *)card;
 - (void)cardDelete:(_MirageCard *)card;
 - (void)cardDownload:(_MirageCard *)card;
+- (void)cardMakeDefault:(_MirageCard *)card;
 - (void)cardToggleFavorite:(_MirageCard *)card;
 - (void)cardRename:(_MirageCard *)card toName:(NSString *)name;
 - (void)card:(_MirageCard *)card didBeginRename:(BOOL)renaming;

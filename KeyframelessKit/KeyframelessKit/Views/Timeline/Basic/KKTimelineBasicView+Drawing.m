@@ -195,8 +195,15 @@
   // it's editing so the user sees which keypose the (fixed-position) popover
   // controls. The ring colour tracks that pill's own value colour (warn when
   // the endpoint is a real transition, accent when flat), matching the diamond
-  // it highlights. Drawn unclipped so the ring isn't shaved at the track edges.
+  // it highlights. Clipped to the container padded by the ring's own overhang
+  // (half pill + 3px ring inset + stroke) so a ring at frac 0/1 draws whole,
+  // but one panned/zoomed past the container hides with its pill instead of
+  // floating off-track.
   if (_boundaryPopoverShowing && p.anyAnimatable) {
+    NSRect cont = [self _containerRect];
+    [NSGraphicsContext saveGraphicsState];
+    NSRectClip(NSMakeRect(NSMinX(cont) - 5.0, NSMinY(self.bounds),
+                          NSWidth(cont) + 10.0, NSHeight(self.bounds)));
     double af;
     NSColor *hlColor;
     if (_curDiamond == 1) {
@@ -222,6 +229,7 @@
     hl.lineWidth = 2.0;
     [hlColor setStroke];
     [hl stroke];
+    [NSGraphicsContext restoreGraphicsState];
   }
 
   [self _drawRulerInRect:g proj:p xproj:xp];

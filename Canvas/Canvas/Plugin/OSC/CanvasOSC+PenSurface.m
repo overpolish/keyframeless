@@ -120,17 +120,17 @@
   }];
 }
 
-// Action-scoped read-modify-write of the layer blob (the OSC can't READ the
+// Host-callback read-modify-write of the layer blob (the OSC can't READ the
 // custom param, so it round-trips the inspector snapshot). When `selectID` is
 // set, the selection is written in the SAME action so it undoes together.
 - (void)penMutateBlob:(void (^)(NSMutableArray<KKBezierPath *> *paths))mutate
         selectLayerID:(NSString *)selectID {
   __block NSString *newBlob = nil;
   __block NSString *newState = nil;
-  BOOL scoped = KKPerformUndoable(
-      self.apiManager, self, nil,
+  BOOL scoped = KKPerformHostCallbackParameterAccess(
+      self.apiManager,
       ^(id<FxParameterRetrievalAPI_v6> getAPI,
-        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxParameterSettingAPI_v5> setAPI) {
         if (!setAPI)
           return;
         NSString *b64 = CanvasLayerBlobSnapshot();
@@ -168,7 +168,7 @@
 }
 
 - (void)penSetLiveLayers:(NSArray<KKBezierPath *> *)paths {
-  // Write the blob param INSIDE an action scope on every drag tick, exactly
+  // Write the blob param inside the host's OSC callback on every drag tick,
   // like the Scale / Position OSCs (KKScaleOSC -_writeScaleValues:): FCP
   // coalesces a gesture's per-tick writes into ONE undo step, and because the
   // param itself changes the FCP viewer RE-RENDERS the actual shape live, not
@@ -177,9 +177,9 @@
   // republishes it.
   NSString *blob =
       [[KKBezierPath blobFromPaths:paths] base64EncodedStringWithOptions:0];
-  KKPerformUndoable(self.apiManager, self, nil,
+  KKPerformHostCallbackParameterAccess(self.apiManager,
                     ^(id<FxParameterRetrievalAPI_v6> getAPI,
-                      id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+                      id<FxParameterSettingAPI_v5> setAPI) {
                       if (setAPI)
                         KKWriteCustomParamString(setAPI, blob, kParamLayerData);
                     });
@@ -207,10 +207,10 @@
   if (!self.penLiveParamWritten) {
     NSString *blob = CanvasLayerBlobSnapshot();
     if (blob.length) {
-      KKPerformUndoable(
-          self.apiManager, self, nil,
+      KKPerformHostCallbackParameterAccess(
+          self.apiManager,
           ^(id<FxParameterRetrievalAPI_v6> getAPI,
-            id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+            id<FxParameterSettingAPI_v5> setAPI) {
             if (setAPI)
               KKWriteCustomParamString(setAPI, blob, kParamLayerData);
           });

@@ -5,8 +5,9 @@
 
 #import "MirageStateBlob.h"
 
-#import "Constants.h"             // MirageCustomDefaultShaderSource
+#import "Constants.h"
 #import "MirageDirectiveCommon.h" // MirageCommonDefault
+#import "MirageLocalCatalog.h"
 #import "MirageRack.h"            // the sentinel + per-entry code lane keys
 
 // Bytes before the state samples: the sample count + the motion-blur header.
@@ -44,8 +45,8 @@ static void MirageAppendSection(NSMutableData *data, NSString *name,
 // timeline blob simply hasn't been persisted yet (a fresh instance writes it
 // only on the first param change / UI edit), and the editor already shows the
 // catalog default, so seed that same default here - otherwise the first render
-// falls to passthrough and the plasma only appears after the user nudges a
-// param.
+// falls to passthrough and the chosen template only appears after the user
+// nudges a param.
 //
 // `entryID` selects WHICH code lane: the sentinel's key is the bare
 // `kMirageCodeLaneLabel` every pre-rack project persisted, so the sentinel path
@@ -54,7 +55,7 @@ static void MirageAppendSection(NSMutableData *data, NSString *name,
 // That seed is the SENTINEL's alone. A later rack entry can only exist because
 // the registry naming it was persisted, so a missing code lane there is not
 // "not written yet", it is an entry with no shader - which renders as
-// passthrough (the chain flowing through it), never as a plasma dropped into
+// passthrough (the chain flowing through it), never as a default dropped into
 // the middle of someone's chain.
 static void MirageAppendCodeSections(NSMutableData *data, KKTimeline *timeline,
                                      NSString *entryID) {
@@ -63,8 +64,17 @@ static void MirageAppendCodeSections(NSMutableData *data, KKTimeline *timeline,
 
   if (shaderLane.codeString.length)
     MirageAppendSection(data, @"Image", shaderLane.codeString);
-  else if (!shaderLane && [entryID isEqualToString:kMirageRackSentinelEntryID])
-    MirageAppendSection(data, @"Image", MirageCustomDefaultShaderSource());
+  else if (!shaderLane && [entryID isEqualToString:kMirageRackSentinelEntryID]) {
+    NSDictionary<NSString *, NSString *> *sections =
+        MirageDefaultShaderSections();
+    for (NSString *name in
+         @[ @"Image", @"Common", @"Buffer A", @"Buffer B", @"Buffer C",
+            @"Buffer D" ]) {
+      NSString *code = sections[name];
+      if (code.length)
+        MirageAppendSection(data, name, code);
+    }
+  }
 
   for (NSDictionary *t in shaderLane.codeTabs) {
     NSString *n =

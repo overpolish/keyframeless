@@ -394,10 +394,11 @@
           return; // superseded: the playhead is still moving
         if (!s->_openStaticIsBoundary || !s->_openStaticView)
           return; // popover closed while we waited
+        if (s->_openPopoverLivePlaying)
+          return; // a coarse playback gap is not a settled user scrub
         [s _publishBoundaryRequestForFraction:s->_openStaticBoundaryFraction];
-        // Bring the playhead back to the keypose too: on an adjustment layer
-        // the re-requested frame is only composited correctly with the
-        // playhead there, and "settled" means the user has stopped steering.
+        // Once a user scrub settles, restore both the keypose preview and the
+        // host playhead. Playback keeps ownership while it is actually active.
         if (s.onBoundarySeekHostPlayhead)
           s.onBoundarySeekHostPlayhead(s->_openStaticBoundaryFraction);
         if (s.onBoundaryPreviewNeedsRender)
@@ -425,6 +426,7 @@
         _openStaticView))
     return;
   BOOL fracChanged = fabs(fraction - _openStaticBoundaryFraction) > 1e-6;
+  [self _noteEditorPresented];
   [self _applyKeyposeEditStateWithLanes:lanes
                                fraction:fraction
                          excludedLabels:excludedLabels];

@@ -67,6 +67,18 @@ NS_ASSUME_NONNULL_BEGIN
   id _editorGlobalKeyDownMonitor;
   id _editorGlobalKeyUpMonitor;
   id _editorGlobalShortcutCapture;
+  // Unpinned editors (KKEditorPanelsPinned() == NO) close on an outside click;
+  // installed per show and swapped live when the pin flips.
+  id _editorDismissLocalMonitor;
+  id _editorDismissGlobalMonitor;
+  CFTimeInterval _openEditorShownAt;
+  // Bumped on every present AND every in-place switch (constants<->keypose,
+  // keypose nav, gap re-scope). An outside click arms a dismiss; it only fires
+  // if the generation is still the same afterwards, so a click that opened or
+  // re-targeted an editor is a switch, not a close+reopen.
+  NSUInteger _editorPresentGeneration;
+  BOOL _editorDismissArmed;
+  NSUInteger _editorDismissArmedGeneration;
   pid_t _editorHostPID;
   // Transient one-shot: set just before -_showPopoverWithContent: to mark the
   // next popover as an "option picker" (OSC / filter / param-order / motion
@@ -96,6 +108,11 @@ NS_ASSUME_NONNULL_BEGIN
   // source (header button / P key) releases.
   BOOL _compositionPeekMouseHeld;
   BOOL _compositionPeekKeyHeld;
+  // Bare-key editor shortcuts whose keyDown we consumed, so ONLY their keyUp is
+  // swallowed too. Swallowing every L/K/G/V keyUp left a text field that had
+  // received the keyDown (a field takes precedence over the shortcut) without
+  // its keyUp, which is what pops macOS's press-and-hold accent menu on "l".
+  NSMutableSet<NSString *> *_editorConsumedKeyDowns;
   __weak NSWindow *_compositionPeekWindow;
   NSRect _compositionPeekSavedFrame;
   BOOL _compositionPeekSuspendedFrameClamp;
@@ -339,6 +356,11 @@ NS_ASSUME_NONNULL_BEGIN
                                          onClose:(void (^)(void))onClose;
 - (BOOL)_editorPanelIsVisible;
 - (void)_closeEditorPanel;
+- (void)_installEditorDismissMonitors;
+- (void)_removeEditorDismissMonitors;
+/// Call from every path that presents or re-targets an editor in place.
+- (void)_noteEditorPresented;
+- (void)_editorPanelsPinnedDidChange:(NSNotification *)note;
 - (void)_setOpenEditorContentSize:(NSSize)size;
 /// The screen edge (MinX / MaxX) of the inspector's timeline area that has more
 /// free screen space. Companion popovers (static values, gap/hold) anchor there

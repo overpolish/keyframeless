@@ -441,6 +441,10 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
     return;
 
   id<MTLTexture> outTex = [destinationImage metalTextureForDevice:device];
+  if (!outTex) {
+    [cache returnCommandQueueToCache:queue];
+    return;
+  }
 
   id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
   cmdBuf.label = @"KKToolbar Command Buffer";

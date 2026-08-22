@@ -78,6 +78,12 @@
 /// resolve: `availableLanesProvider` fires from a code-commit callback, which
 /// is outside any action scope, and reading a parameter there returns nil.
 @property(nonatomic, copy, nullable) NSDictionary<NSString *, id> *audioTickets;
+/// Shader source + bound #audio keys last reconciled with the ticket store.
+/// Ordinary animation edits leave this unchanged and must not open a host
+/// action merely to rediscover that no audio binding changed.
+@property(nonatomic, copy, nullable) NSString *audioTicketBindingSignature;
+@property(nonatomic, strong, nullable) KKTimeline *pendingAudioTicketTimeline;
+@property(nonatomic) BOOL audioTicketSyncScheduled;
 /// Set while the rack selection restored by an undo/redo is being pushed into
 /// the inspector, so the push doesn't persist the value it just read back and
 /// stack a duplicate undo entry behind the one the user is walking through.
@@ -186,6 +192,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// until something seeds it - a caller that already holds the canonical one
 /// shouldn't be made to depend on having seeded it first.
 - (void)syncAudioTicketsForTimeline:(nullable KKTimeline *)timeline;
+/// Coalesced host-callback bridge: keeps only the newest timeline from a burst
+/// and performs the potentially scoped ticket reconciliation after the host
+/// callback has returned.
+- (void)scheduleAudioTicketSyncForTimeline:(nullable KKTimeline *)timeline;
 @end
 
 @interface MiragePlugin (Render)

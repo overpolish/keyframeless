@@ -52,6 +52,17 @@ enum AudioClipFingerprint {
 			+ "/fade=\(fadeHash(clip.fadeIn))-\(fadeHash(clip.fadeOut))"
 			+ "/filters=\(filtersHash(clip.auFilters))"
 			+ "/ch=\(channelsHash(clip.sourceChannels))"
+			// Appended only when groups exist, so every clip without them keeps
+			// the fingerprint it had before groups were introduced - a format
+			// change here would orphan published-source links (`identity` is
+			// what Sonar's contentHash builds on).
+			+ (clip.sourceChannelGroups.map { "/chg=\(groupsHash($0))" } ?? "")
+	}
+
+	private static func groupsHash(_ groups: [FCPXMLParser.ChannelSourceGroup]) -> String {
+		groups.map {
+			"\($0.channels.map(String.init).joined(separator: ","))@\($0.gainDB)"
+		}.joined(separator: "|")
 	}
 
 	private static func volumeCurveHash(_ points: [FCPXMLParser.VolumePoint]?) -> String {

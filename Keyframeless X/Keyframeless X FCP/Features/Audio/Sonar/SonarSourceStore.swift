@@ -93,7 +93,21 @@ enum SonarSourceStore {
 		if current.count != list.count {
 			purge(list, keeping: current, manifestURL: manifestURL)
 		}
-		return current.sorted { $0.publishedAt > $1.publishedAt }
+		// A rename onto a name that slugged the same (before `uniqueName`
+		// compared slugs) left two entries sharing one id, which duplicate-id
+		// `ForEach` renders as a ghost row. Keep the newest per id - the rename
+		// that caused the collision deleted the older source's grid and moved
+		// its own in, so the newer entry is the one whose grid is on disk.
+		// (Not file order: rename rewrites the manifest newest-first, so the
+		// colliding entry can sit on either side of its victim.)
+		var newestByID: [String: SonarSource] = [:]
+		for source in current {
+			if let held = newestByID[source.id], held.publishedAt >= source.publishedAt {
+				continue
+			}
+			newestByID[source.id] = source
+		}
+		return newestByID.values.sorted { $0.publishedAt > $1.publishedAt }
 	}
 
 	/// Drops sources from a superseded identity scheme, grid and all. Runs off
@@ -202,11 +216,22 @@ enum SonarSourceStore {
 
 	/// "Music", then "Music 2" - a label collision between different selections is
 	/// normal, not an error.
-	private static func uniqueName(base: String, project: String?) -> String {
-		let taken = Set(sources().filter { $0.projectName == project }.map(\.name))
-		guard taken.contains(base) else { return base }
+	///
+	/// Compared by the id the name would produce, not by the name: `sourceID`
+	/// lowercases and folds punctuation on BOTH halves, so "DEMO" in "PROJECT"
+	/// and "Demo" in "Project" are different labels but the SAME `.kksg` file.
+	/// Letting both through hands two sources one id - the second one deletes
+	/// the first's grid and the manifest ends up with duplicate ids that render
+	/// as a ghost row. `excluding` is the source being renamed, so changing only
+	/// the case of its own name isn't a collision.
+	private static func uniqueName(
+		base: String, project: String?, excluding excludedID: String? = nil
+	) -> String {
+		var taken = Set(sources().map(\.id))
+		if let excludedID { taken.remove(excludedID) }
+		guard taken.contains(sourceID(project: project, name: base)) else { return base }
 		var n = 2
-		while taken.contains("\(base) \(n)") { n += 1 }
+		while taken.contains(sourceID(project: project, name: "\(base) \(n)")) { n += 1 }
 		return "\(base) \(n)"
 	}
 
@@ -224,7 +249,7 @@ enum SonarSourceStore {
 		guard !trimmed.isEmpty, trimmed != old.name else { return }
 		// Suffixes against OTHER sources, so renaming onto a taken name gives
 		// "Music 2" rather than two rows claiming the same file.
-		let unique = uniqueName(base: trimmed, project: old.projectName)
+		let unique = uniqueName(base: trimmed, project: old.projectName, excluding: old.id)
 		let newID = sourceID(project: old.projectName, name: unique)
 		if let from = url(for: id), let to = url(for: newID), from != to {
 			try? FileManager.default.removeItem(at: to)

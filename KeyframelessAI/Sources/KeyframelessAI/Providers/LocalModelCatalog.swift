@@ -82,6 +82,35 @@ public enum LocalModelCatalog {
 		models.first { $0.id == id }
 	}
 
+	/// Prefix marking a model the user downloaded OUTSIDE Keyframeless (adopted
+	/// from their own HuggingFace cache) rather than a catalog entry. The suffix
+	/// is the HF repo id, so no registry is needed to resolve it.
+	public static let customIDPrefix = "custom:"
+
+	public static func customID(repoID: String) -> String {
+		customIDPrefix + repoID
+	}
+
+	public static func customRepoID(id: String) -> String? {
+		id.hasPrefix(customIDPrefix) ? String(id.dropFirst(customIDPrefix.count)) : nil
+	}
+
+	/// Resolve any selectable model id - a catalog entry, or a synthetic row for
+	/// an adopted custom model. Customs carry no RAM floor (they never join the
+	/// recommendation) and load through the default text-LLM factory, with the
+	/// runner falling back to the VLM factory on failure.
+	public static func resolve(id: String) -> LocalAIModel? {
+		if let m = model(id: id) { return m }
+		guard let repoID = customRepoID(id: id) else { return nil }
+		return LocalAIModel(
+			id: id,
+			displayName: repoID.components(separatedBy: "/").last ?? repoID,
+			blurb: AILoc("Your model"),
+			sizeDescription: "",
+			minRAMGB: 0,
+			repoID: repoID)
+	}
+
 	/// The largest model whose RAM requirement the host meets. `minRAMGB` is the
 	/// TOTAL system RAM for comfortable (swap-free) use = the model's resident
 	/// footprint + headroom for the OS, FCP, and the prefill spike. So the dense

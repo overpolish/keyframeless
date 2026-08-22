@@ -200,6 +200,11 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     _editorCompactMode = YES;
     [self _buildUI];
     [self _refresh];
+    [NSNotificationCenter.defaultCenter
+        addObserver:self
+           selector:@selector(_editorPanelsPinnedDidChange:)
+               name:KKEditorPanelsPinnedDidChangeNotification
+             object:nil];
   }
   return self;
 }
@@ -885,6 +890,7 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
     lane.codeTabs = tmpl.codeTabs; // any added extra sections (empty default)
     lane.codeTabCatalog = tmpl.codeTabCatalog; // the "+" menu catalog
     lane.codeValidator = tmpl.codeValidator;
+    lane.codeSaveValidator = tmpl.codeSaveValidator;
     lane.codeValidationComposer = tmpl.codeValidationComposer;
     lane.codeFormatter = tmpl.codeFormatter;
     lane.codeSchemaProvider = tmpl.codeSchemaProvider;
@@ -1492,6 +1498,25 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
 
   NSSize current = _openEditorPanel.frame.size;
   CGFloat anchoredTop = NSMaxY(_openEditorPanel.frame);
+  if (!changed) {
+    // A re-assert (every present ends with one) must keep the size the panel
+    // opened at - the user's remembered size, or the natural size of a fresh
+    // panel - and only reflow the hosted content into it. Retargeting the
+    // natural height here threw away the height the user had resized to on
+    // every reopen.
+    [_openStaticView setCompactMode:compact];
+    _openEditorMiniViewer.activitySuspended =
+        compact && !_editorMiniViewerFramesRequired;
+    _openEditorPanel.minSize = [_openStaticView minimumHostedContentSize];
+    NSSize floor = _openEditorPanel.minSize;
+    if (current.width < floor.width || current.height < floor.height) {
+      current.width = MAX(current.width, floor.width);
+      current.height = MAX(current.height, floor.height);
+      [_openEditorPanel setContentSize:current keepingTopEdgeAt:anchoredTop];
+    }
+    [_openStaticView applyHostedContentSize:_openEditorPanel.frame.size];
+    return;
+  }
   if (compact && (_editorExpandedSizeBeforeCompact.width <= 0.0 ||
                   _editorExpandedSizeBeforeCompact.height <= 0.0))
     _editorExpandedSizeBeforeCompact = current;
@@ -1568,6 +1593,8 @@ static NSUInteger KKDistinctLayerKeyCount(NSArray<KKLane *> *lanes) {
 }
 
 - (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+  [self _removeEditorDismissMonitors];
   if (_editorKeyMonitor)
     [NSEvent removeMonitor:_editorKeyMonitor];
   if (_editorGlobalKeyDownMonitor)
