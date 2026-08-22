@@ -31,44 +31,9 @@
         <div class="group">
           <span class="tag feature">New</span>
           <ul class="bullets">
-            <li>Filter the shader browser by Audio to find every shader that reacts to your clip's sound, including community shaders you haven't downloaded yet</li>
-          </ul>
-        </div>
-        <div class="group">
-          <span class="tag improvement">Improved</span>
-          <ul class="bullets">
-            <li>Kai no longer treats a position control's value as a 0-1 coordinate when writing shaders - the reference it works from now spells out that positions arrive in pixels, a mixup that could produce a valid shader whose output was just black</li>
-            <li>Kai's shader reference is now explicit about what every control kind delivers: percentage fields inside a multi-value control arrive already divided by 100, and colour swatches arrive in the same encoding as the footage, so its shaders get the math right the first time</li>
-            <li>Kai now compiles every shader it writes and repairs compile errors itself before the code reaches the editor, follows stricter GLSL rules so its shaders avoid reserved words, per-frame state and effects too subtle to see, and no longer reports success after doing nothing when a request to make a new filter or effect was mistaken for an animation</li>
-            <li>An open keypose editor now lets you briefly scrub elsewhere before returning to its keypose, without snapping the playhead back during playback</li>
-            <li>The Advanced timeline now previews what a modifier click will do: hold Cmd over a gap for the copy cursor to insert a keypose there, or Option over a keypose for the not-allowed cursor to delete it</li>
-            <li>Layer and category headers on the Advanced timeline now collapse only from a click on their name or chevron, so a click on the header's empty space no longer folds the group by accident</li>
-          </ul>
-        </div>
-        <div class="group">
-          <span class="tag fix">Fixed</span>
-          <ul class="bullets">
-            <li>Fixed audio visualizers and other generator shaders with transparency turning the clip behind them black - they now draw over your footage and stay truly transparent where the footage itself is transparent</li>
-            <li>Fixed the L key popping up the accent menu instead of typing while an editor panel was open, including in the Kai prompt</li>
-            <li>Fixed the main viewer staying in Matte after the toggle was switched off when a grading shader was the only entry in the rack, and while motion blur was enabled</li>
-            <li>Fixed the mini viewer never showing the matte for a rack-hosted grading shader even with Matte enabled</li>
-            <li>Fixed the vectorscope shifting its measurements on pressing or releasing a puck without moving it - the scope now measures at one resolution and sample density through presses, drags and release</li>
-            <li>Fixed the mini viewer preview softening while dragging a colour-surface puck</li>
-            <li>Fixed a lane with no keyposes drawing as an empty row on the Advanced timeline instead of showing its dashed grey placeholder line</li>
-            <li>Fixed the ring highlighting the keypose an open editor is editing staying visible over the ruler and labels after that keypose was scrolled or zoomed out of view</li>
-          </ul>
-        </div>
-      </section>
-      <section class="release">
-        <div class="release-head">
-          <h2>1.1.0</h2>
-          <span class="date">2026-08-09</span>
-        </div>
-        <div class="group">
-          <span class="tag feature">New</span>
-          <ul class="bullets">
             <li>The keypose, Constants, curve, and modulation editors now have a pin button beside Close (or press K). Pinned, the default, an editor stays open until you close it. Unpinned, a click anywhere outside it closes it. The choice is remembered</li>
             <li>Choose any installed shader template as the default for new Mirage effects and rack entries</li>
+            <li>Filter the shader browser by Audio to find every shader that reacts to your clip's sound, including community shaders you haven't downloaded yet</li>
           </ul>
         </div>
         <div class="group">
@@ -79,6 +44,12 @@
             <li>Hover any card in the template browser and click its pin to make that template the default</li>
             <li>Made the vectorscope track colour-surface puck drags smoothly, including fast, large adjustments</li>
             <li>The code editor now shows a missing <code>// #template</code> line as an amber warning with Save disabled instead of a red error, since the shader still renders without it</li>
+            <li>Kai no longer treats a position control's value as a 0-1 coordinate when writing shaders - the reference it works from now spells out that positions arrive in pixels, a mixup that could produce a valid shader whose output was just black</li>
+            <li>Kai's shader reference is now explicit about what every control kind delivers: percentage fields inside a multi-value control arrive already divided by 100, and colour swatches arrive in the same encoding as the footage, so its shaders get the math right the first time</li>
+            <li>Kai now compiles every shader it writes and repairs compile errors itself before the code reaches the editor, follows stricter GLSL rules so its shaders avoid reserved words, per-frame state and effects too subtle to see, and no longer reports success after doing nothing when a request to make a new filter or effect was mistaken for an animation</li>
+            <li>An open keypose editor now lets you briefly scrub elsewhere before returning to its keypose, without snapping the playhead back during playback</li>
+            <li>The Advanced timeline now previews what a modifier click will do: hold Cmd over a gap for the copy cursor to insert a keypose there, or Option over a keypose for the not-allowed cursor to delete it</li>
+            <li>Layer and category headers on the Advanced timeline now collapse only from a click on their name or chevron, so a click on the header's empty space no longer folds the group by accident</li>
           </ul>
         </div>
         <div class="group">
@@ -91,9 +62,16 @@
             <li>Fixed qualifier selection mattes in the main viewer showing every key instead of the selected puck's key</li>
             <li>Fixed the Original, Matte and Split pill bar disappearing from the main viewer when shader controls were visible</li>
             <li>Fixed Original and Split keyboard shortcuts being disabled in compact mode when a generator was selected later in a source-processing rack</li>
-            <li>Fixed rack-hosted qualifier mattes not appearing in the mini viewer even though Matte was enabled</li>
             <li>Fixed the main viewer rendering Plasma after deleting the first of two rack shaders</li>
             <li>Fixed on-screen-control cursors being replaced by the arrow in the mini viewer</li>
+            <li>Fixed audio visualizers and other generator shaders with transparency turning the clip behind them black - they now draw over your footage and stay truly transparent where the footage itself is transparent</li>
+            <li>Fixed the L key popping up the accent menu instead of typing while an editor panel was open, including in the Kai prompt</li>
+            <li>Fixed the main viewer staying in Matte after the toggle was switched off when a grading shader was the only entry in the rack, and while motion blur was enabled</li>
+            <li>Fixed the mini viewer never showing the matte for a rack-hosted grading shader even with Matte enabled</li>
+            <li>Fixed the vectorscope shifting its measurements on pressing or releasing a puck without moving it - the scope now measures at one resolution and sample density through presses, drags and release</li>
+            <li>Fixed the mini viewer preview softening while dragging a colour-surface puck</li>
+            <li>Fixed a lane with no keyposes drawing as an empty row on the Advanced timeline instead of showing its dashed grey placeholder line</li>
+            <li>Fixed the ring highlighting the keypose an open editor is editing staying visible over the ruler and labels after that keypose was scrolled or zoomed out of view</li>
           </ul>
         </div>
       </section>
