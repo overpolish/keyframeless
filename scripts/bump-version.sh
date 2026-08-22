@@ -239,7 +239,7 @@ if [[ "$CREATE_CHANGELOG" == true ]]; then
   create_changelog_md
   echo ""
   echo "Done - $COMPONENT bumped to $VERSION"
-  echo "  edit docs/changelog/$COMPONENT/$VERSION.md, then run scripts/build-changelog.py"
+  echo "  edit docs/changelog/$(changelog_slug_for_component "$COMPONENT")/$VERSION.md, then run scripts/build-changelog.py"
 else
   echo ""
   echo "Done - $COMPONENT bumped to $VERSION (alpha; no changelog entry)"
