@@ -43,6 +43,9 @@ fi
 # Temp files for the product currently being built; removed on any exit.
 GEN_PKGPROJ=""
 GEN_UNINSTALL=""
+# Set when any release-notes date was stamped, so the run can remind about the
+# changelog rebuild those .md edits need.
+STAMPED=false
 cleanup() {
   [[ -n "$GEN_PKGPROJ" ]] && rm -f "$GEN_PKGPROJ"
   [[ -n "$GEN_UNINSTALL" ]] && rm -f "$GEN_UNINSTALL"
@@ -161,6 +164,37 @@ build_combined() {
   "$ROOT/scripts/sign-pkg.sh" "Keyframeless" "$APPLE_ID" "$TEAM_ID"
 }
 
+# Stamp today's date onto a component's release notes for the version being built.
+# bump-version.sh writes "<!-- date: TBD -->" because bumping is not releasing; the
+# date only becomes real once an installer for that version is actually produced.
+# Only TBD is rewritten, so rebuilding an already-shipped version keeps its
+# original date.
+changelog_slug_for_component() {
+  case "$1" in
+    keyframelessai) echo "kai" ;;
+    *)              echo "$1" ;;
+  esac
+}
+
+stamp_changelog_date() {
+  local component="$1" slug version md today
+  slug="$(changelog_slug_for_component "$component")"
+  version="$(python3 "$SPLIT" --version "$component")"
+  md="$ROOT/docs/changelog/$slug/$version.md"
+  if [[ ! -f "$md" ]]; then
+    return
+  fi
+  if ! grep -q "<!--[[:space:]]*date:[[:space:]]*TBD[[:space:]]*-->" "$md"; then
+    return
+  fi
+  today="$(date +%Y-%m-%d)"
+  sed -i '' \
+    "s|<!--[[:space:]]*date:[[:space:]]*TBD[[:space:]]*-->|<!-- date: $today -->|" \
+    "$md"
+  echo "  release date: docs/changelog/$slug/$version.md -> $today"
+  STAMPED=true
+}
+
 build_product() {
   local component="$1" name version
   name="$(python3 "$SPLIT" --name "$component")"
@@ -189,6 +223,8 @@ build_product() {
   mv "$BUILD_DIR/$name.pkg" "$BUILD_DIR/$name-v$version.pkg"
   echo "  -> $name-v$version.pkg"
 
+  stamp_changelog_date "$component"
+
   cleanup
 }
 
@@ -200,6 +236,10 @@ case "$TARGET" in
     stage_ai_helper
     build_combined
     unstage_ai_helper
+    for component in $(python3 "$SPLIT" --components); do
+      stamp_changelog_date "$component"
+    done
+    stamp_changelog_date keyframelessai
     ;;
   all)
     for component in $(python3 "$SPLIT" --components); do
@@ -217,4 +257,8 @@ case "$TARGET" in
 esac
 
 echo ""
+if [[ "$STAMPED" == true ]]; then
+  echo "Rebuilding release-notes site for the stamped dates..."
+  python3 "$ROOT/scripts/build-changelog.py"
+fi
 echo "Done."

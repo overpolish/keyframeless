@@ -174,6 +174,9 @@ bump_pkgproj() {
 
 # Create a prefilled release-notes .md for this version (the changelog site + the
 # kk-version meta tag both derive from this file). Never clobbers an existing one.
+# The date is left as TBD on purpose: bumping is not releasing. build-and-sign.sh
+# stamps the real date when the installer for that version is actually built, so a
+# TBD date is the reliable "this version has not shipped yet" marker.
 create_changelog_md() {
   local slug
   slug="$(changelog_slug_for_component "$COMPONENT")"
@@ -185,7 +188,7 @@ create_changelog_md() {
   fi
   mkdir -p "$dir"
   cat >"$md" <<EOF
-<!-- date: $(date +%Y-%m-%d) -->
+<!-- date: TBD -->
 
 ### New
 
