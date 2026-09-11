@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import "MMCombinedPose.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -11,6 +12,12 @@
   BOOL ok = api && [api addToggleButtonWithName:@"Legacy Link Properties"
                                   parameterID:MMLinkProperties defaultValue:NO
                                parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
+  ok = ok && [api addCustomParameterWithName:@"Combined Pose" parameterID:MMCustomControls
+                                defaultValue:[[MMCombinedPose alloc] initWithPositionX:0 scale:100 authored:NO]
+                              parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
+  ok = ok && [api addStringParameterWithName:@"Combined view cache" parameterID:MMCombinedCacheToken
+                                defaultValue:@"" parameterFlags:(kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   for (MMTimingLane *lane in self.timingLanes) {
     BOOL isScale = lane.valueID == MMScale;
     ok = ok &&

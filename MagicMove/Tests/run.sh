@@ -18,17 +18,17 @@ for source in MotionTiming MTDurationRecords; do
     -I "$root/MotionTiming/Sources/MotionTiming/include" \
     -c "$root/MotionTiming/Sources/MotionTiming/$source.c" -o "$test_tmp/$source.o"
 done
-for suite in LinkedPosesTests ModelTests MatchEndpointsTests; do
+for suite in LinkedPosesTests ModelTests MatchEndpointsTests CombinedPoseTests; do
   xcrun clang -fobjc-arc -fmodules -Wno-protocol -fsanitize=address,undefined \
     -I "$core" -I "$render" -I "$root/MagicMove/Tests" \
     -fmodule-map-file="$test_tmp/MotionTiming.modulemap" \
     -F /Library/Developer/SDKs/FxPlug.sdk/Library/Frameworks \
     -F "$build/Products/Debug" \
-    -framework Foundation -framework CoreGraphics -framework CoreMedia -framework Metal -framework FxPlug -framework KeyframelessKit \
+    -framework AppKit -framework Foundation -framework CoreGraphics -framework CoreMedia -framework Metal -framework FxPlug -framework KeyframelessKit \
     -Wl,-rpath,"$build/Products/Debug" \
     "$root/MagicMove/Tests/$suite.m" "$root/MagicMove/Tests/MockHost.m" \
-    "$core/Plugin.m" "$core/Plugin+Links.m" "$core/Plugin+Parameters.m" \
-    "$core/MMDestinations.m" "$render/Plugin+Render.m" \
+    "$core/Plugin.m" "$core/Plugin+CustomRow.m" "$core/Plugin+Links.m" "$core/Plugin+Parameters.m" \
+    "$core/MMCombinedPose.m" "$core/MMDestinations.m" "$render/Plugin+Render.m" \
     "$test_tmp/MotionTiming.o" "$test_tmp/MTDurationRecords.o" -o "$test_tmp/$suite"
   DYLD_FRAMEWORK_PATH="$runtime" "$test_tmp/$suite"
 done

@@ -3,6 +3,7 @@
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import "MMDestinations.h"
+#import "MMCombinedPose.h"
 @import MotionTiming;
 #import <math.h>
 
@@ -23,6 +24,15 @@ static BOOL MMError(NSError **error, NSString *message) {
   if (!api) return MMError(error, @"Magic Move needs parameter access");
   MMTransform state = {0};
   state.scale = 1;
+  BOOL combinedActive = NO;
+  MMCombinedPose *combined = MMReadCombinedPose(self.apiManager, renderTime, &combinedActive, error);
+  if (!combined) return NO;
+  if (combinedActive) {
+    state.offset.x = combined.positionX/100;
+    state.scale = combined.scale/100;
+    *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
+    return YES;
+  }
   for (MMTimingLane *lane in self.timingLanes) {
     NSUInteger generation = lane.durationGeneration;
     NSData *pending = lane.pendingDestinations;

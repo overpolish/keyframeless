@@ -64,14 +64,16 @@ static void testParameterContract(void) {
     if (!([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN))
       visible++;
   }
-  assert(
-      visible ==
-      10); // Five native rows per property, no groups or custom inspector rows.
+  assert(visible == 11); // Five native rows per property plus a custom editor.
+  UInt32 customFlags = [h.flags[@(MMCustomControls)] unsignedIntValue];
+  assert(customFlags & kFxParameterFlag_CUSTOM_UI);
+  assert(!(customFlags & kFxParameterFlag_NOT_ANIMATABLE));
+  assert(!(customFlags & kFxParameterFlag_DONT_SAVE));
   assert([h.definitions[@(MMPositionX)][@"default"] doubleValue] == 0);
   assert([h.definitions[@(MMScale)][@"default"] doubleValue] == 100);
   for (NSNumber *key in @[ @(MMPositionX), @(MMScale) ])
     assert(
-        !([h.flags[key] unsignedIntValue] & kFxParameterFlag_NOT_ANIMATABLE));
+        !([h.flags[key] unsignedIntValue] & (kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI)));
   for (NSNumber *key in @[
          @(MMTransitionDuration), @(MMPositionAvailableTime), @(MMPositionLink),
          @(MMPositionMatch),

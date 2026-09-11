@@ -40,7 +40,7 @@
 
 @class MMLinkEdit;
 
-@interface MagicMovePlugin : KKPlugin <FxTileableEffect>
+@interface MagicMovePlugin : KKPlugin <FxTileableEffect, FxCustomParameterViewHost_v2>
 @property(atomic) BOOL syncingDuration;
 @property(atomic) NSUInteger activeNativeCallbacks;
 @property(atomic) BOOL hasPendingNativeEdits;

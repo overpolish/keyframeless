@@ -6,6 +6,7 @@
 #import "Plugin_Private.h"
 #import "Constants.h"
 #import "MMDestinations.h"
+#import "MMCombinedPose.h"
 #import <CoreGraphics/CoreGraphics.h>
 
 // KKPlugin implements this optional FxTileableEffect callback but does not
@@ -65,6 +66,7 @@
 }
 
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == MMCustomControls) return [NSSet setWithObjects:MMCombinedPose.class, NSNumber.class, nil];
   if (parameterID == MMDurationData || parameterID == MMScaleDurationData) return [NSSet setWithObject:KKDataBlob.class];
   return [super classesForCustomParameterID:parameterID];
 }
@@ -239,6 +241,10 @@
 - (BOOL)parameterChanged:(UInt32)parameterID atTime:(CMTime)time error:(NSError **)error {
   // FxPlug callbacks can overlap the timer on another thread. Never release a
   // prepared plan while a native callback is still updating its snapshots.
+  if (parameterID == MMCustomControls || parameterID == MMCombinedCacheToken) {
+    MMRefreshCombinedPoseCache(self.apiManager, time);
+    return YES;
+  }
   BOOL native = NO;
   for (MMTimingLane *lane in self.timingLanes) if (lane.valueID == parameterID) native = YES;
   if (!native) return [self handleParameterChanged:parameterID atTime:time error:error];

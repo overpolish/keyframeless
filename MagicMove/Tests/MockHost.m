@@ -58,8 +58,19 @@
              : self;
 }
 - (BOOL)getStringParameterValue:(NSString **)value fromParameter:(UInt32)p {
-  *value = nil;
-  return NO;
+  *value = self.staticValues[@(p)];
+  return *value != nil;
+}
+- (BOOL)setStringParameterValue:(NSString *)value toParameter:(UInt32)p {
+  self.staticValues[@(p)] = value;
+  [self notifyParameter:p atTime:kCMTimeZero];
+  return YES;
+}
+- (BOOL)addStringParameterWithName:(NSString *)name parameterID:(UInt32)p defaultValue:(NSString *)value parameterFlags:(FxParameterFlags)flags {
+  self.definitions[@(p)] = @{@"name":name, @"kind":@"string"};
+  self.flags[@(p)] = @(flags);
+  self.staticValues[@(p)] = value;
+  return YES;
 }
 - (BOOL)addFloatSliderWithName:(NSString *)name
                    parameterID:(UInt32)p
@@ -182,6 +193,13 @@
   [self notifyParameter:p atTime:t];
   return YES;
 }
+- (BOOL)getParameterFlags:(FxParameterFlags *)flags fromParameter:(UInt32)p {
+  NSNumber *value = self.flags[@(p)];
+  if (!value) return NO;
+  *flags = value.unsignedIntValue;
+  return YES;
+}
+
 - (BOOL)setParameterFlags:(FxParameterFlags)f toParameter:(UInt32)p {
   self.hostWrites++;
   self.flagWrites++;

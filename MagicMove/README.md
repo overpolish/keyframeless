@@ -30,6 +30,45 @@ Position 0 is centred; 100 is one image-width right. Scale 100 is original size,
 0 is invisible. A zero duration cuts at arrival. Before/after the sequence the
 endpoint holds. With no keys, each property uses its static native value.
 
+## Custom-row capability checkpoint
+
+The Combined Pose custom row stores Position X and Scale in one immutable,
+secure-coded MMCombinedPose object. Its native host keyframe captures both
+components. Editing either field preserves the other component and writes the
+whole object at the playhead time. Moving or deleting a combined key therefore
+moves or deletes both values together without partner-key synchronization.
+
+Once the combined row is edited or has keys, it drives the rendered transform.
+An untouched, unkeyed combined row leaves the existing scalar model active.
+The original scalar rows remain for comparison; their duration, link and match
+controls do not currently apply to combined poses.
+
+This checkpoint uses the MotionTiming vector sampler with a fixed 1.2-second
+incoming duration per combined pose, capped to the previous gap. The first pose
+holds before its key and the last holds after its key. The custom fields display
+the same sampled values as rendering. FxCustomParameterInterpolation_v2 also
+provides host-weighted interpolation for host requests, but rendering samples
+native key times directly and does not depend on host curve weights.
+
+The custom view samples an in-memory snapshot populated by native parameter
+callbacks and rendering. A hidden, non-saved string token connects each open
+view to its cache across FxPlug plugin instances. The view timer never enumerates
+keys. Failed refreshes invalidate the snapshot, and generation checks prevent
+older in-flight reads from replacing a newer callback result. At an existing key,
+a commit reads the current custom object directly to preserve the latest partner
+component; between keys it preserves the timing engine's sampled value.
+
+The row uses CUSTOM_UI | USE_FULL_VIEW_WIDTH. Motion has confirmed that this
+separate animatable custom parameter displays a custom view and host keyframe
+controls. The earlier scalar-row experiment did not display a custom view:
+CUSTOM_UI was absent after attachment, and explicitly setting it returned NO.
+
+Test on a fresh effect: create combined keys with different Position X and Scale
+values, scrub, move a key, and save/reopen. Verify that each key retains both
+values and that both properties animate together. Published FCP behavior still
+needs host verification. Editable combined timing, per-property linking/matching,
+and the rotation layout decision follow this storage/keyframe checkpoint.
+
 ## Build and tests
 
 From the repository root:
@@ -82,7 +121,8 @@ constraint.
 
 MagicMove's host adapter reads endpoint values at native key times. Native
 interpolated slider values can differ from rendered intermediate values; edit
-endpoint values at their keys. Custom UI remains a later checkpoint.
+endpoint values at their keys. The Combined Pose custom row uses the separate
+vector sampling path described above.
 
 The contextual checkboxes and duration rows are transient, non-animatable,
 non-saved editors. Separate hidden secure-coded blobs persist each property's
