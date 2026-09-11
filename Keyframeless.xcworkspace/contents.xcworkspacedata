@@ -13,4 +13,6 @@
    <FileRef
       location = "group:Keyframeless X/Keyframeless X.xcodeproj">
    </FileRef>
+   <FileRef location = "group:MagicMove/MagicMove.xcodeproj">
+   </FileRef>
 </Workspace>

@@ -48,7 +48,7 @@ incdirs() {  # $1 = source root -> emit "    - -I<dir>" for every dir holding a 
   incdirs "$REPO/KeyframelessKit/KeyframelessKit"
   echo "    - -ferror-limit=0"
 
-  for plug in Canvas; do
+  for plug in Canvas MagicMove; do
     [ -d "$REPO/$plug/$plug" ] || continue
     echo ""
     echo "---"
@@ -57,6 +57,11 @@ incdirs() {  # $1 = source root -> emit "    - -I<dir>" for every dir holding a 
     echo "CompileFlags:"
     echo "  Add:"
     incdirs "$REPO/$plug/$plug"
+    if [ "$plug" = MagicMove ]; then
+      echo "    - -I$REPO/MotionTiming/Sources/MotionTiming/include"
+      TIMING_MODMAP="$DD/Build/Intermediates.noindex/GeneratedModuleMaps/MotionTiming.modulemap"
+      [ -f "$TIMING_MODMAP" ] && echo "    - -fmodule-map-file=$TIMING_MODMAP"
+    fi
   done
 
   cat <<'EOF'
