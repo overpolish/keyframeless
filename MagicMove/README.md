@@ -101,7 +101,7 @@ components. Editing either combined value preserves its easing. Older saved
 poses without an easing field retain Smooth.
 
 Combined incoming duration remains fixed at 1.2 seconds for this checkpoint.
-No motion blur is applied yet.
+Motion blur is available through the primitive toggle described below.
 
 ## Build and tests
 
@@ -203,3 +203,71 @@ independent motion choices even when their keyframe times are linked.
 The choice is saved with its owner and follows native keyframe moves. Legacy
 poses default to None. Native keyframe controls continue to create keyposes;
 explicit value editing and incoming easing preserve the outgoing motion choice.
+
+## Motion Blur checkpoint
+
+Motion Blur is a saved, non-animated native toggle, off by default. It restores
+Magic Move's pre-archive sample-and-accumulate path through the current shared
+`KKMotionBlur` implementation: 180-degree shutter, 16 full-resolution samples,
+and the existing backward shutter sampling on a high-resolution clock.
+
+The port retains pooled textures, bounded concurrent blur renders, and a single
+command buffer/GPU wait for all sample draws and accumulation. This is the old
+Magic Move path; Canvas's velocity reconstruction is a separate implementation.
+Each output frame reads one native keypose snapshot and evaluates its shutter
+samples in memory. Both scalar and combined poses include incoming timing,
+easing, and outgoing Added Motion. Blur averages the transformed current source
+frame; this checkpoint does not request extra footage frames from the host.
+
+Disabled blur retains the one-transform render payload. Enabled blur contains
+16 transforms (current time first), then `KKMotionBlurState`. Render callbacks
+need no parameter access. If the shared blur render cannot prepare its resources,
+the existing unblurred fallback is retained. Shutter and sample controls remain
+fixed until the custom UI checkpoint.
+
+CPU tests compare all shutter samples against ordinary engine evaluation. The
+Metal integration test runs the production renderer and shared accumulation,
+checking a moving premultiplied image, alpha conservation, a shared command
+buffer, and the sharp disabled path. Live playback performance still requires
+manual host testing.
+
+### Clean keypose editing preview: host limitation
+
+Desired behavior: hide blur when paused exactly on a keypose, with no indicator,
+while retaining blur during playback and export. This is not implemented.
+The installed FxPlug SDK's `pluginState:atTime:quality:error:` supplies render
+quality, not a preview/playback/export purpose. Neither its timing API nor image
+tile exposes a reliable paused-preview flag. `KKPlayheadPoller` estimates playback
+from recent playhead movement; its comments document stalls during playback.
+That estimate must not control the effect's rendered pixels: the host can retain
+render state/output, and an editing-only sharp frame must not enter playback or
+export. Implement this only with a verified preview-only host mechanism or a
+separate viewer overlay; render quality and idle-time heuristics are insufficient.
+
+Document-membership diagnostic (Motion, 2026-09-12): the editing instance and
+both export instances received `pluginInstanceAddedToDocument` before rendering.
+The second export had motion blur enabled and rendered 300 frames; every draw
+reported one document callback. This public callback therefore did not distinguish
+editing from export in this test. Temporary lifecycle/render probes were removed
+after capture; the diagnostic did not change rendered pixels.
+
+### Motion Blur shortcut
+
+Control–Option–M toggles the normal saved Motion Blur setting. The binding uses
+physical M (keycode 46); customization belongs in the future settings popover.
+The shortcut uses MagicMove's own event adapter and router, with no legacy
+shortcut dependency. Event capture remains in the plugin, outside MotionTiming.
+
+The visible combined inspector row makes an instance eligible. With several
+eligible rows, click the intended row first; the last interacted-with eligible
+row owns the shortcut. With one eligible row it is selected automatically.
+Repeats do not toggle again. Text editing and mouse gestures suppress the action.
+Host-focused capture is limited to Motion/FCP and requires macOS to permit the
+consuming keyboard event tap and focused-element query. Plugin-local events use
+AppKit. This is a saved toggle, not a preview-only bypass: turn blur back on when
+wanted for export.
+
+Automated shortcut tests cover matching, routing, weak owners, repeat handling,
+and parameter writes/action cleanup. Host checkpoint: toggle from the timeline,
+verify the inspector and image update once per press, undo/redo once, switch clips,
+and verify another effect is not changed. Also check typing and held keys.

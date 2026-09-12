@@ -2,6 +2,7 @@
 #import "Plugin_Private.h"
 #import "Constants.h"
 #import "MMCombinedPose.h"
+#import "MMShortcut.h"
 #import <Cocoa/Cocoa.h>
 
 // KKPlugin implements the view host in a private category.
@@ -24,6 +25,7 @@
   self = [super initWithFrame:NSMakeRect(0, 0, 220, 54)];
   if (!self) return nil;
   _manager = manager;
+  self.toolTip = @"Control–Option–M: Toggle Motion Blur";
   NSMutableArray *fields = [NSMutableArray array];
   for (NSUInteger i=0; i<2; ++i) {
     NSTextField *label = [NSTextField labelWithString:i == 0 ? @"Position X" : @"Scale"];
@@ -33,7 +35,9 @@
     NSTextField *field = [[NSTextField alloc] initWithFrame:NSMakeRect(84, 28-i*26, 130, 22)];
     field.autoresizingMask = NSViewWidthSizable;
     field.tag = i == 0 ? MMPositionX : MMScale;
-    field.doubleValue = i == 0 ? 0 : 100;
+    // Unknown is not the same as the valid default pose (0, 100).
+    field.objectValue = nil;
+    field.enabled = NO;
     field.target = self; field.action = @selector(commitValue:);
     field.accessibilityLabel = label.stringValue;
     NSNumberFormatter *formatter = [NSNumberFormatter new];
@@ -61,8 +65,24 @@
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   [self.refreshTimer invalidate]; self.refreshTimer = nil;
+  [[MMShortcutCapture sharedCapture] detachView:self];
   if (!self.window) return;
   __weak MMCustomRow *weakSelf = self;
+  [[MMShortcutCapture sharedCapture] attachView:self action:^BOOL {
+    MMCustomRow *view=weakSelf;
+    if (!view || NSEvent.pressedMouseButtons) return NO;
+    for (NSTextField *field in view.fields) if (field.currentEditor) return NO;
+    // Host actions must not block the event tap. Keep the selected owner for
+    // this press, then verify its surface still exists before writing.
+    dispatch_async(dispatch_get_main_queue(), ^{
+      MMCustomRow *target=weakSelf;
+      if (!target.window.isVisible || target.hiddenOrHasHiddenAncestor) return;
+      @try { if (!MMToggleMotionBlur(target.manager,target)) NSBeep(); }
+      @catch (NSException *exception) { NSBeep(); }
+    });
+    return YES;
+  }];
+  [self refreshValues];
   self.refreshTimer = [NSTimer timerWithTimeInterval:0.1 repeats:YES block:^(NSTimer *timer) {
     MMCustomRow *view = weakSelf;
     if (!view) { [timer invalidate]; return; }
@@ -70,12 +90,23 @@
   }];
   [[NSRunLoop mainRunLoop] addTimer:self.refreshTimer forMode:NSRunLoopCommonModes];
 }
-- (void)dealloc { [_refreshTimer invalidate]; }
+- (NSView *)hitTest:(NSPoint)point {
+  NSView *hit=[super hitTest:point];
+  if (hit && NSApp.currentEvent.type==NSEventTypeLeftMouseDown)
+    [[MMShortcutCapture sharedCapture] activateView:self];
+  return hit;
+}
+- (void)dealloc {
+  [_refreshTimer invalidate];
+  [[MMShortcutCapture sharedCapture] detachView:self];
+}
 - (void)refreshValues {
   // Cached sampling is read-only and may run while the host playhead is dragged.
   // Native linked-key writes still retain their separate mouse-up guard.
   if (!self.window || self.hiddenOrHasHiddenAncestor) return;
   for (NSTextField *field in self.fields) if (field.currentEditor) return;
+  // Preserve the last display while unavailable, but never allow stale edits.
+  for (NSTextField *field in self.fields) field.enabled = NO;
   id<FxCustomParameterActionAPI_v4> action = [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action) return;
   [action startAction:self];
@@ -93,7 +124,7 @@
     if (!pose) return;
     for (NSTextField *field in self.fields) {
       double value = field.tag == MMPositionX ? pose.positionX : pose.scale;
-      if (field.doubleValue != value) field.doubleValue = value;
+      if (!field.objectValue || field.doubleValue != value) field.doubleValue = value;
     }
   } @finally { [action endAction:self]; }
 }

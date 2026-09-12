@@ -38,3 +38,7 @@ BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *
                               UInt32 component, double value, CMTime time);
 
 BOOL MMCombinedOutgoingMotion(id<PROAPIAccessing> manager, CMTime time, int *motion, CMTime *targetTime);
+
+// Reads one native snapshot, then evaluates all shutter times without host reads.
+NSArray<MMCombinedPose *> *MMReadCombinedPoseSamples(id<PROAPIAccessing> manager,
+    NSArray<NSValue *> *times, BOOL *active, NSError **error);

@@ -1,0 +1,183 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+
+#import "MMShortcut.h"
+#import "MockHost.h"
+
+@interface ShortcutHost : MockHost <FxCustomParameterActionAPI_v4>
+@property(nonatomic) NSUInteger actionsStarted;
+@property(nonatomic) NSUInteger actionsEnded;
+@property(nonatomic) CMTime actionTime;
+@property(nonatomic) CMTime lastWriteTime;
+@property(nonatomic) BOOL throwOnWrite;
+@property(nonatomic) BOOL failWrite;
+@end
+
+@implementation ShortcutHost
+- (id)apiForProtocol:(Protocol *)protocol {
+  if ([self.missingProtocols containsObject:NSStringFromProtocol(protocol)]) return nil;
+  if (protocol == @protocol(FxCustomParameterActionAPI_v4) ||
+      protocol == @protocol(FxParameterRetrievalAPI_v6) ||
+      protocol == @protocol(FxParameterSettingAPI_v5) ||
+      protocol == @protocol(FxUndoAPI)) return self;
+  return [super apiForProtocol:protocol];
+}
+- (void)startAction:(id)sender { self.actionsStarted++; }
+- (void)endAction:(id)sender { self.actionsEnded++; }
+- (CMTime)currentTime { return self.actionTime; }
+- (BOOL)setBoolValue:(BOOL)value toParameter:(UInt32)parameter atTime:(CMTime)time {
+  self.lastWriteTime = time;
+  if (self.throwOnWrite) @throw [NSException exceptionWithName:@"ShortcutTestException"
+                                                        reason:@"setter failure"
+                                                      userInfo:nil];
+  if (self.failWrite) return NO;
+  return [super setBoolValue:value toParameter:parameter atTime:time];
+}
+@end
+
+static void testShortcutMatching(void) {
+  NSEventModifierFlags required = NSEventModifierFlagControl | NSEventModifierFlagOption;
+  assert(MMShortcutMatches(46, required));
+  assert(MMShortcutMatches(46, required | NSEventModifierFlagCapsLock));
+
+  assert(!MMShortcutMatches(45, required));
+  assert(!MMShortcutMatches(46, NSEventModifierFlagControl));
+  assert(!MMShortcutMatches(46, required | NSEventModifierFlagCommand));
+  assert(!MMShortcutMatches(46, required | NSEventModifierFlagShift));
+  assert(!MMShortcutMatches(46, required | NSEventModifierFlagFunction));
+}
+
+static void testRouterSelectionAndRepeat(void) {
+  MMShortcutRouter *router = [MMShortcutRouter new];
+  NSObject *first = [NSObject new];
+  NSObject *second = [NSObject new];
+  __block NSUInteger firstActions = 0, secondActions = 0;
+  BOOL (^firstEligible)(void) = ^BOOL { return YES; };
+  BOOL (^secondEligible)(void) = ^BOOL { return YES; };
+  BOOL (^firstAction)(void) = ^BOOL { firstActions++; return YES; };
+  BOOL (^secondAction)(void) = ^BOOL { secondActions++; return YES; };
+  NSEventModifierFlags mods = NSEventModifierFlagControl | NSEventModifierFlagOption;
+
+  [router registerOwner:first eligible:firstEligible action:firstAction];
+  [router registerOwner:second eligible:secondEligible action:secondAction];
+  // Two eligible owners are ambiguous until one is explicitly activated.
+  assert(![router handleKeyCode:46 modifiers:mods repeat:NO]);
+  assert(firstActions == 0 && secondActions == 0);
+
+  [router activateOwner:second];
+  assert([router handleKeyCode:46 modifiers:mods repeat:NO]);
+  assert(secondActions == 1 && firstActions == 0);
+  // A matching key repeat is consumed, but never invokes the action.
+  assert([router handleKeyCode:46 modifiers:mods repeat:YES]);
+  assert(secondActions == 1);
+
+  [router unregisterOwner:second];
+  assert([router handleKeyCode:46 modifiers:mods repeat:NO]);
+  assert(firstActions == 1);
+  assert(![router handleKeyCode:45 modifiers:mods repeat:NO]);
+}
+
+static void testRouterEligibilityAndWeakOwners(void) {
+  MMShortcutRouter *router = [MMShortcutRouter new];
+  NSObject *first = [NSObject new];
+  NSObject *second = [NSObject new];
+  __block BOOL firstIsEligible = YES;
+  __block BOOL secondIsEligible = YES;
+  __block NSUInteger actions = 0;
+  NSEventModifierFlags mods = NSEventModifierFlagControl | NSEventModifierFlagOption;
+  [router registerOwner:first eligible:^BOOL { return firstIsEligible; } action:^BOOL {
+    actions++; return YES;
+  }];
+  [router registerOwner:second eligible:^BOOL { return secondIsEligible; } action:^BOOL {
+    actions++; return YES;
+  }];
+
+  [router activateOwner:second];
+  secondIsEligible = NO;
+  // With exactly one eligible owner, routing falls back to it.
+  assert([router handleKeyCode:46 modifiers:mods repeat:NO]);
+  assert(actions == 1);
+
+  secondIsEligible = YES;
+  firstIsEligible = NO;
+  assert([router handleKeyCode:46 modifiers:mods repeat:NO]);
+  assert(actions == 2);
+
+  firstIsEligible = YES;
+  secondIsEligible = YES;
+  [router unregisterOwner:second];
+  // A registered owner is weak; after unregistering the sole second owner,
+  // the first owner remains the only eligible route.
+  assert([router handleKeyCode:46 modifiers:mods repeat:NO]);
+  assert(actions == 3);
+
+  __weak NSObject *weakOwner;
+  @autoreleasepool {
+    NSObject *temporary = [NSObject new];
+    weakOwner = temporary;
+    [router registerOwner:temporary eligible:^BOOL { return YES; } action:^BOOL {
+      actions++; return YES;
+    }];
+  }
+  assert(weakOwner == nil);
+  assert([router handleKeyCode:46 modifiers:mods repeat:NO]);
+  assert(actions == 4);
+}
+
+static void testMotionBlurToggle(void) {
+  ShortcutHost *host = [ShortcutHost new];
+  host.actionTime = TestTime(3.25);
+  host.editors[@(MMMotionBlur)] = @NO;
+  NSUInteger writes = host.hostWrites;
+  assert(MMToggleMotionBlur(host, host));
+  assert([host.editors[@(MMMotionBlur)] boolValue]);
+  assert(host.hostWrites == writes + 1);
+  assert(host.actionsStarted == 1 && host.actionsEnded == 1);
+  assert(host.undoGroupsStarted == 1 && host.undoGroupsEnded == 1 && host.undoDepth == 0);
+  assert(CMTimeCompare(host.lastWriteTime, host.actionTime) == 0);
+
+  host.actionTime = TestTime(6.5);
+  assert(MMToggleMotionBlur(host, host));
+  assert(![host.editors[@(MMMotionBlur)] boolValue]);
+  assert(host.actionsStarted == 2 && host.actionsEnded == 2);
+  assert(host.undoGroupsStarted == 2 && host.undoGroupsEnded == 2 && host.undoDepth == 0);
+  assert(CMTimeCompare(host.lastWriteTime, host.actionTime) == 0);
+}
+
+static void testMotionBlurReadFailureAndExceptionBalance(void) {
+  ShortcutHost *host = [ShortcutHost new];
+  host.actionTime = TestTime(2.0);
+  host.editors[@(MMMotionBlur)] = @YES;
+  host.failReadParameter = MMMotionBlur;
+  NSUInteger writes = host.hostWrites;
+  assert(!MMToggleMotionBlur(host, host));
+  assert(host.hostWrites == writes);
+  assert(host.actionsStarted == 1 && host.actionsEnded == 1);
+  assert(host.undoGroupsStarted == 0 && host.undoGroupsEnded == 0);
+
+  host.failReadParameter = 0;
+  host.failWrite = YES;
+  writes = host.hostWrites;
+  assert(!MMToggleMotionBlur(host, host));
+  assert(host.hostWrites == writes);
+  assert(host.actionsStarted == 2 && host.actionsEnded == 2);
+  assert(host.undoGroupsStarted == 1 && host.undoGroupsEnded == 1 && host.undoDepth == 0);
+
+  host.failWrite = NO;
+  host.missingProtocols = [NSSet setWithObject:NSStringFromProtocol(@protocol(FxParameterSettingAPI_v5))];
+  writes = host.hostWrites;
+  assert(!MMToggleMotionBlur(host, host));
+  assert(host.hostWrites == writes);
+  assert(host.actionsStarted == 3 && host.actionsEnded == 3);
+  assert(host.undoGroupsStarted == 1 && host.undoGroupsEnded == 1);
+}
+
+int main(void) {
+  @autoreleasepool {
+    testShortcutMatching();
+    testRouterSelectionAndRepeat();
+    testRouterEligibilityAndWeakOwners();
+    testMotionBlurToggle();
+    testMotionBlurReadFailureAndExceptionBalance();
+    puts("Shortcuts: physical matching, routing, repeats, weak owners, motion blur toggle, read failure and action balancing passed");
+  }
+}

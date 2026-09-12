@@ -20,6 +20,8 @@
                                     kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   ok = ok && [api addToggleButtonWithName:@"Explicit Keypose Creation" parameterID:MMExplicitCreation
                            defaultValue:NO parameterFlags:kFxParameterFlag_NOT_ANIMATABLE];
+  ok = ok && [api addToggleButtonWithName:@"Motion Blur" parameterID:MMMotionBlur
+                           defaultValue:NO parameterFlags:kFxParameterFlag_NOT_ANIMATABLE];
   NSArray *motions = @[@"None", @"Wave", @"Wiggle", @"Handheld"];
   NSArray *easings = @[@"Smooth", @"Linear", @"Ease In", @"Ease Out"];
   FxParameterFlags editorFlags = kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_DISABLED;

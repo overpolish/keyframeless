@@ -11,4 +11,5 @@ esac
 "$root/MagicMove/Tests/run.sh"
 if [ "$gpu" = yes ]; then
   "$root/MagicMove/Tests/run-shader.sh"
+  "$root/MagicMove/Tests/run-blur.sh"
 fi

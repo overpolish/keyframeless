@@ -198,13 +198,27 @@ MMCombinedPose *MMReadCombinedValue(id<PROAPIAccessing> manager, CMTime time) {
   id<FxParameterRetrievalAPI_v6> get = [manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   return MMCombinedValue(get, time);
 }
-MMCombinedPose *MMReadCombinedPose(id<PROAPIAccessing> manager, CMTime time, BOOL *active, NSError **error) {
+NSArray<MMCombinedPose *> *MMReadCombinedPoseSamples(id<PROAPIAccessing> manager,
+    NSArray<NSValue *> *times, BOOL *active, NSError **error) {
+  *active = NO;
+  if (!times.count) return MMCombinedFailure(error);
+  CMTime time; [times[0] getValue:&time];
   MMCombinedPoseCache *cache = MMCacheForManager(manager);
   NSUInteger generation = 0;
   @synchronized (cache) { generation = cache.generation; }
   NSArray *entries = MMReadCombinedEntries(manager, time, error);
   MMPublishCache(cache, entries, generation);
-  return MMSampleCombinedEntries(entries, time, active, error);
+  NSMutableArray *samples = [NSMutableArray arrayWithCapacity:times.count];
+  for (NSValue *wrapped in times) {
+    [wrapped getValue:&time];
+    MMCombinedPose *pose = MMSampleCombinedEntries(entries, time, active, error);
+    if (!pose) return nil;
+    [samples addObject:pose];
+  }
+  return samples;
+}
+MMCombinedPose *MMReadCombinedPose(id<PROAPIAccessing> manager, CMTime time, BOOL *active, NSError **error) {
+  return MMReadCombinedPoseSamples(manager, @[[NSValue valueWithBytes:&time objCType:@encode(CMTime)]], active, error).firstObject;
 }
 
 BOOL MMCombinedIncomingEasing(id<PROAPIAccessing> manager, CMTime time, int *easing, CMTime *targetTime) {

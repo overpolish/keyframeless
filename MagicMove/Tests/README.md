@@ -102,3 +102,21 @@ cached enable/disable updates while scrubbing, and delayed display echoes.
 CombinedPoseTests also covers outgoing motion targeting, secure coding, and
 preservation during value edits. Shared C tests cover deterministic motion and
 join smoothing. Motion/FCP visual feel still needs manual host testing.
+
+MotionBlurTests covers fixed defaults, scalar shutter snapshots, frame timing,
+coarse host clocks, bounded native reads, invalid frame duration, and disabling.
+CombinedPoseTests compares combined blur samples to engine evaluation.
+`run-blur.sh` uses the built plugin metallib to exercise the production render
+path on Metal, including the shared sample pool and accumulator. The normal
+`scripts/test-magicmove.sh` run includes it; `--cpu-only` skips GPU tests.
+
+`ShortcutTests` exercises the independent shortcut router and real Motion Blur
+write function with a mock host, including matching, repeats, instance ownership,
+read failures, and balanced host actions. Event-tap delivery, inspector visibility,
+and actual host undo/redo require the Motion/FCP checkpoint in the plugin README.
+
+`CustomRowTests` creates the production AppKit row in an offscreen window. It
+covers blank/disabled initial fields, delayed cache loading, immediate attachment
+refresh, valid zero values, preserved-but-disabled values after snapshot failure,
+and no native keyframe enumeration during UI refresh. Filter switching still
+needs a host check because FCP controls inspector recreation and callback timing.

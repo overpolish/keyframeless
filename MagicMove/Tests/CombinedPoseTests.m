@@ -240,6 +240,24 @@ int main(void) {
     assert(!([host.flags[@(MMCombinedAddedMotion)] unsignedIntValue] & kFxParameterFlag_DISABLED));
     [plugin refreshDurationAtTime:TestTime(2)];
     assert([host.flags[@(MMCombinedAddedMotion)] unsignedIntValue] & kFxParameterFlag_DISABLED);
+    // Blur takes one combined native snapshot, then evaluates every shutter time.
+    host.editors[@(MMMotionBlur)] = @YES;
+    NSUInteger blurReads = host.nativeKeyReads;
+    NSData *blurState;
+    assert([plugin pluginState:&blurState atTime:TestTime(0.5) quality:0 error:&error]);
+    assert(host.nativeKeyReads-blurReads < 6);
+    KKMotionBlurState blur;
+    [blurState getBytes:&blur range:NSMakeRange(blurState.length-sizeof(blur),sizeof(blur))];
+    assert(blur.enabled && blur.sampleCount == 16);
+    NSArray<NSValue *> *blurTimes = [KKMotionBlur sampleTimesForState:blur renderTime:TestTime(0.5)];
+    for (NSUInteger i=0;i<blurTimes.count;++i) {
+      CMTime sampleTime; [blurTimes[i] getValue:&sampleTime];
+      MMCombinedPose *expected = MMReadCombinedPose(host,sampleTime,&active,&error);
+      MMTransform sample;
+      [blurState getBytes:&sample range:NSMakeRange(i*sizeof(sample),sizeof(sample))];
+      assert(fabs(sample.offset.x-expected.positionX/100)<1e-6 && fabs(sample.scale-expected.scale/100)<1e-6);
+    }
+    host.editors[@(MMMotionBlur)] = @NO;
     host.failReadParameter = MMCustomControls; error = nil;
     assert(!MMReadCombinedPose(host, TestTime(1), &active, &error) && error);
     puts("Combined pose: coding, interpolation, activation, vector timing, insertion, movement, deletion, rendering, callback cache refresh, no-enumeration UI reads, delayed partner edits, undo/redo, isolation and read failure passed");

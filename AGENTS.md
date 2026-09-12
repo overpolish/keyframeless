@@ -1,0 +1,8 @@
+# New plugins and shared library
+
+- Build new plugins and the new shared library as maintainable, focused components. `MotionTiming` is the current independent timing library; keep its reusable engine behavior independent of plugin UI and host integration.
+- Do not introduce new dependencies on Mirage or the legacy Keyframeless libraries in this work. Existing dependencies are migration work, not precedent for adding more. Migrate incrementally within approved checkpoints rather than undertaking unrelated rewrites.
+- Use legacy implementations as references for lessons, proven behavior, algorithms, and performance. Reusing or porting well-formed, well-structured code is encouraged when it fits the new architecture. Preserve relevant licensing and attribution, adapt its boundaries deliberately, and avoid carrying over legacy coupling or unnecessary abstractions.
+- Keep plugin-specific UI and host integration in the plugin. Put reusable behavior in the new shared library behind clear interfaces; do not move host-specific code into the timing engine merely to share it.
+- Add meaningful automated tests alongside implementation, not as a later refactoring task. Cover shared-library behavior and plugin integration, including relevant persistence, undo, lifecycle, and failure cases. Prefer observable behavior over tests that mirror implementation details.
+- Run checks appropriate to each change. For behavior that depends on Motion or FCP and cannot be established by automated tests, provide a focused host-test checkpoint and record what was actually verified. Passing mocks does not establish host behavior.
