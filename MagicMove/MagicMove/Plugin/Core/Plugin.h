@@ -46,6 +46,8 @@
 @class MMLinkEdit;
 
 @interface MagicMovePlugin : KKPlugin <FxTileableEffect, FxCustomParameterViewHost_v2>
+// Canonical image dimensions published by image callbacks, read by the inspector.
+@property(atomic) CGSize inspectorImageSize;
 @property(atomic) BOOL syncingDuration;
 @property(atomic) NSUInteger activeNativeCallbacks;
 @property(atomic) BOOL hasPendingNativeEdits;

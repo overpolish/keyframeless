@@ -2,6 +2,7 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import "MMCombinedPose.h"
+#import "MMScalePose.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -12,19 +13,27 @@
   BOOL ok = api && [api addToggleButtonWithName:@"Legacy Link Properties"
                                   parameterID:MMLinkProperties defaultValue:NO
                                parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
-  ok = ok && [api addCustomParameterWithName:@"Combined Pose" parameterID:MMCustomControls
+  ok = ok && [api addCustomParameterWithName:@"" parameterID:MMCustomControls
                                 defaultValue:[[MMCombinedPose alloc] initWithPositionX:0 scale:100 authored:NO]
                               parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
+  ok = ok && [api addCustomParameterWithName:@"" parameterID:MMScaleControls
+                                defaultValue:[[MMScalePose alloc] initWithX:100 y:100 authored:NO]
+                              parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
+  ok = ok && [api addStringParameterWithName:@"Scale view cache" parameterID:MMScaleCacheToken
+                                defaultValue:@"" parameterFlags:(kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
+  ok = ok && [api addToggleButtonWithName:@"Scale Proportional" parameterID:MMScaleProportional
+                           defaultValue:YES parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   ok = ok && [api addStringParameterWithName:@"Combined view cache" parameterID:MMCombinedCacheToken
                                 defaultValue:@"" parameterFlags:(kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   ok = ok && [api addToggleButtonWithName:@"Explicit Keypose Creation" parameterID:MMExplicitCreation
-                           defaultValue:NO parameterFlags:kFxParameterFlag_NOT_ANIMATABLE];
+                           defaultValue:NO parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   ok = ok && [api addToggleButtonWithName:@"Motion Blur" parameterID:MMMotionBlur
-                           defaultValue:NO parameterFlags:kFxParameterFlag_NOT_ANIMATABLE];
+                           defaultValue:NO parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   NSArray *motions = @[@"None", @"Wave", @"Wiggle", @"Handheld"];
   NSArray *easings = @[@"Smooth", @"Linear", @"Ease In", @"Ease Out"];
-  FxParameterFlags editorFlags = kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_DISABLED;
+  FxParameterFlags editorFlags = kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_DISABLED;
   ok = ok && [api addPopupMenuWithName:@"Combined Easing" parameterID:MMCombinedEasing
                         defaultValue:0 menuEntries:easings parameterFlags:editorFlags];
   ok = ok && [api addPopupMenuWithName:@"Combined Added Motion" parameterID:MMCombinedAddedMotion
@@ -36,27 +45,27 @@
                       defaultValue:(isScale ? 100 : 0) parameterMin:(isScale ? 0 : -200)
                       parameterMax:(isScale ? 400 : 200)
                          sliderMin:(isScale ? 0 : -200) sliderMax:(isScale ? 400 : 200)
-                             delta:0.01 parameterFlags:0] &&
+                             delta:0.01 parameterFlags:kFxParameterFlag_HIDDEN] &&
         [api addPopupMenuWithName:@"Added Motion" parameterID:lane.addedMotionID defaultValue:0
                      menuEntries:motions parameterFlags:editorFlags] &&
         [api addPopupMenuWithName:@"Easing" parameterID:lane.easingID defaultValue:0
                      menuEntries:easings parameterFlags:editorFlags] &&
         [api addToggleButtonWithName:@"Link this pose" parameterID:lane.linkEditorID
                        defaultValue:NO
-                     parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+                     parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_HIDDEN |
                                      kFxParameterFlag_DISABLED)] &&
         [api addToggleButtonWithName:@"Match In/Out" parameterID:lane.matchEditorID defaultValue:NO
-                     parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_DISABLED)] &&
+                     parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_HIDDEN | kFxParameterFlag_DISABLED)] &&
         [api addToggleButtonWithName:@"Legacy Match Out" parameterID:(isScale ? MMScaleLegacyMatchOut : MMPositionLegacyMatchOut) defaultValue:NO
                      parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_HIDDEN)] &&
         [api addToggleButtonWithName:@"Use available time" parameterID:lane.availableTimeID
                        defaultValue:NO
-                     parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+                     parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_HIDDEN |
                                      kFxParameterFlag_DISABLED)] &&
         [api addFloatSliderWithName:@"Duration" parameterID:lane.durationID
                       defaultValue:1.2 parameterMin:0 parameterMax:60
                          sliderMin:0 sliderMax:60 delta:0.01
-                    parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+                    parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_DISABLED)] &&
         [api addCustomParameterWithName:(isScale ? @"Scale Duration Data" : @"Duration Data")
                            parameterID:lane.dataID defaultValue:(id)[KKDataBlob blobWithString:@"[]"]

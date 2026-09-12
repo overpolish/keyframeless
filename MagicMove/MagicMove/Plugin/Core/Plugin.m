@@ -7,6 +7,7 @@
 #import "Constants.h"
 #import "MMDestinations.h"
 #import "MMCombinedPose.h"
+#import "MMScalePose.h"
 #import <CoreGraphics/CoreGraphics.h>
 
 // KKPlugin implements this optional FxTileableEffect callback but does not
@@ -70,6 +71,7 @@
 }
 
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == MMScaleControls) return [NSSet setWithObject:MMScalePose.class];
   if (parameterID == MMCustomControls) return [NSSet setWithObjects:MMCombinedPose.class, NSNumber.class, nil];
   if (parameterID == MMDurationData || parameterID == MMScaleDurationData) return [NSSet setWithObject:KKDataBlob.class];
   return [super classesForCustomParameterID:parameterID];
@@ -150,7 +152,7 @@
   id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   self.syncingDuration = YES;
   @try {
-    if (flagsChanged && [set setParameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+    if (flagsChanged && [set setParameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
                                                 (enabled ? 0 : kFxParameterFlag_DISABLED)) toParameter:MMCombinedEasing])
       self.combinedEasingEnabled = @(enabled);
     if (valueChanged && [set setIntValue:easing toParameter:MMCombinedEasing atTime:time])
@@ -167,7 +169,7 @@
   id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   self.syncingDuration = YES;
   @try {
-    if (flagsChanged && [set setParameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+    if (flagsChanged && [set setParameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
                                                 (enabled ? 0 : kFxParameterFlag_DISABLED)) toParameter:MMCombinedAddedMotion])
       self.combinedAddedMotionEnabled = @(enabled);
     if (valueChanged && [set setIntValue:motion toParameter:MMCombinedAddedMotion atTime:time])
@@ -212,13 +214,13 @@
       !matchFlagsChanged && !matchValueChanged && !easingChanged && !motionChanged && !motionFlagsChanged) return;
 
   id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  FxParameterFlags flags = kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+  FxParameterFlags flags = kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
                            (enabled ? 0 : kFxParameterFlag_DISABLED);
   self.syncingDuration = YES;
   @try {
     BOOL ok = YES;
     if (motionFlagsChanged) {
-      BOOL written = [set setParameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+      BOOL written = [set setParameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
                        (motionEnabled ? 0 : kFxParameterFlag_DISABLED)) toParameter:lane.addedMotionID];
       if (written) lane.addedMotionEnabled = @(motionEnabled);
       ok = written && ok;
@@ -235,7 +237,7 @@
       ok = written && ok;
     }
     if (matchFlagsChanged) {
-      FxParameterFlags base = kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE;
+      FxParameterFlags base = kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE;
       ok = [set setParameterFlags:base | (matchEnabled ? 0 : kFxParameterFlag_DISABLED) toParameter:lane.matchEditorID] && ok;
     }
     if (matchValueChanged) {
@@ -244,7 +246,7 @@
       ok = written && ok;
     }
     if (linkFlagsChanged)
-      ok = [set setParameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+      ok = [set setParameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
                                   (linkEnabled ? 0 : kFxParameterFlag_DISABLED)) toParameter:lane.linkEditorID];
     if (linkValueChanged) {
       BOOL written = [set setBoolValue:linked toParameter:lane.linkEditorID atTime:time];
@@ -316,6 +318,10 @@
 - (BOOL)parameterChanged:(UInt32)parameterID atTime:(CMTime)time error:(NSError **)error {
   // FxPlug callbacks can overlap the timer on another thread. Never release a
   // prepared plan while a native callback is still updating its snapshots.
+  if (parameterID == MMScaleControls || parameterID == MMScaleCacheToken) {
+    MMRefreshScalePoseCache(self.apiManager, time);
+    return YES;
+  }
   if (parameterID == MMCustomControls || parameterID == MMCombinedCacheToken) {
     MMRefreshCombinedPoseCache(self.apiManager, time);
     return YES;
@@ -344,7 +350,7 @@
     if (easing < MTEasingSmooth || easing > MTEasingEaseOut) return NO;
     MMCombinedPose *old = MMReadCombinedValue(self.apiManager, targetTime);
     if (!old) return NO;
-    MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX scale:old.scale authored:YES easing:(MTEasing)easing addedMotion:old.addedMotion];
+    MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX positionY:old.positionY scale:old.scale authored:YES easing:(MTEasing)easing addedMotion:old.addedMotion];
     id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     BOOL ok = [set setCustomParameterValue:updated toParameter:MMCustomControls atTime:targetTime];
     if (ok) self.publishedCombinedEasing = @(easing);
@@ -360,7 +366,7 @@
     if (motion < MTAddedMotionNone || motion > MTAddedMotionHandheld) return NO;
     MMCombinedPose *old = MMReadCombinedValue(self.apiManager, targetTime);
     if (!old) return NO;
-    MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX scale:old.scale authored:YES easing:old.easing addedMotion:(MTAddedMotion)motion];
+    MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX positionY:old.positionY scale:old.scale authored:YES easing:old.easing addedMotion:(MTAddedMotion)motion];
     id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     BOOL ok = [set setCustomParameterValue:updated toParameter:MMCustomControls atTime:targetTime];
     if (ok) self.publishedCombinedAddedMotion = @(motion);

@@ -91,7 +91,7 @@ static void render(id<MTLDevice> device, id<MTLCommandQueue> queue,
 }
 
 static MMTransform transform(float x, float y, float scale, float rotation, float aspect) {
-  MMTransform result = {{x, y}, scale, rotation, aspect}; return result;
+  MMTransform result = {{x, y}, scale, rotation, aspect, scale}; return result;
 }
 
 int main(int argc, const char **argv) {
@@ -118,6 +118,12 @@ int main(int argc, const char **argv) {
     for (NSUInteger i = 0; i < 16; ++i) assert(pixels[i * 4 + 3] == 0); // scale zero
     render(device, queue, pipeline, input, transform(0, 0, 0.5f, 0, 1), pixels, 4, 4);
     assert(pixels[(2 * 4 + 2) * 4 + 3] > 0.1f && pixels[3] == 0); // centered scale
+    MMTransform stretch = transform(0, 0, 1, 0, 1); stretch.scaleY = 0.5f;
+    render(device, queue, pipeline, input, stretch, pixels, 4, 4);
+    assert(pixels[(2*4)*4+3] > 0.1f && pixels[3] == 0); // full width, half height
+    stretch.scaleY = 0;
+    render(device, queue, pipeline, input, stretch, pixels, 4, 4);
+    for (NSUInteger i=0; i<16; ++i) assert(pixels[i*4+3] == 0);
     render(device, queue, pipeline, input, transform(3, 0, 1, 0, 1), pixels, 4, 4);
     for (NSUInteger i = 0; i < 16; ++i) assert(pixels[i * 4 + 3] == 0); // outside bounds
 

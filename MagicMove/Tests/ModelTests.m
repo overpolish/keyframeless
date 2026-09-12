@@ -64,11 +64,17 @@ static void testParameterContract(void) {
     if (!([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN))
       visible++;
   }
-  assert(visible == 19); // Scalar rows plus combined controls and explicit creation.
+  assert(visible == 2); // Position and Scale UI checkpoint; saved legacy parameters remain hidden.
+  assert([h.definitions[@(MMCustomControls)][@"name"] isEqualToString:@""]);
   UInt32 customFlags = [h.flags[@(MMCustomControls)] unsignedIntValue];
   assert(customFlags & kFxParameterFlag_CUSTOM_UI);
   assert(!(customFlags & kFxParameterFlag_NOT_ANIMATABLE));
   assert(!(customFlags & kFxParameterFlag_DONT_SAVE));
+  UInt32 scaleFlags=[h.flags[@(MMScaleControls)] unsignedIntValue];
+  assert(scaleFlags & kFxParameterFlag_CUSTOM_UI);
+  assert(!(scaleFlags & (kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)));
+  assert([h.definitions[@(MMScaleControls)][@"name"] isEqualToString:@""]);
+  assert([h.definitions[@(MMScaleProportional)][@"default"] boolValue]);
   assert([h.definitions[@(MMPositionX)][@"default"] doubleValue] == 0);
   assert([h.definitions[@(MMScale)][@"default"] doubleValue] == 100);
   for (NSNumber *key in @[ @(MMPositionX), @(MMScale) ])
@@ -94,6 +100,11 @@ static void testParameterContract(void) {
     assert([f.plugin classesForCustomParameterID:key.unsignedIntValue] &&
            [h.blobs[key] isKindOfClass:KKDataBlob.class]);
   }
+  // Editor state changes must not reveal hidden rows during scrubbing.
+  [f.plugin updateTimingEditorsAtTime:TestTime(1) mouseDown:NO error:nil];
+  for (NSNumber *key in h.definitions)
+    if (key.unsignedIntValue != MMCustomControls && key.unsignedIntValue != MMScaleControls)
+      assert([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN);
   NSDictionary *properties = nil;
   assert([f.plugin properties:&properties error:nil]);
   assert([properties[kFxPropertyKey_VariesWhenParamsAreStatic] boolValue]);
@@ -446,6 +457,7 @@ static void testDuplicatedEffectsStayIndependent(void) {
 @property FxRect imagePixelBounds;
 @end
 @implementation TileBoundsDouble
+- (FxMatrix44 *)inversePixelTransform { return [FxMatrix44 new]; }
 @end
 static void testRenderInputAndTileContracts(void) {
   Fixture *f = [Fixture new];

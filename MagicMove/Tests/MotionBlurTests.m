@@ -45,9 +45,12 @@ int main(void) {
     // The ordinary payload stays compact when blur is disabled.
     NSData *state = nil;
     NSError *error = nil;
+    NSUInteger unblurredReadsBefore=host.nativeKeyReads;
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
     assert(!error && state.length == sizeof(MMTransform));
     assert(IsFiniteTransform(TransformAt(state, 0)));
+    NSUInteger snapshotReads=host.nativeKeyReads-unblurredReadsBefore;
+    assert(snapshotReads <= 10); // Includes one count read for the new Scale lane.
 
     // Blur uses the fixed primitive defaults and appends the shared state after
     // the complete set of transform samples.
@@ -60,7 +63,7 @@ int main(void) {
     assert(blur.enabled && blur.sampleCount == 16);
     assert(fabs(blur.shutterSec - (1.0 / 60.0)) < 1e-9);
     assert(state.length == 16 * sizeof(MMTransform) + sizeof(blur));
-    assert(host.nativeKeyReads - readsBefore < 10);
+    assert(host.nativeKeyReads - readsBefore == snapshotReads); // Independent of shutter sample count.
     MMTransform current = TransformAt(state, 0);
     MMTransform earlier = TransformAt(state, 15);
     assert(IsFiniteTransform(current) && IsFiniteTransform(earlier));

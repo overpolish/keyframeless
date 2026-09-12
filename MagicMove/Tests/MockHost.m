@@ -225,7 +225,7 @@
                          atTime:(CMTime)t {
   if (self.failReadParameter == p)
     return NO;
-  *v = _blobs[@(p)] ?: [KKDataBlob blobWithString:@"[]"];
+  *v = _blobs[@(p)] ?: (p == MMScaleControls ? nil : [KKDataBlob blobWithString:@"[]"]);
   return YES;
 }
 - (BOOL)setCustomParameterValue:(id)v toParameter:(UInt32)p atTime:(CMTime)t {

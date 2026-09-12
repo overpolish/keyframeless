@@ -312,11 +312,17 @@ static BOOL MMApplyNativePoses(id<PROAPIAccessing> manager, UInt32 valueID,
     BOOL created = selectedLink && requestedLink && !pose;
     if (created) {
       pose = MMPoseAtTime(after, records[i].time);
-      if (pose && pose.record.linkID) return (MMLinkError(error, @"A new pose overlaps an existing linked pair"), nil);
+      if (pose && pose.record.linkID) {
+        MMLinkError(error, @"A new pose overlaps an existing linked pair");
+        return nil;
+      }
       if (!pose) {
         pose = [MMLinkPose new]; pose.isNew = YES;
         MMLinkPose *nativeSource = MMPoseAtTime(sourceAfter, records[i].time);
-        if (!nativeSource) return (MMLinkError(error, @"Unable to locate the new source keyframe"), nil);
+        if (!nativeSource) {
+          MMLinkError(error, @"Unable to locate the new source keyframe");
+          return nil;
+        }
         FxKeyframe key; FxInitKeyframe(key, kFxKeyframe_CurrentVersion);
         key.time = nativeSource.key.time;
         pose.key = key;
@@ -332,7 +338,10 @@ static BOOL MMApplyNativePoses(id<PROAPIAccessing> manager, UInt32 valueID,
     MTDurationRecord record = pose.record;
     if (valuesChanged && !MMSameTime(record.time, records[i].time)) {
       MMLinkPose *nativeSource = MMPoseAtTime(sourceAfter, records[i].time);
-      if (!nativeSource) return (MMLinkError(error, @"Unable to locate the moved source keyframe"), nil);
+      if (!nativeSource) {
+        MMLinkError(error, @"Unable to locate the moved source keyframe");
+        return nil;
+      }
       FxKeyframe key = pose.key; key.time = nativeSource.key.time; pose.key = key;
       record.time = records[i].time;
     }

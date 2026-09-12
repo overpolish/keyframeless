@@ -7,6 +7,7 @@ case "${1:-}" in
   --cpu-only) gpu=no ;;
   *) echo "Usage: scripts/test-magicmove.sh [--cpu-only]" >&2; exit 2 ;;
 esac
+"$root/InspectorControls/Tests/run.sh"
 "$root/MotionTiming/Tests/run.sh"
 "$root/MagicMove/Tests/run.sh"
 if [ "$gpu" = yes ]; then

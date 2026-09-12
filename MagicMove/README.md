@@ -271,3 +271,100 @@ Automated shortcut tests cover matching, routing, weak owners, repeat handling,
 and parameter writes/action cleanup. Host checkpoint: toggle from the timeline,
 verify the inspector and image update once per press, undo/redo once, switch clips,
 and verify another effect is not changed. Also check typing and held keys.
+
+### Position inspector UI checkpoint
+
+Position and Scale are visible. Each row’s X/Y pair shares one native keyframe
+control; the two rows have independent keyframe lanes. All other parameters remain registered and saved but hidden, including
+when their enabled state refreshes. Existing combined poses retain their stored
+scale and metadata; older poses decode Y as zero. New Y values participate in
+sampling, edits, and motion blur. Saved positions retain the normalized engine
+convention; the inspector converts each axis to pixels using the host object's
+dimensions published by the plugin’s image callbacks. The calculation ports
+`KKMiniViewerPixelReferenceSize` and applies `inversePixelTransform` to full image
+bounds, removing preview scaling and accounting for pixel aspect ratio. No OSC
+API or viewer feed is required. Geometry stays on the plugin instance so recreated
+rows can use it immediately; until the first valid image callback the row waits
+for dimensions rather than displaying false pixel values.
+
+The row adapts the existing `KKParameterRowView`, `KKLabelView`, and
+`KKValueTextField` implementations without linking those classes. These
+presentation components now live in `InspectorControls`. The requested
+refinement uses an 11 pt label, values, and X/Y and px decorations
+in #B3B3B3. The legacy responsive column calculation leaves the numeric fields
+free to expand as the inspector widens (with narrow-width safeguards). Native
+keyframe controls remain host supplied.
+
+`ICValueTextField` ports click-to-edit, continuous cursor scrubbing (1 px per
+4 points of travel), Shift coarse / Option fine adjustment, Return, Tab and
+Shift-Tab, clipboard shortcuts, and click-away commit. Refresh skips the entire
+edit or scrub session. A scrub brackets all value writes in one host undo group;
+a typed commit uses one group. Cursor and grouping cleanup runs on exceptional
+exits as well. These interactions still require host testing for event routing
+and FCP's undo behavior.
+
+Host check: add a fresh effect, verify Position and Scale appear, key two different
+X/Y values, scrub between them, edit each axis independently, and resize the
+inspector. Verify one native keyframe control owns the pair and that switching
+filters does not display placeholder numeric defaults.
+
+Position row spacing follows the existing `KKParameterRowView` / `KKLabelView`
+implementation: register an empty custom parameter name (avoiding a separate
+host label line), draw the label with a 21 pt inset, and reserve 75 pt at the
+trailing edge for host controls. The adapted layout relaxes column minima when
+space is narrow instead of overflowing. It does not link the legacy row classes.
+
+Field host check: click/type X and Y, Tab between them, Return and click away;
+drag each value continuously and with Shift/Option, then undo once. Check px
+values against a known frame size and confirm scrubbing does not select text.
+
+Geometry regression checks exercise the production image callback and row with
+OSC access absent, half-resolution preview dimensions, a partial requested tile,
+recreated rows, pixel edits, and independent plugin instances. Host testing still
+needs to confirm event routing for click/type and drag/undo.
+
+Numeric Position readouts sit 2 pt below the label/decorations and always show
+whole pixels without decimals. Formatting does not round stored
+values; scrub updates also pass their full value through the formatter.
+
+The X/Y groups include 12 pt of extra separation, increasing the host-measured
+visible gap from 6 px to 18 px while retaining expanding value fields.
+
+
+### Scale inspector checkpoint
+
+Scale and Position consume `ICInspectorRow` and `ICValueTextField` from the
+independent local `InspectorControls` package. MagicMove retains host integration.
+Scale displays X/Y percentages with one decimal place and has a chain toggle in
+the label column. The saved, nonanimated proportional toggle defaults on. Linking
+preserves the existing ratio; it does not immediately change values. Unlinking
+allows independent axes. If the edited axis starts at zero, the partner follows
+the same delta; proportional values are bounded together at 400%.
+
+`MMScalePose` stores both percentages in a separate native custom parameter.
+Position keys and saved combined/scalar scale data remain intact; legacy scale
+rendering remains active until the new Scale lane is authored or keyed. Scale
+uses the current primitive incoming 1.2-second timing and supports explicit
+creation against its own next key. Each row owns a separate disposable cache.
+Scale requires no image geometry. Unequal axes are evaluated at each motion-blur
+sample and rendered independently.
+
+Host check: key Scale at two times independently of Position; drag each row’s
+native keys. Test linked edits from 100/100, unlink and make 150/75, then relink
+and change X to 200 (Y should become 100). Toggle linking without changing values,
+undo a field drag once, reopen the inspector, and verify saved linking state.
+Confirm nonuniform scaling and motion blur in the viewer and after export.
+
+
+`InspectorControls/Sources/InspectorControls/InspectorTokens.m` centralizes the validated inspector typography, colors,
+row spacing, and numeric baseline offset. It is AppKit-only and has no FxPlug or
+legacy-library dependency, shared by the controls in InspectorControls.
+The host accent ports the legacy #5B5CE9 value for FCP/Motion and is shared by the
+active chain icon, caret, and selection highlight. The chain icon is centered on
+the Scale label's capital-letter metrics, independent of the numeric offset.
+
+The XPC service links the local static InspectorControls package.
+`Plugin+CustomRow.m` is the MagicMove adapter: it configures components, binds
+callbacks, and owns host reads/writes, unit conversion, undo, shortcut routing,
+and snapshot refresh. Package usage and standalone checks are documented in
+[InspectorControls](../InspectorControls/README.md).

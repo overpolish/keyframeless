@@ -6,3 +6,7 @@
 - Keep plugin-specific UI and host integration in the plugin. Put reusable behavior in the new shared library behind clear interfaces; do not move host-specific code into the timing engine merely to share it.
 - Add meaningful automated tests alongside implementation, not as a later refactoring task. Cover shared-library behavior and plugin integration, including relevant persistence, undo, lifecycle, and failure cases. Prefer observable behavior over tests that mirror implementation details.
 - Run checks appropriate to each change. For behavior that depends on Motion or FCP and cannot be established by automated tests, provide a focused host-test checkpoint and record what was actually verified. Passing mocks does not establish host behavior.
+
+- Before recreating a control, layout, or interaction, inspect the existing plugin and shared-library implementations for an already-solved equivalent. Adapt well-structured code and proven host-specific details deliberately; do not start from visual approximation alone.
+
+- `InspectorControls` is the independent AppKit controls package. Reuse its row, value field, and tokens for new inspector UI. Keep it free of FxPlug, plugin parameter IDs, timing, and legacy-library dependencies. Host reads/writes, value conversion, undo, and keyframe ownership belong in plugin adapters. Test the package standalone as well as its plugin integration.

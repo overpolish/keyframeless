@@ -6,4 +6,5 @@ typedef struct {
   float scale;
   float rotation;
   float aspect;
+  float scaleY;
 } MMTransform;

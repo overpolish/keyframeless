@@ -5,6 +5,7 @@ root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 build="$root/DerivedData/Keyframeless/Build"
 core="$root/MagicMove/MagicMove/Plugin/Core"
 render="$root/MagicMove/MagicMove/Plugin/Render"
+inspector="$root/InspectorControls/Sources/InspectorControls"
 runtime="$build/Products/Debug/MagicMove.app/Contents/PlugIns/MagicMove XPC Service.pluginkit/Contents/Frameworks"
 if [ ! -d "$runtime/KeyframelessKit.framework" ]; then
   echo "Build the MagicMove workspace scheme in DerivedData/Keyframeless first (see MagicMove/Tests/README.md)." >&2
@@ -13,13 +14,15 @@ fi
 test_tmp=$(mktemp -d -t magicmove-tests)
 trap 'rm -rf "$test_tmp"' EXIT HUP INT TERM
 printf 'module MotionTiming { umbrella header "%s/MotionTiming/Sources/MotionTiming/include/MotionTiming.h" export * }\n' "$root" > "$test_tmp/MotionTiming.modulemap"
+printf 'module InspectorControls { umbrella header "%s/include/InspectorControls.h" export * }\n' "$inspector" > "$test_tmp/InspectorControls.modulemap"
 for source in MotionTiming MTDurationRecords; do
   xcrun clang -std=c17 -Wall -Wextra -Werror -fsanitize=address,undefined \
     -I "$root/MotionTiming/Sources/MotionTiming/include" \
     -c "$root/MotionTiming/Sources/MotionTiming/$source.c" -o "$test_tmp/$source.o"
 done
-for suite in ${MM_TEST_SUITES:-LinkedPosesTests ModelTests MatchEndpointsTests CombinedPoseTests EasingTests AddedMotionTests MotionBlurTests ShortcutTests CustomRowTests}; do
+for suite in ${MM_TEST_SUITES:-LinkedPosesTests ModelTests MatchEndpointsTests CombinedPoseTests EasingTests AddedMotionTests MotionBlurTests ShortcutTests CustomRowTests PositionTests ScaleTests}; do
   xcrun clang -fobjc-arc -fmodules -Wno-protocol -fsanitize=address,undefined \
+    -I "$inspector/include" -fmodule-map-file="$test_tmp/InspectorControls.modulemap" \
     -I "$core" -I "$render" -I "$root/MagicMove/Tests" \
     -fmodule-map-file="$test_tmp/MotionTiming.modulemap" \
     -F /Library/Developer/SDKs/FxPlug.sdk/Library/Frameworks \
@@ -28,7 +31,7 @@ for suite in ${MM_TEST_SUITES:-LinkedPosesTests ModelTests MatchEndpointsTests C
     -Wl,-rpath,"$build/Products/Debug" \
     "$root/MagicMove/Tests/$suite.m" "$root/MagicMove/Tests/MockHost.m" \
     "$core/Plugin.m" "$core/Plugin+CustomRow.m" "$core/Plugin+Links.m" "$core/Plugin+Parameters.m" \
-    "$core/MMShortcut.m" "$core/MMCombinedPose.m" "$core/MMDestinations.m" "$render/Plugin+Render.m" \
+    "$inspector/InspectorTokens.m" "$inspector/ICValueTextField.m" "$inspector/ICInspectorRow.m" "$core/MMScalePose.m" "$core/MMShortcut.m" "$core/MMCombinedPose.m" "$core/MMDestinations.m" "$render/Plugin+Render.m" \
     "$test_tmp/MotionTiming.o" "$test_tmp/MTDurationRecords.o" -o "$test_tmp/$suite"
   DYLD_FRAMEWORK_PATH="$runtime" "$test_tmp/$suite" "$@"
 done

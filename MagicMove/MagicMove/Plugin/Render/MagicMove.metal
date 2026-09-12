@@ -35,11 +35,13 @@ vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                constant MMTransform &transform [[buffer(0)]],
                                texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]]) {
-    if (transform.scale <= 0) return float4(0);
+    if (transform.scale <= 0 || transform.scaleY <= 0) return float4(0);
     float2 p = in.textureCoordinate - 0.5 - transform.offset;
     p.x *= transform.aspect;
     float c = cos(transform.rotation), s = sin(transform.rotation);
-    p = float2(c*p.x + s*p.y, -s*p.x + c*p.y) / transform.scale;
+    p = float2(c*p.x + s*p.y, -s*p.x + c*p.y);
+    p.x /= transform.scale;
+    p.y /= transform.scaleY;
     p.x /= transform.aspect;
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear,
                                      address::clamp_to_zero);

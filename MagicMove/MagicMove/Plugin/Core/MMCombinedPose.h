@@ -6,11 +6,15 @@
 // One host key stores both components; native key times remain authoritative.
 @interface MMCombinedPose : NSObject <NSSecureCoding, NSCopying, FxCustomParameterInterpolation_v2>
 @property(nonatomic, readonly) double positionX;
+@property(nonatomic, readonly) double positionY;
 @property(nonatomic, readonly) double scale;
 @property(nonatomic, readonly) BOOL authored;
 @property(nonatomic, readonly) MTEasing easing;
 @property(nonatomic, readonly) MTAddedMotion addedMotion;
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing addedMotion:(MTAddedMotion)addedMotion;
+- (instancetype)initWithPositionX:(double)x positionY:(double)y scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing addedMotion:(MTAddedMotion)addedMotion;
+- (instancetype)initWithPositionX:(double)x positionY:(double)y scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing;
+- (instancetype)initWithPositionX:(double)x positionY:(double)y scale:(double)scale authored:(BOOL)authored;
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing;
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored;
 @end

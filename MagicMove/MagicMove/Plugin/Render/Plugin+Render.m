@@ -4,6 +4,7 @@
 #import "ShaderTypes.h"
 #import "MMDestinations.h"
 #import "MMCombinedPose.h"
+#import "MMScalePose.h"
 @import MotionTiming;
 #import <math.h>
 
@@ -37,14 +38,16 @@ static BOOL MMError(NSError **error, NSString *message) {
       : @[[NSValue valueWithBytes:&renderTime objCType:@encode(CMTime)]];
   NSMutableData *transforms = [NSMutableData dataWithLength:times.count*sizeof(MMTransform)];
   MMTransform *states = transforms.mutableBytes;
-  for (NSUInteger sample=0; sample<times.count; ++sample) states[sample].scale = 1;
+  for (NSUInteger sample=0; sample<times.count; ++sample) { states[sample].scale = 1; states[sample].scaleY = 1; }
   BOOL combinedActive = NO;
   NSArray<MMCombinedPose *> *combined = MMReadCombinedPoseSamples(self.apiManager, times, &combinedActive, error);
   if (!combined) return NO;
   if (combinedActive) {
     for (NSUInteger sample=0; sample<times.count; ++sample) {
       states[sample].offset.x = combined[sample].positionX/100;
+      states[sample].offset.y = combined[sample].positionY/100;
       states[sample].scale = combined[sample].scale/100;
+      states[sample].scaleY = combined[sample].scale/100;
     }
   } else for (MMTimingLane *lane in self.timingLanes) {
     NSUInteger generation = lane.durationGeneration;
@@ -73,8 +76,15 @@ static BOOL MMError(NSError **error, NSString *message) {
         return MMError(error, @"Invalid motion destinations");
       if (!isfinite(value)) return MMError(error, @"Invalid motion value");
       if (lane.valueID == MMPositionX) states[sample].offset.x = value/100;
-      else if (lane.valueID == MMScale) states[sample].scale = value/100;
+      else if (lane.valueID == MMScale) { states[sample].scale = value/100; states[sample].scaleY = value/100; }
     }
+  }
+  BOOL scaleActive = NO;
+  NSArray<MMScalePose *> *scales = MMReadScalePoseSamples(self.apiManager, times, &scaleActive, error);
+  if (!scales) return NO;
+  if (scaleActive) for (NSUInteger sample=0; sample<times.count; ++sample) {
+    states[sample].scale = scales[sample].x/100;
+    states[sample].scaleY = scales[sample].y/100;
   }
   // Preserve the one-transform unblurred payload. Blur adds all shutter samples
   // followed by its shared renderer state; sample zero is always renderTime.
@@ -83,12 +93,27 @@ static BOOL MMError(NSError **error, NSString *message) {
   return YES;
 }
 
+// Ported from KKMiniViewerPixelReferenceSize: inversePixelTransform removes
+// preview/proxy scaling and accounts for pixel aspect ratio. No viewer feed.
+- (void)publishInspectorGeometry:(FxImageTile *)image {
+  if (!image) return;
+  FxRect bounds = image.imagePixelBounds;
+  FxMatrix44 *inverse = image.inversePixelTransform;
+  if (!inverse) return;
+  FxPoint2D lower = [inverse transform2DPoint:(FxPoint2D){bounds.left, bounds.bottom}];
+  FxPoint2D upper = [inverse transform2DPoint:(FxPoint2D){bounds.right, bounds.top}];
+  double width = fabs(upper.x-lower.x), height = fabs(upper.y-lower.y);
+  if (isfinite(width) && isfinite(height) && width > 0 && height > 0)
+    self.inspectorImageSize = CGSizeMake(width, height);
+}
+
 // Moving/rotating the source can require pixels outside the destination tile.
 - (BOOL)sourceTileRect:(FxRect *)sourceTileRect sourceImageIndex:(NSUInteger)index
           sourceImages:(NSArray<FxImageTile *> *)sourceImages
    destinationTileRect:(FxRect)destinationTileRect destinationImage:(FxImageTile *)destinationImage
            pluginState:(NSData *)pluginState atTime:(CMTime)renderTime error:(NSError **)error {
   if (index >= sourceImages.count) return MMError(error, @"Missing Magic Move source image");
+  [self publishInspectorGeometry:destinationImage];
   *sourceTileRect = sourceImages[index].imagePixelBounds;
   return YES;
 }
@@ -100,6 +125,7 @@ static BOOL MMError(NSError **error, NSString *message) {
   if (pluginState.length < sizeof(MMTransform) || sourceImages.count == 0 ||
       !sourceImages[0].ioSurface || !destinationImage.ioSurface)
     return MMError(error, @"Invalid Magic Move render input");
+  [self publishInspectorGeometry:destinationImage];
   KKMotionBlurState blur = {0};
   if (pluginState.length != sizeof(MMTransform)) {
     if (pluginState.length < 2*sizeof(MMTransform)+sizeof(blur))
