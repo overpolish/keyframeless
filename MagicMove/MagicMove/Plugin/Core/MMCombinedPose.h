@@ -1,12 +1,15 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #pragma once
 #import <FxPlug/FxPlugSDK.h>
+@import MotionTiming;
 
 // One host key stores both components; native key times remain authoritative.
 @interface MMCombinedPose : NSObject <NSSecureCoding, NSCopying, FxCustomParameterInterpolation_v2>
 @property(nonatomic, readonly) double positionX;
 @property(nonatomic, readonly) double scale;
 @property(nonatomic, readonly) BOOL authored;
+@property(nonatomic, readonly) MTEasing easing;
+- (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing;
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored;
 @end
 
@@ -20,8 +23,14 @@ MMCombinedPose *MMReadCombinedPose(id<PROAPIAccessing> manager, CMTime time,
 @interface MMCombinedPoseCache : NSObject
 @property(nonatomic, readonly) NSString *token;
 - (MMCombinedPose *)sampleAtTime:(CMTime)time;
+- (BOOL)valueTargetAtTime:(CMTime)time targetTime:(CMTime *)target;
 - (MMCombinedPose *)poseForEditingAtTime:(CMTime)time latestValue:(MMCombinedPose *)latest;
 @end
 MMCombinedPoseCache *MMCreateCombinedPoseCache(void);
 void MMRefreshCombinedPoseCache(id<PROAPIAccessing> manager, CMTime time);
 MMCombinedPose *MMReadCombinedValue(id<PROAPIAccessing> manager, CMTime time);
+
+BOOL MMCombinedIncomingEasing(id<PROAPIAccessing> manager, CMTime time, int *easing, CMTime *targetTime);
+
+BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *cache,
+                              UInt32 component, double value, CMTime time);

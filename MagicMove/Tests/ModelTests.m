@@ -64,7 +64,7 @@ static void testParameterContract(void) {
     if (!([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN))
       visible++;
   }
-  assert(visible == 11); // Five native rows per property plus a custom editor.
+  assert(visible == 15); // Six native rows per property plus combined controls.
   UInt32 customFlags = [h.flags[@(MMCustomControls)] unsignedIntValue];
   assert(customFlags & kFxParameterFlag_CUSTOM_UI);
   assert(!(customFlags & kFxParameterFlag_NOT_ANIMATABLE));
@@ -182,12 +182,12 @@ static void testContextualRowsAndBoundaryTimes(void) {
   assert(disabled(f.host, MMTransitionDuration));
   [f.plugin refreshDurationAtTime:TestTime(2)];
   assert(!disabled(f.host, MMTransitionDuration));
-  assert(disabled(f.host, MMScaleDuration));
+  assert(!disabled(f.host, MMScaleDuration));
   NSUInteger writes = f.host.hostWrites;
   [f.plugin refreshDurationAtTime:TestTime(2)];
   assert(f.host.hostWrites == writes);
   [f.plugin refreshDurationAtTime:TestTime(2 - 1.0 / 30)];
-  assert(disabled(f.host, MMTransitionDuration));
+  assert(!disabled(f.host, MMTransitionDuration));
   assert(disabled(f.host, MMPositionLink));
   NSData *d = TestData(f.host, MMPositionX, MMDurationData);
   assert(MMKeyposeAtTime(d, TestTime(0)) == 0 &&
@@ -200,9 +200,36 @@ static void testContextualRowsAndBoundaryTimes(void) {
   // records.
   NSData *old = ((KKDataBlob *)f.host.blobs[@(MMDurationData)]).data;
   f.host.editors[@(MMTransitionDuration)] = @0.2;
-  TestChange(f.host, MMTransitionDuration, 1);
+  TestChange(f.host, MMTransitionDuration, -1);
   assert([((KKDataBlob *)f.host.blobs[@(MMDurationData)]).data isEqual:old]);
   assert([f.host lane:MMPositionX].count == 2);
+}
+static void testTimingTargetsNextArrival(void) {
+  Fixture *f = [Fixture new];
+  for (int i=0; i<4; ++i) TestAdd(f.host,MMPositionX,i*2,i*25);
+  duration(f,MMTransitionDuration,3,0.4); // K2 | K3: only K3 changes.
+  assert(record(f,MMPositionX,MMDurationData,1).duration == 1.2);
+  assert(record(f,MMPositionX,MMDurationData,2).duration == 0.4);
+  assert(record(f,MMPositionX,MMDurationData,3).duration == 1.2);
+  available(f,MMPositionAvailableTime,3,YES);
+  assert(record(f,MMPositionX,MMDurationData,2).useAvailableTime);
+  assert(!record(f,MMPositionX,MMDurationData,1).useAvailableTime);
+  f.host.editors[@(MMPositionEasing)] = @(MTEasingLinear);
+  TestChange(f.host,MMPositionEasing,3);
+  assert(record(f,MMPositionX,MMDurationData,2).easing == MTEasingLinear);
+  assert(record(f,MMPositionX,MMDurationData,1).easing == MTEasingSmooth);
+  assert([f.host lane:MMPositionX].count == 4);
+  duration(f,MMTransitionDuration,2,0.6); // Exact K2 owns its own IN.
+  assert(record(f,MMPositionX,MMDurationData,1).duration == 0.6);
+  assert(record(f,MMPositionX,MMDurationData,2).duration == 0.4);
+  NSData *records = TestData(f.host,MMPositionX,MMDurationData);
+  assert(MMDestinationAtTime(records,TestTime(-1)) == NSNotFound);
+  assert(MMDestinationAtTime(records,TestTime(0)) == NSNotFound);
+  assert(MMDestinationAtTime(records,TestTime(1)) == 1);
+  assert(MMDestinationAtTime(records,TestTime(2)) == 1);
+  assert(MMDestinationAtTime(records,TestTime(3)) == 2);
+  assert(MMDestinationAtTime(records,TestTime(6)) == 3);
+  assert(MMDestinationAtTime(records,TestTime(7)) == NSNotFound);
 }
 static void testSavedRecordsRoundTripAndLegacy(void) {
   Fixture *f = [Fixture new];
@@ -470,6 +497,7 @@ int main(void) {
   RUN(testIncomingOwnershipAndAvailableTime);
   RUN(testInsertionClampsWithoutRewritingDuration);
   RUN(testContextualRowsAndBoundaryTimes);
+  RUN(testTimingTargetsNextArrival);
   RUN(testSavedRecordsRoundTripAndLegacy);
   RUN(testCorruptDataAndUnavailableAPIs);
   RUN(testRestoredSnapshotsAndRenderGeneration);
@@ -477,5 +505,5 @@ int main(void) {
   RUN(testMultiSelectionMovesOnlyLinkedPartners);
   RUN(testDuplicatedEffectsStayIndependent);
   RUN(testRenderInputAndTileContracts);
-  puts("MagicMove model: 12 test groups passed");
+  puts("MagicMove model: 13 test groups passed");
 }

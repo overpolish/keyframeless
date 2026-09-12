@@ -53,7 +53,7 @@ static BOOL MMError(NSError **error, NSString *message) {
         destinations[i] = (MTDestination){records[i].time-records[0].time,
                                            (records[i].useAvailableTime && i > 0 ?
                                             records[i].time-records[i-1].time : records[i].duration),
-                                           &records[i].value};
+                                           &records[i].value, records[i].easing};
       double seconds = CMTimeGetSeconds(renderTime)-records[0].time;
       if (!MTSample(destinations, count, 1, seconds, &value))
         return MMError(error, @"Invalid motion destinations");

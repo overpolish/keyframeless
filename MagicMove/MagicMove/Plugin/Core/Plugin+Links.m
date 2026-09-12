@@ -155,11 +155,11 @@ static BOOL MMMatchEndpoints(id<PROAPIAccessing> manager, MMTimingLane *lane,
     // to either incoming edge, or enabling from the first pose, choose that edge.
     MMLinkPose *entry = poses[1];
     BOOL useEntry = (matchEdit && !matchIn) ||
-      ((parameterID == lane.durationID || parameterID == lane.availableTimeID) &&
+      ((parameterID == lane.durationID || parameterID == lane.availableTimeID || parameterID == lane.easingID) &&
        MMSameTime(entry.record.time, CMTimeGetSeconds(time)));
     MTDurationRecord timing = useEntry ? entry.record : last.record;
     for (MMLinkPose *pose in @[entry,last]) {
-      MTDurationRecord r = pose.record; r.duration = timing.duration; r.useAvailableTime = timing.useAvailableTime; pose.record = r;
+      MTDurationRecord r = pose.record; r.duration = timing.duration; r.useAvailableTime = timing.useAvailableTime; r.easing = timing.easing; pose.record = r;
     }
   }
   return YES;
@@ -175,7 +175,7 @@ static void MMSpreadTiming(NSArray<MMLinkPose *> *source, NSArray<MMLinkPose *> 
     MMLinkPose *pose = queue.lastObject; [queue removeLastObject];
     if ([seen containsObject:pose]) continue;
     [seen addObject:pose];
-    MTDurationRecord r = pose.record; r.duration = timing.duration; r.useAvailableTime = timing.useAvailableTime; pose.record = r;
+    MTDurationRecord r = pose.record; r.duration = timing.duration; r.useAvailableTime = timing.useAvailableTime; r.easing = timing.easing; pose.record = r;
     NSArray *own = [source containsObject:pose] ? source : partner;
     NSArray *other = own == source ? partner : source;
     MMLinkPose *linked = MMPoseWithLink(other, r.linkID);
@@ -256,6 +256,8 @@ static BOOL MMApplyNativePoses(id<PROAPIAccessing> manager, UInt32 valueID,
                  data:(NSMutableData *)data atTime:(CMTime)time error:(NSError **)error {
   id<FxParameterRetrievalAPI_v6> get = [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   BOOL linkEdit = parameterID == lane.linkEditorID;
+  BOOL timingEdit = parameterID == lane.durationID || parameterID == lane.availableTimeID || parameterID == lane.easingID;
+  NSInteger timingIndex = MMDestinationAtTime(data, time);
   BOOL requestedLink = NO;
   NSInteger linkIndex = MMKeyposeAtTime(data, time);
   if (linkEdit) {
@@ -275,7 +277,14 @@ static BOOL MMApplyNativePoses(id<PROAPIAccessing> manager, UInt32 valueID,
   if (!before || !source) return nil;
   NSMutableArray<MMLinkPose *> *after = MMCopyPoses(before);
   NSMutableArray<MMLinkPose *> *sourceAfter = MMCopyPoses(source);
-  if (!MMMatchEndpoints(self.apiManager, lane, sourceAfter, saved, parameterID, time, error)) return nil;
+  CMTime timingTime = time;
+  if (timingEdit && timingIndex != NSNotFound) {
+    double arrival = ((const MTDurationRecord *)data.bytes)[timingIndex].time;
+    MMLinkPose *target = MMPoseAtTime(sourceAfter, arrival);
+    if (!target) return nil;
+    timingTime = target.key.time;
+  }
+  if (!MMMatchEndpoints(self.apiManager, lane, sourceAfter, saved, parameterID, timingTime, error)) return nil;
   [data setData:MMRecordsFromPoses(sourceAfter)];
   MTDurationRecord *records = data.mutableBytes;
   NSUInteger count = data.length/sizeof(*records);
@@ -292,7 +301,6 @@ static BOOL MMApplyNativePoses(id<PROAPIAccessing> manager, UInt32 valueID,
       }
     }
   }
-  NSInteger timingIndex = MMDestinationAtTime(data, time);
   for (NSUInteger i=0; i<count; ++i) {
     MMLinkPose *pose = MMPoseWithLink(after, records[i].linkID);
     BOOL selectedLink = linkEdit && linkIndex == (NSInteger)i;
@@ -331,6 +339,7 @@ static BOOL MMApplyNativePoses(id<PROAPIAccessing> manager, UInt32 valueID,
     if ((selectedLink && requestedLink) || (!linkEdit && !valuesChanged && timingIndex == (NSInteger)i)) {
       record.duration = records[i].duration;
       record.useAvailableTime = records[i].useAvailableTime;
+      record.easing = records[i].easing;
     }
     pose.record = record;
   }
@@ -343,8 +352,8 @@ static BOOL MMApplyNativePoses(id<PROAPIAccessing> manager, UInt32 valueID,
   MMSortPoses(after);
   if (!MMMatchEndpoints(self.apiManager, partner, after, partnerSaved, 0, time, error)) return nil;
   MMLinkPose *timingSeed = nil;
-  if (parameterID == lane.durationID || parameterID == lane.availableTimeID || linkEdit)
-    timingSeed = MMPoseAtTime(sourceAfter, CMTimeGetSeconds(time));
+  if (timingEdit || linkEdit)
+    timingSeed = MMPoseAtTime(sourceAfter, CMTimeGetSeconds(timingTime));
   else if (sourceAfter.count >= 3 && sourceAfter.firstObject.record.matchEndpoints)
     timingSeed = sourceAfter.lastObject;
   if (timingSeed) MMSpreadTiming(sourceAfter, after, timingSeed);

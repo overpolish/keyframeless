@@ -14,6 +14,8 @@
 @property(nonatomic) UInt32 durationID;
 @property(nonatomic) UInt32 dataID;
 @property(nonatomic) UInt32 availableTimeID;
+@property(nonatomic) UInt32 easingID;
+@property(atomic, copy) NSNumber *publishedEasing;
 @property(nonatomic) UInt32 linkEditorID;
 @property(nonatomic) UInt32 matchEditorID;
 @property(nonatomic) BOOL matchEnabled;
@@ -46,6 +48,8 @@
 @property(atomic) BOOL hasPendingNativeEdits;
 @property(atomic, strong) MMLinkEdit *pendingLinkEdit;
 @property(nonatomic, strong) NSTimer *durationTimer;
+@property(nonatomic, copy) NSNumber *publishedCombinedEasing;
+@property(nonatomic, copy) NSNumber *combinedEasingEnabled;
 @property(nonatomic, copy, readonly) NSArray<MMTimingLane *> *timingLanes;
 - (void)startDurationRefresh;
 - (void)refreshDurationAtTime:(CMTime)time;

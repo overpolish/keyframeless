@@ -12,6 +12,8 @@ NSData * _Nullable MMReadSavedDestinations(id<PROAPIAccessing> api, UInt32 dataI
 BOOL MMDestinationsEqual(NSData * _Nullable a, NSData * _Nullable b);
 BOOL MMWriteDestinations(id<PROAPIAccessing> api, UInt32 dataID, NSData *records);
 NSInteger MMKeyposeAtTime(NSData *records, CMTime time);
+// Incoming timing target: exact destination or next arrival between keys.
+// No target at/before the first pose or after the last.
 NSInteger MMDestinationAtTime(NSData *records, CMTime time);
 
 NS_ASSUME_NONNULL_END

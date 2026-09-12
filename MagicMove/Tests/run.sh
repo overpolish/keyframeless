@@ -18,7 +18,7 @@ for source in MotionTiming MTDurationRecords; do
     -I "$root/MotionTiming/Sources/MotionTiming/include" \
     -c "$root/MotionTiming/Sources/MotionTiming/$source.c" -o "$test_tmp/$source.o"
 done
-for suite in LinkedPosesTests ModelTests MatchEndpointsTests CombinedPoseTests; do
+for suite in LinkedPosesTests ModelTests MatchEndpointsTests CombinedPoseTests EasingTests; do
   xcrun clang -fobjc-arc -fmodules -Wno-protocol -fsanitize=address,undefined \
     -I "$core" -I "$render" -I "$root/MagicMove/Tests" \
     -fmodule-map-file="$test_tmp/MotionTiming.modulemap" \

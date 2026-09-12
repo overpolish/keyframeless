@@ -6,7 +6,7 @@
 static bool validRecords(const MTDurationRecord *records, size_t count) {
     if (count && !records) return false;
     for (size_t i = 0; i < count; ++i) {
-        if (!isfinite(records[i].time) || !isfinite(records[i].value) ||
+        if ((records[i].easing < MTEasingSmooth || records[i].easing > MTEasingEaseOut) || !isfinite(records[i].time) || !isfinite(records[i].value) ||
             !isfinite(records[i].duration) || records[i].duration < 0 ||
             (i && records[i].time <= records[i - 1].time)) return false;
     }
@@ -57,6 +57,7 @@ bool MTReconcileDurations(const MTDurationRecord *previous,
                 currentMatched[i] = previousMatched[j] = true;
                 output[i].duration = previous[j].duration;
                 output[i].useAvailableTime = previous[j].useAvailableTime;
+                output[i].easing = previous[j].easing;
                 output[i].linkID = previous[j].linkID;
                 output[i].previousIndex = j;
                 break;
@@ -81,6 +82,7 @@ bool MTReconcileDurations(const MTDurationRecord *previous,
             currentMatched[currentIndex] = previousMatched[previousIndex] = true;
             output[currentIndex].duration = previous[previousIndex].duration;
             output[currentIndex].useAvailableTime = previous[previousIndex].useAvailableTime;
+            output[currentIndex].easing = previous[previousIndex].easing;
             output[currentIndex].linkID = previous[previousIndex].linkID;
             output[currentIndex].previousIndex = previousIndex;
         }
@@ -98,6 +100,7 @@ bool MTReconcileDurations(const MTDurationRecord *previous,
             previousMatched[previousIndex] = currentMatched[currentIndex] = true;
             output[currentIndex].duration = previous[previousIndex].duration;
             output[currentIndex].useAvailableTime = previous[previousIndex].useAvailableTime;
+            output[currentIndex].easing = previous[previousIndex].easing;
             output[currentIndex].linkID = previous[previousIndex].linkID;
             output[currentIndex].previousIndex = previousIndex;
             previousIndex++;
@@ -107,6 +110,7 @@ bool MTReconcileDurations(const MTDurationRecord *previous,
         if (!currentMatched[i]) {
             output[i].duration = defaultDuration;
             output[i].useAvailableTime = false;
+            output[i].easing = MTEasingSmooth;
         }
 
     free(previousMatched);

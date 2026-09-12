@@ -3,7 +3,6 @@
 #import "Constants.h"
 #import "MMCombinedPose.h"
 #import <Cocoa/Cocoa.h>
-#import <CoreGraphics/CoreGraphics.h>
 
 // KKPlugin implements the view host in a private category.
 @interface KKPlugin (MMCustomRowHost)
@@ -73,8 +72,9 @@
 }
 - (void)dealloc { [_refreshTimer invalidate]; }
 - (void)refreshValues {
-  if (!self.window || self.hiddenOrHasHiddenAncestor ||
-      CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft)) return;
+  // Cached sampling is read-only and may run while the host playhead is dragged.
+  // Native linked-key writes still retain their separate mouse-up guard.
+  if (!self.window || self.hiddenOrHasHiddenAncestor) return;
   for (NSTextField *field in self.fields) if (field.currentEditor) return;
   id<FxCustomParameterActionAPI_v4> action = [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action) return;
@@ -82,6 +82,13 @@
   @try {
     CMTime time = [action currentTime];
     MMCombinedPose *pose = [self.poseCache sampleAtTime:time];
+    id<FxParameterRetrievalAPI_v6> get = [self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    BOOL explicit = NO;
+    if (![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time]) return;
+    if (explicit) {
+      CMTime target;
+      pose = [self.poseCache valueTargetAtTime:time targetTime:&target] ? [self.poseCache sampleAtTime:target] : nil;
+    }
     for (NSTextField *field in self.fields) field.enabled = pose != nil;
     if (!pose) return;
     for (NSTextField *field in self.fields) {
@@ -95,22 +102,13 @@
   if (!action) { NSBeep(); return; }
   [action startAction:self];
   @try {
-    id<FxParameterSettingAPI_v5> set = [self.manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    CMTime time = [action currentTime];
-    // One value read preserves the latest partner at this host time, including
-    // changes whose callbacks have not arrived yet. Never enumerate keys here.
-    MMCombinedPose *old = [self.poseCache poseForEditingAtTime:time
-                                                 latestValue:MMReadCombinedValue(self.manager, time)];
-    if (!old) { NSBeep(); return; }
-    MMCombinedPose *pose = [[MMCombinedPose alloc]
-        initWithPositionX:field.tag == MMPositionX ? field.doubleValue : old.positionX
-                    scale:field.tag == MMScale ? field.doubleValue : old.scale authored:YES];
-    BOOL success = pose && [set setCustomParameterValue:pose toParameter:MMCustomControls atTime:time];
-    if (!success) NSBeep();
+    if (!MMWriteCombinedComponent(self.manager,self.poseCache,(UInt32)field.tag,
+                                  field.doubleValue,[action currentTime])) NSBeep();
   } @finally {
     [action endAction:self];
   }
 }
+
 @end
 
 #pragma clang diagnostic push

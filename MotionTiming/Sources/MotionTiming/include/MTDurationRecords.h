@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+typedef enum { MTEasingSmooth = 0, MTEasingLinear, MTEasingEaseIn, MTEasingEaseOut } MTEasing;
+
 /// A scalar key pose and the duration entering that pose.
 typedef struct {
     double time;
@@ -19,6 +21,7 @@ typedef struct {
     uint64_t linkID; // Host-persisted identity; zero means unlinked.
     size_t previousIndex; // Transient association result; SIZE_MAX means unmatched.
     bool matchEndpoints; // Shared lane setting, repeated so legacy array blobs remain valid.
+    MTEasing easing; // Incoming transition; zero preserves legacy smoothstep.
 } MTDurationRecord;
 
 /// Associates current records with previous records and carries durations and timing mode

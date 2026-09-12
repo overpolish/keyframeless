@@ -28,6 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface MagicMovePlugin (DeferredEdits)
 // Caller owns the host action. Explicit button state keeps gesture tests deterministic.
+- (BOOL)updateTimingEditorsAtTime:(CMTime)time mouseDown:(BOOL)mouseDown error:(NSError **)error;
 - (BOOL)commitPendingEditsWithMouseDown:(BOOL)mouseDown atTime:(CMTime)time error:(NSError **)error;
 @end
 

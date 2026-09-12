@@ -15,6 +15,7 @@ typedef struct {
     double arrival;
     double duration;
     const double *values;
+    MTEasing easing;
 } MTDestination;
 
 /// Holds the preceding destination until arrival-duration, then smoothly

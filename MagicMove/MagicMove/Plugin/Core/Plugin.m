@@ -40,6 +40,7 @@
     position.durationID = MMTransitionDuration;
     position.dataID = MMDurationData;
     position.availableTimeID = MMPositionAvailableTime;
+    position.easingID = MMPositionEasing;
     position.linkEditorID = MMPositionLink;
     position.matchEditorID = MMPositionMatch;
     MMTimingLane *scale = [MMTimingLane new];
@@ -47,6 +48,7 @@
     scale.durationID = MMScaleDuration;
     scale.dataID = MMScaleDurationData;
     scale.availableTimeID = MMScaleAvailableTime;
+    scale.easingID = MMScaleEasing;
     scale.linkEditorID = MMScaleLink;
     scale.matchEditorID = MMScaleMatch;
     _timingLanes = @[position, scale];
@@ -91,9 +93,10 @@
       MagicMovePlugin *p = weakSelf;
       if (!p) { [timer invalidate]; return; }
       if (p.syncingDuration || p.activeNativeCallbacks) return;
-      // Quartz exposes session button state across the host/XPC boundary.
-      // No event interception is needed. Avoid even empty actions while held.
-      if (CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft)) return;
+      // Scrubbing may refresh cached inspector state while held. A native
+      // linked-key drag still avoids host actions until release.
+      BOOL mouseDown = CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft);
+      if (mouseDown && p.hasPendingNativeEdits) return;
       id<FxCustomParameterActionAPI_v4> action =
           [p.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
       if (!action) return;
@@ -103,9 +106,8 @@
       @try {
         NSError *error = nil;
         CMTime time = [action currentTime];
-        if (![p commitPendingEditsWithMouseDown:NO atTime:time error:&error])
+        if (![p updateTimingEditorsAtTime:time mouseDown:mouseDown error:&error])
           KKLogError(@"Magic Move deferred linked edit failed: %@", error);
-        [p refreshDurationAtTime:time];
       }
       @finally {
 
@@ -117,16 +119,45 @@
   });
 }
 
+- (BOOL)updateTimingEditorsAtTime:(CMTime)time mouseDown:(BOOL)mouseDown error:(NSError **)error {
+  if (self.syncingDuration || self.activeNativeCallbacks) return YES;
+  if (![self commitPendingEditsWithMouseDown:mouseDown atTime:time error:error]) return NO;
+  [self refreshDurationAtTime:time allowNativeReads:!mouseDown];
+  return YES;
+}
+
 - (void)refreshDurationAtTime:(CMTime)time {
+  [self refreshDurationAtTime:time allowNativeReads:YES];
+}
+
+- (void)refreshDurationAtTime:(CMTime)time allowNativeReads:(BOOL)allowNativeReads {
   if (self.syncingDuration || self.hasPendingNativeEdits) return;
+  [self refreshCombinedEasingAtTime:time];
   for (MMTimingLane *lane in self.timingLanes) {
-    [self refreshDurationForLane:lane atTime:time];
+    [self refreshDurationForLane:lane atTime:time allowNativeReads:allowNativeReads];
   }
 }
 
-- (void)refreshDurationForLane:(MMTimingLane *)lane atTime:(CMTime)time {
+- (void)refreshCombinedEasingAtTime:(CMTime)time {
+  int easing = 0;
+  BOOL enabled = MMCombinedIncomingEasing(self.apiManager, time, &easing, NULL);
+  BOOL flagsChanged = !self.combinedEasingEnabled || self.combinedEasingEnabled.boolValue != enabled;
+  BOOL valueChanged = !self.publishedCombinedEasing || self.publishedCombinedEasing.intValue != easing;
+  if (!flagsChanged && !valueChanged) return;
+  id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  self.syncingDuration = YES;
+  @try {
+    if (flagsChanged && [set setParameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+                                                (enabled ? 0 : kFxParameterFlag_DISABLED)) toParameter:MMCombinedEasing])
+      self.combinedEasingEnabled = @(enabled);
+    if (valueChanged && [set setIntValue:easing toParameter:MMCombinedEasing atTime:time])
+      self.publishedCombinedEasing = @(easing);
+  } @finally { self.syncingDuration = NO; }
+}
+
+- (void)refreshDurationForLane:(MMTimingLane *)lane atTime:(CMTime)time allowNativeReads:(BOOL)allowNativeReads {
   NSData *data = lane.durationSnapshot;
-  if (!data) {
+  if (!data && allowNativeReads) {
     NSUInteger generation = lane.durationGeneration;
     data = MMReadDestinations(self.apiManager, lane.valueID, lane.dataID, nil);
     if (data) [lane publishDurationSnapshot:data generation:generation];
@@ -142,16 +173,18 @@
   BOOL linked = linkEnabled && ((const MTDurationRecord *)data.bytes)[poseIndex].linkID != 0;
   BOOL linkFlagsChanged = !lane.durationEditorKnown || lane.linkEditorEnabled != linkEnabled;
   BOOL linkValueChanged = !lane.durationEditorKnown || lane.linkEditorValue != linked;
-  NSInteger index = poseIndex == 0 ? NSNotFound : poseIndex;
+  NSInteger index = data ? MMDestinationAtTime(data, time) : NSNotFound;
   BOOL enabled = index != NSNotFound;
   double value = enabled ? ((const MTDurationRecord *)data.bytes)[index].duration : 0;
+  int easing = enabled ? ((const MTDurationRecord *)data.bytes)[index].easing : MTEasingSmooth;
+  BOOL easingChanged = !lane.publishedEasing || lane.publishedEasing.intValue != easing;
   BOOL available = enabled && ((const MTDurationRecord *)data.bytes)[index].useAvailableTime;
   BOOL modeChanged = !lane.durationEditorKnown || lane.editorAvailableTime != available;
   BOOL flagsChanged = !lane.durationEditorKnown || lane.durationEditorEnabled != enabled;
   BOOL valueChanged = enabled && (!lane.durationEditorKnown ||
                                  !lane.durationEditorEnabled || lane.durationEditorValue != value);
   if (!flagsChanged && !valueChanged && !modeChanged && !linkFlagsChanged && !linkValueChanged &&
-      !matchFlagsChanged && !matchValueChanged) return;
+      !matchFlagsChanged && !matchValueChanged && !easingChanged) return;
 
   id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   FxParameterFlags flags = kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
@@ -159,6 +192,12 @@
   self.syncingDuration = YES;
   @try {
     BOOL ok = YES;
+    if (flagsChanged) ok = [set setParameterFlags:flags toParameter:lane.easingID] && ok;
+    if (easingChanged) {
+      BOOL written = [set setIntValue:easing toParameter:lane.easingID atTime:time];
+      if (written) lane.publishedEasing = @(easing);
+      ok = written && ok;
+    }
     if (matchFlagsChanged) {
       FxParameterFlags base = kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE;
       ok = [set setParameterFlags:base | (matchEnabled ? 0 : kFxParameterFlag_DISABLED) toParameter:lane.matchEditorID] && ok;
@@ -259,10 +298,26 @@
 - (BOOL)handleParameterChanged:(UInt32)parameterID atTime:(CMTime)time error:(NSError **)error {
 
   if (self.syncingDuration) return YES;
+  if (parameterID == MMCombinedEasing) {
+    id<FxParameterRetrievalAPI_v6> get = [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    int easing = 0, oldEasing = 0;
+    CMTime targetTime = kCMTimeInvalid;
+    if (![get getIntValue:&easing fromParameter:parameterID atTime:time]) return NO;
+    if (self.publishedCombinedEasing && self.publishedCombinedEasing.intValue == easing) return YES;
+    if (!MMCombinedIncomingEasing(self.apiManager, time, &oldEasing, &targetTime)) { [self refreshCombinedEasingAtTime:time]; return YES; }
+    if (easing < MTEasingSmooth || easing > MTEasingEaseOut) return NO;
+    MMCombinedPose *old = MMReadCombinedValue(self.apiManager, targetTime);
+    if (!old) return NO;
+    MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX scale:old.scale authored:YES easing:(MTEasing)easing];
+    id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    BOOL ok = [set setCustomParameterValue:updated toParameter:MMCustomControls atTime:targetTime];
+    if (ok) self.publishedCombinedEasing = @(easing);
+    return ok;
+  }
   MMTimingLane *lane = nil;
   for (MMTimingLane *candidate in self.timingLanes) {
     if (parameterID == candidate.valueID || parameterID == candidate.durationID ||
-        parameterID == candidate.dataID || parameterID == candidate.availableTimeID ||
+        parameterID == candidate.dataID || parameterID == candidate.availableTimeID || parameterID == candidate.easingID ||
         parameterID == candidate.linkEditorID || parameterID == candidate.matchEditorID) { lane = candidate; break; }
   }
   if (!lane) return YES;
@@ -270,6 +325,10 @@
   // has cleared, even after the playhead leaves the pose. They must not start
   // another refresh cycle or turn an unchecked display into an unlink command.
   id<FxParameterRetrievalAPI_v6> get = [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (parameterID == lane.easingID && lane.publishedEasing) {
+    int easing;
+    if ([get getIntValue:&easing fromParameter:parameterID atTime:time] && easing == lane.publishedEasing.intValue) return YES;
+  }
   if (parameterID == lane.durationID && lane.publishedDurationValue) {
     double value;
     if ([get getFloatValue:&value fromParameter:parameterID atTime:time] &&
@@ -340,13 +399,17 @@
 
     return YES;
   }
-  if (parameterID == lane.durationID || parameterID == lane.availableTimeID) {
+  if (parameterID == lane.durationID || parameterID == lane.availableTimeID || parameterID == lane.easingID) {
     NSInteger index = MMDestinationAtTime(data, time);
     if (index == NSNotFound) { [self refreshDurationAtTime:time]; return YES; }
     id<FxParameterRetrievalAPI_v6> get = [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     NSMutableData *edited = [data mutableCopy];
     MTDurationRecord *record = &((MTDurationRecord *)edited.mutableBytes)[index];
-    if (parameterID == lane.availableTimeID) {
+    if (parameterID == lane.easingID) {
+      int easing;
+      if (![get getIntValue:&easing fromParameter:lane.easingID atTime:time] || easing < MTEasingSmooth || easing > MTEasingEaseOut) return NO;
+      record->easing = (MTEasing)easing;
+    } else if (parameterID == lane.availableTimeID) {
       BOOL available = NO;
       if (![get getBoolValue:&available fromParameter:lane.availableTimeID atTime:time]) return NO;
       record->useAvailableTime = available;

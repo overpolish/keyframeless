@@ -17,7 +17,8 @@ Each property has flat inspector controls:
 - **Use available time** — fills the gap from the previous pose with our easing.
 - **Duration** — holds the preceding value, then transitions for the requested
   duration, capped to the gap. Disabled while using available time, with its
-  saved value retained. Timing controls disable between keys and at the first.
+  saved value retained. Between keys, timing controls edit the next arrival. At a key they edit
+  that key’s incoming transition; at/before the first and after the last they disable.
 
 Linked pairs share movement, deletion, and incoming timing. Values remain
 independently editable. Linking adopts the initiating pose's incoming settings.
@@ -53,7 +54,10 @@ native key times directly and does not depend on host curve weights.
 The custom view samples an in-memory snapshot populated by native parameter
 callbacks and rendering. A hidden, non-saved string token connects each open
 view to its cache across FxPlug plugin instances. The view timer never enumerates
-keys. Failed refreshes invalidate the snapshot, and generation checks prevent
+keys and continues refreshing during playhead scrubbing. Native timing selectors
+also refresh from caches while the mouse is held, including enable/disable state.
+A missing scalar cache disables stale controls until it can be refreshed safely.
+Pending linked-key drags still defer their host writes until mouse-up. Failed refreshes invalidate the snapshot, and generation checks prevent
 older in-flight reads from replacing a newer callback result. At an existing key,
 a commit reads the current custom object directly to preserve the latest partner
 component; between keys it preserves the timing engine's sampled value.
@@ -66,8 +70,38 @@ CUSTOM_UI was absent after attachment, and explicitly setting it returned NO.
 Test on a fresh effect: create combined keys with different Position X and Scale
 values, scrub, move a key, and save/reopen. Verify that each key retains both
 values and that both properties animate together. Published FCP behavior still
-needs host verification. Editable combined timing, per-property linking/matching,
+needs host verification. Editable combined duration, per-property linking/matching,
 and the rotation layout decision follow this storage/keyframe checkpoint.
+
+## Explicit creation checkpoint
+
+Explicit Keypose Creation defaults to off and is saved per effect. It currently
+applies to the combined custom fields only; native comparison sliders retain host
+behavior. Off preserves writes at the playhead. On routes edits directly to the
+next combined key between poses, to the exact key when on one, and to the nearest
+endpoint outside the sequence. Fields display that target pose in explicit mode.
+No temporary playhead key is created or deleted to redirect an edit.
+
+With explicit creation enabled and no combined keys, value fields are disabled
+until the native keyframe button creates the first key. User testing in Motion
+confirmed that the native keyframe button works with the custom row, including
+explicit creation mode. Use it to create combined keyposes at the playhead;
+no separate Add Keypose button is needed.
+The primitive native toggle can move into the planned settings menu later.
+
+## Easing checkpoint
+
+Each incoming destination has a native Easing selector: Smooth (the existing
+smoothstep), Linear, Ease In (quadratic), or Ease Out (quadratic). Selectors are
+disabled at/before the first key and after the last; between keys they target
+the next arrival. Scalar choices live with each pose's
+duration records, follow moved keys, and propagate through linked/matched timing.
+Combined Easing is stored in the combined native key object and affects both
+components. Editing either combined value preserves its easing. Older saved
+poses without an easing field retain Smooth.
+
+Combined incoming duration remains fixed at 1.2 seconds for this checkpoint.
+Motion blur is the next checkpoint; no blur is applied yet.
 
 ## Build and tests
 

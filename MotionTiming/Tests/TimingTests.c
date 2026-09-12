@@ -10,7 +10,7 @@ static void assertVector(const double *actual, const double *expected, size_t co
 
 static void testEndpointsAndHolds(void) {
     double first[] = {0, 50}, second[] = {100, 100}, third[] = {200, 150};
-    MTDestination d[] = {{0, 0, first}, {4, 1.2, second}, {8, 1, third}};
+    MTDestination d[] = {{0, 0, first, MTEasingSmooth}, {4, 1.2, second, MTEasingSmooth}, {8, 1, third, MTEasingSmooth}};
     double out[2];
     assert(MTSample(d, 3, 2, -1, out)); assertVector(out, first, 2);
     assert(MTSample(d, 3, 2, 2.8, out)); assertVector(out, first, 2);
@@ -22,7 +22,7 @@ static void testEndpointsAndHolds(void) {
 
 static void testIncomingDurationAndSmoothstep(void) {
     double a[] = {0}, b[] = {100};
-    MTDestination d[] = {{0, 99, a}, {10, 4, b}};
+    MTDestination d[] = {{0, 99, a, MTEasingSmooth}, {10, 4, b, MTEasingSmooth}};
     double out[1];
     // The destination owns the incoming transition duration; the first duration is ignored.
     assert(MTSample(d, 2, 1, 5, out) && out[0] == 0);
@@ -34,8 +34,8 @@ static void testIncomingDurationAndSmoothstep(void) {
 
 static void testZeroDurationAndGapClamping(void) {
     double a[] = {0}, b[] = {100}, c[] = {200};
-    MTDestination zero[] = {{0, 7, a}, {5, 0, b}};
-    MTDestination longDuration[] = {{0, 7, a}, {5, 20, b}, {10, 1, c}};
+    MTDestination zero[] = {{0, 7, a, MTEasingSmooth}, {5, 0, b, MTEasingSmooth}};
+    MTDestination longDuration[] = {{0, 7, a, MTEasingSmooth}, {5, 20, b, MTEasingSmooth}, {10, 1, c, MTEasingSmooth}};
     double out[1];
     assert(MTSample(zero, 2, 1, 4.999999, out) && out[0] == 0);
     assert(MTSample(zero, 2, 1, 5, out) && out[0] == 100);
@@ -47,7 +47,7 @@ static void testZeroDurationAndGapClamping(void) {
 
 static void testMultiComponentAndStatelessSampling(void) {
     double a[] = {0, 10, 100}, b[] = {100, 20, 200}, c[] = {200, 30, 300};
-    MTDestination d[] = {{0, 2, a}, {4, 2, b}, {8, 2, c}};
+    MTDestination d[] = {{0, 2, a, MTEasingSmooth}, {4, 2, b, MTEasingSmooth}, {8, 2, c, MTEasingSmooth}};
     double expected[] = {50, 15, 150}, out[3], repeat[3];
     assert(MTSample(d, 3, 3, 3, out)); assertVector(out, expected, 3);
     // Sampling is independent of call history and direction.
@@ -62,7 +62,7 @@ static void testDeterministicGeneratedInvariants(void) {
     for (size_t i = 0; i < 6; ++i) {
         d[i].arrival = (double)i * 3; d[i].duration = 1.5 + (double)(i % 3);
         for (size_t c = 0; c < 4; ++c) values[i][c] = (double)(i * 100 + c * 7);
-        d[i].values = values[i];
+        d[i].values = values[i]; d[i].easing = MTEasingSmooth;
     }
     for (size_t sample = 0; sample <= 60; ++sample) {
         double out[4]; assert(MTSample(d, 6, 4, (double)sample / 2, out));
@@ -75,7 +75,7 @@ static void testDeterministicGeneratedInvariants(void) {
 
 static void testInvalidInputsLeaveOutputUntouched(void) {
     double a[] = {1}, b[] = {2}, out[] = {42};
-    MTDestination valid[] = {{0, 1, a}, {2, 1, b}}, invalid;
+    MTDestination valid[] = {{0, 1, a, MTEasingSmooth}, {2, 1, b, MTEasingSmooth}}, invalid;
     assert(!MTSample(NULL, 0, 1, 0, out) && out[0] == 42);
     assert(!MTSample(valid, 2, 0, 0, out) && out[0] == 42);
     assert(!MTSample(valid, 2, 1, NAN, out) && out[0] == 42);
@@ -95,13 +95,29 @@ static void testInvalidInputsLeaveOutputUntouched(void) {
     assert(!MTSample(&invalid, 1, 1, 0, out) && out[0] == 42);
     invalid = valid[0]; invalid.arrival = -1;
     assert(!MTSample(&invalid, 1, 1, 0, out) && out[0] == 42);
-    MTDestination unordered[] = {{0, 1, a}, {0, 1, b}};
+    MTDestination unordered[] = {{0, 1, a, MTEasingSmooth}, {0, 1, b, MTEasingSmooth}};
     assert(!MTSample(unordered, 2, 1, 0, out) && out[0] == 42);
     unordered[1].arrival = -1;
     assert(!MTSample(unordered, 2, 1, 0, out) && out[0] == 42);
 }
 
+static void testEasingTypes(void) {
+    double a[] = {0,100}, b[] = {100,200}, out[2];
+    MTDestination d[] = {{0,0,a,MTEasingEaseOut}, {4,2,b,MTEasingSmooth}};
+    double expected[] = {15.625,25,6.25,43.75};
+    for (int e=0; e<=3; ++e) {
+        d[1].easing = (MTEasing)e;
+        assert(MTSample(d,2,2,2.5,out));
+        assert(fabs(out[0]-expected[e])<1e-9 && fabs(out[1]-100-expected[e])<1e-9);
+        assert(MTSample(d,2,2,1,out) && out[0]==0);
+        assert(MTSample(d,2,2,4,out) && out[0]==100);
+    }
+    d[1].easing = (MTEasing)99; out[0] = 123;
+    assert(!MTSample(d,2,2,2.5,out) && out[0]==123);
+}
+
 int main(void) {
+    testEasingTypes();
     testEndpointsAndHolds(); testIncomingDurationAndSmoothstep();
     testZeroDurationAndGapClamping(); testMultiComponentAndStatelessSampling();
     testDeterministicGeneratedInvariants(); testInvalidInputsLeaveOutputUntouched();

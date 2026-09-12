@@ -5,9 +5,10 @@ Magic Move. It has no dependency on Mirage's keyposes, custom
 UI, Foundation, or FxPlug.
 
 Each destination contains an arrival time, an incoming transition duration,
-and a vector of values. Values share timing by construction. The evaluator
+an easing type, and a vector of values. Values share timing by construction. The evaluator
 holds the previous destination until the transition begins; users need no
-extra pose to mark the end of a hold.
+extra pose to mark the end of a hold. Incoming easing supports Smooth
+(smoothstep), Linear, Ease In (quadratic), and Ease Out (quadratic).
 
 Times are seconds supplied by the caller. Sampling is deterministic and supports
 arbitrary frame order. The host adapter owns persistence, undo, and conversion

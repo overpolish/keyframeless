@@ -62,11 +62,12 @@ NSData *MMReadSavedDestinations(id<PROAPIAccessing> manager, UInt32 dataID, NSEr
         ![entry[@"duration"] isKindOfClass:NSNumber.class] ||
         (entry[@"useAvailableTime"] && ![entry[@"useAvailableTime"] isKindOfClass:NSNumber.class]) ||
         (entry[@"linkID"] && ![entry[@"linkID"] isKindOfClass:NSNumber.class]) ||
+        (entry[@"easing"] && (![entry[@"easing"] isKindOfClass:NSNumber.class] || [entry[@"easing"] integerValue] < MTEasingSmooth || [entry[@"easing"] integerValue] > MTEasingEaseOut)) ||
         (entry[@"matchEndpoints"] && ![entry[@"matchEndpoints"] isKindOfClass:NSNumber.class]))
       return MMFail(error, @"Invalid saved duration entry");
     old[i] = (MTDurationRecord){[entry[@"time"] doubleValue], [entry[@"value"] doubleValue],
                                 [entry[@"duration"] doubleValue], [entry[@"useAvailableTime"] boolValue],
-                                [entry[@"linkID"] unsignedLongLongValue], SIZE_MAX, [entry[@"matchEndpoints"] boolValue]};
+                                [entry[@"linkID"] unsignedLongLongValue], SIZE_MAX, [entry[@"matchEndpoints"] boolValue], (MTEasing)[entry[@"easing"] intValue]};
   }
   return previous;
 }
@@ -76,7 +77,7 @@ BOOL MMWriteDestinations(id<PROAPIAccessing> manager, UInt32 dataID, NSData *dat
   for (NSUInteger i=0; i<data.length/sizeof(*records); ++i)
     [json addObject:@{@"time":@(records[i].time), @"value":@(records[i].value),
                      @"duration":@(records[i].duration), @"useAvailableTime":@(records[i].useAvailableTime),
-                     @"linkID":@(records[i].linkID), @"matchEndpoints":@(records[i].matchEndpoints)}];
+                     @"linkID":@(records[i].linkID), @"matchEndpoints":@(records[i].matchEndpoints), @"easing":@(records[i].easing)}];
   NSData *encoded = [NSJSONSerialization dataWithJSONObject:json options:NSJSONWritingSortedKeys error:nil];
   id<FxParameterRetrievalAPI_v6> get = [manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSObject<NSSecureCoding,NSCopying> *old = nil;
@@ -98,8 +99,15 @@ NSInteger MMKeyposeAtTime(NSData *data, CMTime time) {
 }
 
 NSInteger MMDestinationAtTime(NSData *data, CMTime time) {
-  NSInteger index = MMKeyposeAtTime(data, time);
-  return index == 0 ? NSNotFound : index;
+  if (!CMTIME_IS_NUMERIC(time)) return NSNotFound;
+  const MTDurationRecord *records = data.bytes;
+  NSUInteger count = data.length/sizeof(*records);
+  double seconds = CMTimeGetSeconds(time);
+  if (count < 2 || seconds <= records[0].time + 1e-6) return NSNotFound;
+  // Exact keys own their IN; between keys, the next arrival owns the interval.
+  for (NSUInteger i=1; i<count; ++i)
+    if (seconds <= records[i].time || fabs(seconds-records[i].time) < 1e-6) return (NSInteger)i;
+  return NSNotFound;
 }
 
 BOOL MMDestinationsEqual(NSData *a, NSData *b) {
@@ -108,6 +116,6 @@ BOOL MMDestinationsEqual(NSData *a, NSData *b) {
   for (NSUInteger i=0; i<a.length/sizeof(*x); ++i)
     if (x[i].time != y[i].time || x[i].value != y[i].value ||
         x[i].duration != y[i].duration || x[i].useAvailableTime != y[i].useAvailableTime ||
-        x[i].linkID != y[i].linkID || x[i].matchEndpoints != y[i].matchEndpoints) return NO;
+        x[i].easing != y[i].easing || x[i].linkID != y[i].linkID || x[i].matchEndpoints != y[i].matchEndpoints) return NO;
   return YES;
 }

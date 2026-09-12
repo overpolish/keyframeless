@@ -7,34 +7,38 @@
 @implementation MMCombinedPose
 + (BOOL)supportsSecureCoding { return YES; }
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored {
-  if (!isfinite(x) || !isfinite(scale)) return nil;
-  if ((self = [super init])) { _positionX = x; _scale = scale; _authored = authored; }
+  return [self initWithPositionX:x scale:scale authored:authored easing:MTEasingSmooth];
+}
+- (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing {
+  if (!isfinite(x) || !isfinite(scale) || easing < MTEasingSmooth || easing > MTEasingEaseOut) return nil;
+  if ((self = [super init])) { _positionX = x; _scale = scale; _authored = authored; _easing = easing; }
   return self;
 }
 - (instancetype)initWithCoder:(NSCoder *)coder {
   return [self initWithPositionX:[coder decodeDoubleForKey:@"x"]
                           scale:[coder decodeDoubleForKey:@"scale"]
-                       authored:[coder decodeBoolForKey:@"authored"]];
+                       authored:[coder decodeBoolForKey:@"authored"] easing:(MTEasing)[coder decodeIntegerForKey:@"easing"]];
 }
 - (void)encodeWithCoder:(NSCoder *)coder {
   [coder encodeDouble:self.positionX forKey:@"x"];
   [coder encodeDouble:self.scale forKey:@"scale"];
   [coder encodeBool:self.authored forKey:@"authored"];
+  [coder encodeInteger:self.easing forKey:@"easing"];
 }
 - (id)copyWithZone:(NSZone *)zone { return self; }
 - (BOOL)isEqual:(id)object {
   if (![object isKindOfClass:MMCombinedPose.class]) return NO;
   MMCombinedPose *other = object;
-  return self.positionX == other.positionX && self.scale == other.scale && self.authored == other.authored;
+  return self.positionX == other.positionX && self.scale == other.scale && self.authored == other.authored && self.easing == other.easing;
 }
-- (NSUInteger)hash { return @(self.positionX).hash ^ @(self.scale).hash ^ (NSUInteger)self.authored; }
+- (NSUInteger)hash { return @(self.positionX).hash ^ @(self.scale).hash ^ (NSUInteger)self.authored ^ (NSUInteger)self.easing; }
 - (NSObject<NSSecureCoding, NSCopying> *)interpolateBetween:(NSObject<NSSecureCoding, NSCopying> *)rightValue withWeight:(float)weight {
   if (![rightValue isKindOfClass:MMCombinedPose.class] || !isfinite(weight)) return self;
   MMCombinedPose *right = (MMCombinedPose *)rightValue;
   double w = fmax(0, fmin(1, weight));
   return [[MMCombinedPose alloc] initWithPositionX:self.positionX + (right.positionX-self.positionX)*w
                                            scale:self.scale + (right.scale-self.scale)*w
-                                        authored:self.authored || right.authored];
+                                        authored:self.authored || right.authored easing:w >= 1 ? right.easing : self.easing];
 }
 @end
 
@@ -74,7 +78,7 @@ static NSArray *MMReadCombinedEntries(id<PROAPIAccessing> manager, CMTime time, 
     if (!CMTIME_IS_NUMERIC(key.time)) return MMCombinedFailure(error);
     MMCombinedPose *pose = MMCombinedValue(get, key.time);
     if (!pose) return MMCombinedFailure(error);
-    [entries addObject:@{@"time":@(CMTimeGetSeconds(key.time)), @"pose":pose}];
+    [entries addObject:@{@"time":@(CMTimeGetSeconds(key.time)), @"pose":pose, @"nativeTime":[NSValue valueWithBytes:&key.time objCType:@encode(CMTime)]}];
   }
   [entries sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
     return [a[@"time"] compare:b[@"time"]];
@@ -98,7 +102,7 @@ static MMCombinedPose *MMSampleCombinedEntries(NSArray *entries, CMTime time, BO
   for (NSUInteger i=0; i<count; ++i) {
     MMCombinedPose *pose = entries[i][@"pose"];
     components[i*2] = pose.positionX; components[i*2+1] = pose.scale;
-    destinations[i] = (MTDestination){[entries[i][@"time"] doubleValue]-start, 1.2, &components[i*2]};
+    destinations[i] = (MTDestination){[entries[i][@"time"] doubleValue]-start, 1.2, &components[i*2], pose.easing};
   }
   double result[2];
   if (!MTSample(destinations, count, 2, CMTimeGetSeconds(time)-start, result)) return MMCombinedFailure(error);
@@ -112,6 +116,20 @@ static MMCombinedPose *MMSampleCombinedEntries(NSArray *entries, CMTime time, BO
 @property(nonatomic) NSUInteger generation;
 @end
 @implementation MMCombinedPoseCache
+- (BOOL)valueTargetAtTime:(CMTime)time targetTime:(CMTime *)target {
+  if (!CMTIME_IS_NUMERIC(time)) return NO;
+  NSArray *entries;
+  @synchronized (self) { entries = self.entries; }
+  if (!entries.count || !entries[0][@"nativeTime"]) return NO;
+  double seconds = CMTimeGetSeconds(time);
+  NSDictionary *chosen = entries.lastObject;
+  for (NSDictionary *entry in entries)
+    if (seconds <= [entry[@"time"] doubleValue] || fabs(seconds-[entry[@"time"] doubleValue])<1e-6) {
+      chosen = entry; break;
+    }
+  [chosen[@"nativeTime"] getValue:target];
+  return YES;
+}
 - (MMCombinedPose *)poseForEditingAtTime:(CMTime)time latestValue:(MMCombinedPose *)latest {
   if (!latest || !CMTIME_IS_NUMERIC(time)) return nil;
   NSArray *entries;
@@ -181,4 +199,40 @@ MMCombinedPose *MMReadCombinedPose(id<PROAPIAccessing> manager, CMTime time, BOO
   NSArray *entries = MMReadCombinedEntries(manager, time, error);
   MMPublishCache(cache, entries, generation);
   return MMSampleCombinedEntries(entries, time, active, error);
+}
+
+BOOL MMCombinedIncomingEasing(id<PROAPIAccessing> manager, CMTime time, int *easing, CMTime *targetTime) {
+  if (!CMTIME_IS_NUMERIC(time)) return NO;
+  MMCombinedPoseCache *cache = MMCacheForManager(manager);
+  NSArray *entries;
+  @synchronized (cache) { entries = cache.entries; }
+  double seconds = CMTimeGetSeconds(time);
+  if (entries.count < 2 || seconds <= [entries[0][@"time"] doubleValue] + 1e-6) return NO;
+  for (NSUInteger i=1; i<entries.count; ++i) {
+    double arrival = [entries[i][@"time"] doubleValue];
+    if (seconds <= arrival || fabs(arrival-seconds) < 1e-6) {
+      *easing = ((MMCombinedPose *)entries[i][@"pose"]).easing;
+      if (targetTime) [entries[i][@"nativeTime"] getValue:targetTime];
+      return YES;
+    }
+  }
+  return NO;
+}
+
+BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *cache,
+                              UInt32 component, double value, CMTime time) {
+  if ((component != MMPositionX && component != MMScale) || !isfinite(value)) return NO;
+  id<FxParameterRetrievalAPI_v6> get = [manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> set = [manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  BOOL explicit = NO;
+  if (![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time]) return NO;
+  CMTime target = time;
+  if (explicit && ![cache valueTargetAtTime:time targetTime:&target]) return NO;
+  MMCombinedPose *latest = MMReadCombinedValue(manager,target);
+  MMCombinedPose *old = explicit ? latest : [cache poseForEditingAtTime:time latestValue:latest];
+  if (!old) return NO;
+  MMCombinedPose *pose = [[MMCombinedPose alloc]
+      initWithPositionX:component == MMPositionX ? value : old.positionX
+                  scale:component == MMScale ? value : old.scale authored:YES easing:old.easing];
+  return pose && [set setCustomParameterValue:pose toParameter:MMCustomControls atTime:target];
 }

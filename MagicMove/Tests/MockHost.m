@@ -57,6 +57,19 @@
              ? nil
              : self;
 }
+- (BOOL)addPopupMenuWithName:(NSString *)name parameterID:(UInt32)p defaultValue:(UInt32)value menuEntries:(NSArray *)entries parameterFlags:(FxParameterFlags)flags {
+  self.definitions[@(p)] = @{@"name":name, @"kind":@"popup", @"entries":entries};
+  self.flags[@(p)] = @(flags); self.editors[@(p)] = @(value);
+  return YES;
+}
+- (BOOL)getIntValue:(int *)value fromParameter:(UInt32)p atTime:(CMTime)time {
+  if (self.failReadParameter == p) return NO;
+  *value = [self.editors[@(p)] intValue]; return YES;
+}
+- (BOOL)setIntValue:(int)value toParameter:(UInt32)p atTime:(CMTime)time {
+  self.hostWrites++; self.editors[@(p)] = @(value);
+  [self notifyParameter:p atTime:time]; return YES;
+}
 - (BOOL)getStringParameterValue:(NSString **)value fromParameter:(UInt32)p {
   *value = self.staticValues[@(p)];
   return *value != nil;

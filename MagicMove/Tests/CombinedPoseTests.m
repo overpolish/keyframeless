@@ -6,12 +6,33 @@
 
 @interface MockHost (CombinedTestSorting)
 - (void)sort:(NSUInteger)parameter;
+- (void)notifyParameter:(UInt32)parameter atTime:(CMTime)time;
 @end
 
 // Model custom values at native key times separately from the scalar mock.
 @interface CombinedHost : MockHost
+@property(nonatomic) CMTime lastCombinedWrite;
 @end
 @implementation CombinedHost
+- (NSError *)addKeyframe:(const FxKeyframe *)key toParameter:(NSUInteger)p andChannel:(NSUInteger)channel {
+  if (p != MMCustomControls) return [super addKeyframe:key toParameter:p andChannel:channel];
+  if (self.failAddOnce) { self.failAddOnce = NO; return [NSError errorWithDomain:@"Mock" code:1 userInfo:nil]; }
+  NSObject<NSSecureCoding,NSCopying> *value;
+  [self getCustomParameterValue:&value fromParameter:(UInt32)p atTime:key->time];
+  [[self lane:p] addObject:[@{@"time":@(CMTimeGetSeconds(key->time)), @"value":value,
+      @"key":[NSValue valueWithBytes:key objCType:@encode(FxKeyframe)]} mutableCopy]];
+  [self sort:p]; self.mutations++;
+  [self notifyParameter:(UInt32)p atTime:key->time];
+  return nil;
+}
+- (BOOL)setCustomParameterValue:(id)value toParameter:(UInt32)p atTime:(CMTime)time {
+  if (self.failBlobOnce == p) return [super setCustomParameterValue:value toParameter:p atTime:time];
+  if (p == MMCustomControls) self.lastCombinedWrite = time;
+  if (p == MMCustomControls)
+    for (NSMutableDictionary *key in [self lane:p])
+      if (fabs([key[@"time"] doubleValue]-CMTimeGetSeconds(time))<1e-6) key[@"value"] = value;
+  return [super setCustomParameterValue:value toParameter:p atTime:time];
+}
 - (BOOL)getCustomParameterValue:(NSObject<NSSecureCoding,NSCopying> **)value fromParameter:(UInt32)p atTime:(CMTime)t {
   if (p != MMCustomControls) return [super getCustomParameterValue:value fromParameter:p atTime:t];
   if (self.failReadParameter == p) return NO;
@@ -134,6 +155,70 @@ int main(void) {
     host.failReadParameter = 0;
     [plugin parameterChanged:MMCustomControls atTime:TestTime(2) error:nil];
     assert([cache sampleAtTime:TestTime(2)]);
+    [plugin refreshDurationAtTime:TestTime(2)];
+    assert(!([host.flags[@(MMCombinedEasing)] unsignedIntValue] & kFxParameterFlag_DISABLED));
+    host.editors[@(MMCombinedEasing)] = @(MTEasingLinear);
+    assert([plugin parameterChanged:MMCombinedEasing atTime:TestTime(2) error:nil]);
+    assert(MMReadCombinedValue(host,TestTime(2)).easing == MTEasingLinear);
+    Check(host, 1.1, 25, 137.5);
+    NSData *easedArchive = [NSKeyedArchiver archivedDataWithRootObject:MMReadCombinedValue(host,TestTime(2)) requiringSecureCoding:YES error:&error];
+    MMCombinedPose *eased = [NSKeyedUnarchiver unarchivedObjectOfClass:MMCombinedPose.class fromData:easedArchive error:&error];
+    assert(eased.easing == MTEasingLinear);
+    [plugin refreshDurationAtTime:TestTime(0)];
+    assert([host.flags[@(MMCombinedEasing)] unsignedIntValue] & kFxParameterFlag_DISABLED);
+    // Timing from the interval edits the next native key, preserving its values.
+    [plugin refreshDurationAtTime:TestTime(1)];
+    assert(!([host.flags[@(MMCombinedEasing)] unsignedIntValue] & kFxParameterFlag_DISABLED));
+    int incoming = -1; CMTime target = kCMTimeInvalid;
+    assert(MMCombinedIncomingEasing(host,TestTime(1),&incoming,&target));
+    assert(CMTimeCompare(target,TestTime(2)) == 0);
+    NSUInteger combinedKeyCount = [host lane:MMCustomControls].count;
+    host.editors[@(MMCombinedEasing)] = @(MTEasingEaseOut);
+    assert([plugin parameterChanged:MMCombinedEasing atTime:TestTime(1) error:nil]);
+    assert([host lane:MMCustomControls].count == combinedKeyCount);
+    MMCombinedPose *destination = MMReadCombinedValue(host,TestTime(2));
+    assert(destination.positionX == 100 && destination.scale == 250 && destination.easing == MTEasingEaseOut);
+    assert(MMReadCombinedValue(host,TestTime(0)).easing == MTEasingSmooth);
+    assert(!MMCombinedIncomingEasing(host,TestTime(-1),&incoming,NULL));
+    assert(!MMCombinedIncomingEasing(host,TestTime(0),&incoming,NULL));
+    assert(!MMCombinedIncomingEasing(host,TestTime(3),&incoming,NULL));
+    reads = host.nativeKeyReads;
+    assert([plugin updateTimingEditorsAtTime:TestTime(1) mouseDown:YES error:nil]);
+    assert(!([host.flags[@(MMCombinedEasing)] unsignedIntValue] & kFxParameterFlag_DISABLED));
+    assert([host.editors[@(MMCombinedEasing)] intValue] == MTEasingEaseOut);
+    assert([plugin updateTimingEditorsAtTime:TestTime(0) mouseDown:YES error:nil]);
+    assert([host.flags[@(MMCombinedEasing)] unsignedIntValue] & kFxParameterFlag_DISABLED);
+    assert(host.nativeKeyReads == reads);
+    // Explicit mode routes custom edits to the next existing key, never the playhead.
+    assert(![host.editors[@(MMExplicitCreation)] boolValue]);
+    host.editors[@(MMExplicitCreation)] = @YES;
+    NSUInteger beforeKeys = [host lane:MMCustomControls].count;
+    host.deferCallbacks = YES; reads = host.nativeKeyReads;
+    assert(MMWriteCombinedComponent(host,cache,MMPositionX,60,TestTime(1)));
+    assert(CMTimeCompare(host.lastCombinedWrite,TestTime(2)) == 0);
+    assert([host lane:MMCustomControls].count == beforeKeys && host.nativeKeyReads == reads);
+    destination = MMReadCombinedValue(host,TestTime(2));
+    assert(destination.positionX == 60 && destination.scale == 250 && destination.easing == MTEasingEaseOut);
+    host.deferCallbacks = NO; assert([host drainCallbacks]);
+    assert(MMWriteCombinedComponent(host,cache,MMScale,90,TestTime(0)));
+    assert(CMTimeCompare(host.lastCombinedWrite,TestTime(0)) == 0);
+    assert(MMWriteCombinedComponent(host,cache,MMPositionX,65,TestTime(8)));
+    assert(CMTimeCompare(host.lastCombinedWrite,TestTime(2)) == 0);
+    // Default behavior continues writing at the actual playhead time.
+    host.editors[@(MMExplicitCreation)] = @NO;
+    assert(MMWriteCombinedComponent(host,cache,MMPositionX,10,TestTime(1)));
+    assert(CMTimeCompare(host.lastCombinedWrite,TestTime(1)) == 0);
+    host.editors[@(MMExplicitCreation)] = @YES;
+    // The native keyframe button creates the first key in an empty explicit lane.
+    second.editors[@(MMExplicitCreation)] = @YES;
+    assert(!MMWriteCombinedComponent(second,other,MMPositionX,25,TestTime(1)));
+    error = nil;
+    FxKeyframe firstKey; FxInitKeyframe(firstKey,kFxKeyframe_CurrentVersion);
+    firstKey.time = TestTime(1);
+    assert(![second addKeyframe:&firstKey toParameter:MMCustomControls andChannel:0]);
+    assert([second lane:MMCustomControls].count == 1);
+    assert(MMWriteCombinedComponent(second,other,MMPositionX,25,TestTime(0)));
+    assert(CMTimeCompare(second.lastCombinedWrite,TestTime(1)) == 0);
     host.failReadParameter = MMCustomControls; error = nil;
     assert(!MMReadCombinedPose(host, TestTime(1), &active, &error) && error);
     puts("Combined pose: coding, interpolation, activation, vector timing, insertion, movement, deletion, rendering, callback cache refresh, no-enumeration UI reads, delayed partner edits, undo/redo, isolation and read failure passed");

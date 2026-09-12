@@ -26,13 +26,15 @@ static void testGeneratedCorrespondenceInvariants(void) {
     for (size_t i = 0; i < Count; ++i) {
         previous[i] = (MTDurationRecord){(double)i * 2, (double)(100 + i),
                                         (double)i / 3, (i % 2) != 0,
-                                        (uint64_t)(1000 + i), 999, false};
+                                        (uint64_t)(1000 + i), 999, false, MTEasingSmooth};
+        previous[i].easing = (MTEasing)(i % 4);
         current[i] = (MTDurationRecord){(double)i * 2 + 0.5, (double)(200 + i),
-                                        99, true, 9999, 9999, false};
+                                        99, true, 9999, 9999, false, MTEasingSmooth};
     }
     assert(MTReconcileDurations(previous, Count, current, Count, 7, output));
     for (size_t i = 0; i < Count; ++i) {
         assert(output[i].duration == previous[i].duration);
+        assert(output[i].easing == previous[i].easing);
         assert(output[i].useAvailableTime == previous[i].useAvailableTime);
         assert(output[i].linkID == previous[i].linkID);
         assert(output[i].previousIndex == i);
@@ -40,9 +42,9 @@ static void testGeneratedCorrespondenceInvariants(void) {
 }
 
 static void testInvalidInputsPreserveOutput(void) {
-    MTDurationRecord previous[] = {{0, 1, 2, false, 11, 0, false}};
-    MTDurationRecord current[] = {{1, 2, 3, true, 22, 1, false}};
-    MTDurationRecord output[] = {{8, 9, 10, true, 33, 44, false}};
+    MTDurationRecord previous[] = {{0, 1, 2, false, 11, 0, false, MTEasingSmooth}};
+    MTDurationRecord current[] = {{1, 2, 3, true, 22, 1, false, MTEasingSmooth}};
+    MTDurationRecord output[] = {{8, 9, 10, true, 33, 44, false, MTEasingSmooth}};
     MTDurationRecord expected = output[0];
     assert(!MTReconcileDurations(previous, 1, current, 1, NAN, output));
     assert(memcmp(output, &expected, sizeof(expected)) == 0);
@@ -59,7 +61,7 @@ static void testInvalidInputsPreserveOutput(void) {
     invalid = previous[0]; invalid.time = INFINITY;
     assert(!MTReconcileDurations(&invalid, 1, current, 1, 1, output));
     assert(memcmp(output, &expected, sizeof(expected)) == 0);
-    MTDurationRecord unordered[] = {{0, 1, 2, false, 11, 0, false}, {0, 2, 3, false, 12, 0, false}};
+    MTDurationRecord unordered[] = {{0, 1, 2, false, 11, 0, false, MTEasingSmooth}, {0, 2, 3, false, 12, 0, false, MTEasingSmooth}};
     assert(!MTReconcileDurations(unordered, 2, current, 1, 1, output));
     assert(memcmp(output, &expected, sizeof(expected)) == 0);
 }
@@ -112,9 +114,9 @@ int main(void) {
     testInvalidInputsPreserveOutput();
     testMatchEndpointsPersistAcrossReconciliation();
     MTDurationRecord previous[] = {
-        {0, 10, 1, false, 101, 77, true},
-        {2, 20, 2, false, 202, 77, true},
-        {4, 30, 3, false, 303, 77, true}
+        {0, 10, 1, false, 101, 77, true, MTEasingSmooth},
+        {2, 20, 2, false, 202, 77, true, MTEasingSmooth},
+        {4, 30, 3, false, 303, 77, true, MTEasingSmooth}
     };
     MTDurationRecord current[4];
     double expected[] = {1, 2, 3, 9};
@@ -122,8 +124,8 @@ int main(void) {
 
     // Moving a key while preserving its distinct value retains its duration.
     MTDurationRecord retime[] = {
-        {-1, 10, 0, false, 0, 0, false}, {3, 20, 0, false, 0, 0, false},
-        {5, 30, 0, false, 0, 0, false}
+        {-1, 10, 0, false, 0, 0, false, MTEasingSmooth}, {3, 20, 0, false, 0, 0, false, MTEasingSmooth},
+        {5, 30, 0, false, 0, 0, false, MTEasingSmooth}
     };
     assert(MTReconcileDurations(previous, 3, retime, 3, 9, current));
     expectDurations(current, 3, expected);
@@ -134,8 +136,8 @@ int main(void) {
 
     // A same-time value edit is paired chronologically after exact matches.
     MTDurationRecord edit[] = {
-        {0, 10, 0, false, 0, 0, false}, {2, 25, 0, false, 0, 0, false},
-        {4, 30, 0, false, 0, 0, false}
+        {0, 10, 0, false, 0, 0, false, MTEasingSmooth}, {2, 25, 0, false, 0, 0, false, MTEasingSmooth},
+        {4, 30, 0, false, 0, 0, false, MTEasingSmooth}
     };
     double editExpected[] = {1, 2, 3};
     assert(MTReconcileDurations(previous, 3, edit, 3, 9, current));
@@ -146,12 +148,12 @@ int main(void) {
 
     // Same-value multi-select moves pair in chronological order after exact matches.
     MTDurationRecord sameValuePrevious[] = {
-        {0, 10, 1, false, 401, 0, false}, {2, 10, 2, true, 402, 0, false},
-        {4, 20, 3, false, 403, 0, false}
+        {0, 10, 1, false, 401, 0, false, MTEasingSmooth}, {2, 10, 2, true, 402, 0, false, MTEasingSmooth},
+        {4, 20, 3, false, 403, 0, false, MTEasingSmooth}
     };
     MTDurationRecord sameValueCurrent[] = {
-        {1, 10, 0, false, 0, 0, false}, {3, 10, 0, false, 0, 0, false},
-        {4, 20, 0, false, 0, 0, false}
+        {1, 10, 0, false, 0, 0, false, MTEasingSmooth}, {3, 10, 0, false, 0, 0, false, MTEasingSmooth},
+        {4, 20, 0, false, 0, 0, false, MTEasingSmooth}
     };
     assert(MTReconcileDurations(sameValuePrevious, 3, sameValueCurrent, 3, 9, current));
     const uint64_t sameValueLinks[] = {401, 402, 403};
@@ -161,8 +163,8 @@ int main(void) {
 
     // Insertions/deletions preserve unique value identities and default new keys.
     MTDurationRecord inserted[] = {
-        {0, 10, 0, false, 0, 0, false}, {1, 15, 0, false, 0, 0, false},
-        {2, 20, 0, false, 0, 0, false}, {4, 30, 0, false, 0, 0, false}
+        {0, 10, 0, false, 0, 0, false, MTEasingSmooth}, {1, 15, 0, false, 0, 0, false, MTEasingSmooth},
+        {2, 20, 0, false, 0, 0, false, MTEasingSmooth}, {4, 30, 0, false, 0, 0, false, MTEasingSmooth}
     };
     double insertionExpected[] = {1, 9, 2, 3};
     assert(MTReconcileDurations(previous, 3, inserted, 4, 9, current));
@@ -172,7 +174,7 @@ int main(void) {
     const size_t insertionIndices[] = {0, SIZE_MAX, 1, 2};
     expectAssociations(current, 4, insertionLinks, insertionIndices);
     MTDurationRecord deleted[] = {
-        {0, 10, 0, false, 0, 0, false}, {4, 30, 0, false, 0, 0, false}
+        {0, 10, 0, false, 0, 0, false, MTEasingSmooth}, {4, 30, 0, false, 0, 0, false, MTEasingSmooth}
     };
     double deletionExpected[] = {1, 3};
     assert(MTReconcileDurations(previous, 3, deleted, 2, 9, current));
@@ -183,8 +185,8 @@ int main(void) {
 
     // Crossing distinct values with no time collision uses chronological pairing.
     MTDurationRecord crossed[] = {
-        {1, 35, 0, false, 0, 0, false}, {3, 5, 0, false, 0, 0, false},
-        {5, 25, 0, false, 0, 0, false}
+        {1, 35, 0, false, 0, 0, false, MTEasingSmooth}, {3, 5, 0, false, 0, 0, false, MTEasingSmooth},
+        {5, 25, 0, false, 0, 0, false, MTEasingSmooth}
     };
     double crossedExpected[] = {1, 2, 3};
     assert(MTReconcileDurations(previous, 3, crossed, 3, 9, current));
@@ -193,8 +195,8 @@ int main(void) {
     const size_t crossedIndices[] = {0, 1, 2};
     expectAssociations(current, 3, crossedLinks, crossedIndices);
 
-    MTDurationRecord untouched[] = {{7, 70, 42, false, 0, 0, false}};
-    MTDurationRecord invalid[] = {{0, 1, 4, false, 0, 0, false}, {0, 2, 5, false, 0, 0, false}};
+    MTDurationRecord untouched[] = {{7, 70, 42, false, 0, 0, false, MTEasingSmooth}};
+    MTDurationRecord invalid[] = {{0, 1, 4, false, 0, 0, false, MTEasingSmooth}, {0, 2, 5, false, 0, 0, false, MTEasingSmooth}};
     assert(!MTReconcileDurations(invalid, 2, untouched, 1, 9, current));
     assert(current[0].duration == 1 && current[1].duration == 2 &&
            current[2].duration == 3);
@@ -205,7 +207,7 @@ int main(void) {
     assert(!MTReconcileDurations(previous, 3, untouched, 1, NAN, current));
 
     // New records clear stale link IDs and transient associations.
-    MTDurationRecord newRecord[] = {{6, 60, 0, true, 999, 999, false}};
+    MTDurationRecord newRecord[] = {{6, 60, 0, true, 999, 999, false, MTEasingSmooth}};
     assert(MTReconcileDurations(previous, 3, newRecord, 1, 9, current));
     assert(current[0].linkID == 0 && current[0].previousIndex == SIZE_MAX);
     assert(!current[0].useAvailableTime && current[0].duration == 9);
