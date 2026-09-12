@@ -16,4 +16,7 @@ NSInteger MMKeyposeAtTime(NSData *records, CMTime time);
 // No target at/before the first pose or after the last.
 NSInteger MMDestinationAtTime(NSData *records, CMTime time);
 
+// Exact keys own their OUT; between keys, the previous key owns added motion.
+NSInteger MMOriginAtTime(NSData *data, CMTime time);
+
 NS_ASSUME_NONNULL_END

@@ -64,7 +64,7 @@ static void testParameterContract(void) {
     if (!([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN))
       visible++;
   }
-  assert(visible == 15); // Six native rows per property plus combined controls.
+  assert(visible == 18); // Scalar rows plus combined controls and explicit creation.
   UInt32 customFlags = [h.flags[@(MMCustomControls)] unsignedIntValue];
   assert(customFlags & kFxParameterFlag_CUSTOM_UI);
   assert(!(customFlags & kFxParameterFlag_NOT_ANIMATABLE));

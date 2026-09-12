@@ -101,7 +101,7 @@ components. Editing either combined value preserves its easing. Older saved
 poses without an easing field retain Smooth.
 
 Combined incoming duration remains fixed at 1.2 seconds for this checkpoint.
-Motion blur is the next checkpoint; no blur is applied yet.
+No motion blur is applied yet.
 
 ## Build and tests
 
@@ -180,3 +180,26 @@ Motion/FCP's native drag or undo implementation.
 MagicMove still subclasses KeyframelessKit's KKPlugin and uses its Metal helpers,
 shader types, KKDataBlob, logging and inherited lifecycle behaviour. It does not
 use Mirage's timeline, popovers, mini viewer, or constants UI.
+
+## Added Motion checkpoint
+
+Each scalar property and the combined pose have an Added Motion dropdown:
+None (default), Wave, Wiggle, and Handheld. Amount, speed, and component selection
+remain fixed for this checkpoint; there are no extra shape controls yet.
+
+Added Motion belongs to the outgoing keypose: between K2 and K3 it edits K2,
+while incoming duration and easing edit K3. At a key it edits that key's OUT.
+The dropdown disables before the first key and at/after the last key, where no
+outgoing interval exists. Its value and availability refresh during scrubbing.
+
+Motion covers the entire interval, including the hold and transition and gaps
+filled by Use available time. The shared C evaluator ports the existing wave,
+wiggle, handheld, and two-half Hermite join smoothing. Keypose values remain
+exact, and None preserves the existing timing behavior. The combined dropdown
+applies the selected motion type to both Position X and Scale, with the existing
+deterministic component variation; scalar properties retain
+independent motion choices even when their keyframe times are linked.
+
+The choice is saved with its owner and follows native keyframe moves. Legacy
+poses default to None. Native keyframe controls continue to create keyposes;
+explicit value editing and incoming easing preserve the outgoing motion choice.

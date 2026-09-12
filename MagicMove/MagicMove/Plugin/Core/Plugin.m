@@ -41,6 +41,7 @@
     position.dataID = MMDurationData;
     position.availableTimeID = MMPositionAvailableTime;
     position.easingID = MMPositionEasing;
+    position.addedMotionID = MMPositionAddedMotion;
     position.linkEditorID = MMPositionLink;
     position.matchEditorID = MMPositionMatch;
     MMTimingLane *scale = [MMTimingLane new];
@@ -49,6 +50,7 @@
     scale.dataID = MMScaleDurationData;
     scale.availableTimeID = MMScaleAvailableTime;
     scale.easingID = MMScaleEasing;
+    scale.addedMotionID = MMScaleAddedMotion;
     scale.linkEditorID = MMScaleLink;
     scale.matchEditorID = MMScaleMatch;
     _timingLanes = @[position, scale];
@@ -133,6 +135,7 @@
 - (void)refreshDurationAtTime:(CMTime)time allowNativeReads:(BOOL)allowNativeReads {
   if (self.syncingDuration || self.hasPendingNativeEdits) return;
   [self refreshCombinedEasingAtTime:time];
+  [self refreshCombinedAddedMotionAtTime:time];
   for (MMTimingLane *lane in self.timingLanes) {
     [self refreshDurationForLane:lane atTime:time allowNativeReads:allowNativeReads];
   }
@@ -152,6 +155,23 @@
       self.combinedEasingEnabled = @(enabled);
     if (valueChanged && [set setIntValue:easing toParameter:MMCombinedEasing atTime:time])
       self.publishedCombinedEasing = @(easing);
+  } @finally { self.syncingDuration = NO; }
+}
+
+- (void)refreshCombinedAddedMotionAtTime:(CMTime)time {
+  int motion = 0;
+  BOOL enabled = MMCombinedOutgoingMotion(self.apiManager, time, &motion, NULL);
+  BOOL flagsChanged = !self.combinedAddedMotionEnabled || self.combinedAddedMotionEnabled.boolValue != enabled;
+  BOOL valueChanged = !self.publishedCombinedAddedMotion || self.publishedCombinedAddedMotion.intValue != motion;
+  if (!flagsChanged && !valueChanged) return;
+  id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  self.syncingDuration = YES;
+  @try {
+    if (flagsChanged && [set setParameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+                                                (enabled ? 0 : kFxParameterFlag_DISABLED)) toParameter:MMCombinedAddedMotion])
+      self.combinedAddedMotionEnabled = @(enabled);
+    if (valueChanged && [set setIntValue:motion toParameter:MMCombinedAddedMotion atTime:time])
+      self.publishedCombinedAddedMotion = @(motion);
   } @finally { self.syncingDuration = NO; }
 }
 
@@ -178,13 +198,18 @@
   double value = enabled ? ((const MTDurationRecord *)data.bytes)[index].duration : 0;
   int easing = enabled ? ((const MTDurationRecord *)data.bytes)[index].easing : MTEasingSmooth;
   BOOL easingChanged = !lane.publishedEasing || lane.publishedEasing.intValue != easing;
+  NSInteger origin = data ? MMOriginAtTime(data, time) : NSNotFound;
+  BOOL motionEnabled = origin != NSNotFound;
+  int motion = motionEnabled ? ((const MTDurationRecord *)data.bytes)[origin].addedMotion : MTAddedMotionNone;
+  BOOL motionFlagsChanged = !lane.addedMotionEnabled || lane.addedMotionEnabled.boolValue != motionEnabled;
+  BOOL motionChanged = !lane.publishedAddedMotion || lane.publishedAddedMotion.intValue != motion;
   BOOL available = enabled && ((const MTDurationRecord *)data.bytes)[index].useAvailableTime;
   BOOL modeChanged = !lane.durationEditorKnown || lane.editorAvailableTime != available;
   BOOL flagsChanged = !lane.durationEditorKnown || lane.durationEditorEnabled != enabled;
   BOOL valueChanged = enabled && (!lane.durationEditorKnown ||
                                  !lane.durationEditorEnabled || lane.durationEditorValue != value);
   if (!flagsChanged && !valueChanged && !modeChanged && !linkFlagsChanged && !linkValueChanged &&
-      !matchFlagsChanged && !matchValueChanged && !easingChanged) return;
+      !matchFlagsChanged && !matchValueChanged && !easingChanged && !motionChanged && !motionFlagsChanged) return;
 
   id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   FxParameterFlags flags = kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
@@ -192,6 +217,17 @@
   self.syncingDuration = YES;
   @try {
     BOOL ok = YES;
+    if (motionFlagsChanged) {
+      BOOL written = [set setParameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE |
+                       (motionEnabled ? 0 : kFxParameterFlag_DISABLED)) toParameter:lane.addedMotionID];
+      if (written) lane.addedMotionEnabled = @(motionEnabled);
+      ok = written && ok;
+    }
+    if (motionChanged) {
+      BOOL written = [set setIntValue:motion toParameter:lane.addedMotionID atTime:time];
+      if (written) lane.publishedAddedMotion = @(motion);
+      ok = written && ok;
+    }
     if (flagsChanged) ok = [set setParameterFlags:flags toParameter:lane.easingID] && ok;
     if (easingChanged) {
       BOOL written = [set setIntValue:easing toParameter:lane.easingID atTime:time];
@@ -308,16 +344,32 @@
     if (easing < MTEasingSmooth || easing > MTEasingEaseOut) return NO;
     MMCombinedPose *old = MMReadCombinedValue(self.apiManager, targetTime);
     if (!old) return NO;
-    MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX scale:old.scale authored:YES easing:(MTEasing)easing];
+    MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX scale:old.scale authored:YES easing:(MTEasing)easing addedMotion:old.addedMotion];
     id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     BOOL ok = [set setCustomParameterValue:updated toParameter:MMCustomControls atTime:targetTime];
     if (ok) self.publishedCombinedEasing = @(easing);
     return ok;
   }
+  if (parameterID == MMCombinedAddedMotion) {
+    id<FxParameterRetrievalAPI_v6> get = [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    int motion = 0, oldMotion = 0;
+    CMTime targetTime = kCMTimeInvalid;
+    if (![get getIntValue:&motion fromParameter:parameterID atTime:time]) return NO;
+    if (self.publishedCombinedAddedMotion && self.publishedCombinedAddedMotion.intValue == motion) return YES;
+    if (!MMCombinedOutgoingMotion(self.apiManager, time, &oldMotion, &targetTime)) { [self refreshCombinedAddedMotionAtTime:time]; return YES; }
+    if (motion < MTAddedMotionNone || motion > MTAddedMotionHandheld) return NO;
+    MMCombinedPose *old = MMReadCombinedValue(self.apiManager, targetTime);
+    if (!old) return NO;
+    MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX scale:old.scale authored:YES easing:old.easing addedMotion:(MTAddedMotion)motion];
+    id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    BOOL ok = [set setCustomParameterValue:updated toParameter:MMCustomControls atTime:targetTime];
+    if (ok) self.publishedCombinedAddedMotion = @(motion);
+    return ok;
+  }
   MMTimingLane *lane = nil;
   for (MMTimingLane *candidate in self.timingLanes) {
     if (parameterID == candidate.valueID || parameterID == candidate.durationID ||
-        parameterID == candidate.dataID || parameterID == candidate.availableTimeID || parameterID == candidate.easingID ||
+        parameterID == candidate.dataID || parameterID == candidate.availableTimeID || parameterID == candidate.easingID || parameterID == candidate.addedMotionID ||
         parameterID == candidate.linkEditorID || parameterID == candidate.matchEditorID) { lane = candidate; break; }
   }
   if (!lane) return YES;
@@ -328,6 +380,10 @@
   if (parameterID == lane.easingID && lane.publishedEasing) {
     int easing;
     if ([get getIntValue:&easing fromParameter:parameterID atTime:time] && easing == lane.publishedEasing.intValue) return YES;
+  }
+  if (parameterID == lane.addedMotionID && lane.publishedAddedMotion) {
+    int motion;
+    if ([get getIntValue:&motion fromParameter:parameterID atTime:time] && motion == lane.publishedAddedMotion.intValue) return YES;
   }
   if (parameterID == lane.durationID && lane.publishedDurationValue) {
     double value;
@@ -399,13 +455,17 @@
 
     return YES;
   }
-  if (parameterID == lane.durationID || parameterID == lane.availableTimeID || parameterID == lane.easingID) {
-    NSInteger index = MMDestinationAtTime(data, time);
+  if (parameterID == lane.durationID || parameterID == lane.availableTimeID || parameterID == lane.easingID || parameterID == lane.addedMotionID) {
+    NSInteger index = parameterID == lane.addedMotionID ? MMOriginAtTime(data, time) : MMDestinationAtTime(data, time);
     if (index == NSNotFound) { [self refreshDurationAtTime:time]; return YES; }
     id<FxParameterRetrievalAPI_v6> get = [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     NSMutableData *edited = [data mutableCopy];
     MTDurationRecord *record = &((MTDurationRecord *)edited.mutableBytes)[index];
-    if (parameterID == lane.easingID) {
+    if (parameterID == lane.addedMotionID) {
+      int motion;
+      if (![get getIntValue:&motion fromParameter:lane.addedMotionID atTime:time] || motion < MTAddedMotionNone || motion > MTAddedMotionHandheld) return NO;
+      record->addedMotion = (MTAddedMotion)motion;
+    } else if (parameterID == lane.easingID) {
       int easing;
       if (![get getIntValue:&easing fromParameter:lane.easingID atTime:time] || easing < MTEasingSmooth || easing > MTEasingEaseOut) return NO;
       record->easing = (MTEasing)easing;

@@ -11,6 +11,12 @@ extern "C" {
 #endif
 
 typedef enum { MTEasingSmooth = 0, MTEasingLinear, MTEasingEaseIn, MTEasingEaseOut } MTEasing;
+typedef enum {
+    MTAddedMotionNone = 0,
+    MTAddedMotionWave,
+    MTAddedMotionWiggle,
+    MTAddedMotionHandheld
+} MTAddedMotion;
 
 /// A scalar key pose and the duration entering that pose.
 typedef struct {
@@ -22,6 +28,7 @@ typedef struct {
     size_t previousIndex; // Transient association result; SIZE_MAX means unmatched.
     bool matchEndpoints; // Shared lane setting, repeated so legacy array blobs remain valid.
     MTEasing easing; // Incoming transition; zero preserves legacy smoothstep.
+    MTAddedMotion addedMotion; // Outgoing modulation owned by this keypose.
 } MTDurationRecord;
 
 /// Associates current records with previous records and carries durations and timing mode

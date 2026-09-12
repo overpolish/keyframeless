@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
 
 static void assertVector(const double *actual, const double *expected, size_t count) {
     for (size_t i = 0; i < count; ++i) assert(fabs(actual[i] - expected[i]) < 1e-9);
@@ -58,7 +60,7 @@ static void testMultiComponentAndStatelessSampling(void) {
 }
 
 static void testDeterministicGeneratedInvariants(void) {
-    double values[6][4]; MTDestination d[6];
+    double values[6][4]; MTDestination d[6]; memset(d, 0, sizeof(d));
     for (size_t i = 0; i < 6; ++i) {
         d[i].arrival = (double)i * 3; d[i].duration = 1.5 + (double)(i % 3);
         for (size_t c = 0; c < 4; ++c) values[i][c] = (double)(i * 100 + c * 7);
@@ -116,10 +118,47 @@ static void testEasingTypes(void) {
     assert(!MTSample(d,2,2,2.5,out) && out[0]==123);
 }
 
+static void testAddedMotion(void) {
+    double a[] = {0.0, 0.0}, b[] = {100.0, 0.0}, c[] = {200.0, 50.0};
+    double mins[] = {-100.0, -100.0}, maxs[] = {100.0, 100.0};
+    MTDestination d[] = {
+        {0, 1, a, MTEasingSmooth, MTAddedMotionWave, mins, maxs, 2},
+        {4, 1, b, MTEasingSmooth, MTAddedMotionNone, mins, maxs, 2},
+        {8, 1, c, MTEasingSmooth, MTAddedMotionNone, mins, maxs, 2}
+    };
+    double out[2];
+    // The outgoing owner modulates the entire interval, including its hold.
+    assert(MTSample(d, 3, 2, 0, out) && out[0] == 0 && out[1] == 0);
+    assert(MTSample(d, 3, 2, 1.25, out));
+    assert(fabs(out[0]) > 1e-6); // wave is visible during the hold
+    // The next pose remains exact, and a None interval preserves ordinary timing.
+    assert(MTSample(d, 3, 2, 4, out) && out[0] == 100 && out[1] == 0);
+    assert(MTSample(d, 3, 2, 7.5, out) && fabs(out[0] - 150.0) < 1e-9);
+    // Every built-in effect is finite and lands exactly on the keypose.
+    for (int motion = MTAddedMotionWave; motion <= MTAddedMotionHandheld; ++motion) {
+        d[0].addedMotion = (MTAddedMotion)motion;
+        for (int i = 0; i <= 20; ++i) {
+            assert(MTSample(d, 3, 2, i * 0.2, out));
+            assert(isfinite(out[0]) && isfinite(out[1]));
+        }
+        assert(MTSample(d, 3, 2, 4, out) && out[0] == 100 && out[1] == 0);
+        double forward[2], backward[2];
+        assert(MTSample(d, 3, 2, 1.25, forward));
+        assert(MTSample(d, 3, 2, 3.25, backward));
+        assert(MTSample(d, 3, 2, 1.25, out));
+        assertVector(out, forward, 2);
+        assert(MTSample(d, 3, 2, 3.25, out));
+        assertVector(out, backward, 2);
+    }
+    d[0].addedMotion = (MTAddedMotion)99; out[0] = 7;
+    assert(!MTSample(d, 3, 2, 1, out) && out[0] == 7);
+}
+
 int main(void) {
     testEasingTypes();
     testEndpointsAndHolds(); testIncomingDurationAndSmoothstep();
     testZeroDurationAndGapClamping(); testMultiComponentAndStatelessSampling();
     testDeterministicGeneratedInvariants(); testInvalidInputsLeaveOutputUntouched();
+    testAddedMotion();
     puts("MotionTiming: all tests passed");
 }

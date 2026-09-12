@@ -95,3 +95,10 @@ button-state visibility from the plugin process still require Motion testing.
 Linked edits are prepared from native callback snapshots; release applies the
 latest prepared pair and publishes both cached records. Saved-data notifications
 invalidate model snapshots without forgetting successfully displayed values.
+
+AddedMotionTests covers outgoing ownership, scalar rendering, motion choices
+remaining independent across linked properties, persistence after key movement,
+cached enable/disable updates while scrubbing, and delayed display echoes.
+CombinedPoseTests also covers outgoing motion targeting, secure coding, and
+preservation during value edits. Shared C tests cover deterministic motion and
+join smoothing. Motion/FCP visual feel still needs manual host testing.

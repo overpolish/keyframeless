@@ -15,6 +15,9 @@
 @property(nonatomic) UInt32 dataID;
 @property(nonatomic) UInt32 availableTimeID;
 @property(nonatomic) UInt32 easingID;
+@property(nonatomic) UInt32 addedMotionID;
+@property(nonatomic, copy) NSNumber *publishedAddedMotion;
+@property(nonatomic, copy) NSNumber *addedMotionEnabled;
 @property(atomic, copy) NSNumber *publishedEasing;
 @property(nonatomic) UInt32 linkEditorID;
 @property(nonatomic) UInt32 matchEditorID;
@@ -50,6 +53,8 @@
 @property(nonatomic, strong) NSTimer *durationTimer;
 @property(nonatomic, copy) NSNumber *publishedCombinedEasing;
 @property(nonatomic, copy) NSNumber *combinedEasingEnabled;
+@property(nonatomic, copy) NSNumber *publishedCombinedAddedMotion;
+@property(nonatomic, copy) NSNumber *combinedAddedMotionEnabled;
 @property(nonatomic, copy, readonly) NSArray<MMTimingLane *> *timingLanes;
 - (void)startDurationRefresh;
 - (void)refreshDurationAtTime:(CMTime)time;

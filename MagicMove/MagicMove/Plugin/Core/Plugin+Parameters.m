@@ -20,10 +20,13 @@
                                     kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   ok = ok && [api addToggleButtonWithName:@"Explicit Keypose Creation" parameterID:MMExplicitCreation
                            defaultValue:NO parameterFlags:kFxParameterFlag_NOT_ANIMATABLE];
+  NSArray *motions = @[@"None", @"Wave", @"Wiggle", @"Handheld"];
   NSArray *easings = @[@"Smooth", @"Linear", @"Ease In", @"Ease Out"];
   FxParameterFlags editorFlags = kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_DISABLED;
   ok = ok && [api addPopupMenuWithName:@"Combined Easing" parameterID:MMCombinedEasing
                         defaultValue:0 menuEntries:easings parameterFlags:editorFlags];
+  ok = ok && [api addPopupMenuWithName:@"Combined Added Motion" parameterID:MMCombinedAddedMotion
+                        defaultValue:0 menuEntries:motions parameterFlags:editorFlags];
   for (MMTimingLane *lane in self.timingLanes) {
     BOOL isScale = lane.valueID == MMScale;
     ok = ok &&
@@ -32,6 +35,8 @@
                       parameterMax:(isScale ? 400 : 200)
                          sliderMin:(isScale ? 0 : -200) sliderMax:(isScale ? 400 : 200)
                              delta:0.01 parameterFlags:0] &&
+        [api addPopupMenuWithName:@"Added Motion" parameterID:lane.addedMotionID defaultValue:0
+                     menuEntries:motions parameterFlags:editorFlags] &&
         [api addPopupMenuWithName:@"Easing" parameterID:lane.easingID defaultValue:0
                      menuEntries:easings parameterFlags:editorFlags] &&
         [api addToggleButtonWithName:@"Link this pose" parameterID:lane.linkEditorID

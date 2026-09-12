@@ -219,6 +219,27 @@ int main(void) {
     assert([second lane:MMCustomControls].count == 1);
     assert(MMWriteCombinedComponent(second,other,MMPositionX,25,TestTime(0)));
     assert(CMTimeCompare(second.lastCombinedWrite,TestTime(1)) == 0);
+    // Outgoing motion uses the previous key, independently of incoming easing.
+    [plugin refreshDurationAtTime:TestTime(0.5)];
+    host.editors[@(MMCombinedAddedMotion)] = @(MTAddedMotionWiggle);
+    TestChange(host,MMCombinedAddedMotion,0.5);
+    MMCombinedPose *origin = MMReadCombinedValue(host,TestTime(0));
+    assert(origin.addedMotion == MTAddedMotionWiggle);
+    assert(CMTimeCompare(host.lastCombinedWrite,TestTime(0)) == 0);
+    assert(MMReadCombinedValue(host,TestTime(2)).addedMotion == MTAddedMotionNone);
+    archive = [NSKeyedArchiver archivedDataWithRootObject:origin requiringSecureCoding:YES error:&error];
+    decoded = [NSKeyedUnarchiver unarchivedObjectOfClass:MMCombinedPose.class fromData:archive error:&error];
+    assert([decoded isEqual:origin] && decoded.addedMotion == MTAddedMotionWiggle);
+    // Both value writes and incoming easing writes retain outgoing motion.
+    assert(MMWriteCombinedComponent(host,cache,MMPositionX,30,TestTime(0)));
+    assert(MMReadCombinedValue(host,TestTime(0)).addedMotion == MTAddedMotionWiggle);
+    host.editors[@(MMCombinedAddedMotion)] = @(MTAddedMotionWave);
+    TestChange(host,MMCombinedAddedMotion,2); // Last key has no outgoing interval.
+    assert(MMReadCombinedValue(host,TestTime(2)).addedMotion == MTAddedMotionNone);
+    [plugin refreshDurationAtTime:TestTime(0)];
+    assert(!([host.flags[@(MMCombinedAddedMotion)] unsignedIntValue] & kFxParameterFlag_DISABLED));
+    [plugin refreshDurationAtTime:TestTime(2)];
+    assert([host.flags[@(MMCombinedAddedMotion)] unsignedIntValue] & kFxParameterFlag_DISABLED);
     host.failReadParameter = MMCustomControls; error = nil;
     assert(!MMReadCombinedPose(host, TestTime(1), &active, &error) && error);
     puts("Combined pose: coding, interpolation, activation, vector timing, insertion, movement, deletion, rendering, callback cache refresh, no-enumeration UI reads, delayed partner edits, undo/redo, isolation and read failure passed");

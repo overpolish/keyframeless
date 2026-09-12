@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #include <stdint.h>
 #include <string.h>
 

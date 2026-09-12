@@ -9,6 +9,8 @@
 @property(nonatomic, readonly) double scale;
 @property(nonatomic, readonly) BOOL authored;
 @property(nonatomic, readonly) MTEasing easing;
+@property(nonatomic, readonly) MTAddedMotion addedMotion;
+- (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing addedMotion:(MTAddedMotion)addedMotion;
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing;
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored;
 @end
@@ -34,3 +36,5 @@ BOOL MMCombinedIncomingEasing(id<PROAPIAccessing> manager, CMTime time, int *eas
 
 BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *cache,
                               UInt32 component, double value, CMTime time);
+
+BOOL MMCombinedOutgoingMotion(id<PROAPIAccessing> manager, CMTime time, int *motion, CMTime *targetTime);
