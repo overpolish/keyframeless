@@ -72,7 +72,7 @@
 }
 - (void)refreshValues {
   if(!self.row.window || self.row.hiddenOrHasHiddenAncestor || self.row.interacting) return;
-  for(ICValueTextField *field in self.row.fields) field.enabled=NO;
+  self.row.enabled=NO;
   self.slider.enabled=NO;
   id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)]; if(!action) return;
   [action startAction:self.row];
@@ -92,8 +92,9 @@
     id<MMPropertyPose> pose=[self.lane sampleEntries:entries time:time]; if(!pose) return;
     NSArray<NSNumber *> *values=pose.values;
     if(values.count!=self.row.fields.count) return;
+    self.row.enabled=YES;
     for(NSUInteger i=0;i<values.count;i++) {
-      ICValueTextField *field=self.row.fields[i]; field.enabled=YES;
+      ICValueTextField *field=self.row.fields[i];
       if(!field.objectValue || field.doubleValue!=values[i].doubleValue) { field.doubleValue=values[i].doubleValue; }
     }
     self.slider.enabled=YES;

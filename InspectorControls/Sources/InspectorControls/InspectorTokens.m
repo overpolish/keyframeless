@@ -13,6 +13,7 @@
 + (NSColor *)decorationColor {
   return [NSColor colorWithSRGBRed:179.0/255 green:179.0/255 blue:179.0/255 alpha:1];
 }
++ (NSColor *)disabledTextColor { return [NSColor colorWithSRGBRed:82.0/255 green:82.0/255 blue:82.0/255 alpha:1]; }
 + (NSColor *)valueColor { return [NSColor colorWithWhite:0.839 alpha:1]; }
 + (NSColor *)accentMatchingHost {
   // Ported from NSColor+KKColors: Motion and FCP use the same accent.

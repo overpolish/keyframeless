@@ -93,3 +93,9 @@ affect row selection, component colours, or the separate aspect-link button.
 `componentColorsVisible` controls axis decoration tint independently of row
 selection. Consumers enable it for rows whose curves are displayed. Selection
 continues to control the label and background; suffixes retain their neutral tint.
+
+`ICPopUpButton` is a reusable native `NSPopUpButton` with borderless inspector
+styling, right-aligned titles, and directly drawn stacked chevrons. Use the normal
+item/selection and target/action APIs. Align its trailing edge with a row's final
+unit label to share the numeric readout and decoration columns. Disabled titles
+and chevrons use the shared disabled text token.

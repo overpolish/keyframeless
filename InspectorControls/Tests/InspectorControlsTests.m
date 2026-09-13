@@ -337,6 +337,26 @@ int main(void) {
     assert(fabs(NSMidY(row.linkButton.frame) - glyphCenter) <= 0.25);
     testKeyposeLinkedPresentation(row);
 
+    row.selected=YES;
+    row.componentColors=ICInspectorTokens.curveColors;
+    row.componentColorsVisible=YES;
+    row.enabled=NO;
+    assertRGB(row.titleLabel.textColor,82.0/255,82.0/255,82.0/255,1,1e-6);
+    for (NSTextField *field in row.fields) {
+      assert(!field.enabled);
+      assertRGB(field.textColor,82.0/255,82.0/255,82.0/255,1,1e-6);
+    }
+    for (NSTextField *decoration in [row.axisLabels arrayByAddingObjectsFromArray:row.unitLabels])
+      assertRGB(decoration.textColor,82.0/255,82.0/255,82.0/255,1,1e-6);
+    row.selected=NO; row.selected=YES;
+    assert([row.titleLabel.textColor isEqual:ICInspectorTokens.disabledTextColor]);
+    row.enabled=YES;
+    assert([row.titleLabel.textColor isEqual:ICInspectorTokens.accentMatchingHost]);
+    assert([row.axisLabels[0].textColor isEqual:ICInspectorTokens.curveColors[0]]);
+    assert([row.unitLabels[0].textColor isEqual:ICInspectorTokens.decorationColor]);
+    assert([row.fields[0].textColor isEqual:ICInspectorTokens.valueColor]);
+
+
     ICTestEditorField *styled = [ICTestEditorField valueField];
     styled.testEditor = [NSTextView new];
     [styled styleFieldEditor];
@@ -348,6 +368,24 @@ int main(void) {
     [row removeFromSuperview];
     row = nil;
     assert(rowDisposesWithoutCallbackCycle());
+    ICPopUpButton *popup=[[ICPopUpButton alloc] initWithFrame:NSMakeRect(0,0,140,18) pullsDown:NO];
+    [popup addItemsWithTitles:@[@"None",@"Wave",@"Handheld"]];
+    [popup selectItemAtIndex:2];
+    assert(popup.indexOfSelectedItem==2 && [popup.title isEqualToString:@"Handheld"]);
+    assert(!popup.bordered && popup.alignment==NSTextAlignmentRight);
+    assert(popup.controlSize==NSControlSizeRegular);
+    assert([popup.font isEqual:[NSFont menuFontOfSize:0]]);
+    assert([popup.menu.font isEqual:[NSFont menuFontOfSize:0]]);
+    assert(((NSPopUpButtonCell *)popup.cell).arrowPosition==NSPopUpNoArrow);
+    popup.enabled=NO;
+    NSImage *popupImage=[[NSImage alloc] initWithSize:popup.frame.size];
+    [popupImage lockFocus];
+    [popup.cell drawWithFrame:popup.bounds inView:popup];
+    [popupImage unlockFocus];
+    assert(!popup.enabled && popup.indexOfSelectedItem==2);
+    popup.enabled=YES;
+    [popup selectItemAtIndex:1];
+    assert([popup.title isEqualToString:@"Wave"]);
     testScrubBounds();
     testSliderRow();
     puts("InspectorControls: configuration, blank state, callbacks, precision, layout, styling, and disposal passed");

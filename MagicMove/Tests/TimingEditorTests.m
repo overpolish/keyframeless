@@ -13,6 +13,7 @@
 @interface TimingHost : MockHost <FxCustomParameterActionAPI_v4>
 @property CMTime playhead;
 @property NSUInteger actions;
+@property NSUInteger seeks;
 @property(nonatomic,copy) void (^readHook)(void);
 @end
 @interface MMTimingEditor (Tests)
@@ -26,6 +27,13 @@
 - (void)endAction:(id)sender {
   assert(self.actions);
   self.actions--;
+}
+- (BOOL)movePlayheadToTime:(CMTime)time error:(NSError **)error {
+  (void)error;
+  assert(self.actions>0);
+  self.seeks++;
+  self.playhead=time;
+  return NO; // FCP may report failure even though the seek applied.
 }
 - (CMTime)currentTime {
   return self.playhead;
@@ -345,6 +353,11 @@ static void testEditorActions(void) {
   window.releasedWhenClosed = NO;
   MMTimingEditor *panel = [[MMTimingEditor alloc] initWithPlugin:plugin];
   [window.contentView addSubview:panel];
+  for (NSString *key in @[@"easingMenu", @"motionMenu"]) {
+    NSPopUpButton *menu=[panel valueForKey:key];
+    assert(menu.controlSize==NSControlSizeRegular);
+    assert([menu.font isEqual:[NSFont menuFontOfSize:0]]);
+  }
   ICInspectorRow *duration = [panel valueForKey:@"durationRow"];
   assert(duration.fields[0].enabled && duration.fields[0].doubleValue == 1.2);
   assert([[[panel valueForKey:@"gapLabel"] stringValue] isEqualToString:@"0s → 4s"]);
@@ -414,6 +427,11 @@ static void testEditorActions(void) {
   host.playhead = TestTime(5);
   [panel refresh];
   assert(!duration.fields[0].enabled);
+  for (ICInspectorRow *disabledRow in @[duration, [panel valueForKey:@"motionRow"]]) {
+    assert([disabledRow.titleLabel.textColor isEqual:ICInspectorTokens.disabledTextColor]);
+    for (NSTextField *decoration in [disabledRow.axisLabels arrayByAddingObjectsFromArray:disabledRow.unitLabels])
+      assert([decoration.textColor isEqual:ICInspectorTokens.disabledTextColor]);
+  }
   plugin.activeInspectorParameterID=MMCustomControls;
   [panel refresh];
   assert(plugin.activeInspectorParameterID == MMCustomControls &&
@@ -475,6 +493,32 @@ static void testStaggeredLinkedGraph(void) {
   [window.contentView addSubview:panel];
   [panel refresh];
   assert(([plugin.graphedInspectorParameters isEqualToSet:[NSSet setWithArray:@[@(MMCustomControls),@(MMScaleControls)]]]));
+  [panel layoutSubtreeIfNeeded];
+  NSView *scrubGraph=[panel valueForKey:@"graph"];
+  NSUInteger writes=host.hostWrites, groups=host.undoGroupsStarted;
+  NSEvent *(^event)(NSEventType,double)=^NSEvent *(NSEventType type,double fraction) {
+    NSRect plot=NSInsetRect(scrubGraph.bounds,8,8);
+    NSPoint p=[scrubGraph convertPoint:NSMakePoint(NSMinX(plot)+fraction*NSWidth(plot),NSMidY(plot)) toView:nil];
+    return [NSEvent mouseEventWithType:type location:p modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
+  };
+  [scrubGraph mouseDown:event(NSEventTypeLeftMouseDown,0.25)];
+  assert(fabs(CMTimeGetSeconds(host.playhead)-1)<1e-6);
+  [panel refresh]; // selected Scale has not started, but the combined range stays fixed.
+  [scrubGraph mouseDragged:event(NSEventTypeLeftMouseDragged,-1)];
+  assert(CMTimeCompare(host.playhead,TestTime(0))==0);
+  [panel refresh];
+  [scrubGraph mouseDragged:event(NSEventTypeLeftMouseDragged,2)];
+  assert(CMTimeCompare(host.playhead,TestTime(4))==0);
+  [scrubGraph mouseUp:event(NSEventTypeLeftMouseUp,0.75)];
+  assert(CMTimeCompare(host.playhead,TestTime(3))==0);
+  assert(host.seeks==4 && host.actions==0);
+  assert(host.hostWrites==writes && host.undoGroupsStarted==groups);
+  host.missingProtocols=[NSSet setWithObject:NSStringFromProtocol(@protocol(FxCommandAPI_v2))];
+  [scrubGraph mouseDown:event(NSEventTypeLeftMouseDown,0.5)];
+  [scrubGraph mouseUp:event(NSEventTypeLeftMouseUp,0.5)];
+  assert(host.seeks==4 && host.actions==0);
+  host.missingProtocols=[NSSet set];
   s1=[s1 poseByReplacingTiming:[s1.timing timingByReplacingLinkID:@""]];
   [host lane:MMScaleControls][1][@"value"]=s1;
   MMRefreshScalePoseCache(host,TestTime(3));

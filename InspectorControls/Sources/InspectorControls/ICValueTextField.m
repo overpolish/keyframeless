@@ -48,6 +48,19 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
   return NO;
 }
 
+// AppKit substitutes its own disabled text colour. Draw using our explicit
+// token while retaining the disabled state for editing and hit testing.
+@interface ICValueTextFieldCell : NSTextFieldCell
+@end
+@implementation ICValueTextFieldCell
+- (void)drawInteriorWithFrame:(NSRect)frame inView:(NSView *)view {
+  BOOL enabled=self.enabled;
+  if (!enabled) self.enabled=YES;
+  @try { [super drawInteriorWithFrame:frame inView:view]; }
+  @finally { if (!enabled) self.enabled=NO; }
+}
+@end
+
 @interface ICValueTextField ()
 @property(nonatomic) BOOL icNavigatingAway;
 @end
@@ -58,6 +71,13 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
   BOOL _icScrubbing;
   BOOL _inMouseDown;
   id _outsideClickMonitor;
+}
+
++ (Class)cellClass { return ICValueTextFieldCell.class; }
+
+- (void)setEnabled:(BOOL)enabled {
+  [super setEnabled:enabled];
+  self.textColor=enabled ? ICInspectorTokens.valueColor : ICInspectorTokens.disabledTextColor;
 }
 
 + (instancetype)valueField {

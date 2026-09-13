@@ -190,7 +190,7 @@
   if (!self.window || self.hiddenOrHasHiddenAncestor) return;
   if (self.interacting) return;
   // Preserve the last display while unavailable, but never allow stale edits.
-  for (NSTextField *field in self.fields) field.enabled = NO;
+  self.enabled = NO;
   id<FxCustomParameterActionAPI_v4> action = [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action) return;
   [action startAction:self];
@@ -217,7 +217,7 @@
         pose = [self.scaleCache valueTargetAtTime:time targetTime:&target] ? [self.scaleCache sampleAtTime:target] : nil;
       else pose = [self.poseCache valueTargetAtTime:time targetTime:&target] ? [self.poseCache sampleAtTime:target] : nil;
     }
-    for (NSTextField *field in self.fields) field.enabled = pose != nil;
+    self.enabled = pose != nil;
     if (!pose) return;
     for (NSTextField *field in self.fields) {
       double dimension = field.tag == MMPositionX ? self.pixelSize.width : self.pixelSize.height;

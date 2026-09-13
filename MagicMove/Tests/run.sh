@@ -31,7 +31,7 @@ for suite in ${MM_TEST_SUITES:-LinkedPosesTests ModelTests MatchEndpointsTests C
     -Wl,-rpath,"$build/Products/Debug" \
     "$root/MagicMove/Tests/$suite.m" "$root/MagicMove/Tests/MockHost.m" \
     "$core/Plugin.m" "$core/Plugin+CustomRow.m" "$core/Plugin+Links.m" "$core/Plugin+Parameters.m" \
-    "$inspector/ICMenuToggleView.m" "$inspector/InspectorTokens.m" "$inspector/ICValueTextField.m" "$inspector/ICInspectorRow.m" "$inspector/ICSliderView.m" "$inspector/ICSliderRow.m" "$core/MMPoseTiming.m" "$core/MMTimingEditorModel.m" "$core/MMTimingEditor.m" "$core/MMScalePose.m" "$core/MMScalarPose.m" "$core/MMPropertyLane.m" "$core/MMRotationPose.m" "$core/MMPropertyRow.m" "$core/MMResetParameter.m" "$core/MMNativeLinks.m" "$core/MMShortcut.m" "$core/MMCombinedPose.m" "$core/MMDestinations.m" "$render/Plugin+Render.m" \
+    "$inspector/ICPopUpButton.m" "$inspector/ICMenuToggleView.m" "$inspector/InspectorTokens.m" "$inspector/ICValueTextField.m" "$inspector/ICInspectorRow.m" "$inspector/ICSliderView.m" "$inspector/ICSliderRow.m" "$core/MMPoseTiming.m" "$core/MMTimingEditorModel.m" "$core/MMTimingEditor.m" "$core/MMScalePose.m" "$core/MMScalarPose.m" "$core/MMPropertyLane.m" "$core/MMRotationPose.m" "$core/MMPropertyRow.m" "$core/MMResetParameter.m" "$core/MMNativeLinks.m" "$core/MMShortcut.m" "$core/MMCombinedPose.m" "$core/MMDestinations.m" "$render/Plugin+Render.m" \
     "$test_tmp/MotionTiming.o" "$test_tmp/MTDurationRecords.o" -o "$test_tmp/$suite"
   DYLD_FRAMEWORK_PATH="$runtime" "$test_tmp/$suite" "$@"
 done

@@ -7,3 +7,5 @@
 #import "ICSliderRow.h"
 
 #import "ICMenuToggleView.h"
+
+#import "ICPopUpButton.h"

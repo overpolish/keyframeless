@@ -67,6 +67,7 @@
     [self addSubview:axis]; [self addSubview:field];
     [fields addObject:field]; [labels addObject:axis]; [units addObject:unit];
   }
+  _enabled=YES;
   _componentColors=@[];
   _fields=[fields copy]; _axisLabels=[labels copy]; _unitLabels=[units copy];
   __weak ICInspectorRow *weakRow = self;
@@ -89,7 +90,7 @@
   if(_selected==selected) return;
   _selected=selected;
   self.titleLabel.font=selected ? ICInspectorTokens.selectedLabelFont : ICInspectorTokens.labelFont;
-  self.titleLabel.textColor=selected ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.labelColor;
+  [self updateTextColors];
   self.needsDisplay=YES;
 }
 - (void)setKeyposeLinked:(BOOL)keyposeLinked {
@@ -112,9 +113,22 @@
   _componentColorsVisible=visible;
   [self updateComponentColors];
 }
+- (void)setEnabled:(BOOL)enabled {
+  _enabled=enabled;
+  for (ICValueTextField *field in self.fields) field.enabled=enabled;
+  [self updateTextColors];
+}
+- (void)updateTextColors {
+  self.titleLabel.textColor=!self.enabled ? ICInspectorTokens.disabledTextColor :
+      (self.selected ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.labelColor);
+  for (NSTextField *unit in self.unitLabels)
+    unit.textColor=self.enabled ? ICInspectorTokens.decorationColor : ICInspectorTokens.disabledTextColor;
+  [self updateComponentColors];
+  self.needsDisplay=YES;
+}
 - (void)updateComponentColors {
   for(NSUInteger i=0;i<self.axisLabels.count;i++)
-    self.axisLabels[i].textColor=self.componentColorsVisible && i<self.componentColors.count
+    self.axisLabels[i].textColor=!self.enabled ? ICInspectorTokens.disabledTextColor : self.componentColorsVisible && i<self.componentColors.count
         ? self.componentColors[i] : ICInspectorTokens.decorationColor;
 }
 - (BOOL)interacting {
@@ -150,7 +164,7 @@
     NSRect titleFrame = self.titleLabel.frame;
     CGFloat labelBaseline = NSMaxY(titleFrame) - self.titleLabel.firstBaselineOffsetFromTop;
     CGFloat labelTextCenter = labelBaseline + self.titleLabel.font.capHeight / 2;
-    NSRect iconFrame = NSMakeRect((ICInspectorLabelInset - ICInspectorLinkSize) / 2, round((labelTextCenter - ICInspectorLinkSize / 2) * 2) / 2,
+    NSRect iconFrame = NSMakeRect((ICInspectorLabelInset - ICInspectorLinkSize) / 2 + 2, round((labelTextCenter - ICInspectorLinkSize / 2) * 2) / 2,
                                   ICInspectorLinkSize, ICInspectorLinkSize);
     // Fit the symbol proportionally; its intrinsic canvas need not be square.
     NSSize imageSize=image.size;

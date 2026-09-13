@@ -24,6 +24,7 @@ static const CGFloat ICInspectorLinkSize = 15;
 @property(class, nonatomic, readonly) NSColor *labelColor;
 @property(class, nonatomic, readonly) NSColor *decorationColor;
 @property(class, nonatomic, readonly) NSColor *valueColor;
+@property(class, nonatomic, readonly) NSColor *disabledTextColor;
 @property(class, nonatomic, readonly) NSColor *accentMatchingHost;
 @property(class, nonatomic, readonly) NSColor *inactiveControlColor;
 @property(class, nonatomic, readonly) NSColor *selectionColor;

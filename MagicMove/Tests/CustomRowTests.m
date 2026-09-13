@@ -293,9 +293,9 @@ int main(int argc, const char *argv[]) {
       NSArray *colors=MMInspectorColors([selectionIDs[i] unsignedIntValue]);
       assert([candidate.componentColors isEqualToArray:colors]);
       for(NSUInteger axis=0;axis<candidate.axisLabels.count;axis++)
-        assert([candidate.axisLabels[axis].textColor isEqual:i==selected ? colors[axis] : ICInspectorTokens.decorationColor]);
+        assert([candidate.axisLabels[axis].textColor isEqual:!candidate.enabled ? ICInspectorTokens.disabledTextColor : (i==selected ? colors[axis] : ICInspectorTokens.decorationColor)]);
       assert([candidate.titleLabel.font isEqual:i==selected ? ICInspectorTokens.selectedLabelFont : ICInspectorTokens.labelFont]);
-      assert([candidate.titleLabel.textColor isEqual:i==selected ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.labelColor]);
+      assert([candidate.titleLabel.textColor isEqual:!candidate.enabled ? ICInspectorTokens.disabledTextColor : (i==selected ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.labelColor)]);
     }
   }
   scalePlugin.activeInspectorParameterID=MMScaleControls;
@@ -305,12 +305,12 @@ int main(int argc, const char *argv[]) {
     ICInspectorRow *candidate=selectionRows[i];
     assert(candidate.selected==(i==1));
     for (NSUInteger axis=0;axis<candidate.axisLabels.count;axis++)
-      assert([candidate.axisLabels[axis].textColor isEqual:i<2 ? MMInspectorColors([selectionIDs[i] unsignedIntValue])[axis] : ICInspectorTokens.decorationColor]);
-    for (NSTextField *suffix in candidate.unitLabels) assert([suffix.textColor isEqual:ICInspectorTokens.decorationColor]);
+      assert([candidate.axisLabels[axis].textColor isEqual:!candidate.enabled ? ICInspectorTokens.disabledTextColor : (i<2 ? MMInspectorColors([selectionIDs[i] unsignedIntValue])[axis] : ICInspectorTokens.decorationColor)]);
+    for (NSTextField *suffix in candidate.unitLabels) assert([suffix.textColor isEqual:candidate.enabled ? ICInspectorTokens.decorationColor : ICInspectorTokens.disabledTextColor]);
   }
   scalePlugin.graphedInspectorParameters=[NSSet setWithObject:@(MMScaleControls)];
   [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:scalePlugin];
-  assert([positionRow.axisLabels[0].textColor isEqual:ICInspectorTokens.decorationColor]);
+  assert([positionRow.axisLabels[0].textColor isEqual:((ICInspectorRow *)positionRow).enabled ? ICInspectorTokens.decorationColor : ICInspectorTokens.disabledTextColor]);
   scalePlugin.activeInspectorParameterID=0;
   [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:scalePlugin];
   [positionRow removeFromSuperview]; [scaleRow removeFromSuperview];

@@ -13,9 +13,37 @@
 @property(copy) NSArray<NSBezierPath *> *curvePaths;
 @property(nonatomic, copy) NSArray<NSColor *> *componentColors;
 @property NSRect curveBounds;
+@property(nonatomic) BOOL scrubbing;
+@property(copy) void (^onScrub)(double fraction);
+@property(copy) void (^onScrubEnd)(void);
 - (void)prepareCurves;
 @end
 @implementation MMGapGraph
+- (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
+- (void)scrubEvent:(NSEvent *)event {
+  NSRect plot=NSInsetRect(self.bounds,8,8);
+  if (NSWidth(plot)<=0 || !self.onScrub) return;
+  NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
+  self.onScrub(fmax(0,fmin(1,(point.x-NSMinX(plot))/NSWidth(plot))));
+}
+- (void)mouseDown:(NSEvent *)event {
+  if (self.points.count<2 || !self.onScrub) return;
+  self.scrubbing=YES;
+  [self scrubEvent:event];
+}
+- (void)mouseDragged:(NSEvent *)event {
+  if (self.scrubbing) [self scrubEvent:event];
+}
+- (void)mouseUp:(NSEvent *)event {
+  if (!self.scrubbing) return;
+  [self scrubEvent:event];
+  self.scrubbing=NO;
+  if (self.onScrubEnd) self.onScrubEnd();
+}
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  if (!self.window) self.scrubbing=NO;
+}
 - (void)setPoints:(NSArray<NSArray<NSNumber *> *> *)points {
   if (_points == points)
     return;
@@ -100,9 +128,15 @@
            : ICInspectorTokens.accentMatchingHost) setStroke];
     [self.curvePaths[axis] stroke];
     if (self.startFractions.count && self.curvePaths[axis].elementCount) {
-      NSPoint start; [self.curvePaths[axis] elementAtIndex:0 associatedPoints:&start];
+      NSBezierPath *path=self.curvePaths[axis];
+      NSPoint start,end;
+      [path elementAtIndex:0 associatedPoints:&start];
+      [path elementAtIndex:path.elementCount-1 associatedPoints:&end];
       [(axis<self.componentColors.count ? self.componentColors[axis] : ICInspectorTokens.accentMatchingHost) setFill];
-      [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(start.x-2,start.y-2,4,4)] fill];
+      for (NSValue *value in @[[NSValue valueWithPoint:start],[NSValue valueWithPoint:end]]) {
+        NSPoint point=value.pointValue;
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(point.x-2,point.y-2,4,4)] fill];
+      }
     }
   }
   [NSColor.whiteColor setStroke];
@@ -173,10 +207,9 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
 }
 - (NSPopUpButton *)menu:(NSArray<NSString *> *)items
                 setting:(NSInteger)setting {
-  NSPopUpButton *menu = [[NSPopUpButton alloc] initWithFrame:NSZeroRect
+  NSPopUpButton *menu = [[ICPopUpButton alloc] initWithFrame:NSZeroRect
                                                    pullsDown:NO];
-  menu.controlSize = NSControlSizeSmall;
-  menu.font = ICInspectorTokens.labelFont;
+
   [menu addItemsWithTitles:items];
   menu.tag = setting;
   menu.target = self;
@@ -198,6 +231,9 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   _gapTimeFormatter.maximumFractionDigits=2;
   _graph = [MMGapGraph new];
   _graph.accessibilityLabel = @"Evaluated motion preview";
+  __weak MMTimingEditor *weakEditor=self;
+  _graph.onScrub=^(double fraction) { [weakEditor scrubGraphToFraction:fraction]; };
+  _graph.onScrubEnd=^{ [weakEditor refresh]; };
   [self addSubview:_graph];
   _durationRow = [[ICInspectorRow alloc]
       initWithLabel:@"Duration"
@@ -276,11 +312,13 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   self.graph.frame = NSMakeRect(21, 110, content, 114);
   self.durationRow.frame = NSMakeRect(0, 81, width, 24);
   self.available.frame = NSMakeRect(21, 57, MIN(145, content), 20);
+  [self.durationRow layoutSubtreeIfNeeded];
+  CGFloat menuRight=NSMaxX(self.durationRow.unitLabels.lastObject.frame);
   self.easingMenu.frame =
-      NSMakeRect(MAX(165, right - 120), 56, MIN(120, MAX(0, right - 165)), 22);
+      NSMakeRect(165, 57, MAX(0, menuRight - 165), 18);
   self.motionLabel.frame = NSMakeRect(21, 34, MAX(0, content - 122), 18);
   self.motionMenu.frame =
-      NSMakeRect(MAX(145, right - 120), 32, MIN(120, MAX(0, right - 145)), 22);
+      NSMakeRect(145, 34, MAX(0, menuRight - 145), 18);
   self.motionRow.frame = NSMakeRect(0, 5, width, 24);
   self.motionRow.titleLabel.stringValue = @"Amount / Speed";
 }
@@ -321,8 +359,8 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   MMEnable(self.easingMenu, enabled);
   MMEnable(self.motionMenu, enabled);
   for (ICInspectorRow *row in @[ self.durationRow, self.motionRow ])
-    for (ICValueTextField *field in row.fields)
-      MMEnable(field, enabled);
+    row.enabled = enabled;
+  self.motionLabel.textColor = enabled ? ICInspectorTokens.labelColor : ICInspectorTokens.disabledTextColor;
 }
 - (void)updateControlsForGap:(MMInspectorGap *)gap editing:(BOOL)editing {
   MMText(
@@ -343,7 +381,8 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   MMEnable(self.available, YES);
   MMEnable(self.easingMenu, YES);
   MMEnable(self.motionMenu, YES);
-  MMEnable(self.durationRow.fields[0], !incoming.available);
+  self.durationRow.enabled = !incoming.available;
+  self.motionLabel.textColor = ICInspectorTokens.labelColor;
   MMNumber(self.durationRow.fields[0], incoming.duration);
   NSControlStateValue available =
       incoming.available ? NSControlStateValueOn : NSControlStateValueOff;
@@ -364,8 +403,28 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
                                     (unsigned long)gap.destinationIndex]);
   MMNumber(self.motionRow.fields[0], outgoing.amount * 100);
   MMNumber(self.motionRow.fields[1], outgoing.speed);
-  for (ICValueTextField *field in self.motionRow.fields)
-    MMEnable(field, motion != MTAddedMotionNone);
+  self.motionRow.enabled = motion != MTAddedMotionNone;
+}
+- (void)scrubGraphToFraction:(double)fraction {
+  if (!self.window || self.hiddenOrHasHiddenAncestor || !self.plottedGaps.count || !isfinite(fraction)) return;
+  CMTime start=MMInspectorGraphStart(self.plottedGaps);
+  CMTime end=self.plottedGaps.firstObject.destinationTime;
+  if (!CMTIME_IS_NUMERIC(start) || !CMTIME_IS_NUMERIC(end) || CMTimeCompare(end,start)<=0) return;
+  fraction=fmax(0,fmin(1,fraction));
+  CMTime target=fraction==0 ? start : fraction==1 ? end :
+      CMTimeAdd(start,CMTimeMultiplyByFloat64(CMTimeSubtract(end,start),fraction));
+  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!action) return;
+  [action startAction:self];
+  @try {
+    id<FxCommandAPI_v2> command=[self.manager apiForProtocol:@protocol(FxCommandAPI_v2)];
+    if (!command) return;
+    // These native-key times share the action's host clock. No clip-relative
+    // fraction conversion is needed, unlike the legacy whole-clip timeline.
+    // Legacy host tests showed NO can accompany a successful FCP seek.
+    [command movePlayheadToTime:target error:nil];
+    self.graph.progress=fraction;
+  } @finally { [action endAction:self]; }
 }
 - (void)refresh {
   if (!self.window || self.hiddenOrHasHiddenAncestor)
@@ -378,7 +437,7 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
     return;
   }
   UInt32 parameter =
-      editing ? self.displayedParameter
+      (editing || self.graph.scrubbing) ? self.displayedParameter
               : (self.plugin.activeInspectorParameterID ?: MMCustomControls);
   CMTime now;
   MMInspectorGap *gap;
@@ -387,7 +446,7 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   @try {
     now = [action currentTime];
     gap = MMReadInspectorGap(self.manager, parameter, now);
-    graphGaps=MMReadInspectorGraphGaps(self.manager,parameter,now);
+    graphGaps=self.graph.scrubbing ? self.plottedGaps : MMReadInspectorGraphGaps(self.manager,parameter,now);
   } @finally {
     [action endAction:self];
   }
@@ -400,7 +459,7 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   [self updateControlsForGap:gap editing:editing];
   CMTime graphStart=MMInspectorGraphStart(graphGaps);
   CMTime graphEnd=graphGaps.firstObject.destinationTime;
-  self.graph.progress=graphGaps.count ? CMTimeGetSeconds(CMTimeSubtract(now,graphStart))/CMTimeGetSeconds(CMTimeSubtract(graphEnd,graphStart)) : 0;
+  if (!self.graph.scrubbing) self.graph.progress=graphGaps.count ? CMTimeGetSeconds(CMTimeSubtract(now,graphStart))/CMTimeGetSeconds(CMTimeSubtract(graphEnd,graphStart)) : 0;
   if (graphGaps.count)
     MMText(self.gapLabel,[NSString stringWithFormat:@"%@s → %@s",[self.gapTimeFormatter stringFromNumber:@(CMTimeGetSeconds(graphStart))],[self.gapTimeFormatter stringFromNumber:@(CMTimeGetSeconds(graphEnd))]]);
   CGSize size=self.plugin.inspectorImageSize;

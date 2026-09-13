@@ -27,6 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly, copy) NSArray<NSTextField *> *unitLabels;
 @property(nonatomic, readonly, nullable) NSButton *linkButton;
 @property(nonatomic, readonly) BOOL interacting;
+@property(nonatomic, getter=isEnabled) BOOL enabled;
 @property(nonatomic, getter=isSelected) BOOL selected;
 // Presentation-only indicator for a host-linked keypose. This is independent
 // of the optional scale/proportional linkButton.
