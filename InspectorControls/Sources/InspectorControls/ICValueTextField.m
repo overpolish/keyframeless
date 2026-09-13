@@ -102,9 +102,22 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
   _inMouseDown = NO;
 }
 
+- (void)scrubBy:(double)delta {
+  double old=self.doubleValue, value=old+delta;
+  if([self.formatter isKindOfClass:NSNumberFormatter.class]) {
+    NSNumberFormatter *formatter=(NSNumberFormatter *)self.formatter;
+    if(formatter.minimum) value=fmax(value,formatter.minimum.doubleValue);
+    if(formatter.maximum) value=fmin(value,formatter.maximum.doubleValue);
+  }
+  // Formatter bounds normally validate typed text; programmatic drag values
+  // need the same bounds before dispatch, without rejecting/beeping at an edge.
+  if(!isfinite(value) || value==old) return;
+  self.doubleValue=value;
+  [self sendAction:self.action to:self.target];
+}
+
 - (void)trackScrubFromMouseDown:(NSEvent *)event {
   double step = self.scrubStep > 0 ? self.scrubStep : 1.0;
-  double value = self.doubleValue;
   CGFloat residual = 0, startTravel = 0;
   BOOL scrubbing = NO;
   NSPoint anchor = NSEvent.mouseLocation;
@@ -132,9 +145,7 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
       NSInteger steps = ICScrubWholeStepsForTravel(residual);
       if (steps) {
         residual -= (CGFloat)steps * kICScrubPointsPerStep;
-        value += (double)steps * step * multiplier;
-        self.doubleValue = value; // Keep precision; let the formatter control the readout.
-        [self sendAction:self.action to:self.target];
+        [self scrubBy:(double)steps * step * multiplier];
       }
       if (screenHeight > 0) CGWarpMouseCursorPosition(anchorCG);
     }

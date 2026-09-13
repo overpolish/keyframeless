@@ -8,6 +8,8 @@
 #import "MMDestinations.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
+#import "MMScalarPose.h"
+#import "MMRotationPose.h"
 #import <CoreGraphics/CoreGraphics.h>
 
 // KKPlugin implements this optional FxTileableEffect callback but does not
@@ -71,6 +73,9 @@
 }
 
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == MMTimingControls) return [NSSet setWithObject:NSNumber.class];
+  if (parameterID == MMRotationControls) return [NSSet setWithObject:MMRotationPose.class];
+  if (parameterID == MMOpacityControls) return [NSSet setWithObject:MMScalarPose.class];
   if (parameterID == MMScaleControls) return [NSSet setWithObject:MMScalePose.class];
   if (parameterID == MMCustomControls) return [NSSet setWithObjects:MMCombinedPose.class, NSNumber.class, nil];
   if (parameterID == MMDurationData || parameterID == MMScaleDurationData) return [NSSet setWithObject:KKDataBlob.class];
@@ -318,6 +323,14 @@
 - (BOOL)parameterChanged:(UInt32)parameterID atTime:(CMTime)time error:(NSError **)error {
   // FxPlug callbacks can overlap the timer on another thread. Never release a
   // prepared plan while a native callback is still updating its snapshots.
+  if (parameterID == MMRotationControls || parameterID == MMRotationCacheToken) {
+    [MMRotationLane() refreshCacheForManager:self.apiManager time:time];
+    return YES;
+  }
+  if (parameterID == MMOpacityControls || parameterID == MMOpacityCacheToken) {
+    [MMOpacityLane() refreshCacheForManager:self.apiManager time:time];
+    return YES;
+  }
   if (parameterID == MMScaleControls || parameterID == MMScaleCacheToken) {
     MMRefreshScalePoseCache(self.apiManager, time);
     return YES;
@@ -352,6 +365,7 @@
     if (!old) return NO;
     MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX positionY:old.positionY scale:old.scale authored:YES easing:(MTEasing)easing addedMotion:old.addedMotion];
     id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    updated=[updated poseByReplacingTiming:old.timing];
     BOOL ok = [set setCustomParameterValue:updated toParameter:MMCustomControls atTime:targetTime];
     if (ok) self.publishedCombinedEasing = @(easing);
     return ok;
@@ -368,6 +382,7 @@
     if (!old) return NO;
     MMCombinedPose *updated = [[MMCombinedPose alloc] initWithPositionX:old.positionX positionY:old.positionY scale:old.scale authored:YES easing:old.easing addedMotion:(MTAddedMotion)motion];
     id<FxParameterSettingAPI_v5> set = [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    updated=[updated poseByReplacingTiming:old.timing];
     BOOL ok = [set setCustomParameterValue:updated toParameter:MMCustomControls atTime:targetTime];
     if (ok) self.publishedCombinedAddedMotion = @(motion);
     return ok;

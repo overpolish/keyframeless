@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AB0000000000000000000001 /* InspectorControls in Frameworks */ = {isa = PBXBuildFile; productRef = AB0000000000000000000002 /* InspectorControls */; };
 		AA0000000000000000000001 /* MotionTiming in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* MotionTiming */; };
+		AB0000000000000000000001 /* InspectorControls in Frameworks */ = {isa = PBXBuildFile; productRef = AB0000000000000000000002 /* InspectorControls */; };
 		F21396022F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
@@ -99,8 +99,15 @@
 				Plugin/Core/main.m,
 				Plugin/Core/MMCombinedPose.m,
 				Plugin/Core/MMDestinations.m,
+				Plugin/Core/MMPoseTiming.m,
+				Plugin/Core/MMPropertyLane.m,
+				Plugin/Core/MMPropertyRow.m,
+				Plugin/Core/MMRotationPose.m,
+				Plugin/Core/MMScalarPose.m,
 				Plugin/Core/MMScalePose.m,
 				Plugin/Core/MMShortcut.m,
+				Plugin/Core/MMTimingEditor.m,
+				Plugin/Core/MMTimingEditorModel.m,
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomRow.m",
 				"Plugin/Core/Plugin+Links.m",
@@ -650,26 +657,26 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		AB0000000000000000000003 /* XCLocalSwiftPackageReference "../InspectorControls" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../InspectorControls;
-		};
 		AA0000000000000000000003 /* XCLocalSwiftPackageReference "../MotionTiming" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../MotionTiming;
 		};
+		AB0000000000000000000003 /* XCLocalSwiftPackageReference "../InspectorControls" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../InspectorControls;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		AB0000000000000000000002 /* InspectorControls */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AB0000000000000000000003 /* XCLocalSwiftPackageReference "../InspectorControls" */;
-			productName = InspectorControls;
-		};
 		AA0000000000000000000002 /* MotionTiming */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000000000000000000003 /* XCLocalSwiftPackageReference "../MotionTiming" */;
 			productName = MotionTiming;
+		};
+		AB0000000000000000000002 /* InspectorControls */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AB0000000000000000000003 /* XCLocalSwiftPackageReference "../InspectorControls" */;
+			productName = InspectorControls;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

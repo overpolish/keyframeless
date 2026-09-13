@@ -4,6 +4,12 @@
 #import <math.h>
 
 @implementation MMScalePose
+- (instancetype)poseByReplacingTiming:(MMPoseTiming *)timing {
+  if (!timing) return nil;
+  MMScalePose *copy=[[MMScalePose alloc] initWithX:self.x y:self.y authored:self.authored easing:self.easing addedMotion:self.addedMotion];
+  copy->_timing=timing;
+  return copy;
+}
 + (BOOL)supportsSecureCoding {
   return YES;
 }
@@ -26,20 +32,28 @@
   if ((self = [super init])) {
     _x = x;
     _y = y;
-    _authored = authored;
+    _authored = authored; _timing=[MMPoseTiming new];
     _easing = easing;
     _addedMotion = motion;
   }
   return self;
 }
 - (instancetype)initWithCoder:(NSCoder *)c {
-  return [self initWithX:[c decodeDoubleForKey:@"x"]
+  self = [self initWithX:[c decodeDoubleForKey:@"x"]
                        y:[c decodeDoubleForKey:@"y"]
                 authored:[c decodeBoolForKey:@"authored"]
                   easing:(MTEasing)[c decodeIntegerForKey:@"easing"]
              addedMotion:(MTAddedMotion)[c decodeIntegerForKey:@"addedMotion"]];
+  if (!self) return nil;
+  if ([c containsValueForKey:@"timing"]) {
+    MMPoseTiming *timing=[c decodeObjectOfClass:MMPoseTiming.class forKey:@"timing"];
+    if (!timing) return nil;
+    _timing=timing;
+  }
+  return self;
 }
 - (void)encodeWithCoder:(NSCoder *)c {
+  [c encodeObject:self.timing forKey:@"timing"];
   [c encodeDouble:_x forKey:@"x"];
   [c encodeDouble:_y forKey:@"y"];
   [c encodeBool:_authored forKey:@"authored"];
@@ -50,12 +64,12 @@
   return self;
 }
 - (BOOL)isEqual:(id)o {
-  return [o isKindOfClass:MMScalePose.class] && _x == [o x] && _y == [o y] &&
+  return [o isKindOfClass:MMScalePose.class] && [self.timing isEqual:[o timing]] && _x == [o x] && _y == [o y] &&
          _authored == [o authored] && _easing == [o easing] &&
          _addedMotion == [o addedMotion];
 }
 - (NSUInteger)hash {
-  return @(_x).hash ^ @(_y).hash ^ (NSUInteger)_authored ^
+  return self.timing.hash ^ @(_x).hash ^ @(_y).hash ^ (NSUInteger)_authored ^
          ((NSUInteger)_easing << 8) ^ ((NSUInteger)_addedMotion << 16);
 }
 - (NSObject<NSSecureCoding, NSCopying> *)
@@ -65,11 +79,11 @@
     return self;
   MMScalePose *r = (MMScalePose *)rightValue;
   double w = fmax(0, fmin(1, weight));
-  return [[MMScalePose alloc] initWithX:_x + (r.x - _x) * w
+  return [[[MMScalePose alloc] initWithX:_x + (r.x - _x) * w
                                       y:_y + (r.y - _y) * w
                                authored:_authored || r.authored
                                  easing:w >= 1 ? r.easing : _easing
-                            addedMotion:w >= 1 ? r.addedMotion : _addedMotion];
+                            addedMotion:w >= 1 ? r.addedMotion : _addedMotion] poseByReplacingTiming:w >= 1 ? r.timing : self.timing];
 }
 @end
 
@@ -161,7 +175,7 @@ static NSArray *MMScaleEntries(id<PROAPIAccessing> manager, CMTime time,
   [a sortUsingComparator:^NSComparisonResult(NSDictionary *x, NSDictionary *y) {
     return [x[@"time"] compare:y[@"time"]];
   }];
-  return a;
+  return [a copy];
 }
 static MMScalePose *MMScaleSample(NSArray *e, CMTime t, BOOL *active,
                                   NSError **error) {
@@ -189,13 +203,13 @@ static MMScalePose *MMScaleSample(NSArray *e, CMTime t, BOOL *active,
     vals[i * 2] = p.x;
     vals[i * 2 + 1] = p.y;
     ds[i] = (MTDestination){[e[i][@"time"] doubleValue] - start,
-                            1.2,
+                            (p.timing.available && i>0 ? [e[i][@"time"] doubleValue]-[e[i-1][@"time"] doubleValue] : p.timing.duration),
                             &vals[i * 2],
                             p.easing,
                             p.addedMotion,
                             mins,
                             maxs,
-                            2};
+                            2, true, p.timing.amount, p.timing.speed};
   }
   double out[2];
   if (!MTSample(ds, n, 2, CMTimeGetSeconds(t) - start, out)) {
@@ -213,6 +227,26 @@ static MMScalePose *MMScaleSample(NSArray *e, CMTime t, BOOL *active,
 - (MMScalePose *)poseForEditingAtTime:(CMTime)time latest:(MMScalePose *)latest;
 @end
 @implementation MMScalePoseCache
+- (void)publishPose:(MMScalePose *)pose atTime:(CMTime)time
+        inSnapshot:(NSArray<NSDictionary *> *)snapshot {
+  if (!pose || !CMTIME_IS_NUMERIC(time)) return;
+  @synchronized(self) {
+    NSArray *entries=self.entries ?: snapshot;
+    for (NSUInteger i=0;i<entries.count;i++) {
+      NSDictionary *entry=entries[i];
+      if (!entry[@"nativeTime"] || fabs([entry[@"time"] doubleValue]-CMTimeGetSeconds(time))>=1e-6) continue;
+      NSMutableArray *updated=[entries mutableCopy];
+      NSMutableDictionary *key=[entry mutableCopy];
+      key[@"pose"]=pose; updated[i]=[key copy];
+      // An older render/refresh cannot overwrite this successful write.
+      self.generation++;
+      self.entries=[updated copy];
+      return;
+    }
+    // A newer snapshot removed/moved the key: do not resurrect it.
+  }
+}
+- (NSArray<NSDictionary *> *)snapshotEntries { @synchronized(self) { return self.entries; } }
 - (MMScalePose *)sampleAtTime:(CMTime)t {
   NSArray *e;
   @synchronized(self) {
@@ -304,7 +338,7 @@ MMScalePoseCache *MMCreateScalePoseCache(void) {
   }
   return c;
 }
-static MMScalePoseCache *MMScaleCacheFor(id<PROAPIAccessing> m) {
+MMScalePoseCache *MMScaleCacheForManager(id<PROAPIAccessing> m) {
   id<FxParameterRetrievalAPI_v6> g =
       [m apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSString *t = nil;
@@ -316,13 +350,13 @@ static MMScalePoseCache *MMScaleCacheFor(id<PROAPIAccessing> m) {
   }
 }
 void MMRefreshScalePoseCache(id<PROAPIAccessing> m, CMTime t) {
-  MMScalePoseCache *c = MMScaleCacheFor(m);
+  MMScalePoseCache *c = MMScaleCacheForManager(m);
   if (!c)
     return;
   NSUInteger gen;
   @synchronized(c) {
     gen = ++c.generation;
-    c.entries = nil;
+    // Keep the last complete snapshot until this read succeeds or fails.
   }
   NSArray *e = MMScaleEntries(m, t, nil);
   @synchronized(c) {
@@ -345,7 +379,7 @@ NSArray *MMReadScalePoseSamples(id<PROAPIAccessing> m,
   }
   CMTime t;
   [times[0] getValue:&t];
-  MMScalePoseCache *c = MMScaleCacheFor(m);
+  MMScalePoseCache *c = MMScaleCacheForManager(m);
   NSUInteger generation;
   @synchronized(c) {
     generation = c.generation;
@@ -428,6 +462,7 @@ BOOL MMWriteScaleComponent(id<PROAPIAccessing> m, MMScalePoseCache *c,
                                          authored:YES
                                            easing:old.easing
                                       addedMotion:old.addedMotion];
+  p=[p poseByReplacingTiming:old.timing];
   BOOL ok = p && [s setCustomParameterValue:p
                                 toParameter:MMScaleControls
                                      atTime:target];
@@ -435,3 +470,5 @@ BOOL MMWriteScaleComponent(id<PROAPIAccessing> m, MMScalePoseCache *c,
     [c publishPose:p atTime:target];
   return ok;
 }
+
+MMScalePose *MMSampleScaleSnapshot(NSArray<NSDictionary *> *entries, CMTime time) { BOOL active=NO; return MMScaleSample(entries,time,&active,nil); }

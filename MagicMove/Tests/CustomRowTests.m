@@ -2,6 +2,11 @@
 #import "MockHost.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
+#import "MMScalarPose.h"
+#import "MMRotationPose.h"
+#import "MMPropertyRow.h"
+#import "MMInspectorColors.h"
+#import "MMTimingEditor.h"
 @import InspectorControls;
 
 @interface ICValueTextField (StyleTest)
@@ -31,6 +36,12 @@ static void hostAccent(NSColor *color) {
 @property(nonatomic, readonly) NSButton *linkButton;
 @property(nonatomic, readonly) NSTextField *titleLabel;
 - (void)toggleProportional:(NSButton *)button;
+@end
+@interface MMVectorRow (RowTests)
+- (void)refreshValues;
+@end
+@interface MMScalarRow (RowTests)
+- (void)refreshValues;
 @end
 @interface RowHost : MockHost <FxCustomParameterActionAPI_v4>
 @property NSSize imageSize;
@@ -150,11 +161,10 @@ int main(int argc, const char *argv[]) {
     if ([v isKindOfClass:NSTextField.class] && [[(NSTextField *)v stringValue] isEqualToString:@"Position"])
       label=(NSTextField *)v;
   assert(label && NSMinX(label.frame)==21 && label.font.pointSize==11);
-  assert(NSMinY(replacement.fields[0].frame)==NSMinY(label.frame)-2);
+  assert(NSMinY(replacement.fields[0].frame)==NSMinY(label.frame)-1);
   NSUInteger suffixes=0;
-  for (NSView *v in replacement.subviews) {
-    if (![v isKindOfClass:NSTextField.class]) continue;
-    NSTextField *text=(NSTextField *)v;
+  for (NSTextField *text in replacement.unitLabels) {
+    assert(text.superview==nil);
     if ([text.stringValue isEqualToString:@"px"]) {
       suffixes++; assert(text.font.pointSize==11);
       NSColor *color=[text.textColor colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
@@ -218,11 +228,24 @@ int main(int argc, const char *argv[]) {
   assert(scaleRow.linkButton.state==NSControlStateValueOn);
   hostAccent(scaleRow.linkButton.contentTintColor);
   [scaleRow setNeedsLayout:YES]; [scaleRow layoutSubtreeIfNeeded];
+  // The host's trailing controls must remain outside the custom row's hit area.
+  for(CGFloat width=320;width<=550;width+=115) {
+    scaleRow.frame=NSMakeRect(13,7,width,24);
+    [scaleRow layoutSubtreeIfNeeded];
+    for(CGFloat x=width-ICInspectorHostGutter;x<width;x+=10)
+      assert([scaleRow hitTest:NSMakePoint(13+x,19)]==nil);
+    NSTextField *field=scaleRow.fields[0];
+    NSPoint center=[scaleRow convertPoint:NSMakePoint(NSMidX(field.frame),NSMidY(field.frame)) toView:scaleRow.superview];
+    assert([scaleRow hitTest:center]==field);
+  }
+
   CGFloat glyphCenter=NSMaxY(scaleRow.titleLabel.frame)-scaleRow.titleLabel.firstBaselineOffsetFromTop
       +scaleRow.titleLabel.font.capHeight/2;
   assert(fabs(NSMidY(scaleRow.linkButton.frame)-glyphCenter)<=0.25);
-  assert(NSMinY(scaleRow.fields[0].frame)==NSMinY(scaleRow.titleLabel.frame)-2);
+  assert(NSMinY(scaleRow.fields[0].frame)==NSMinY(scaleRow.titleLabel.frame)-1);
   assert([scaleRow.unitLabels[0].stringValue isEqualToString:@"%"]);
+  // Percentage decorations are painted without remote text-field views.
+  for (NSTextField *unit in scaleRow.unitLabels) assert(unit.superview==nil);
   assert([scaleRow.fields[0].stringValue isEqualToString:@"100.0"]);
   MMCustomRow *positionRow=(MMCustomRow *)[scalePlugin createViewForParameterID:MMCustomControls];
   // Opening Position must not replace Scale's cache token.
@@ -254,6 +277,126 @@ int main(int argc, const char *argv[]) {
   assert(scaleHost.starts==scaleHost.ends);
   [scaleRow removeFromSuperview];
   (void)positionRow;
+  MMScalarRow *opacityRow=(MMScalarRow *)[scalePlugin createViewForParameterID:MMOpacityControls];
+  [window.contentView addSubview:opacityRow]; [opacityRow refreshValues];
+  [window.contentView addSubview:positionRow];
+  [window.contentView addSubview:scaleRow];
+  NSArray<ICInspectorRow *> *selectionRows=@[(ICInspectorRow *)positionRow,(ICInspectorRow *)scaleRow,opacityRow];
+  NSArray *selectionIDs=@[@(MMCustomControls),@(MMScaleControls),@(MMOpacityControls)];
+  for(NSUInteger selected=0;selected<selectionRows.count;selected++) {
+    scalePlugin.activeInspectorParameterID=[selectionIDs[selected] unsignedIntValue];
+    [NSNotificationCenter.defaultCenter postNotificationName:@"MMActiveRowChanged" object:scalePlugin];
+    for(NSUInteger i=0;i<selectionRows.count;i++) {
+      ICInspectorRow *candidate=selectionRows[i];
+      assert(candidate.selected==(i==selected));
+      NSArray *colors=MMInspectorColors([selectionIDs[i] unsignedIntValue]);
+      assert([candidate.componentColors isEqualToArray:colors]);
+      for(NSUInteger axis=0;axis<candidate.axisLabels.count;axis++)
+        assert([candidate.axisLabels[axis].textColor isEqual:i==selected ? colors[axis] : ICInspectorTokens.decorationColor]);
+      assert([candidate.titleLabel.font isEqual:i==selected ? ICInspectorTokens.selectedLabelFont : ICInspectorTokens.labelFont]);
+      assert([candidate.titleLabel.textColor isEqual:i==selected ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.labelColor]);
+    }
+  }
+  scalePlugin.activeInspectorParameterID=0;
+  [NSNotificationCenter.defaultCenter postNotificationName:@"MMActiveRowChanged" object:scalePlugin];
+  [positionRow removeFromSuperview]; [scaleRow removeFromSuperview];
+  assert([opacityRow.titleLabel.stringValue isEqualToString:@"Opacity"]);
+  assert(opacityRow.fields[0].enabled && opacityRow.sliderView.enabled);
+  assert(opacityRow.fields[0].doubleValue==100 && opacityRow.sliderView.doubleValue==100);
+  assert(opacityRow.unitLabels[0].superview==nil);
+  for(CGFloat width=320;width<=550;width+=115) {
+    opacityRow.frame=NSMakeRect(13,7,width,24); [opacityRow setNeedsLayout:YES]; [opacityRow layoutSubtreeIfNeeded];
+    assert([opacityRow hitTest:NSMakePoint(13+width-60,19)]==nil);
+    assert(NSMaxX(opacityRow.sliderView.frame)<NSMinX(opacityRow.fields[0].frame));
+  }
+  NSUInteger opacityGroups=scaleHost.undoGroupsStarted, opacityReads=scaleHost.nativeKeyReads;
+  opacityRow.onScrubBegin();
+  opacityRow.fields[0].doubleValue=75; opacityRow.onValueCommit(opacityRow.fields[0]);
+  opacityRow.fields[0].doubleValue=50; opacityRow.onValueCommit(opacityRow.fields[0]);
+  opacityRow.onScrubEnd(); [opacityRow refreshValues];
+  assert(scaleHost.undoGroupsStarted==opacityGroups+1 && scaleHost.undoDepth==0);
+  assert(((MMScalarPose *)scaleHost.blobs[@(MMOpacityControls)]).value==50);
+  assert(opacityRow.fields[0].doubleValue==50 && opacityRow.sliderView.doubleValue==50);
+  // Refresh does not enumerate keys, and unavailable snapshots keep readouts
+  // while preventing stale writes through either input.
+  opacityReads=scaleHost.nativeKeyReads; [opacityRow refreshValues];
+  assert(scaleHost.nativeKeyReads==opacityReads);
+  scaleHost.failReadParameter=MMOpacityControls;
+  [MMOpacityLane() refreshCacheForManager:scaleHost time:kCMTimeZero]; [opacityRow refreshValues];
+  assert(!opacityRow.fields[0].enabled && !opacityRow.sliderView.enabled && opacityRow.fields[0].doubleValue==50);
+  scaleHost.failReadParameter=0; [MMOpacityLane() refreshCacheForManager:scaleHost time:kCMTimeZero];
+  [opacityRow refreshValues]; assert(opacityRow.fields[0].enabled && opacityRow.sliderView.enabled);
+  assert(scaleHost.starts==scaleHost.ends);
+  [opacityRow removeFromSuperview];
+  MMVectorRow *rotationRow=(MMVectorRow *)[scalePlugin createViewForParameterID:MMRotationControls];
+  [window.contentView addSubview:rotationRow]; [rotationRow refreshValues];
+  assert(rotationRow.fields.count==3 && [rotationRow.titleLabel.stringValue isEqualToString:@"Rotation"]);
+  for(ICValueTextField *field in rotationRow.fields) assert(field.enabled && field.doubleValue==0);
+  for(NSTextField *unit in rotationRow.unitLabels) assert(unit.superview==nil && [unit.stringValue isEqualToString:@"°"]);
+  for(CGFloat width=320;width<=550;width+=115) {
+    rotationRow.frame=NSMakeRect(13,7,width,24); [rotationRow setNeedsLayout:YES]; [rotationRow layoutSubtreeIfNeeded];
+    assert([rotationRow hitTest:NSMakePoint(13+width-60,19)]==nil);
+    assert(NSWidth(rotationRow.titleLabel.frame)>40);
+    for(NSUInteger axis=0;axis<3;axis++) {
+      assert(NSWidth(rotationRow.fields[axis].frame)>20);
+      assert(NSMaxX(rotationRow.fields[axis].frame)<=NSMinX(rotationRow.unitLabels[axis].frame));
+      assert(NSMaxX(rotationRow.unitLabels[axis].frame)<=width-ICInspectorHostGutter);
+    }
+  }
+  NSUInteger rotationGroups=scaleHost.undoGroupsStarted;
+  rotationRow.onScrubBegin();
+  rotationRow.fields[0].doubleValue=720; rotationRow.onValueCommit(rotationRow.fields[0]);
+  rotationRow.fields[2].doubleValue=-360; rotationRow.onValueCommit(rotationRow.fields[2]);
+  rotationRow.onScrubEnd(); [rotationRow refreshValues];
+  assert(scaleHost.undoGroupsStarted==rotationGroups+1 && scaleHost.undoDepth==0);
+  assert(rotationRow.fields[0].doubleValue==720 && rotationRow.fields[1].doubleValue==0 && rotationRow.fields[2].doubleValue==-360);
+  scalePlugin.activeInspectorParameterID=MMRotationControls;
+  [NSNotificationCenter.defaultCenter postNotificationName:@"MMActiveRowChanged" object:scalePlugin];
+  assert(rotationRow.selected);
+  for(NSUInteger axis=0;axis<3;axis++) assert([rotationRow.axisLabels[axis].textColor isEqual:MMInspectorColors(MMRotationControls)[axis]]);
+  MMPropertyPoseCache *rotationCache=[MMRotationLane() cacheForManager:scaleHost];
+  CMTime firstTime=TestTime(0),lastTime=TestTime(4);
+  NSArray *rotationEntries=@[
+    @{@"time":@0,@"nativeTime":[NSValue valueWithBytes:&firstTime objCType:@encode(CMTime)],@"pose":MMRotationLane().defaultPose},
+    @{@"time":@4,@"nativeTime":[NSValue valueWithBytes:&lastTime objCType:@encode(CMTime)],@"pose":scaleHost.blobs[@(MMRotationControls)]}];
+  [rotationCache setValue:rotationEntries forKey:@"entries"];
+  MMTimingEditor *rotationPanel=[[MMTimingEditor alloc] initWithPlugin:scalePlugin];
+  [window.contentView addSubview:rotationPanel];
+  NSView *rotationGraph=[rotationPanel valueForKey:@"graph"];
+  [rotationGraph performSelector:@selector(prepareCurves)];
+  assert([[rotationGraph valueForKey:@"curvePaths"] count]==3);
+  assert([[rotationGraph valueForKey:@"componentColors"] isEqualToArray:MMInspectorColors(MMRotationControls)]);
+  [rotationPanel removeFromSuperview]; [rotationRow removeFromSuperview];
+  scalePlugin.activeInspectorParameterID=0;
+  // The shared panel is independent of native keyframe controls and survives
+  // opening before a cache snapshot is available.
+  MMTimingEditor *panel=[[MMTimingEditor alloc] initWithPlugin:scalePlugin];
+  panel.frame=NSMakeRect(0,0,395,256);
+  [window.contentView addSubview:panel];
+  assert(![[panel valueForKey:@"available"] isEnabled]);
+  [panel layoutSubtreeIfNeeded];
+  for(NSView *child in panel.subviews) {
+    assert(NSMinY(child.frame)>=0 && NSMaxY(child.frame)<=NSHeight(panel.bounds));
+    assert(NSMinX(child.frame)>=0 && NSMaxX(child.frame)<=NSWidth(panel.bounds));
+  }
+  NSString *previewPath=NSProcessInfo.processInfo.environment[@"MM_TIMING_PREVIEW"];
+  if(previewPath) {
+    MMScalePose *a=[[MMScalePose alloc] initWithX:100 y:80 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionWave];
+    MMScalePose *b=[[MMScalePose alloc] initWithX:180 y:140 authored:YES];
+    CMTime first=TestTime(0),last=TestTime(3);
+    NSArray *entries=@[
+      @{@"time":@0,@"nativeTime":[NSValue valueWithBytes:&first objCType:@encode(CMTime)],@"pose":a},
+      @{@"time":@3,@"nativeTime":[NSValue valueWithBytes:&last objCType:@encode(CMTime)],@"pose":b}];
+    [MMScaleCacheForManager(scaleHost) setValue:entries forKey:@"entries"];
+    scalePlugin.activeInspectorParameterID=MMScaleControls;
+    [panel performSelector:@selector(refresh)];
+    panel.appearance=[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+    [panel layoutSubtreeIfNeeded];
+    NSBitmapImageRep *bitmap=[panel bitmapImageRepForCachingDisplayInRect:panel.bounds];
+    [panel cacheDisplayInRect:panel.bounds toBitmapImageRep:bitmap];
+    [[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:previewPath atomically:YES];
+  }
+  [panel removeFromSuperview];
   [window close];
   puts("Custom row: empty loading state, delayed values, immediate attachment refresh, zero values, unavailable snapshots and no refresh keyframe reads passed");
  }

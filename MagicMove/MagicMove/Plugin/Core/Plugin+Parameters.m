@@ -3,6 +3,8 @@
 #import "Plugin_Private.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
+#import "MMScalarPose.h"
+#import "MMRotationPose.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -13,12 +15,23 @@
   BOOL ok = api && [api addToggleButtonWithName:@"Legacy Link Properties"
                                   parameterID:MMLinkProperties defaultValue:NO
                                parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
-  ok = ok && [api addCustomParameterWithName:@"" parameterID:MMCustomControls
-                                defaultValue:[[MMCombinedPose alloc] initWithPositionX:0 scale:100 authored:NO]
-                              parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
   ok = ok && [api addCustomParameterWithName:@"" parameterID:MMScaleControls
                                 defaultValue:[[MMScalePose alloc] initWithX:100 y:100 authored:NO]
                               parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
+  ok = ok && [api addCustomParameterWithName:@"" parameterID:MMCustomControls
+                                defaultValue:[[MMCombinedPose alloc] initWithPositionX:0 scale:100 authored:NO]
+                              parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
+  ok = ok && [api addCustomParameterWithName:@"" parameterID:MMRotationControls defaultValue:(id)MMRotationLane().defaultPose
+      parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
+  ok = ok && [api addStringParameterWithName:@"Rotation view cache" parameterID:MMRotationCacheToken defaultValue:@""
+      parameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
+  ok = ok && [api addCustomParameterWithName:@"" parameterID:MMOpacityControls
+      defaultValue:[[MMScalarPose alloc] initWithValue:100 authored:NO easing:MTEasingSmooth addedMotion:MTAddedMotionNone]
+      parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
+  ok = ok && [api addStringParameterWithName:@"Opacity view cache" parameterID:MMOpacityCacheToken defaultValue:@""
+      parameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
+  ok = ok && [api addCustomParameterWithName:@"" parameterID:MMTimingControls defaultValue:@0
+      parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   ok = ok && [api addStringParameterWithName:@"Scale view cache" parameterID:MMScaleCacheToken
                                 defaultValue:@"" parameterFlags:(kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];

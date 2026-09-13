@@ -64,12 +64,20 @@ static void testParameterContract(void) {
     if (!([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN))
       visible++;
   }
-  assert(visible == 2); // Position and Scale UI checkpoint; saved legacy parameters remain hidden.
+  assert(visible == 5); // Position, Scale, Rotation, Opacity and one shared timing editor.
+  UInt32 timingFlags=[h.flags[@(MMTimingControls)] unsignedIntValue];
+  assert(timingFlags & kFxParameterFlag_NOT_ANIMATABLE);
+  assert(timingFlags & kFxParameterFlag_DONT_SAVE);
   assert([h.definitions[@(MMCustomControls)][@"name"] isEqualToString:@""]);
   UInt32 customFlags = [h.flags[@(MMCustomControls)] unsignedIntValue];
   assert(customFlags & kFxParameterFlag_CUSTOM_UI);
   assert(!(customFlags & kFxParameterFlag_NOT_ANIMATABLE));
   assert(!(customFlags & kFxParameterFlag_DONT_SAVE));
+  UInt32 opacityFlags=[h.flags[@(MMOpacityControls)] unsignedIntValue];
+  assert(opacityFlags & kFxParameterFlag_CUSTOM_UI);
+  assert(opacityFlags & kFxParameterFlag_USE_FULL_VIEW_WIDTH);
+  assert(!(opacityFlags & (kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)));
+  assert([h.definitions[@(MMOpacityControls)][@"name"] isEqualToString:@""]);
   UInt32 scaleFlags=[h.flags[@(MMScaleControls)] unsignedIntValue];
   assert(scaleFlags & kFxParameterFlag_CUSTOM_UI);
   assert(!(scaleFlags & (kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)));
@@ -103,7 +111,7 @@ static void testParameterContract(void) {
   // Editor state changes must not reveal hidden rows during scrubbing.
   [f.plugin updateTimingEditorsAtTime:TestTime(1) mouseDown:NO error:nil];
   for (NSNumber *key in h.definitions)
-    if (key.unsignedIntValue != MMCustomControls && key.unsignedIntValue != MMScaleControls)
+    if (key.unsignedIntValue != MMCustomControls && key.unsignedIntValue != MMScaleControls && key.unsignedIntValue != MMTimingControls && key.unsignedIntValue != MMOpacityControls && key.unsignedIntValue != MMRotationControls)
       assert([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN);
   NSDictionary *properties = nil;
   assert([f.plugin properties:&properties error:nil]);

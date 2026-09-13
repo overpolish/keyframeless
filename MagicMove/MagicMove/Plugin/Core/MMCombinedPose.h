@@ -2,6 +2,7 @@
 #pragma once
 #import <FxPlug/FxPlugSDK.h>
 @import MotionTiming;
+#import "MMPoseTiming.h"
 
 // One host key stores both components; native key times remain authoritative.
 @interface MMCombinedPose : NSObject <NSSecureCoding, NSCopying, FxCustomParameterInterpolation_v2>
@@ -9,6 +10,8 @@
 @property(nonatomic, readonly) double positionY;
 @property(nonatomic, readonly) double scale;
 @property(nonatomic, readonly) BOOL authored;
+@property(nonatomic, readonly) MMPoseTiming *timing;
+- (MMCombinedPose *)poseByReplacingTiming:(MMPoseTiming *)timing;
 @property(nonatomic, readonly) MTEasing easing;
 @property(nonatomic, readonly) MTAddedMotion addedMotion;
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing addedMotion:(MTAddedMotion)addedMotion;
@@ -28,6 +31,11 @@ MMCombinedPose *MMReadCombinedPose(id<PROAPIAccessing> manager, CMTime time,
 // serialized into poses. All key enumeration stays in host callbacks/rendering.
 @interface MMCombinedPoseCache : NSObject
 @property(nonatomic, readonly) NSString *token;
+- (NSArray<NSDictionary *> *)snapshotEntries;
+// Publish a successful existing-key write without host enumeration. The pre-write
+// snapshot can restore an unavailable cache after the successful write.
+- (void)publishPose:(MMCombinedPose *)pose atTime:(CMTime)time
+        inSnapshot:(NSArray<NSDictionary *> *)snapshot;
 - (MMCombinedPose *)sampleAtTime:(CMTime)time;
 - (BOOL)valueTargetAtTime:(CMTime)time targetTime:(CMTime *)target;
 - (MMCombinedPose *)poseForEditingAtTime:(CMTime)time latestValue:(MMCombinedPose *)latest;
@@ -46,3 +54,7 @@ BOOL MMCombinedOutgoingMotion(id<PROAPIAccessing> manager, CMTime time, int *mot
 // Reads one native snapshot, then evaluates all shutter times without host reads.
 NSArray<MMCombinedPose *> *MMReadCombinedPoseSamples(id<PROAPIAccessing> manager,
     NSArray<NSValue *> *times, BOOL *active, NSError **error);
+
+MMCombinedPoseCache *MMCombinedCacheForManager(id<PROAPIAccessing> manager);
+
+MMCombinedPose *MMSampleCombinedSnapshot(NSArray<NSDictionary *> *entries, CMTime time);

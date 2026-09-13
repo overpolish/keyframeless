@@ -20,6 +20,9 @@ typedef struct {
     const double *modulationMins; // Optional per-component zero-centred range.
     const double *modulationMaxs;
     size_t modulationRangeCount;
+    bool customMotion; // When true, use motionAmount and motionSpeed below.
+    double motionAmount; // Motion intensity; must be finite and nonnegative when custom.
+    double motionSpeed; // Motion frequency multiplier; must be finite and positive when custom.
 } MTDestination;
 
 /// Holds the preceding destination until arrival-duration, then smoothly
@@ -28,8 +31,8 @@ typedef struct {
 /// Destinations must have finite, nonnegative times/durations, strictly
 /// increasing arrivals, and componentCount finite values each. Returns false
 /// for invalid input and leaves output untouched. No allocation or host state.
-/// Outgoing addedMotion uses fixed legacy intensity/frequency=1 and deterministic
-/// per-component seed variation. Motion covers the full gap; joins touching
+/// Outgoing addedMotion uses legacy intensity/frequency=1 unless customMotion is true,
+/// in which case motionAmount and motionSpeed control intensity and frequency. Motion covers the full gap; joins touching
 /// motion use the legacy 0.42-span Hermite blend and pass through each key exactly.
 /// Optional modulation ranges have modulationRangeCount entries in both arrays;
 /// they supply quarter-range amplitude when a component value is zero.

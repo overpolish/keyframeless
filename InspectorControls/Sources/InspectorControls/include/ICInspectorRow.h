@@ -22,9 +22,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) NSTextField *titleLabel;
 @property(nonatomic, readonly, copy) NSArray<ICValueTextField *> *fields;
 @property(nonatomic, readonly, copy) NSArray<NSTextField *> *axisLabels;
+// Suffix layout/style holders, deliberately outside the view hierarchy. The row
+// draws their cells; set needsDisplay on the row after changing their appearance.
 @property(nonatomic, readonly, copy) NSArray<NSTextField *> *unitLabels;
 @property(nonatomic, readonly, nullable) NSButton *linkButton;
 @property(nonatomic, readonly) BOOL interacting;
+@property(nonatomic, getter=isSelected) BOOL selected;
+// Presentation-only colors in component order; selected axes use these colors.
+@property(nonatomic, copy) NSArray<NSColor *> *componentColors;
 @property(nonatomic, copy, nullable) void (^onValueCommit)(ICValueTextField *field);
 @property(nonatomic, copy, nullable) void (^onScrubBegin)(void);
 @property(nonatomic, copy, nullable) void (^onScrubEnd)(void);

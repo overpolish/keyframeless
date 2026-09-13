@@ -51,7 +51,10 @@ label/tooltip and handles `onLinkToggle`, including saved state and tint updates
 Use weak captures when a callback refers back to its owning adapter.
 
 `ICValueTextField` and `ICInspectorTokens` can also be used independently of the
-row. Layout supports a nonempty component array; the validated two-component rows
+row. Numeric scrubbing respects the attached `NSNumberFormatter` minimum and
+maximum before dispatching a value. Further travel at a bound sends no action;
+reversing direction immediately changes the value without accumulated overshoot.
+Layout supports a nonempty component array; the validated two-component rows
 retain their exact spacing and numeric baseline offset. OSC controls are outside
 this package's scope.
 

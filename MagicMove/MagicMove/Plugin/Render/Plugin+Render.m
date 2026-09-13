@@ -5,6 +5,8 @@
 #import "MMDestinations.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
+#import "MMScalarPose.h"
+#import "MMRotationPose.h"
 @import MotionTiming;
 #import <math.h>
 
@@ -85,6 +87,19 @@ static BOOL MMError(NSError **error, NSString *message) {
   if (scaleActive) for (NSUInteger sample=0; sample<times.count; ++sample) {
     states[sample].scale = scales[sample].x/100;
     states[sample].scaleY = scales[sample].y/100;
+  }
+  NSArray<MMScalarPose *> *opacities=[MMOpacityLane() readSamples:self.apiManager times:times error:error];
+  if(!opacities) return NO;
+  for(NSUInteger sample=0;sample<times.count;sample++)
+    states[sample].opacity=fmax(0,fmin(1,opacities[sample].value/100));
+  NSArray<id<MMPropertyPose>> *rotations=[MMRotationLane() readSamples:self.apiManager times:times error:error];
+  if(!rotations) return NO;
+  for(NSUInteger sample=0;sample<times.count;sample++) {
+    NSArray<NSNumber *> *angles=rotations[sample].values;
+    // Reduce only for trigonometry; authored degrees and timing remain unwrapped.
+    states[sample].rotationX=fmod(angles[0].doubleValue,360)*M_PI/180;
+    states[sample].rotationY=fmod(angles[1].doubleValue,360)*M_PI/180;
+    states[sample].rotation=fmod(angles[2].doubleValue,360)*M_PI/180;
   }
   // Preserve the one-transform unblurred payload. Blur adds all shutter samples
   // followed by its shared renderer state; sample zero is always renderTime.

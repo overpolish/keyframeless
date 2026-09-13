@@ -5,6 +5,12 @@
 @import MotionTiming;
 
 @implementation MMCombinedPose
+- (instancetype)poseByReplacingTiming:(MMPoseTiming *)timing {
+  if (!timing) return nil;
+  MMCombinedPose *copy=[[MMCombinedPose alloc] initWithPositionX:self.positionX positionY:self.positionY scale:self.scale authored:self.authored easing:self.easing addedMotion:self.addedMotion];
+  copy->_timing=timing;
+  return copy;
+}
 + (BOOL)supportsSecureCoding { return YES; }
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored {
   return [self initWithPositionX:x scale:scale authored:authored easing:MTEasingSmooth];
@@ -15,7 +21,7 @@
 - (instancetype)initWithPositionX:(double)x positionY:(double)y scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing addedMotion:(MTAddedMotion)addedMotion {
   if (addedMotion < MTAddedMotionNone || addedMotion > MTAddedMotionHandheld) return nil;
   if (!isfinite(x) || !isfinite(y) || !isfinite(scale) || easing < MTEasingSmooth || easing > MTEasingEaseOut) return nil;
-  if ((self = [super init])) { _positionX = x; _positionY = y; _scale = scale; _authored = authored; _easing = easing; _addedMotion = addedMotion; }
+  if ((self = [super init])) { _positionX = x; _positionY = y; _scale = scale; _authored = authored; _timing=[MMPoseTiming new]; _easing = easing; _addedMotion = addedMotion; }
   return self;
 }
 - (instancetype)initWithPositionX:(double)x scale:(double)scale authored:(BOOL)authored easing:(MTEasing)easing addedMotion:(MTAddedMotion)addedMotion {
@@ -28,12 +34,20 @@
   return [self initWithPositionX:x positionY:y scale:scale authored:authored easing:MTEasingSmooth];
 }
 - (instancetype)initWithCoder:(NSCoder *)coder {
-  return [self initWithPositionX:[coder decodeDoubleForKey:@"x"]
+  self = [self initWithPositionX:[coder decodeDoubleForKey:@"x"]
                         positionY:[coder decodeDoubleForKey:@"y"]
                           scale:[coder decodeDoubleForKey:@"scale"]
                        authored:[coder decodeBoolForKey:@"authored"] easing:(MTEasing)[coder decodeIntegerForKey:@"easing"] addedMotion:(MTAddedMotion)[coder decodeIntegerForKey:@"addedMotion"]];
+  if (!self) return nil;
+  if ([coder containsValueForKey:@"timing"]) {
+    MMPoseTiming *timing=[coder decodeObjectOfClass:MMPoseTiming.class forKey:@"timing"];
+    if (!timing) return nil;
+    _timing=timing;
+  }
+  return self;
 }
 - (void)encodeWithCoder:(NSCoder *)coder {
+  [coder encodeObject:self.timing forKey:@"timing"];
   [coder encodeDouble:self.positionX forKey:@"x"];
   [coder encodeDouble:self.positionY forKey:@"y"];
   [coder encodeDouble:self.scale forKey:@"scale"];
@@ -45,17 +59,17 @@
 - (BOOL)isEqual:(id)object {
   if (![object isKindOfClass:MMCombinedPose.class]) return NO;
   MMCombinedPose *other = object;
-  return self.positionX == other.positionX && self.positionY == other.positionY && self.scale == other.scale && self.authored == other.authored && self.easing == other.easing && self.addedMotion == other.addedMotion;
+  return [self.timing isEqual:other.timing] && self.positionX == other.positionX && self.positionY == other.positionY && self.scale == other.scale && self.authored == other.authored && self.easing == other.easing && self.addedMotion == other.addedMotion;
 }
-- (NSUInteger)hash { return @(self.positionX).hash ^ @(self.positionY).hash ^ @(self.scale).hash ^ (NSUInteger)self.authored ^ (NSUInteger)self.easing ^ ((NSUInteger)self.addedMotion << 8); }
+- (NSUInteger)hash { return self.timing.hash ^ @(self.positionX).hash ^ @(self.positionY).hash ^ @(self.scale).hash ^ (NSUInteger)self.authored ^ (NSUInteger)self.easing ^ ((NSUInteger)self.addedMotion << 8); }
 - (NSObject<NSSecureCoding, NSCopying> *)interpolateBetween:(NSObject<NSSecureCoding, NSCopying> *)rightValue withWeight:(float)weight {
   if (![rightValue isKindOfClass:MMCombinedPose.class] || !isfinite(weight)) return self;
   MMCombinedPose *right = (MMCombinedPose *)rightValue;
   double w = fmax(0, fmin(1, weight));
-  return [[MMCombinedPose alloc] initWithPositionX:self.positionX + (right.positionX-self.positionX)*w
+  return [[[MMCombinedPose alloc] initWithPositionX:self.positionX + (right.positionX-self.positionX)*w
                                           positionY:self.positionY + (right.positionY-self.positionY)*w
                                            scale:self.scale + (right.scale-self.scale)*w
-                                        authored:self.authored || right.authored easing:w >= 1 ? right.easing : self.easing addedMotion:w >= 1 ? right.addedMotion : self.addedMotion];
+                                        authored:self.authored || right.authored easing:w >= 1 ? right.easing : self.easing addedMotion:w >= 1 ? right.addedMotion : self.addedMotion] poseByReplacingTiming:w >= 1 ? right.timing : self.timing];
 }
 @end
 
@@ -120,7 +134,7 @@ static MMCombinedPose *MMSampleCombinedEntries(NSArray *entries, CMTime time, BO
   for (NSUInteger i=0; i<count; ++i) {
     MMCombinedPose *pose = entries[i][@"pose"];
     components[i*3] = pose.positionX; components[i*3+1] = pose.scale; components[i*3+2] = pose.positionY;
-    destinations[i] = (MTDestination){[entries[i][@"time"] doubleValue]-start, 1.2, &components[i*3], pose.easing, pose.addedMotion, motionMins, motionMaxs, 3};
+    destinations[i] = (MTDestination){[entries[i][@"time"] doubleValue]-start, (pose.timing.available && i>0 ? [entries[i][@"time"] doubleValue]-[entries[i-1][@"time"] doubleValue] : pose.timing.duration), &components[i*3], pose.easing, pose.addedMotion, motionMins, motionMaxs, 3, true, pose.timing.amount, pose.timing.speed};
   }
   double result[3];
   if (!MTSample(destinations, count, 3, CMTimeGetSeconds(time)-start, result)) return MMCombinedFailure(error);
@@ -134,6 +148,26 @@ static MMCombinedPose *MMSampleCombinedEntries(NSArray *entries, CMTime time, BO
 @property(nonatomic) NSUInteger generation;
 @end
 @implementation MMCombinedPoseCache
+- (void)publishPose:(MMCombinedPose *)pose atTime:(CMTime)time
+        inSnapshot:(NSArray<NSDictionary *> *)snapshot {
+  if (!pose || !CMTIME_IS_NUMERIC(time)) return;
+  @synchronized(self) {
+    NSArray *entries=self.entries ?: snapshot;
+    for (NSUInteger i=0;i<entries.count;i++) {
+      NSDictionary *entry=entries[i];
+      if (!entry[@"nativeTime"] || fabs([entry[@"time"] doubleValue]-CMTimeGetSeconds(time))>=1e-6) continue;
+      NSMutableArray *updated=[entries mutableCopy];
+      NSMutableDictionary *key=[entry mutableCopy];
+      key[@"pose"]=pose; updated[i]=[key copy];
+      // An older render/refresh cannot overwrite this successful write.
+      self.generation++;
+      self.entries=[updated copy];
+      return;
+    }
+    // A newer snapshot removed/moved the key: do not resurrect it.
+  }
+}
+- (NSArray<NSDictionary *> *)snapshotEntries { @synchronized(self) { return self.entries; } }
 - (BOOL)valueTargetAtTime:(CMTime)time targetTime:(CMTime *)target {
   if (!CMTIME_IS_NUMERIC(time)) return NO;
   NSArray *entries;
@@ -182,7 +216,7 @@ MMCombinedPoseCache *MMCreateCombinedPoseCache(void) {
   @synchronized (caches) { [caches setObject:cache forKey:cache.token]; }
   return cache;
 }
-static MMCombinedPoseCache *MMCacheForManager(id<PROAPIAccessing> manager) {
+MMCombinedPoseCache *MMCombinedCacheForManager(id<PROAPIAccessing> manager) {
   id<FxParameterRetrievalAPI_v6> get = [manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSString *token = nil;
   if (![get getStringParameterValue:&token fromParameter:MMCombinedCacheToken] || !token.length) return nil;
@@ -199,11 +233,11 @@ static void MMPublishCache(MMCombinedPoseCache *cache, NSArray *entries, NSUInte
   }
 }
 void MMRefreshCombinedPoseCache(id<PROAPIAccessing> manager, CMTime time) {
-  MMCombinedPoseCache *cache = MMCacheForManager(manager);
+  MMCombinedPoseCache *cache = MMCombinedCacheForManager(manager);
   if (!cache) return;
   NSUInteger generation = MMBeginCacheRefresh(cache);
-  // Invalidate first: a failed host read must not leave stale data editable.
-  MMPublishCache(cache, nil, generation);
+  // Keep the previous complete snapshot visible during the read. Publish nil
+  // only if this refresh completes with failure and is still current.
   MMPublishCache(cache, MMReadCombinedEntries(manager, time, nil), generation);
 }
 MMCombinedPose *MMReadCombinedValue(id<PROAPIAccessing> manager, CMTime time) {
@@ -215,7 +249,7 @@ NSArray<MMCombinedPose *> *MMReadCombinedPoseSamples(id<PROAPIAccessing> manager
   *active = NO;
   if (!times.count) return MMCombinedFailure(error);
   CMTime time; [times[0] getValue:&time];
-  MMCombinedPoseCache *cache = MMCacheForManager(manager);
+  MMCombinedPoseCache *cache = MMCombinedCacheForManager(manager);
   NSUInteger generation = 0;
   @synchronized (cache) { generation = cache.generation; }
   NSArray *entries = MMReadCombinedEntries(manager, time, error);
@@ -235,7 +269,7 @@ MMCombinedPose *MMReadCombinedPose(id<PROAPIAccessing> manager, CMTime time, BOO
 
 BOOL MMCombinedIncomingEasing(id<PROAPIAccessing> manager, CMTime time, int *easing, CMTime *targetTime) {
   if (!CMTIME_IS_NUMERIC(time)) return NO;
-  MMCombinedPoseCache *cache = MMCacheForManager(manager);
+  MMCombinedPoseCache *cache = MMCombinedCacheForManager(manager);
   NSArray *entries;
   @synchronized (cache) { entries = cache.entries; }
   double seconds = CMTimeGetSeconds(time);
@@ -267,12 +301,13 @@ BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *
       initWithPositionX:component == MMPositionX ? value : old.positionX
               positionY:component == MMPositionY ? value : old.positionY
                   scale:component == MMScale ? value : old.scale authored:YES easing:old.easing addedMotion:old.addedMotion];
+  pose=[pose poseByReplacingTiming:old.timing];
   return pose && [set setCustomParameterValue:pose toParameter:MMCustomControls atTime:target];
 }
 
 BOOL MMCombinedOutgoingMotion(id<PROAPIAccessing> manager, CMTime time, int *motion, CMTime *targetTime) {
   if (!CMTIME_IS_NUMERIC(time)) return NO;
-  MMCombinedPoseCache *cache = MMCacheForManager(manager);
+  MMCombinedPoseCache *cache = MMCombinedCacheForManager(manager);
   NSArray *entries;
   @synchronized (cache) { entries = cache.entries; }
   double seconds = CMTimeGetSeconds(time);
@@ -288,3 +323,5 @@ BOOL MMCombinedOutgoingMotion(id<PROAPIAccessing> manager, CMTime time, int *mot
   }
   return NO;
 }
+
+MMCombinedPose *MMSampleCombinedSnapshot(NSArray<NSDictionary *> *entries, CMTime time) { BOOL active=NO; return MMSampleCombinedEntries(entries,time,&active,nil); }

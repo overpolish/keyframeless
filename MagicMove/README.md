@@ -344,7 +344,7 @@ the same delta; proportional values are bounded together at 400%.
 `MMScalePose` stores both percentages in a separate native custom parameter.
 Position keys and saved combined/scalar scale data remain intact; legacy scale
 rendering remains active until the new Scale lane is authored or keyed. Scale
-uses the current primitive incoming 1.2-second timing and supports explicit
+uses per-pose incoming timing (default 1.2 seconds) and supports explicit
 creation against its own next key. Each row owns a separate disposable cache.
 Scale requires no image geometry. Unequal axes are evaluated at each motion-blur
 sample and rendered independently.
@@ -368,3 +368,98 @@ The XPC service links the local static InspectorControls package.
 callbacks, and owns host reads/writes, unit conversion, undo, shortcut routing,
 and snapshot refresh. Package usage and standalone checks are documented in
 [InspectorControls](../InspectorControls/README.md).
+
+
+### Shared timing editor — first UI iteration
+
+Position and Scale now share a single inspector panel. Click either property row
+to select it; a translucent host-accent overlay marks the active row. Native keyframe controls still create and move
+poses; the graph is read-only and has no curve handles.
+
+The graph shows the current gap's evaluated components, including added motion,
+and a live playhead. Curves are solid and use stable component colors matching
+the selected row's axis decorations. Components share a value range: Position
+uses image pixels, Scale/Opacity percentages, and Rotation degrees. Each gap is
+fitted independently.
+The graph header shows the source and destination keyframe times in seconds.
+At an exact arrival, the panel shows the gap that just completed; the first pose
+shows the first gap. Outside the keyed sequence, or with fewer than two poses,
+there is no editable gap.
+
+Duration, Use available time, and easing edit the displayed gap's destination.
+Added motion type, amount, and speed edit its source. The source/destination
+labels make ownership explicit. Available time retains the requested duration;
+longer durations are capped by the engine without rewriting the saved setting.
+The amount is a multiplier displayed as a percentage; speed is relative to the
+existing motion algorithm's frequency over that gap.
+
+`MMPoseTiming` stores these settings in each native custom pose with secure coding.
+Older poses without this payload default to 1.2 seconds, available time off, and
+100% amount / 1× speed. `MMTimingEditorModel` owns gap selection and host writes;
+`MMTimingEditor` owns presentation and undo. Cached snapshots feed both rendering
+and the preview. UI refresh does not enumerate native keys; the graph is sampled
+again only when pose contents, gap, property, or image dimensions change. Fresh
+render snapshots with identical contents reuse the samples and curve paths;
+playhead updates do not rebuild either. Control updates and graph work run after
+the read-only host action has ended.
+
+Automated checks cover persistence, correct endpoint writes, duration evaluation,
+metadata preservation during value edits, lane independence, graph sampling,
+read counts, empty state/layout, and one undo group per numeric drag. Real host
+check still required: select Position/Scale, scrub across gaps and exact keys,
+change duration/easing/added motion, undo a drag, move native keys, save/reopen,
+and compare the graph's motion with the viewer. Native popup styling and host
+layout/event delivery require Motion/FCP confirmation.
+
+Timing panel writes publish the successfully written pose directly into the
+inspector cache. They must not call native-key enumeration while the custom
+parameter action is open: host diagnostics measured 1.78–4.24 second stalls in
+that post-write refresh. Host callbacks and rendering remain responsible for
+reading authoritative key snapshots. Local publication advances the cache
+generation so an older in-flight read cannot overwrite the new pose.
+
+Callback refreshes retain the last complete inspector snapshot while reading
+native keys, then atomically publish the completed result. A completed failed
+read publishes an unavailable snapshot; an in-progress read does not briefly
+clear the graph or disable controls. Tests observe the panel during both
+Position and Scale reads and verify failure and recovery separately.
+
+The active-row highlight stops before the 75-point native-controls gutter,
+matching legacy `KKParameterRowView` background bounds. The MagicMove row also
+returns no hit in that gutter so native keyframe controls remain reachable.
+Regression checks cover gutter passthrough and numeric-field hits across widths.
+
+### Opacity inspector
+
+Opacity is an independent native custom-keyframe lane (2000), defaulting to
+100%. Its slider and one-decimal field use the shared `InspectorControls`
+slider port and painted percentage suffix. Clicking the row selects its single
+curve in the shared timing panel; incoming duration/easing and outgoing added
+motion use the same ownership rules as Position and Scale. Explicit creation
+redirects value edits to the destination keypose.
+
+`MMScalarPose` and the immutable `MMPropertyLane` adapter provide scalar payloads,
+secure coding, disposable per-inspector caches, and MotionTiming sampling
+without coupling the controls library to FxPlug. Opacity multiplies premultiplied
+RGB and alpha in every render sample, including motion blur. Slider drags group
+writes into one undo operation. Host interaction still needs manual validation.
+
+### Rotation inspector
+
+Rotation is one native custom lane (2100) containing X/Y/Z degree values,
+all defaulting to zero. A single keypose carries all three axes and incoming
+metadata. Values stay unwrapped for multi-turn animations; only render angles
+are reduced before trigonometry. X/Y tilt an orthographically projected image
+plane and Z rotates it in-plane, in X-then-Y-then-Z order. Edge-on planes render
+transparent. Position, local-axis Scale and Opacity continue to compose with it.
+
+Rotation and Opacity reuse `MMPropertyLane`/`MMPropertyPoseCache` for native reads,
+atomic cache publication and timing; `MMPropertyRowBinding` handles inspector
+refresh, explicit targeting, selection, shortcuts and undo for slider and vector
+rows. `InspectorControls` remains AppKit-only. The timing graph accepts arbitrary
+component arrays, draws one solid colored curve per axis and keeps component
+colors stable across selection changes.
+
+Temporary timing latency and click-routing probes were removed after host validation.
+`MM_INSPECTOR_DEBUG_PAINT` retains opt-in layout painting, disabled by default and
+excluded from Release builds.

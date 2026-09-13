@@ -154,11 +154,64 @@ static void testAddedMotion(void) {
     assert(!MTSample(d, 3, 2, 1, out) && out[0] == 7);
 }
 
+static void testCustomMotionControls(void) {
+    double a[] = {0.0}, b[] = {100.0}, c[] = {200.0}, out[1], baseline[1];
+    MTDestination plain[] = {
+        {0, 0, a, MTEasingSmooth}, {4, 1, b, MTEasingSmooth}, {8, 1, c, MTEasingSmooth}
+    };
+    MTDestination amountZero[] = {
+        {0, 0, a, MTEasingSmooth, MTAddedMotionWave, NULL, NULL, 0, true, 0.0, 1.0},
+        {4, 1, b, MTEasingSmooth}, {8, 1, c, MTEasingSmooth}
+    };
+    for (int i = 0; i <= 16; ++i) {
+        double t = i * 0.5;
+        assert(MTSample(plain, 3, 1, t, baseline));
+        assert(MTSample(amountZero, 3, 1, t, out));
+        assert(out[0] == baseline[0]);
+    }
+
+    MTDestination custom[] = {
+        {0, 0, a, MTEasingSmooth, MTAddedMotionWave, NULL, NULL, 0, true, 1.0, 1.0},
+        {4, 1, b, MTEasingSmooth}, {8, 1, c, MTEasingSmooth}
+    };
+    assert(MTSample(custom, 3, 1, 3.5, out));
+    double defaultValue = out[0];
+    custom[0].motionAmount = 2.0;
+    assert(MTSample(custom, 3, 1, 3.5, out));
+    assert(fabs(out[0] - defaultValue) > 1.0e-6);
+    custom[0].motionAmount = 1.0;
+    custom[0].motionSpeed = 2.0;
+    assert(MTSample(custom, 3, 1, 3.5, out));
+    assert(fabs(out[0] - defaultValue) > 1.0e-6);
+
+    // Controls are validated only when opted in, and failures leave output untouched.
+    custom[0].motionAmount = NAN; out[0] = 73.0;
+    assert(!MTSample(custom, 3, 1, 3.5, out) && out[0] == 73.0);
+    custom[0].motionAmount = -1.0;
+    assert(!MTSample(custom, 3, 1, 3.5, out) && out[0] == 73.0);
+    custom[0].motionAmount = 1.0; custom[0].motionSpeed = 0.0;
+    assert(!MTSample(custom, 3, 1, 3.5, out) && out[0] == 73.0);
+    custom[0].motionSpeed = INFINITY;
+    assert(!MTSample(custom, 3, 1, 3.5, out) && out[0] == 73.0);
+
+    // Different outgoing controls retain exact keys and a smooth join.
+    custom[0].motionAmount = 0.7; custom[0].motionSpeed = 0.8;
+    custom[0].addedMotion = MTAddedMotionWave;
+    custom[1].customMotion = true; custom[1].motionAmount = 1.8; custom[1].motionSpeed = 1.6;
+    custom[1].addedMotion = MTAddedMotionWiggle;
+    assert(MTSample(custom, 3, 1, 4.0, out) && out[0] == 100.0);
+    double left[1], right[1];
+    assert(MTSample(custom, 3, 1, 4.0 - 1.0e-4, left));
+    assert(MTSample(custom, 3, 1, 4.0 + 1.0e-4, right));
+    assert(fabs(left[0] - right[0]) < 0.1);
+}
+
 int main(void) {
     testEasingTypes();
     testEndpointsAndHolds(); testIncomingDurationAndSmoothstep();
     testZeroDurationAndGapClamping(); testMultiComponentAndStatelessSampling();
     testDeterministicGeneratedInvariants(); testInvalidInputsLeaveOutputUntouched();
     testAddedMotion();
+    testCustomMotionControls();
     puts("MotionTiming: all tests passed");
 }

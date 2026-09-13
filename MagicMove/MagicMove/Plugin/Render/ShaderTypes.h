@@ -7,4 +7,9 @@ typedef struct {
   float rotation;
   float aspect;
   float scaleY;
+  float opacity;
+  // Additional Euler axes, in radians. Appended to preserve the existing
+  // transform layout for older unblurred plugin states.
+  float rotationX;
+  float rotationY;
 } MMTransform;

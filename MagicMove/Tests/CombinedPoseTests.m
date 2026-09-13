@@ -245,7 +245,7 @@ int main(void) {
     NSUInteger blurReads = host.nativeKeyReads;
     NSData *blurState;
     assert([plugin pluginState:&blurState atTime:TestTime(0.5) quality:0 error:&error]);
-    assert(host.nativeKeyReads-blurReads < 6);
+    assert(host.nativeKeyReads-blurReads < 7); // Includes the independent Rotation lane count.
     KKMotionBlurState blur;
     [blurState getBytes:&blur range:NSMakeRange(blurState.length-sizeof(blur),sizeof(blur))];
     assert(blur.enabled && blur.sampleCount == 16);

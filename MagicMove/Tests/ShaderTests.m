@@ -91,7 +91,15 @@ static void render(id<MTLDevice> device, id<MTLCommandQueue> queue,
 }
 
 static MMTransform transform(float x, float y, float scale, float rotation, float aspect) {
-  MMTransform result = {{x, y}, scale, rotation, aspect, scale}; return result;
+  MMTransform result = {{x, y}, scale, rotation, aspect, scale, 1}; return result;
+}
+
+static MMTransform transform3(float x, float y, float scale, float z,
+                              float aspect, float rotationX, float rotationY) {
+  MMTransform result = transform(x, y, scale, z, aspect);
+  result.rotationX = rotationX;
+  result.rotationY = rotationY;
+  return result;
 }
 
 int main(int argc, const char **argv) {
@@ -110,6 +118,12 @@ int main(int argc, const char **argv) {
 
     render(device, queue, pipeline, input, transform(0, 0, 1, 0, 1), pixels, 4, 4);
     checkPixel(&pixels[(2 * 4 + 2) * 4], color, 0.01f); // identity
+    MMTransform opacity=transform(0,0,1,0,1); opacity.opacity=0.5;
+    render(device,queue,pipeline,input,opacity,pixels,4,4);
+    checkPixel(&pixels[(2*4+2)*4],color*0.5f,0.01f); // premultiplied RGB and alpha
+    opacity.opacity=0;
+    render(device,queue,pipeline,input,opacity,pixels,4,4);
+    for(NSUInteger i=0;i<16;i++) checkPixel(&pixels[i*4],(vector_float4){0,0,0,0},0.001f);
     render(device, queue, pipeline, input, transform(0.75f, 0, 1, 0, 1), pixels, 4, 4);
     assert(pixels[0 * 4 + 3] == 0 && pixels[3 * 4 + 3] > 0.1f); // positive X
     render(device, queue, pipeline, input, transform(-0.75f, 0, 1, 0, 1), pixels, 4, 4);
@@ -147,6 +161,46 @@ int main(int argc, const char **argv) {
                                                           3.0f / 7.0f * 0.125f, 128.0f / 255.0f}, 0.08f);
     render(device, queue, pipeline, ramp, transform(0, 0, 0.5f, 0, 1), pixels, 8, 4);
     assert(pixels[(2 * 8 + 0) * 4 + 3] == 0 && pixels[(2 * 8 + 7) * 4 + 3] == 0);
+    // Non-square pixel aspect is part of the inverse mapping. The right edge
+    // must still sample the right edge of the source ramp at aspect 2.
+    render(device, queue, pipeline, ramp, transform(0, 0, 1, 0, 2), pixels, 8, 4);
+    assert(pixels[(2 * 8 + 7) * 4] > 0.45f);
+    MMTransform zAspect = transform(0, 0, 1, (float)M_PI / 2, 2);
+    // Old Z-only inverse: at this sample p=(.125,-.375), so source x is
+    // -.1875 and the ramp coordinate is .3125.
+    float zExpected = (2.1875f / 7.0f) * 0.5f;
+    render(device, queue, pipeline, ramp, zAspect, pixels, 8, 4);
+    checkPixel(&pixels[(3 * 8 + 4) * 4],
+               (vector_float4){zExpected, zExpected * 0.5f,
+                               zExpected * 0.25f, 128.0f / 255.0f}, 0.03f);
+    // A small but valid scale must not be mistaken for an edge-on plane.
+    id<MTLTexture> one = makeTexture(device, 1, 1, color);
+    render(device, queue, pipeline, one, transform(0, 0, 0.001f, 0, 1), pixels, 1, 1);
+    checkPixel(pixels, color, 0.01f);
+
+    // Orthographic X rotation foreshortens the vertical plane while retaining
+    // its center; Y rotation does the equivalent horizontally.
+    MMTransform xTilt=transform3(0,0,1,0,1,(float)M_PI/3,0);
+    render(device,queue,pipeline,input,xTilt,pixels,4,4);
+    assert(pixels[(2*4+2)*4+3] > .1f && pixels[(0*4+2)*4+3] == 0);
+    MMTransform yTilt=transform3(0,0,1,0,1,0,(float)M_PI/3);
+    render(device,queue,pipeline,input,yTilt,pixels,4,4);
+    assert(pixels[(2*4+2)*4+3] > .1f && pixels[(2*4+0)*4+3] == 0);
+
+    // An edge-on plane has no invertible projected area and must be clear.
+    MMTransform edgeOn=transform3(0,0,1,0,1,0,(float)M_PI/2);
+    render(device,queue,pipeline,input,edgeOn,pixels,4,4);
+    for(NSUInteger i=0;i<16;i++) assert(pixels[i*4+3] == 0);
+
+    // A 180-degree Y flip reverses the horizontal ramp without changing
+    // opacity. Combining all axes still produces a finite, visible sample.
+    MMTransform flip=transform3(0,0,1,0,1,0,(float)M_PI);
+    render(device,queue,pipeline,ramp,flip,pixels,8,4);
+    assert(pixels[(2*8+0)*4] > .45f && pixels[(2*8+7)*4] < .05f);
+    MMTransform composed=transform3(0,0,1,(float)M_PI/4,1,(float)M_PI/6,(float)M_PI/5);
+    composed.opacity=.5f;
+    render(device,queue,pipeline,input,composed,pixels,4,4);
+    assert(pixels[(2*4+2)*4+3] > .05f && pixels[(2*4+2)*4+3] < .2f);
     puts("ShaderTests: all tests passed");
   }
 }

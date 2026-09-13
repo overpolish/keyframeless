@@ -12,9 +12,10 @@ static double mt_seed_hash(int seed, int index) {
     return (double)(v & 0xFFFF) / 65535.0;
 }
 
-// KKEasing hold algorithms, fixed intensity=1, frequency=1, seed=0.
+// KKEasing hold algorithms, with intensity/frequency controls, seed=0.
 // Additional components retain the existing deterministic phase variation.
-static double mt_motion_factor(double t, MTAddedMotion motion, size_t component) {
+static double mt_motion_factor(double t, MTAddedMotion motion, size_t component,
+                               double amount, double speed) {
     t = fmax(0.0, fmin(1.0, t));
     int seed = 0;
     if (component > 0) {
@@ -24,7 +25,7 @@ static double mt_motion_factor(double t, MTAddedMotion motion, size_t component)
     double envelope = sin(t * M_PI);
     if (motion == MTAddedMotionWave) {
         double phase = seed ? mt_seed_hash(seed, 0) * M_PI * 2.0 : 0.0;
-        return 1.0 + 0.45 * sin(t * M_PI * 12.0 + phase) * envelope;
+        return 1.0 + amount * 0.45 * sin(t * M_PI * 12.0 * speed + phase) * envelope;
     }
     if (motion == MTAddedMotionWiggle) {
         double f0=17.0,f1=31.0,f2=59.0,f3=97.0,p0=0,p1=0,p2=0,p3=0;
@@ -34,9 +35,9 @@ static double mt_motion_factor(double t, MTAddedMotion motion, size_t component)
             p0=mt_seed_hash(seed,4)*M_PI*2.0; p1=mt_seed_hash(seed,5)*M_PI*2.0;
             p2=mt_seed_hash(seed,6)*M_PI*2.0; p3=mt_seed_hash(seed,7)*M_PI*2.0;
         }
-        double noise = sin(t * f0 * 3.0 + p0) * 0.4 + sin(t * f1 * 3.0 + p1) * 0.3 +
-                       sin(t * f2 * 3.0 + p2) * 0.2 + sin(t * f3 * 3.0 + p3) * 0.1;
-        return 1.0 + 0.24 * noise * envelope;
+        double noise = sin(t * f0 * 3.0 * speed + p0) * 0.4 + sin(t * f1 * 3.0 * speed + p1) * 0.3 +
+                       sin(t * f2 * 3.0 * speed + p2) * 0.2 + sin(t * f3 * 3.0 * speed + p3) * 0.1;
+        return 1.0 + amount * 0.24 * noise * envelope;
     }
     if (motion == MTAddedMotionHandheld) {
         double sum = 0.0, norm = 0.0, amp = 1.0;
@@ -44,10 +45,10 @@ static double mt_motion_factor(double t, MTAddedMotion motion, size_t component)
             double phase = seed ? mt_seed_hash(seed, k) * M_PI * 2.0 : k * 1.2399;
             double detune = 1.0 + 0.03 * (mt_seed_hash(seed, k + 16) - 0.5);
             double cycles = 3.75 * pow(2.0, k) * detune;
-            sum += amp * sin(t * 2.0 * M_PI * cycles + phase);
+            sum += amp * sin(t * 2.0 * M_PI * cycles * speed + phase);
             norm += amp; amp *= 0.5;
         }
-        return 1.0 + 0.36 * (sum / norm) * envelope;
+        return 1.0 + amount * 0.36 * (sum / norm) * envelope;
     }
     return 1.0;
 }
@@ -60,6 +61,11 @@ static double mt_modulate(double value, double factor, const MTDestination *d,
         if (range > 0.0) return value + (factor - 1.0) * range * 0.25;
     }
     return value;
+}
+
+static bool mt_motion_enabled(const MTDestination *d) {
+    return d->addedMotion != MTAddedMotionNone &&
+           (!d->customMotion || d->motionAmount > 0.0);
 }
 
 static double mt_base_progress(double t, MTEasing easing) {
@@ -83,8 +89,11 @@ static double mt_raw_component(const MTDestination *d, size_t count, size_t c, d
     double start = b->arrival - duration;
     double progress = duration > 0.0 ? mt_base_progress(fmax(0.0, fmin(1.0, (seconds - start) / duration)), b->easing) : 0.0;
     double value = (1.0 - progress) * a->values[c] + progress * b->values[c];
-    if (a->addedMotion != MTAddedMotionNone)
-        value = mt_modulate(value, mt_motion_factor(local, a->addedMotion, c), a, c);
+    if (a->addedMotion != MTAddedMotionNone && local > 0.0 && local < 1.0) {
+        double amount = a->customMotion ? a->motionAmount : 1.0;
+        double speed = a->customMotion ? a->motionSpeed : 1.0;
+        value = mt_modulate(value, mt_motion_factor(local, a->addedMotion, c, amount, speed), a, c);
+    }
     return value;
 }
 
@@ -121,11 +130,14 @@ bool MTSample(const MTDestination *d, size_t count, size_t components,
         for (size_t c = 0; c < d[i].modulationRangeCount; ++c)
             if (!isfinite(d[i].modulationMins[c]) || !isfinite(d[i].modulationMaxs[c]) ||
                 d[i].modulationMaxs[c] < d[i].modulationMins[c]) return false;
+        if (d[i].customMotion &&
+            (!isfinite(d[i].motionAmount) || d[i].motionAmount < 0.0 ||
+             !isfinite(d[i].motionSpeed) || d[i].motionSpeed <= 0.0)) return false;
     }
     for (size_t c = 0; c < components; ++c) {
         output[c] = mt_raw_component(d, count, c, seconds);
         for (size_t i = 1; i + 1 < count; ++i) {
-            if (d[i-1].addedMotion == MTAddedMotionNone && d[i].addedMotion == MTAddedMotionNone) continue;
+            if (!mt_motion_enabled(&d[i-1]) && !mt_motion_enabled(&d[i])) continue;
             // KK_JOIN_BLEND_MOD_FRAC: preserve the broad motion join fillet.
             double w = 0.42 * fmin(d[i].arrival-d[i-1].arrival, d[i+1].arrival-d[i].arrival);
             if (fabs(seconds-d[i].arrival) < w) { output[c] = mt_hermite(d,count,c,seconds,d[i].arrival,w); break; }

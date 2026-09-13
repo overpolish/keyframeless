@@ -40,6 +40,7 @@
 
 @interface MissingYCoder : NSCoder @end
 @implementation MissingYCoder
+- (BOOL)containsValueForKey:(NSString *)key { return NO; }
 - (double)decodeDoubleForKey:(NSString *)key { return [key isEqualToString:@"x"] ? 12 : ([key isEqualToString:@"scale"] ? 140 : 0); }
 - (BOOL)decodeBoolForKey:(NSString *)key { return YES; }
 - (NSInteger)decodeIntegerForKey:(NSString *)key { return [key isEqualToString:@"easing"] ? MTEasingLinear : 0; }

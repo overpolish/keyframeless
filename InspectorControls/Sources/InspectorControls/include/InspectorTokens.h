@@ -12,12 +12,13 @@ static const CGFloat ICInspectorLabelInset = 21;
 static const CGFloat ICInspectorHostGutter = 75;
 static const CGFloat ICInspectorTextHeight = 18;
 static const CGFloat ICInspectorLabelY = 3;
-static const CGFloat ICInspectorValueDrop = 2;
+static const CGFloat ICInspectorValueDrop = 1;
 static const CGFloat ICInspectorGroupSpacing = 12;
 static const CGFloat ICInspectorLinkSize = 15;
 
 @interface ICInspectorTokens : NSObject
 @property(class, nonatomic, readonly) NSFont *labelFont;
+@property(class, nonatomic, readonly) NSFont *selectedLabelFont;
 @property(class, nonatomic, readonly) NSFont *decorationFont;
 @property(class, nonatomic, readonly) NSFont *valueFont;
 @property(class, nonatomic, readonly) NSColor *labelColor;
@@ -26,4 +27,8 @@ static const CGFloat ICInspectorLinkSize = 15;
 @property(class, nonatomic, readonly) NSColor *accentMatchingHost;
 @property(class, nonatomic, readonly) NSColor *inactiveControlColor;
 @property(class, nonatomic, readonly) NSColor *selectionColor;
+@property(class, nonatomic, readonly) NSArray<NSColor *> *curveColors;
+@property(class, nonatomic, readonly) NSColor *sliderTrackColor;
+@property(class, nonatomic, readonly) NSColor *sliderKnobColor;
+@property(class, nonatomic, readonly) NSColor *sliderKnobOutlineColor;
 @end

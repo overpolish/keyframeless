@@ -46,9 +46,13 @@
     formatter.minimumFractionDigits=component.fractionDigits;
     formatter.maximumFractionDigits=component.fractionDigits;
     field.formatter=formatter;
-    [self addSubview:axis]; [self addSubview:unit]; [self addSubview:field];
+    // Retain suffix layout/style without adding a text-field view. In remote
+    // inspectors, percentage label views have intercepted adjacent host buttons
+    // despite correct frames. All suffixes use the same direct drawing path.
+    [self addSubview:axis]; [self addSubview:field];
     [fields addObject:field]; [labels addObject:axis]; [units addObject:unit];
   }
+  _componentColors=@[];
   _fields=[fields copy]; _axisLabels=[labels copy]; _unitLabels=[units copy];
   for (NSUInteger i=1;i<_fields.count;i++) _fields[i-1].nextKeyView=_fields[i];
   if(showsLink) {
@@ -60,6 +64,24 @@
     [self addSubview:_linkButton];
   }
   return self;
+}
+- (void)setSelected:(BOOL)selected {
+  if(_selected==selected) return;
+  _selected=selected;
+  self.titleLabel.font=selected ? ICInspectorTokens.selectedLabelFont : ICInspectorTokens.labelFont;
+  self.titleLabel.textColor=selected ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.labelColor;
+  [self updateComponentColors];
+  self.needsDisplay=YES;
+}
+- (void)setComponentColors:(NSArray<NSColor *> *)componentColors {
+  if([_componentColors isEqualToArray:componentColors]) return;
+  _componentColors=[componentColors copy] ?: @[];
+  [self updateComponentColors];
+}
+- (void)updateComponentColors {
+  for(NSUInteger i=0;i<self.axisLabels.count;i++)
+    self.axisLabels[i].textColor=self.selected && i<self.componentColors.count
+        ? self.componentColors[i] : ICInspectorTokens.decorationColor;
 }
 - (BOOL)interacting {
   for (ICValueTextField *field in self.fields)
@@ -73,6 +95,16 @@
       ICValueFieldHandleTabCommand((NSTextField *)control,selector);
 }
 - (NSSize)intrinsicContentSize { return NSMakeSize(NSViewNoIntrinsicMetric, ICInspectorRowHeight); }
+- (void)drawRect:(NSRect)dirtyRect {
+  [super drawRect:dirtyRect];
+  for(NSTextField *unit in self.unitLabels) {
+    if(unit.hidden || !NSIntersectsRect(dirtyRect,unit.frame)) continue;
+    [NSGraphicsContext saveGraphicsState];
+    NSRectClip(unit.frame);
+    [unit.cell drawWithFrame:unit.frame inView:self];
+    [NSGraphicsContext restoreGraphicsState];
+  }
+}
 - (void)layout {
   [super layout];
   CGFloat width = NSWidth(self.bounds);
@@ -82,9 +114,11 @@
   CGFloat contentWidth = MAX(0, width-ICInspectorHostGutter);
   CGFloat labelWidth = round((width < 475 ? width*0.3670886076-11.860759
       : width*0.3176696611+10.848616)*2)/2;
-  labelWidth = MIN(labelWidth, MAX(0,contentWidth - 70*self.fields.count));
+  labelWidth = MIN(labelWidth, MAX(0,contentWidth - (self.fields.count>2 ? 54:70)*self.fields.count));
   // Add 12 pt to the existing 6 px visible gap between the component groups.
-  const CGFloat groupSpacing = ICInspectorGroupSpacing;
+  const CGFloat groupSpacing = self.fields.count>2 ? 8:ICInspectorGroupSpacing;
+  const CGFloat axisWidth = self.fields.count>2 ? 10:12;
+  const CGFloat unitWidth = self.fields.count>2 ? 8:16;
   CGFloat pairWidth = MAX(0,contentWidth-labelWidth-groupSpacing*(self.fields.count-1))/self.fields.count;
   self.titleLabel.frame = NSMakeRect(ICInspectorLabelInset, ICInspectorLabelY, MAX(0,labelWidth-(self.linkButton != nil ? 47 : 27)), ICInspectorTextHeight);
   // Center the symbol on the label's capital letters, not the lowered values
@@ -95,10 +129,11 @@
   self.linkButton.frame = NSMakeRect(labelWidth-22, iconY, ICInspectorLinkSize, ICInspectorLinkSize);
   for (NSUInteger i=0; i<self.fields.count; ++i) {
     CGFloat x = labelWidth+i*(pairWidth+groupSpacing);
-    self.axisLabels[i].frame = NSMakeRect(x, ICInspectorLabelY, 12, ICInspectorTextHeight);
-    self.fields[i].frame = NSMakeRect(x+12, ICInspectorLabelY-ICInspectorValueDrop, MAX(0,pairWidth-32), ICInspectorTextHeight);
-    self.unitLabels[i].frame = NSMakeRect(x+pairWidth-18, ICInspectorLabelY, 16, ICInspectorTextHeight);
+    self.axisLabels[i].frame = NSMakeRect(x, ICInspectorLabelY, axisWidth, ICInspectorTextHeight);
+    self.fields[i].frame = NSMakeRect(x+axisWidth, ICInspectorLabelY-ICInspectorValueDrop, MAX(0,pairWidth-axisWidth-unitWidth-4), ICInspectorTextHeight);
+    self.unitLabels[i].frame = NSMakeRect(x+pairWidth-unitWidth-2, ICInspectorLabelY, unitWidth, ICInspectorTextHeight);
   }
+  self.needsDisplay=YES;
 }
 
 @end

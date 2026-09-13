@@ -3,3 +3,5 @@
 #import "InspectorTokens.h"
 #import "ICValueTextField.h"
 #import "ICInspectorRow.h"
+#import "ICSliderView.h"
+#import "ICSliderRow.h"

@@ -3,9 +3,21 @@
 #import "Constants.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
+#import "MMScalarPose.h"
+#import "MMPropertyRow.h"
+#import "MMRotationPose.h"
+#import "MMInspectorColors.h"
 #import "MMShortcut.h"
+#import "MMTimingEditor.h"
 @import InspectorControls;
 #import <Cocoa/Cocoa.h>
+
+// Opt-in layout painting for host diagnostics; never enabled in Release builds.
+#ifndef MM_INSPECTOR_DEBUG_PAINT
+#define MM_INSPECTOR_DEBUG_PAINT 0
+#endif
+
+static NSNotificationName const MMActiveRowChanged = @"MMActiveRowChanged";
 
 // KKPlugin implements the view host in a private category.
 @interface KKPlugin (MMCustomRowHost)
@@ -16,9 +28,11 @@
 @interface MMCustomRow : ICInspectorRow
 @property(nonatomic, strong) id<PROAPIAccessing> manager;
 @property(nonatomic, strong) NSTimer *refreshTimer;
+@property(nonatomic, strong) id selectionObserver;
 @property(nonatomic, strong) MMCombinedPoseCache *poseCache;
 @property(nonatomic, strong) MMScalePoseCache *scaleCache;
 @property(nonatomic) BOOL scaleRow;
+@property(nonatomic, weak) MagicMovePlugin *owner;
 @property(nonatomic) NSSize pixelSize;
 @property(nonatomic, copy) CGSize (^imageSizeProvider)(void);
 @property(nonatomic, strong) id<FxUndoAPI> scrubUndo;
@@ -40,7 +54,21 @@
   self=[super initWithLabel:scale ? @"Scale" : @"Position" components:components showsLink:scale];
   if (!self) return nil;
   _manager=manager; _scaleRow=scale;
-  self.toolTip=@"Control–Option–M: Toggle Motion Blur";
+  self.componentColors=MMInspectorColors(scale ? MMScaleControls:MMCustomControls);
+
+#if DEBUG && MM_INSPECTOR_DEBUG_PAINT
+  // Opt-in visual diagnostics: actual field backgrounds, no overlay views,
+  // tracking areas, constraints, or hit-test changes.
+  for(NSTextField *label in [self.axisLabels arrayByAddingObject:self.titleLabel]) {
+    label.drawsBackground=YES; label.backgroundColor=[NSColor.greenColor colorWithAlphaComponent:0.22];
+  }
+  for(NSTextField *field in self.fields) {
+    field.drawsBackground=YES; field.backgroundColor=[NSColor.orangeColor colorWithAlphaComponent:0.28];
+  }
+  for(NSTextField *unit in self.unitLabels) {
+    unit.drawsBackground=YES; unit.backgroundColor=[NSColor.purpleColor colorWithAlphaComponent:0.30];
+  }
+#endif
   __weak MMCustomRow *weakSelf=self;
   self.onValueCommit=^(ICValueTextField *field) { [weakSelf commitValue:field]; };
   self.onScrubBegin=^{ [weakSelf beginScrub]; };
@@ -65,9 +93,15 @@
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   [self.refreshTimer invalidate]; self.refreshTimer = nil;
+  if(self.selectionObserver) [NSNotificationCenter.defaultCenter removeObserver:self.selectionObserver];
+  self.selectionObserver=nil;
   [[MMShortcutCapture sharedCapture] detachView:self];
   if (!self.window) return;
   __weak MMCustomRow *weakSelf = self;
+  if(self.owner) self.selectionObserver=[NSNotificationCenter.defaultCenter
+      addObserverForName:MMActiveRowChanged object:self.owner queue:nil
+      usingBlock:^(NSNotification *note) { [weakSelf updateSelection]; }];
+  [self updateSelection];
   [[MMShortcutCapture sharedCapture] attachView:self action:^BOOL {
     MMCustomRow *view=weakSelf;
     if (!view || NSEvent.pressedMouseButtons) return NO;
@@ -90,13 +124,60 @@
   }];
   [[NSRunLoop mainRunLoop] addTimer:self.refreshTimer forMode:NSRunLoopCommonModes];
 }
+- (void)updateSelection {
+  UInt32 active=self.owner.activeInspectorParameterID ?: MMCustomControls;
+  self.selected=self.owner && active==(self.scaleRow ? MMScaleControls:MMCustomControls);
+}
 - (NSView *)hitTest:(NSPoint)point {
-  NSView *hit=[super hitTest:point];
-  if (hit && NSApp.currentEvent.type==NSEventTypeLeftMouseDown)
+  // Match KKParameterRowView's reserved host-controls region. A full-width
+  // custom view must not claim clicks intended for native keyframe buttons.
+  NSPoint local=[self convertPoint:point fromView:self.superview];
+  BOOL hostRegion=local.x>=NSMaxX(self.bounds)-ICInspectorHostGutter;
+  NSView *hit=hostRegion ? nil : [super hitTest:point];
+  if(hostRegion) return nil;
+  if (hit && NSApp.currentEvent.type==NSEventTypeLeftMouseDown) {
+    self.owner.activeInspectorParameterID=self.scaleRow ? MMScaleControls : MMCustomControls;
+    if(self.owner) [NSNotificationCenter.defaultCenter postNotificationName:MMActiveRowChanged object:self.owner];
     [[MMShortcutCapture sharedCapture] activateView:self];
+  }
   return hit;
 }
+- (void)drawRect:(NSRect)dirtyRect {
+
+#if DEBUG && MM_INSPECTOR_DEBUG_PAINT
+  // Paint the true row rectangle, then outline the frames occupied by its
+  // actual controls. The red region is the reserved native-button gutter.
+  [[NSColor.blueColor colorWithAlphaComponent:0.16] setFill];
+  NSRectFillUsingOperation(self.bounds,NSCompositingOperationSourceOver);
+  NSArray *groups=@[[self.axisLabels arrayByAddingObject:self.titleLabel],self.fields,self.unitLabels];
+  NSArray *colors=@[NSColor.greenColor,NSColor.orangeColor,NSColor.purpleColor];
+  for(NSUInteger i=0;i<groups.count;i++) {
+    [colors[i] setStroke];
+    for(NSView *part in groups[i]) {
+      NSRect rect=part.superview ? [part convertRect:part.bounds toView:self] : part.frame;
+      NSBezierPath *border=[NSBezierPath bezierPathWithRect:NSInsetRect(rect,0.5,0.5)];
+      border.lineWidth=1; [border stroke];
+    }
+  }
+  NSRect gutter=self.bounds;
+  gutter.origin.x=MAX(NSMinX(self.bounds),NSMaxX(self.bounds)-ICInspectorHostGutter);
+  gutter.size.width=NSMaxX(self.bounds)-NSMinX(gutter);
+  [NSColor.redColor setStroke];
+  NSBezierPath *hostBorder=[NSBezierPath bezierPathWithRect:NSInsetRect(gutter,0.5,0.5)];
+  hostBorder.lineWidth=1; [hostBorder stroke];
+#endif
+  if(self.selected) {
+    [[ICInspectorTokens.accentMatchingHost colorWithAlphaComponent:0.12] setFill];
+    NSRect content=self.bounds;
+    content.size.width=MAX(0,content.size.width-ICInspectorHostGutter);
+    if(NSWidth(content)>4)
+      [[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(content,2,1) xRadius:3 yRadius:3] fill];
+  }
+  // Draw shared suffixes above the selection background.
+  [super drawRect:dirtyRect];
+}
 - (void)dealloc {
+  if(_selectionObserver) [NSNotificationCenter.defaultCenter removeObserver:_selectionObserver];
   [_refreshTimer invalidate];
   [[MMShortcutCapture sharedCapture] detachView:self];
 }
@@ -216,8 +297,18 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation MagicMovePlugin (CustomRow)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == MMRotationControls) {
+    NSMutableArray *components=[NSMutableArray array];
+    NSArray *labels=@[@"X",@"Y",@"Z"];
+    for(NSUInteger axis=0;axis<3;axis++)
+      [components addObject:[[ICInspectorComponent alloc] initWithIdentifier:axis label:labels[axis] suffix:@"°" fractionDigits:1]];
+    return [[MMVectorRow alloc] initWithPlugin:self lane:MMRotationLane() label:@"Rotation" components:components];
+  }
+  if (parameterID == MMOpacityControls) return [[MMScalarRow alloc] initWithPlugin:self lane:MMOpacityLane() label:@"Opacity"];
+  if (parameterID == MMTimingControls) return [[MMTimingEditor alloc] initWithPlugin:self];
   if (parameterID == MMCustomControls || parameterID == MMScaleControls) {
     MMCustomRow *row = [[MMCustomRow alloc] initWithManager:self.apiManager scale:parameterID == MMScaleControls];
+    row.owner=self;
     __weak MagicMovePlugin *plugin = self;
     row.imageSizeProvider = ^CGSize { return plugin.inspectorImageSize; };
     return row;
