@@ -26,7 +26,7 @@ int main(void) {
     // Compare the entire join window with the old two-half Hermite implementation.
     double a[]={100}, b[]={200}, c[]={150};
     MTDestination joined[] = {{.arrival=0,.values=a,.addedMotion=MTAddedMotionWave},
-      {.arrival=4,.duration=1.2,.values=b}, {.arrival=8,.duration=1.2,.values=c}};
+      {.arrival=4,.duration=1.2,.values=b,.addedMotion=MTAddedMotionWave}, {.arrival=8,.duration=1.2,.values=c}};
     const MTDestination *joinSource = joined;
     double (^raw)(double) = ^double(double seconds) {
       MTDestination pair[2];
@@ -37,7 +37,7 @@ int main(void) {
     for (int i=0;i<100;++i) {
       double seconds=2.4+i*0.032;
       assert(MTSample(joined,3,1,seconds,output));
-      assert(fabs(output[0]-KKHermiteJoinBlend(seconds,4,4*KK_JOIN_BLEND_MOD_FRAC,raw))<1e-9);
+      assert(fabs(output[0]-KKHermiteJoinBlend(seconds,4,1.2*KK_JOIN_BLEND_MOD_FRAC,raw))<1e-9);
     }
     MockHost *h = [MockHost new];
     MagicMovePlugin *plugin = [[MagicMovePlugin alloc] initWithAPIManager:h]; h.plugin = plugin;

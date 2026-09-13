@@ -203,14 +203,18 @@ static MMScalePose *MMScaleSample(NSArray *e, CMTime t, BOOL *active,
     MMScalePose *p = e[i][@"pose"];
     vals[i * 2] = p.x;
     vals[i * 2 + 1] = p.y;
-    ds[i] = (MTDestination){[e[i][@"time"] doubleValue] - start,
-                            (p.timing.available && i>0 ? [e[i][@"time"] doubleValue]-[e[i-1][@"time"] doubleValue] : p.timing.duration),
-                            &vals[i * 2],
-                            p.easing,
-                            p.addedMotion,
-                            mins,
-                            maxs,
-                            2, true, p.timing.amount, p.timing.speed};
+    ds[i] = (MTDestination){
+        .arrival = [e[i][@"time"] doubleValue] - start,
+        .duration = (p.timing.available && i > 0
+                         ? [e[i][@"time"] doubleValue] - [e[i-1][@"time"] doubleValue]
+                         : p.timing.duration),
+        .values = &vals[i * 2], .easing = p.easing,
+        .addedMotion = p.addedMotion, .modulationMins = mins,
+        .modulationMaxs = maxs, .modulationRangeCount = 2,
+        .customMotion = true, .customMotionComponents = true, .motionAmount = p.timing.amount,
+        .motionSpeed = p.timing.speed, .motionSeed = p.timing.motionSeed,
+        .motionLinked = p.timing.motionLinked,
+        .motionComponentMask = p.timing.motionComponentMask};
   }
   double out[2];
   if (!MTSample(ds, n, 2, CMTimeGetSeconds(t) - start, out)) {

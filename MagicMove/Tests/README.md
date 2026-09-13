@@ -245,3 +245,25 @@ Scale while only Scale's label is selected, neutral suffixes, and clearing a
 peer's tint when it leaves the graph. Editor tests verify the published set after
 unlinking and clear it when the graph detaches. This uses the actual displayed
 curves, not a separate interpretation of group membership in each row.
+
+### Added Motion handoff
+
+Added Motion is evaluated over the source hold, with the legacy Hermite blend
+bridging into the incoming transition. After that handoff, samples match plain
+easing. Available-time transitions have no hold and therefore no added motion.
+Engine tests cover all three motion types and easing types, zero values, continuity,
+plain-transition equivalence, and exact endpoints. Shared popup tests cover
+exclusive checkmarks after stale marks and cell-level selection changes.
+
+### Added Motion component controls
+
+The Added Motion label menu offers Independent Motion (checked means separate
+component patterns) and an inline PARAMETERS group for axis masks. These options are separate from keypose
+timing links. The dice chooses a saved seed; Amount / Speed Reset Parameter
+restores just those two values. Menu actions use the shared host-refresh lifecycle
+and one undo group. New timings default to linked components; older archives
+without the options retain independent components.
+
+Coverage includes secure metadata roundtrips and older archives, deterministic
+seeds, linked/unlinked phases, masks, Position's internal component ordering,
+amount-zero evaluation, rejected writes, reset scope, and menu/dice undo grouping.

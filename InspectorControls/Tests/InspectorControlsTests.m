@@ -377,6 +377,8 @@ int main(void) {
     assert([popup.font isEqual:[NSFont menuFontOfSize:0]]);
     assert([popup.menu.font isEqual:[NSFont menuFontOfSize:0]]);
     assert(((NSPopUpButtonCell *)popup.cell).arrowPosition==NSPopUpNoArrow);
+    popup.selectedItem.image=[NSImage imageWithSystemSymbolName:@"waveform" accessibilityDescription:nil];
+    assert(popup.selectedItem.image);
     popup.enabled=NO;
     NSImage *popupImage=[[NSImage alloc] initWithSize:popup.frame.size];
     [popupImage lockFocus];
@@ -384,6 +386,14 @@ int main(void) {
     [popupImage unlockFocus];
     assert(!popup.enabled && popup.indexOfSelectedItem==2);
     popup.enabled=YES;
+    // A stale native mark must not survive programmatic or cell-level selection.
+    popup.itemArray[0].state=NSControlStateValueOn;
+    [popup selectItemAtIndex:1];
+    for (NSMenuItem *item in popup.itemArray)
+      assert(item.state==(item==popup.selectedItem ? NSControlStateValueOn : NSControlStateValueOff));
+    [(NSPopUpButtonCell *)popup.cell selectItem:popup.itemArray[2]];
+    for (NSMenuItem *item in popup.itemArray)
+      assert(item.state==(item==popup.selectedItem ? NSControlStateValueOn : NSControlStateValueOff));
     [popup selectItemAtIndex:1];
     assert([popup.title isEqualToString:@"Wave"]);
     testScrubBounds();

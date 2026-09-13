@@ -23,6 +23,11 @@ typedef struct {
     bool customMotion; // When true, use motionAmount and motionSpeed below.
     double motionAmount; // Motion intensity; must be finite and nonnegative when custom.
     double motionSpeed; // Motion frequency multiplier; must be finite and positive when custom.
+    // Opt in to explicit component options; omitted fields preserve legacy defaults.
+    bool customMotionComponents;
+    uint32_t motionSeed;
+    bool motionLinked;
+    uint32_t motionComponentMask; // Low bits select components; zero selects none.
 } MTDestination;
 
 /// Holds the preceding destination until arrival-duration, then smoothly
@@ -32,8 +37,10 @@ typedef struct {
 /// increasing arrivals, and componentCount finite values each. Returns false
 /// for invalid input and leaves output untouched. No allocation or host state.
 /// Outgoing addedMotion uses legacy intensity/frequency=1 unless customMotion is true,
-/// in which case motionAmount and motionSpeed control intensity and frequency. Motion covers the full gap; joins touching
-/// motion use the legacy 0.42-span Hermite blend and pass through each key exactly.
+/// in which case motionAmount and motionSpeed control intensity and frequency.
+/// Motion runs during the hold, with a legacy 0.42-span Hermite handoff into the
+/// plain transition. Available-time transitions have no hold and no added motion.
+/// Joins touching motion pass through each key exactly; zero-duration cuts stay exact.
 /// Optional modulation ranges have modulationRangeCount entries in both arrays;
 /// they supply quarter-range amplitude when a component value is zero.
 /// Output must not overlap the input values.

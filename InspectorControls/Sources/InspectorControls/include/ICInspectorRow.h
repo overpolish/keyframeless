@@ -7,6 +7,11 @@
 #import "ICValueTextField.h"
 
 NS_ASSUME_NONNULL_BEGIN
+// Reusable label with a lazily supplied right-click/control-click menu.
+@interface ICMenuTextField : NSTextField
+@property(nonatomic, copy, nullable) NSMenu *(^menuProvider)(void);
+@end
+
 // Presentation configuration. Identifiers are opaque to the library; display
 // units and host-value conversion remain the consumer's responsibility.
 @interface ICInspectorComponent : NSObject

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MockHost.h"
 #import "ShaderTypes.h"
+#import "MMPoseTiming.h"
 #import <math.h>
 
 @interface Fixture : NSObject
@@ -507,6 +508,44 @@ static void testRenderInputAndTileContracts(void) {
                                      error:&error] &&
          error);
 }
+static void testPoseTimingMotionMetadata(void) {
+  MMPoseTiming *base = [[MMPoseTiming alloc] initWithDuration:2
+                                                      available:YES
+                                                         amount:3
+                                                          speed:4];
+  assert(base.motionSeed == 0 && base.motionLinked &&
+         base.motionComponentMask == UINT32_MAX);
+  MMPoseTiming *configured =
+      [base timingByReplacingMotionSeed:UINT32_MAX linked:NO componentMask:5];
+  assert(configured.duration == 2 && configured.available &&
+         configured.amount == 3 && configured.speed == 4 &&
+         configured.motionSeed == UINT32_MAX && !configured.motionLinked &&
+         configured.motionComponentMask == 5);
+  MMPoseTiming *linked = [configured timingByReplacingLinkID:@"group"];
+  assert([linked.linkID isEqualToString:@"group"] &&
+         linked.motionSeed == UINT32_MAX && !linked.motionLinked &&
+         linked.motionComponentMask == 5);
+  NSError *error = nil;
+  NSData *archive = [NSKeyedArchiver archivedDataWithRootObject:configured
+                                            requiringSecureCoding:YES
+                                                            error:&error];
+  assert(archive && !error);
+  MMPoseTiming *decoded = [NSKeyedUnarchiver unarchivedObjectOfClass:MMPoseTiming.class
+                                                              fromData:archive
+                                                                 error:&error];
+  assert(decoded && !error && [decoded isEqual:configured] &&
+         decoded.hash == configured.hash);
+  assert([[base timingByCopyingMotionOptionsFrom:configured] isEqual:
+      [base timingByReplacingMotionSeed:UINT32_MAX linked:NO componentMask:5]]);
+  // Pre-options archives retain the prior independent component pattern.
+  NSKeyedArchiver *legacy=[[NSKeyedArchiver alloc] initRequiringSecureCoding:YES];
+  [legacy encodeDouble:1.2 forKey:@"duration"]; [legacy encodeBool:NO forKey:@"available"];
+  [legacy encodeDouble:1 forKey:@"amount"]; [legacy encodeDouble:1 forKey:@"speed"]; [legacy finishEncoding];
+  NSKeyedUnarchiver *reader=[[NSKeyedUnarchiver alloc] initForReadingFromData:legacy.encodedData error:&error];
+  MMPoseTiming *old=[[MMPoseTiming alloc] initWithCoder:reader]; [reader finishDecoding];
+  assert(old && !old.motionLinked && old.motionSeed==0 && old.motionComponentMask==UINT32_MAX);
+
+}
 #define RUN(test)                                                              \
   do {                                                                         \
     @autoreleasepool {                                                         \
@@ -530,5 +569,6 @@ int main(void) {
   RUN(testMultiSelectionMovesOnlyLinkedPartners);
   RUN(testDuplicatedEffectsStayIndependent);
   RUN(testRenderInputAndTileContracts);
-  puts("MagicMove model: 13 test groups passed");
+  RUN(testPoseTimingMotionMetadata);
+  puts("MagicMove model: 14 test groups passed");
 }

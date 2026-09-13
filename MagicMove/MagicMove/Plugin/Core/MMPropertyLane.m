@@ -126,7 +126,18 @@ static void MMPropertyError(NSError **error) {
     if(pose.values.count!=components) return nil;
     for(NSUInteger axis=0;axis<components;axis++) v[i*components+axis]=pose.values[axis].doubleValue;
     double at=[entries[i][@"time"] doubleValue];
-    destinations[i]=(MTDestination){at-start,pose.timing.available && i>0 ? at-[entries[i-1][@"time"] doubleValue]:pose.timing.duration,&v[i*components],pose.easing,pose.addedMotion,minimum,maximum,components,true,pose.timing.amount,pose.timing.speed};
+    destinations[i]=(MTDestination){
+      .arrival = at - start,
+      .duration = (pose.timing.available && i > 0
+                       ? at - [entries[i-1][@"time"] doubleValue]
+                       : pose.timing.duration),
+      .values = &v[i * components], .easing = pose.easing,
+      .addedMotion = pose.addedMotion, .modulationMins = minimum,
+      .modulationMaxs = maximum, .modulationRangeCount = components,
+      .customMotion = true, .customMotionComponents = true, .motionAmount = pose.timing.amount,
+      .motionSpeed = pose.timing.speed, .motionSeed = pose.timing.motionSeed,
+      .motionLinked = pose.timing.motionLinked,
+      .motionComponentMask = pose.timing.motionComponentMask};
   }
   NSMutableData *output=[NSMutableData dataWithLength:components*sizeof(double)]; double *result=output.mutableBytes;
   if(!MTSample(destinations,count,components,CMTimeGetSeconds(time)-start,result)) return nil;

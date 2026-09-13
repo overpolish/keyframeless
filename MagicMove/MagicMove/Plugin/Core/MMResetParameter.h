@@ -5,6 +5,7 @@
 
 // Host integration for the native custom property lanes. A reset is one undo group.
 BOOL MMResetParameter(id<PROAPIAccessing> manager, NSView *sender, UInt32 parameterID);
+NSMenu *MMCreatePropertyMenu(id<PROAPIAccessing> manager, NSView *sender);
 NSMenu *MMResetParameterMenu(id<PROAPIAccessing> manager, NSView *sender, UInt32 parameterID);
 
 // Menu lifecycle: handled actions already refresh inside their undo group;

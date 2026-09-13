@@ -82,7 +82,7 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
                              CMTime playhead, MMInspectorSetting setting,
                              double value) {
   if (!isfinite(value) || setting < MMInspectorDuration ||
-      setting > MMInspectorSpeed)
+      setting > MMInspectorResetMotionControls)
     return NO;
   if ((setting == MMInspectorDuration && (value < 0 || value > 60)) ||
       (setting == MMInspectorAmount && (value < 0 || value > 3)) ||
@@ -92,6 +92,9 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
       (setting == MMInspectorMotion &&
        (value < 0 || value > 3 || floor(value) != value)))
     return NO;
+  if ((setting==MMInspectorMotionSeed || setting==MMInspectorMotionMask) &&
+      (value<0 || value>UINT32_MAX || floor(value)!=value)) return NO;
+  if (setting==MMInspectorMotionLinked && value!=0 && value!=1) return NO;
   MMInspectorGap *gap = MMReadInspectorGap(manager, parameterID, playhead);
   if (!gap)
     return NO;
@@ -107,9 +110,12 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
       initWithDuration:setting == MMInspectorDuration ? value : timing.duration
              available:setting == MMInspectorAvailable ? value != 0
                                                        : timing.available
-                amount:setting == MMInspectorAmount ? value : timing.amount
-                 speed:setting == MMInspectorSpeed ? value : timing.speed];
+                amount:setting == MMInspectorResetMotionControls ? 1 : setting == MMInspectorAmount ? value : timing.amount
+                 speed:setting == MMInspectorResetMotionControls ? 1 : setting == MMInspectorSpeed ? value : timing.speed];
   updated=[updated timingByReplacingLinkID:timing.linkID];
+  updated=[updated timingByReplacingMotionSeed:setting==MMInspectorMotionSeed ? (uint32_t)value : timing.motionSeed
+      linked:setting==MMInspectorMotionLinked ? value!=0 : timing.motionLinked
+      componentMask:setting==MMInspectorMotionMask ? (uint32_t)value : timing.motionComponentMask];
   MTEasing easing =
       setting == MMInspectorEasing ? (MTEasing)value : [old easing];
   MTAddedMotion motion =
@@ -136,7 +142,7 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
                                  easing:easing
                             addedMotion:motion] poseByReplacingTiming:updated];
   }
-  if(timing.linkID.length) return MMWriteNativeLinkedPose(manager,parameterID,target,pose);
+  if(timing.linkID.length && setting<MMInspectorMotionSeed) return MMWriteNativeLinkedPose(manager,parameterID,target,pose);
   id<FxParameterSettingAPI_v5> set =
       [manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   id cache=parameterID==MMCustomControls ? (id)MMCombinedCacheForManager(manager) : (parameterID==MMRotationControls ? (id)[MMRotationLane() cacheForManager:manager] : (parameterID==MMOpacityControls ? (id)[MMOpacityLane() cacheForManager:manager] : MMScaleCacheForManager(manager)));

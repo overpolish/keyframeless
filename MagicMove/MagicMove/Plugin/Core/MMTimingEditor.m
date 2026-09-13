@@ -2,9 +2,51 @@
 #import "MMTimingEditor.h"
 #import "Constants.h"
 #import "MMInspectorColors.h"
+#import "MMResetParameter.h"
 #import "MMTimingEditorModel.h"
 #import "Plugin.h"
 @import InspectorControls;
+
+// Menu-item images use NSPopUpButton's native image support. Curve semantics
+// stay in the plugin; InspectorControls remains independent of motion types.
+static NSImage *MMTimingMenuGlyph(BOOL addedMotion, NSInteger type) {
+  double startValue=addedMotion ? 1 : 0, endValue=1;
+  MTDestination poses[2]={
+    {.arrival=0,.values=&startValue,.addedMotion=addedMotion ? (MTAddedMotion)type : MTAddedMotionNone},
+    {.arrival=1,.duration=addedMotion ? 0 : 1,.values=&endValue,.easing=addedMotion ? MTEasingSmooth : (MTEasing)type}
+  };
+  NSMutableArray<NSNumber *> *samples=[NSMutableArray new];
+  double low=INFINITY,high=-INFINITY;
+  for (NSUInteger i=0;i<65;i++) {
+    double value=0;
+    MTSample(poses,2,1,(double)i/64,&value);
+    [samples addObject:@(value)];
+    low=fmin(low,value); high=fmax(high,value);
+  }
+  double span=high-low;
+  NSImage *image=[NSImage imageWithSize:NSMakeSize(28,16) flipped:NO drawingHandler:^BOOL(NSRect rect) {
+    NSBezierPath *line=[NSBezierPath bezierPath];
+    line.lineWidth=1.25;
+    line.lineCapStyle=NSLineCapStyleRound;
+    line.lineJoinStyle=NSLineJoinStyleRound;
+    for (NSUInteger i=0;i<samples.count;i++) {
+      double y=span>1e-6 ? (samples[i].doubleValue-low)/span : 0.5;
+      NSPoint point=NSMakePoint(2+(NSWidth(rect)-4)*i/(samples.count-1),3+(NSHeight(rect)-6)*y);
+      if (i) [line lineToPoint:point]; else [line moveToPoint:point];
+    }
+    [NSColor.blackColor setStroke]; [line stroke]; return YES;
+  }];
+  image.template=YES;
+  return image;
+}
+static NSString *MMTimingPropertyName(UInt32 parameter) {
+  switch (parameter) {
+    case MMScaleControls: return @"Scale";
+    case MMRotationControls: return @"Rotation";
+    case MMOpacityControls: return @"Opacity";
+    default: return @"Position";
+  }
+}
 
 @interface MMGapGraph : NSView
 @property(nonatomic, copy) NSArray<NSArray<NSNumber *> *> *points;
@@ -182,35 +224,41 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
 @property(weak) MagicMovePlugin *plugin;
 @property(strong) id<PROAPIAccessing> manager;
 @property(strong) NSTimer *timer;
-@property(strong) NSPopUpButton *easingMenu;
-@property(strong) NSPopUpButton *motionMenu;
+@property(strong) ICPopUpButton *easingMenu;
+@property(strong) ICPopUpButton *motionMenu;
 @property(strong) NSButton *available;
+@property(strong) NSButton *seedButton;
 @property(strong) NSTextField *gapLabel;
 @property(strong) NSNumberFormatter *gapTimeFormatter;
 @property(strong) NSTextField *motionLabel;
+@property(strong) NSTextField *easingLabel;
+@property(strong) NSBox *motionSeparator;
 @property(strong) MMGapGraph *graph;
 @property(strong) ICInspectorRow *durationRow;
 @property(strong) ICInspectorRow *motionRow;
 @property(strong) id<FxUndoAPI> scrubUndo;
 @property UInt32 displayedParameter;
+@property BOOL writingSetting;
 @property(copy) NSArray<MMInspectorGap *> *plottedGaps;
 @property UInt32 plottedParameter;
 @property CGSize plottedSize;
 @end
 @implementation MMTimingEditor
 - (NSTextField *)label:(NSString *)text {
-  NSTextField *label = [NSTextField labelWithString:text];
+  NSTextField *label = [ICMenuTextField labelWithString:text];
   label.font = ICInspectorTokens.labelFont;
   label.textColor = ICInspectorTokens.labelColor;
   [self addSubview:label];
   return label;
 }
-- (NSPopUpButton *)menu:(NSArray<NSString *> *)items
+- (ICPopUpButton *)menu:(NSArray<NSString *> *)items
                 setting:(NSInteger)setting {
-  NSPopUpButton *menu = [[ICPopUpButton alloc] initWithFrame:NSZeroRect
+  ICPopUpButton *menu = [[ICPopUpButton alloc] initWithFrame:NSZeroRect
                                                    pullsDown:NO];
 
   [menu addItemsWithTitles:items];
+  for (NSUInteger i=0;i<menu.numberOfItems;i++)
+    [menu itemAtIndex:i].image=MMTimingMenuGlyph(setting==MMInspectorMotion,(NSInteger)i);
   menu.tag = setting;
   menu.target = self;
   menu.action = @selector(menuChanged:);
@@ -223,7 +271,7 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   _plugin = plugin;
   _manager = plugin.apiManager;
   self.autoresizingMask = NSViewWidthSizable;
-  _gapLabel = [self label:@"Add two keyposes to edit motion"];
+  _gapLabel = [self label:@"Add two keyframes to edit motion"];
   _gapTimeFormatter=[NSNumberFormatter new];
   _gapTimeFormatter.numberStyle=NSNumberFormatterDecimalStyle;
   _gapTimeFormatter.usesGroupingSeparator=NO;
@@ -244,15 +292,26 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
                             fractionDigits:2] ]
           showsLink:NO];
   [self addSubview:_durationRow];
-  _available = [NSButton checkboxWithTitle:@"Use available time"
-                                    target:self
-                                    action:@selector(availableChanged:)];
-  _available.font = ICInspectorTokens.labelFont;
+  _available = [NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:@"arrow.left.and.right"
+      accessibilityDescription:@"Use available time"] target:self action:@selector(availableChanged:)];
+  [_available setButtonType:NSButtonTypeToggle];
+  _available.bordered=NO;
+  _available.imageScaling=NSImageScaleProportionallyDown;
+  _available.contentTintColor=ICInspectorTokens.decorationColor;
+  _available.toolTip=@"Use all available time between keyframes.";
   [self addSubview:_available];
+  _easingLabel=[self label:@"Easing"];
   _easingMenu = [self menu:@[ @"Smooth", @"Linear", @"Ease In", @"Ease Out" ]
                    setting:MMInspectorEasing];
   _easingMenu.accessibilityLabel = @"Incoming easing";
-  _motionLabel = [self label:@"Added motion"];
+  _motionSeparator=[NSBox new]; _motionSeparator.boxType=NSBoxSeparator;
+  [self addSubview:_motionSeparator];
+  _motionLabel = [self label:@"Position Added Motion"];
+  ((ICMenuTextField *)_motionLabel).menuProvider=^{ return [weakEditor motionContextMenu:NO]; };
+  _seedButton=[NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:@"dice" accessibilityDescription:@"Randomize Added Motion"] target:self action:@selector(randomizeMotionSeed:)];
+  _seedButton.bordered=NO; _seedButton.imageScaling=NSImageScaleProportionallyDown;
+  _seedButton.contentTintColor=ICInspectorTokens.decorationColor;
+  [self addSubview:_seedButton];
   _motionMenu = [self menu:@[ @"None", @"Wave", @"Wiggle", @"Handheld" ]
                    setting:MMInspectorMotion];
   _motionMenu.accessibilityLabel = @"Added motion type";
@@ -269,6 +328,7 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
                                              fractionDigits:2]
          ]
           showsLink:NO];
+  _motionRow.titleMenuProvider=^{ return [weakEditor motionContextMenu:YES]; };
   [self addSubview:_motionRow];
   __weak MMTimingEditor *weakSelf = self;
   for (ICInspectorRow *row in @[ _durationRow, _motionRow ]) {
@@ -309,16 +369,23 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   CGFloat width = NSWidth(self.bounds), right = MAX(140, width - 22),
           content = MAX(0, right - 21);
   self.gapLabel.frame = NSMakeRect(21, 230, content, 18);
-  self.graph.frame = NSMakeRect(21, 110, content, 114);
-  self.durationRow.frame = NSMakeRect(0, 81, width, 24);
-  self.available.frame = NSMakeRect(21, 57, MIN(145, content), 20);
+  self.graph.frame = NSMakeRect(21, 130, content, 94);
+  self.durationRow.frame = NSMakeRect(0, 101, width, 24);
+  self.easingLabel.frame=NSMakeRect(21,77,140,18);
+  CGFloat dividerWidth=MIN(48,content);
+  self.motionSeparator.frame=NSMakeRect(21+(content-dividerWidth)/2,64,dividerWidth,1);
   [self.durationRow layoutSubtreeIfNeeded];
   CGFloat menuRight=NSMaxX(self.durationRow.unitLabels.lastObject.frame);
   self.easingMenu.frame =
-      NSMakeRect(165, 57, MAX(0, menuRight - 165), 18);
-  self.motionLabel.frame = NSMakeRect(21, 34, MAX(0, content - 122), 18);
+      NSMakeRect(165, 77, MAX(0, menuRight - 165), 18);
+  self.seedButton.frame=NSMakeRect(menuRight+4,34,16,18);
+  NSTextField *unit=self.durationRow.unitLabels.lastObject;
+  CGFloat suffixCenter=NSMinY(self.durationRow.frame)+NSMaxY(unit.frame)-unit.firstBaselineOffsetFromTop+unit.font.capHeight/2;
+  self.available.frame=NSMakeRect(menuRight+4,round((suffixCenter-9)*2)/2,16,18);
+  CGFloat motionLabelWidth=MIN(160,MAX(0,menuRight-21-115));
+  self.motionLabel.frame = NSMakeRect(21, 34, motionLabelWidth, 18);
   self.motionMenu.frame =
-      NSMakeRect(145, 34, MAX(0, menuRight - 145), 18);
+      NSMakeRect(21+motionLabelWidth+4, 34, MAX(0, menuRight-21-motionLabelWidth-4), 18);
   self.motionRow.frame = NSMakeRect(0, 5, width, 24);
   self.motionRow.titleLabel.stringValue = @"Amount / Speed";
 }
@@ -358,20 +425,22 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   MMEnable(self.available, enabled);
   MMEnable(self.easingMenu, enabled);
   MMEnable(self.motionMenu, enabled);
+  MMEnable(self.seedButton, enabled);
   for (ICInspectorRow *row in @[ self.durationRow, self.motionRow ])
     row.enabled = enabled;
+  self.easingLabel.textColor = enabled ? ICInspectorTokens.labelColor : ICInspectorTokens.disabledTextColor;
   self.motionLabel.textColor = enabled ? ICInspectorTokens.labelColor : ICInspectorTokens.disabledTextColor;
 }
 - (void)updateControlsForGap:(MMInspectorGap *)gap editing:(BOOL)editing {
+  MMText(self.motionLabel,[NSString stringWithFormat:@"%@ Added Motion",MMTimingPropertyName(self.displayedParameter)]);
   MMText(
       self.gapLabel,
       gap ? [NSString stringWithFormat:@"%@s → %@s",
                  [self.gapTimeFormatter stringFromNumber:@(CMTimeGetSeconds(gap.sourceTime))],
                  [self.gapTimeFormatter stringFromNumber:@(CMTimeGetSeconds(gap.destinationTime))]]
-          : @"No keypose gap here");
+          : @"No keyframe gap here");
   if (!gap) {
     [self setEditorsEnabled:NO];
-    MMText(self.motionLabel, @"Added motion");
     return;
   }
   if (editing)
@@ -381,15 +450,18 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   MMEnable(self.available, YES);
   MMEnable(self.easingMenu, YES);
   MMEnable(self.motionMenu, YES);
+  MMEnable(self.seedButton, [gap.sourcePose addedMotion]!=MTAddedMotionNone);
   self.durationRow.enabled = !incoming.available;
   self.motionLabel.textColor = ICInspectorTokens.labelColor;
+  self.easingLabel.textColor = ICInspectorTokens.labelColor;
   MMNumber(self.durationRow.fields[0], incoming.duration);
   NSControlStateValue available =
       incoming.available ? NSControlStateValueOn : NSControlStateValueOff;
   if (self.available.state != available)
     self.available.state = available;
+  self.available.contentTintColor=incoming.available ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.decorationColor;
   NSString *tip = [NSString
-      stringWithFormat:@"Into pose %lu. Limited to the available %.2f s.",
+      stringWithFormat:@"Into keyframe %lu. Limited to the available %.2f s.",
                        (unsigned long)gap.destinationIndex + 1,
                        CMTimeGetSeconds(CMTimeSubtract(gap.destinationTime,
                                                        gap.sourceTime))];
@@ -398,9 +470,6 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   MMSelect(self.easingMenu, [gap.destinationPose easing]);
   NSInteger motion = [gap.sourcePose addedMotion];
   MMSelect(self.motionMenu, motion);
-  MMText(self.motionLabel,
-         [NSString stringWithFormat:@"Added motion · from pose %lu",
-                                    (unsigned long)gap.destinationIndex]);
   MMNumber(self.motionRow.fields[0], outgoing.amount * 100);
   MMNumber(self.motionRow.fields[1], outgoing.speed);
   self.motionRow.enabled = motion != MTAddedMotionNone;
@@ -427,9 +496,12 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   } @finally { [action endAction:self]; }
 }
 - (void)refresh {
-  if (!self.window || self.hiddenOrHasHiddenAncestor)
+  if (!self.window || self.hiddenOrHasHiddenAncestor || self.writingSetting)
     return;
-  BOOL editing = self.durationRow.interacting || self.motionRow.interacting;
+  // Native selection is provisional until its action finishes. Host snapshots
+  // remain authoritative outside that interaction, including undo and scrubbing.
+  BOOL editing = self.durationRow.interacting || self.motionRow.interacting ||
+      self.easingMenu.interacting || self.motionMenu.interacting;
   id<FxCustomParameterActionAPI_v4> action =
       [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action) {
@@ -481,6 +553,56 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
     for (MMInspectorGap *plotted in graphGaps) [visible addObject:@(plotted.parameterID)];
   [self publishGraphParameters:visible];
 }
+- (void)randomizeMotionSeed:(id)sender {
+  (void)sender;
+  [self writeSetting:MMInspectorMotionSeed value:arc4random()];
+}
+- (NSMenu *)motionContextMenu:(BOOL)controls {
+  UInt32 parameter=self.displayedParameter;
+  NSUInteger count=parameter==MMRotationControls ? 3 : parameter==MMOpacityControls ? 1 : 2;
+  if (!controls && count<2) return nil;
+  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!action) return nil;
+  CMTime time; MMInspectorGap *gap;
+  [action startAction:self];
+  @try { time=[action currentTime]; gap=MMReadInspectorGap(self.manager,parameter,time); }
+  @finally { [action endAction:self]; }
+  NSMenu *menu=MMCreatePropertyMenu(self.manager,self); menu.autoenablesItems=NO;
+  MMPoseTiming *timing=[gap.sourcePose timing];
+  NSValue *boxedTime=[NSValue valueWithBytes:&time objCType:@encode(CMTime)];
+  void (^add)(NSMenu *,NSString *,MMInspectorSetting,double,BOOL)=^(NSMenu *destination,NSString *title,MMInspectorSetting setting,double value,BOOL checked) {
+    NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:title action:@selector(motionContextAction:) keyEquivalent:@""];
+    item.target=self; item.enabled=gap!=nil;
+    item.state=checked ? NSControlStateValueOn : NSControlStateValueOff;
+    item.representedObject=@{@"parameter":@(parameter),@"time":boxedTime,@"setting":@(setting),@"value":@(value)};
+    [destination addItem:item];
+  };
+  if (controls) add(menu,@"Reset Parameter",MMInspectorResetMotionControls,0,NO);
+  else {
+    add(menu,@"Independent Motion",MMInspectorMotionLinked,!timing.motionLinked,!timing.motionLinked);
+    [menu addItem:NSMenuItem.separatorItem];
+    [menu addItem:[NSMenuItem sectionHeaderWithTitle:@"PARAMETERS"]];
+    NSArray *names=@[@"X",@"Y",@"Z"];
+    for (NSUInteger i=0;i<count;i++) {
+      add(menu,names[i],MMInspectorMotionMask,timing.motionComponentMask ^ (UINT32_C(1)<<i),(timing.motionComponentMask & (UINT32_C(1)<<i))!=0);
+      menu.itemArray.lastObject.indentationLevel=1;
+    }
+  }
+  return menu;
+}
+- (void)motionContextAction:(NSMenuItem *)item {
+  NSDictionary *request=item.representedObject;
+  NSMenu *menu=item.menu; while (menu.supermenu) menu=menu.supermenu;
+  MMPropertyMenuActionScheduled(menu);
+  __weak MMTimingEditor *weakSelf=self;
+  CFRunLoopPerformBlock(CFRunLoopGetMain(),kCFRunLoopDefaultMode,^{
+    MMTimingEditor *editor=weakSelf; if (!editor.window) return;
+    CMTime time; [request[@"time"] getValue:&time];
+    [editor writeSetting:[request[@"setting"] integerValue] value:[request[@"value"] doubleValue]
+        parameter:[request[@"parameter"] unsignedIntValue] time:time refreshHost:YES];
+  });
+  CFRunLoopWakeUp(CFRunLoopGetMain());
+}
 - (void)menuChanged:(NSPopUpButton *)menu {
   [self writeSetting:menu.tag value:menu.indexOfSelectedItem];
 }
@@ -516,10 +638,14 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   }
 }
 - (void)writeSetting:(MMInspectorSetting)setting value:(double)value {
+  [self writeSetting:setting value:value parameter:self.displayedParameter time:kCMTimeInvalid refreshHost:NO];
+}
+- (void)writeSetting:(MMInspectorSetting)setting value:(double)value parameter:(UInt32)parameter time:(CMTime)time refreshHost:(BOOL)refreshHost {
   id<FxCustomParameterActionAPI_v4> action =
       [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action)
     return;
+  self.writingSetting=YES;
   [action startAction:self];
   @try {
     id<FxUndoAPI> undo =
@@ -527,16 +653,21 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
                        : [self.manager apiForProtocol:@protocol(FxUndoAPI)];
     BOOL grouped = [undo startUndoGroup:@"Change Motion"];
     @try {
-      CMTime now=[action currentTime];
-      if (!MMWriteInspectorSetting(self.manager, self.displayedParameter,
+      CMTime now=CMTIME_IS_NUMERIC(time) ? time : [action currentTime];
+      if (!MMWriteInspectorSetting(self.manager, parameter,
                                    now, setting, value))
         NSBeep();
+      if (refreshHost) {
+        id<FxParameterSettingAPI_v5> set=[self.manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        [set setCustomParameterValue:NSUUID.UUID.UUIDString toParameter:MMHostRefreshToken atTime:now];
+      }
     } @finally {
       if (grouped)
         [undo endUndoGroup];
     }
   } @finally {
     [action endAction:self];
+    self.writingSetting=NO;
   }
   [self refresh];
 }

@@ -247,12 +247,16 @@ void MMPropertyMenuActionFinished(NSMenu *menu,BOOL refreshed) {
   CFRunLoopWakeUp(CFRunLoopGetMain());
 }
 @end
+NSMenu *MMCreatePropertyMenu(id<PROAPIAccessing> manager, NSView *sender) {
+  MMPropertyMenu *menu=[MMPropertyMenu new];
+  menu.manager=manager; menu.sender=sender; menu.delegate=menu;
+  return menu;
+}
 NSMenu *MMResetParameterMenu(id<PROAPIAccessing> manager, NSView *sender, UInt32 parameter) {
 
   MMResetMenuTarget *target=[MMResetMenuTarget new];
   target.manager=manager; target.sender=sender; target.parameter=parameter;
-  MMPropertyMenu *menu=[MMPropertyMenu new];
-  menu.manager=manager; menu.sender=sender; menu.delegate=menu;
+  NSMenu *menu=MMCreatePropertyMenu(manager,sender);
   NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:@"Reset Parameter" action:@selector(resetParameter:) keyEquivalent:@""];
   item.target=target; item.representedObject=target;
   [menu addItem:item]; return menu;

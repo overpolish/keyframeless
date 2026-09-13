@@ -491,11 +491,12 @@ BOOL MMSetNativePropertyLink(id<PROAPIAccessing> m, UInt32 sourceID,
     NSDictionary *e = member[@"entry"];
     id old = e[@"pose"];
     MMPoseTiming *own = [old timing], *incoming = [leader timing];
-    MMPoseTiming *timing = [[[MMPoseTiming alloc]
+    MMPoseTiming *timing = [[[[MMPoseTiming alloc]
         initWithDuration:incoming.duration
                available:incoming.available
                   amount:own.amount
-                   speed:own.speed] timingByReplacingLinkID:link];
+                   speed:own.speed]
+        timingByCopyingMotionOptionsFrom:own] timingByReplacingLinkID:link];
     id pose = MMReplace(old, timing, [leader easing], [old addedMotion]);
     NSArray *entries = MMEntries(m, p);
     after[@(p)] =
@@ -521,7 +522,7 @@ BOOL MMWriteNativeLinkedPose(id<PROAPIAccessing> m, UInt32 parameter,
     id old = e[@"pose"], updated = pose;
     if (p != parameter) {
       MMPoseTiming *own = [old timing];
-      MMPoseTiming *timing = [[[MMPoseTiming alloc]
+      MMPoseTiming *timing = [[[[MMPoseTiming alloc]
           initWithDuration:newTiming.duration != beforeTiming.duration
                                ? newTiming.duration
                                : own.duration
@@ -534,6 +535,7 @@ BOOL MMWriteNativeLinkedPose(id<PROAPIAccessing> m, UInt32 parameter,
                      speed:newTiming.speed != beforeTiming.speed
                                ? newTiming.speed
                                : own.speed]
+          timingByCopyingMotionOptionsFrom:own]
           timingByReplacingLinkID:MMLink(old)];
       updated = MMReplace(
           old, timing,

@@ -134,7 +134,18 @@ static MMCombinedPose *MMSampleCombinedEntries(NSArray *entries, CMTime time, BO
   for (NSUInteger i=0; i<count; ++i) {
     MMCombinedPose *pose = entries[i][@"pose"];
     components[i*3] = pose.positionX; components[i*3+1] = pose.scale; components[i*3+2] = pose.positionY;
-    destinations[i] = (MTDestination){[entries[i][@"time"] doubleValue]-start, (pose.timing.available && i>0 ? [entries[i][@"time"] doubleValue]-[entries[i-1][@"time"] doubleValue] : pose.timing.duration), &components[i*3], pose.easing, pose.addedMotion, motionMins, motionMaxs, 3, true, pose.timing.amount, pose.timing.speed};
+    destinations[i] = (MTDestination){
+      .arrival = [entries[i][@"time"] doubleValue] - start,
+      .duration = (pose.timing.available && i > 0
+                       ? [entries[i][@"time"] doubleValue] - [entries[i-1][@"time"] doubleValue]
+                       : pose.timing.duration),
+      .values = &components[i * 3], .easing = pose.easing,
+      .addedMotion = pose.addedMotion, .modulationMins = motionMins,
+      .modulationMaxs = motionMaxs, .modulationRangeCount = 3,
+      .customMotion = true, .customMotionComponents = true, .motionAmount = pose.timing.amount,
+      .motionSpeed = pose.timing.speed, .motionSeed = pose.timing.motionSeed,
+      .motionLinked = pose.timing.motionLinked,
+      .motionComponentMask = (pose.timing.motionComponentMask & 1u) | ((pose.timing.motionComponentMask & 2u) << 1)};
   }
   double result[3];
   if (!MTSample(destinations, count, 3, CMTimeGetSeconds(time)-start, result)) return MMCombinedFailure(error);

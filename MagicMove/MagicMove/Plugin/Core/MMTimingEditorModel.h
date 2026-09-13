@@ -11,7 +11,11 @@ typedef NS_ENUM(NSInteger, MMInspectorSetting) {
   MMInspectorEasing,
   MMInspectorMotion,
   MMInspectorAmount,
-  MMInspectorSpeed
+  MMInspectorSpeed,
+  MMInspectorMotionSeed,
+  MMInspectorMotionLinked,
+  MMInspectorMotionMask,
+  MMInspectorResetMotionControls
 };
 @interface MMInspectorGap : NSObject
 @property UInt32 parameterID;

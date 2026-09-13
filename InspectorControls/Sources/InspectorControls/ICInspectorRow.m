@@ -5,11 +5,7 @@
 #import "ICInspectorRow.h"
 #import "InspectorTokens.h"
 
-@interface ICTitleMenuTextField : NSTextField
-@property(nonatomic, copy, nullable) NSMenu *(^menuProvider)(void);
-@end
-
-@implementation ICTitleMenuTextField
+@implementation ICMenuTextField
 - (NSMenu *)menuForEvent:(NSEvent *)event {
   NSEventModifierFlags flags = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
   BOOL rightClick = event.type == NSEventTypeRightMouseDown;
@@ -37,7 +33,7 @@
   self=[super initWithFrame:NSMakeRect(0,0,320,ICInspectorRowHeight)];
   if (!self) return nil;
   self.autoresizingMask=NSViewWidthSizable;
-  _titleLabel=[ICTitleMenuTextField labelWithString:label];
+  _titleLabel=[ICMenuTextField labelWithString:label];
   _titleLabel.font=ICInspectorTokens.labelFont;
   _titleLabel.textColor=ICInspectorTokens.labelColor;
   [self addSubview:_titleLabel];
@@ -71,7 +67,7 @@
   _componentColors=@[];
   _fields=[fields copy]; _axisLabels=[labels copy]; _unitLabels=[units copy];
   __weak ICInspectorRow *weakRow = self;
-  ((ICTitleMenuTextField *)_titleLabel).menuProvider = ^NSMenu *{
+  ((ICMenuTextField *)_titleLabel).menuProvider = ^NSMenu *{
     ICInspectorRow *row = weakRow;
     return row.titleMenuProvider ? row.titleMenuProvider() : nil;
   };

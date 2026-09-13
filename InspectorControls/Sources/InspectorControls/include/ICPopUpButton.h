@@ -7,5 +7,7 @@ NS_ASSUME_NONNULL_BEGIN
 // decoration column matches a standard inspector suffix; the title is right aligned.
 // Populate/select items and use target/action through the normal NSPopUpButton API.
 @interface ICPopUpButton : NSPopUpButton
+// True through native menu tracking and delivery of its selection action.
+@property(nonatomic, readonly, getter=isInteracting) BOOL interacting;
 @end
 NS_ASSUME_NONNULL_END

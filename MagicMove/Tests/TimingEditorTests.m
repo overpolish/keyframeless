@@ -357,9 +357,59 @@ static void testEditorActions(void) {
     NSPopUpButton *menu=[panel valueForKey:key];
     assert(menu.controlSize==NSControlSizeRegular);
     assert([menu.font isEqual:[NSFont menuFontOfSize:0]]);
+    for (NSMenuItem *item in menu.itemArray) {
+      assert(item.image && item.image.isTemplate);
+      assert(NSEqualSizes(item.image.size,NSMakeSize(28,16)));
+      assert(item.title.length>0);
+    }
   }
   ICInspectorRow *duration = [panel valueForKey:@"durationRow"];
   assert(duration.fields[0].enabled && duration.fields[0].doubleValue == 1.2);
+  assert([[[panel valueForKey:@"motionLabel"] stringValue] isEqualToString:@"Scale Added Motion"]);
+  [panel layoutSubtreeIfNeeded];
+  NSButton *availableButton=[panel valueForKey:@"available"];
+  NSButton *seedButton=[panel valueForKey:@"seedButton"];
+  assert(availableButton.image && !availableButton.bordered);
+  assert([availableButton.toolTip isEqualToString:@"Use all available time between keyframes."]);
+  assert(fabs(NSMidX(availableButton.frame)-NSMidX(seedButton.frame))<1e-9);
+  NSTextField *easingLabel=[panel valueForKey:@"easingLabel"];
+  assert([easingLabel.stringValue isEqualToString:@"Easing"]);
+  NSBox *separator=[panel valueForKey:@"motionSeparator"];
+  assert(separator.boxType==NSBoxSeparator && NSMaxY(separator.frame)<=NSMinY(easingLabel.frame));
+  NSView *preview=[panel valueForKey:@"graph"];
+  assert(NSWidth(separator.frame)==48 && fabs(NSMidX(separator.frame)-NSMidX(preview.frame))<1e-9);
+  assert(NSMinY(easingLabel.frame)-NSMaxY(separator.frame)>=12);
+  NSTextField *motionLabel=[panel valueForKey:@"motionLabel"];
+  assert(NSMinY(separator.frame)-NSMaxY(motionLabel.frame)>=12);
+  NSTextField *suffix=duration.unitLabels.lastObject;
+  CGFloat suffixCenter=NSMinY(duration.frame)+NSMaxY(suffix.frame)-suffix.firstBaselineOffsetFromTop+suffix.font.capHeight/2;
+  assert(fabs(NSMidY(availableButton.frame)-suffixCenter)<=0.25);
+
+  availableButton.state=NSControlStateValueOn;
+  [availableButton sendAction:availableButton.action to:availableButton.target];
+  assert(!duration.enabled && [availableButton.contentTintColor isEqual:ICInspectorTokens.accentMatchingHost]);
+  availableButton.state=NSControlStateValueOff;
+  [availableButton sendAction:availableButton.action to:availableButton.target];
+  assert(duration.enabled && [availableButton.contentTintColor isEqual:ICInspectorTokens.decorationColor]);
+
+  ICPopUpButton *motionMenu=[panel valueForKey:@"motionMenu"];
+  NSInteger originalMotion=motionMenu.indexOfSelectedItem;
+  // Native tracking has selected a new option, but its action has not run yet.
+  [motionMenu setValue:@1 forKey:@"interactionDepth"];
+  [motionMenu selectItemAtIndex:MTAddedMotionWiggle];
+  [panel refresh];
+  assert(motionMenu.indexOfSelectedItem==MTAddedMotionWiggle);
+  [panel menuChanged:motionMenu];
+  [motionMenu setValue:@0 forKey:@"interactionDepth"];
+  [panel refresh];
+  assert(motionMenu.indexOfSelectedItem==MTAddedMotionWiggle);
+  // Outside tracking the host is authoritative again, as with undo or scrubbing.
+  [motionMenu selectItemAtIndex:originalMotion];
+  [panel menuChanged:motionMenu];
+  [motionMenu selectItemAtIndex:MTAddedMotionWiggle];
+  [panel refresh];
+  assert(motionMenu.indexOfSelectedItem==originalMotion);
+
   assert([[[panel valueForKey:@"gapLabel"] stringValue] isEqualToString:@"0s → 4s"]);
   for(NSView *view in panel.subviews)
     if([view isKindOfClass:NSTextField.class])
@@ -436,6 +486,7 @@ static void testEditorActions(void) {
   [panel refresh];
   assert(plugin.activeInspectorParameterID == MMCustomControls &&
          !duration.fields[0].enabled);
+  assert([[[panel valueForKey:@"motionLabel"] stringValue] isEqualToString:@"Position Added Motion"]);
   [panel removeFromSuperview];
   [window close];
 }
@@ -530,10 +581,85 @@ static void testStaggeredLinkedGraph(void) {
   [window close];
 }
 
+static void testMotionOptionsAndReset(void) {
+  // Position's internal storage is X, legacy scale, Y. UI masks refer to X/Y.
+  MMCombinedPose *p0=combined(100,100,100,1.2,NO,MTEasingSmooth,MTAddedMotionWave,2,1);
+  p0=[p0 poseByReplacingTiming:[p0.timing timingByReplacingMotionSeed:17 linked:NO componentMask:2]];
+  MMCombinedPose *p1=combined(100,100,100,1.2,NO,MTEasingSmooth,MTAddedMotionNone,1,1);
+  NSArray *positionEntries=@[@{@"time":@0,@"pose":p0},@{@"time":@4,@"pose":p1}];
+  MMCombinedPose *sample=MMSampleCombinedSnapshot(positionEntries,TestTime(0.73));
+  assert(fabs(sample.positionX-100)<1e-9 && fabs(sample.scale-100)<1e-9 && fabs(sample.positionY-100)>1e-6);
+  MMPoseTiming *quiet=[[[MMPoseTiming alloc] initWithDuration:1.2 available:NO amount:0 speed:1] timingByCopyingMotionOptionsFrom:p0.timing];
+  positionEntries=@[@{@"time":@0,@"pose":[p0 poseByReplacingTiming:quiet]},@{@"time":@4,@"pose":p1}];
+  sample=MMSampleCombinedSnapshot(positionEntries,TestTime(0.73));
+  assert(fabs(sample.positionY-100)<1e-9);
+
+  TimingHost *host=[TimingHost new]; host.playhead=TestTime(2);
+  MagicMovePlugin *plugin=[[MagicMovePlugin alloc] initWithAPIManager:host]; host.plugin=plugin;
+  assert([plugin addParametersWithError:nil]);
+  addKey(host,MMScaleControls,0,scale(100,100,1.2,NO,MTEasingSmooth,MTAddedMotionWave,2,3));
+  addKey(host,MMScaleControls,4,scale(200,200,1.2,NO,MTEasingSmooth,MTAddedMotionNone,1,1));
+  MMScalePoseCache *cache=MMCreateScalePoseCache(); host.staticValues[@(MMScaleCacheToken)]=cache.token;
+  MMRefreshScalePoseCache(host,host.playhead);
+  assert(MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorMotionSeed,123));
+  assert(MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorMotionLinked,0));
+  assert(MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorMotionMask,1));
+  assert(MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorDuration,2));
+  MMScalePose *source=[host lane:MMScaleControls][0][@"value"];
+  assert(source.timing.motionSeed==123 && !source.timing.motionLinked && source.timing.motionComponentMask==1);
+  assert(source.timing.amount==2 && source.timing.speed==3);
+  assert(MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorResetMotionControls,0));
+  source=[host lane:MMScaleControls][0][@"value"];
+  assert(source.timing.amount==1 && source.timing.speed==1);
+  assert(source.timing.motionSeed==123 && !source.timing.motionLinked && source.timing.motionComponentMask==1);
+  assert(source.addedMotion==MTAddedMotionWave && [host lane:MMScaleControls].count==2);
+  host.failBlobOnce=MMScaleControls;
+  assert(!MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorMotionSeed,999));
+  assert([(MMScalePose *)[host lane:MMScaleControls][0][@"value"] timing].motionSeed==123);
+  assert(!MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorMotionMask,-1));
+  assert(!MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorMotionSeed,4294967296.0));
+  plugin.activeInspectorParameterID=MMScaleControls;
+  NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,395,256) styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+  window.releasedWhenClosed=NO;
+  MMTimingEditor *panel=[[MMTimingEditor alloc] initWithPlugin:plugin]; [window.contentView addSubview:panel]; [panel refresh];
+  ICInspectorRow *row=[panel valueForKey:@"motionRow"];
+  NSMenu *reset=row.titleMenuProvider();
+  assert([reset.itemArray[0].title isEqualToString:@"Reset Parameter"] && reset.itemArray[0].enabled);
+  ICMenuTextField *label=[panel valueForKey:@"motionLabel"];
+  NSMenu *menu=label.menuProvider();
+  assert([menu.itemArray[0].title isEqualToString:@"Independent Motion"]);
+  assert(menu.itemArray[0].state==NSControlStateValueOn);
+  assert(menu.numberOfItems==5 && [menu.itemArray[2].title isEqualToString:@"PARAMETERS"]);
+  assert(menu.itemArray[3].state==NSControlStateValueOn && menu.itemArray[4].state==NSControlStateValueOff);
+  for (NSMenuItem *item in menu.itemArray) assert(!item.submenu);
+  assert(menu.itemArray[3].indentationLevel==1 && menu.itemArray[4].indentationLevel==1);
+  NSUInteger menuGroups=host.undoGroupsStarted;
+  NSMenuItem *link=menu.itemArray[0]; [NSApp sendAction:link.action to:link.target from:link];
+  [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+  source=[host lane:MMScaleControls][0][@"value"];
+  assert(source.timing.motionLinked && host.undoGroupsStarted==menuGroups+1 && host.undoDepth==0);
+  assert(label.menuProvider().itemArray[0].state==NSControlStateValueOff);
+  assert(host.blobs[@(MMHostRefreshToken)]);
+  assert(MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorAmount,2));
+  assert(MMWriteInspectorSetting(host,MMScaleControls,host.playhead,MMInspectorSpeed,3));
+  NSMenuItem *resetItem=reset.itemArray[0]; [NSApp sendAction:resetItem.action to:resetItem.target from:resetItem];
+  [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+  source=[host lane:MMScaleControls][0][@"value"];
+  assert(source.timing.amount==1 && source.timing.speed==1 && source.timing.motionSeed==123 && source.timing.motionComponentMask==1);
+  assert(host.undoGroupsStarted==menuGroups+2 && host.undoDepth==0);
+  NSUInteger groups=host.undoGroupsStarted;
+  NSButton *dice=[panel valueForKey:@"seedButton"]; assert(dice.enabled);
+  [dice sendAction:dice.action to:dice.target];
+  assert(host.undoGroupsStarted==groups+1 && host.undoDepth==0 && host.actions==0);
+  source=[host lane:MMScaleControls][0][@"value"]; assert(source.timing.motionSeed!=123);
+  [panel removeFromSuperview]; [window close];
+}
+
 int main(void) {
   @autoreleasepool {
     testStaggeredLinkedGraph();
     testTimingCoding();
+    testMotionOptionsAndReset();
     testEditorModel();
     testCachePublication();
     testDurationEvaluation();

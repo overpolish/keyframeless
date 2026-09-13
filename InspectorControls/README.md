@@ -99,3 +99,7 @@ styling, right-aligned titles, and directly drawn stacked chevrons. Use the norm
 item/selection and target/action APIs. Align its trailing edge with a row's final
 unit label to share the numeric readout and decoration columns. Disabled titles
 and chevrons use the shared disabled text token.
+
+`ICMenuTextField` provides the same lazy right-click/control-click menu hook used
+by inspector row titles, for standalone labels. Its `menuProvider` is supplied
+by the consumer; host actions and menu contents remain outside this package.

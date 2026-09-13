@@ -15,11 +15,11 @@ static double mt_seed_hash(int seed, int index) {
 // KKEasing hold algorithms, with intensity/frequency controls, seed=0.
 // Additional components retain the existing deterministic phase variation.
 static double mt_motion_factor(double t, MTAddedMotion motion, size_t component,
-                               double amount, double speed) {
+                               double amount, double speed, uint32_t baseSeed) {
     t = fmax(0.0, fmin(1.0, t));
-    int seed = 0;
+    int seed = (int)baseSeed;
     if (component > 0) {
-        seed = (int)((unsigned)component * 0x9E3779B9u);
+        seed = (int)(baseSeed ^ ((unsigned)component * 0x9E3779B9u));
         if (seed == 0) seed = (int)component + 1;
     }
     double envelope = sin(t * M_PI);
@@ -53,18 +53,20 @@ static double mt_motion_factor(double t, MTAddedMotion motion, size_t component,
     return 1.0;
 }
 
-static double mt_modulate(double value, double factor, const MTDestination *d,
-                          size_t component) {
-    if (fabs(value) >= 1.0e-6) return value * factor;
+// Hold motion uses the authored source amplitude, including a range fallback
+// at zero. Transition values are never multiplied by Added Motion.
+static double mt_motion_amplitude(double value, const MTDestination *d, size_t component) {
+    if (fabs(value) >= 1.0e-6) return value;
     if (d->modulationMins && d->modulationMaxs && component < d->modulationRangeCount) {
         double range = d->modulationMaxs[component] - d->modulationMins[component];
-        if (range > 0.0) return value + (factor - 1.0) * range * 0.25;
+        if (range > 0.0) return range * 0.25;
     }
     return value;
 }
 
-static bool mt_motion_enabled(const MTDestination *d) {
-    return d->addedMotion != MTAddedMotionNone &&
+static bool mt_motion_enabled(const MTDestination *d, size_t component) {
+    return (!d->customMotionComponents || (component<32 && (d->motionComponentMask & (UINT32_C(1)<<component)))) &&
+           d->addedMotion != MTAddedMotionNone &&
            (!d->customMotion || d->motionAmount > 0.0);
 }
 
@@ -84,36 +86,54 @@ static double mt_raw_component(const MTDestination *d, size_t count, size_t c, d
     if (next == count) return d[count - 1].values[c];
     const MTDestination *a = &d[next - 1], *b = &d[next];
     double span = b->arrival - a->arrival;
-    double local = fmax(0.0, fmin(1.0, (seconds - a->arrival) / span));
     double duration = fmin(b->duration, span);
     double start = b->arrival - duration;
+    double hold = span-duration;
     double progress = duration > 0.0 ? mt_base_progress(fmax(0.0, fmin(1.0, (seconds - start) / duration)), b->easing) : 0.0;
     double value = (1.0 - progress) * a->values[c] + progress * b->values[c];
-    if (a->addedMotion != MTAddedMotionNone && local > 0.0 && local < 1.0) {
+    if (mt_motion_enabled(a,c) && hold>0.0 && seconds<start) {
+        double local=fmax(0.0,fmin(1.0,(seconds-a->arrival)/hold));
         double amount = a->customMotion ? a->motionAmount : 1.0;
         double speed = a->customMotion ? a->motionSpeed : 1.0;
-        value = mt_modulate(value, mt_motion_factor(local, a->addedMotion, c, amount, speed), a, c);
+        value += (mt_motion_factor(local,a->addedMotion,(a->customMotionComponents && a->motionLinked) ? 0 : c,amount,speed,a->customMotionComponents ? a->motionSeed : 0)-1.0)*
+                 mt_motion_amplitude(a->values[c],a,c);
     }
     return value;
 }
 
 static double mt_hermite(const MTDestination *d, size_t count, size_t c,
-                         double x, double boundary, double window) {
+                         double x, double boundary, double window,
+                         double (*sample)(const MTDestination *, size_t, size_t, double)) {
     if (window <= 0.0 || x <= boundary - window || x >= boundary + window)
-        return mt_raw_component(d, count, c, x);
+        return sample(d, count, c, x);
     double h = fmax(window * 0.05, 1.0e-5);
-    double pB = mt_raw_component(d, count, c, boundary);
-    double mB = (mt_raw_component(d,count,c,boundary+h)-mt_raw_component(d,count,c,boundary-h))/(2.0*h);
+    double pB = sample(d, count, c, boundary);
+    double mB = (sample(d,count,c,boundary+h)-sample(d,count,c,boundary-h))/(2.0*h);
     bool left = x < boundary;
     double lo = left ? boundary-window : boundary;
     double hi = left ? boundary : boundary+window;
-    double p0 = left ? mt_raw_component(d,count,c,lo) : pB;
-    double p1 = left ? pB : mt_raw_component(d,count,c,hi);
-    double m0 = left ? (mt_raw_component(d,count,c,lo+h)-mt_raw_component(d,count,c,lo-h))/(2.0*h) : mB;
-    double m1 = left ? mB : (mt_raw_component(d,count,c,hi+h)-mt_raw_component(d,count,c,hi-h))/(2.0*h);
+    double p0 = left ? sample(d,count,c,lo) : pB;
+    double p1 = left ? pB : sample(d,count,c,hi);
+    double m0 = left ? (sample(d,count,c,lo+h)-sample(d,count,c,lo-h))/(2.0*h) : mB;
+    double m1 = left ? mB : (sample(d,count,c,hi+h)-sample(d,count,c,hi-h))/(2.0*h);
     double u=(x-lo)/(hi-lo), u2=u*u, u3=u2*u;
     return (2*u3-3*u2+1)*p0 + (u3-2*u2+u)*m0*(hi-lo) +
            (-2*u3+3*u2)*p1 + (u3-u2)*m1*(hi-lo);
+}
+
+// Round the hold-to-transition join inside a gap using the same two-half
+// Hermite blend as legacy keypose joins. Its window never reaches either key.
+static double mt_transition_component(const MTDestination *d,size_t count,size_t c,double seconds) {
+    for (size_t i=1;i<count;i++) {
+        if (!mt_motion_enabled(&d[i-1],c)) continue;
+        double span=d[i].arrival-d[i-1].arrival;
+        double duration=fmin(d[i].duration,span), hold=span-duration;
+        double window=0.42*fmin(hold,duration);
+        double boundary=d[i].arrival-duration;
+        if (window>0.0 && fabs(seconds-boundary)<window)
+            return mt_hermite(d,count,c,seconds,boundary,window,mt_raw_component);
+    }
+    return mt_raw_component(d,count,c,seconds);
 }
 
 bool MTSample(const MTDestination *d, size_t count, size_t components,
@@ -135,12 +155,23 @@ bool MTSample(const MTDestination *d, size_t count, size_t components,
              !isfinite(d[i].motionSpeed) || d[i].motionSpeed <= 0.0)) return false;
     }
     for (size_t c = 0; c < components; ++c) {
-        output[c] = mt_raw_component(d, count, c, seconds);
+        output[c] = mt_transition_component(d, count, c, seconds);
         for (size_t i = 1; i + 1 < count; ++i) {
-            if (!mt_motion_enabled(&d[i-1]) && !mt_motion_enabled(&d[i])) continue;
-            // KK_JOIN_BLEND_MOD_FRAC: preserve the broad motion join fillet.
-            double w = 0.42 * fmin(d[i].arrival-d[i-1].arrival, d[i+1].arrival-d[i].arrival);
-            if (fabs(seconds-d[i].arrival) < w) { output[c] = mt_hermite(d,count,c,seconds,d[i].arrival,w); break; }
+            double previousSpan=d[i].arrival-d[i-1].arrival;
+            double nextSpan=d[i+1].arrival-d[i].arrival;
+            double previousTransition=fmin(d[i].duration,previousSpan);
+            double nextHold=nextSpan-fmin(d[i+1].duration,nextSpan);
+            bool incomingHold=mt_motion_enabled(&d[i-1],c) && previousTransition==0.0;
+            bool outgoingHold=mt_motion_enabled(&d[i],c) && nextHold>0.0;
+            if (!incomingHold && !outgoingHold) continue;
+            // Preserve explicit zero-duration cuts instead of rounding them.
+            if (previousTransition==0.0 && d[i-1].values[c]!=d[i].values[c]) continue;
+            // Blend only the adjacent phases, so an earlier hold cannot reshape
+            // the whole incoming transition after its own handoff is complete.
+            double left=previousTransition>0.0 ? previousTransition : previousSpan;
+            double right=nextHold>0.0 ? nextHold : nextSpan;
+            double w = 0.42 * fmin(left,right);
+            if (fabs(seconds-d[i].arrival) < w) { output[c] = mt_hermite(d,count,c,seconds,d[i].arrival,w,mt_transition_component); break; }
         }
     }
     return true;

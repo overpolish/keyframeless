@@ -127,9 +127,9 @@ static void testAddedMotion(void) {
         {8, 1, c, MTEasingSmooth, MTAddedMotionNone, mins, maxs, 2}
     };
     double out[2];
-    // The outgoing owner modulates the entire interval, including its hold.
+    // The outgoing owner modulates the hold and hands off to the transition.
     assert(MTSample(d, 3, 2, 0, out) && out[0] == 0 && out[1] == 0);
-    assert(MTSample(d, 3, 2, 1.25, out));
+    assert(MTSample(d, 3, 2, 1.1, out));
     assert(fabs(out[0]) > 1e-6); // wave is visible during the hold
     // The next pose remains exact, and a None interval preserves ordinary timing.
     assert(MTSample(d, 3, 2, 4, out) && out[0] == 100 && out[1] == 0);
@@ -143,9 +143,9 @@ static void testAddedMotion(void) {
         }
         assert(MTSample(d, 3, 2, 4, out) && out[0] == 100 && out[1] == 0);
         double forward[2], backward[2];
-        assert(MTSample(d, 3, 2, 1.25, forward));
+        assert(MTSample(d, 3, 2, 1.1, forward));
         assert(MTSample(d, 3, 2, 3.25, backward));
-        assert(MTSample(d, 3, 2, 1.25, out));
+        assert(MTSample(d, 3, 2, 1.1, out));
         assertVector(out, forward, 2);
         assert(MTSample(d, 3, 2, 3.25, out));
         assertVector(out, backward, 2);
@@ -155,7 +155,7 @@ static void testAddedMotion(void) {
 }
 
 static void testCustomMotionControls(void) {
-    double a[] = {0.0}, b[] = {100.0}, c[] = {200.0}, out[1], baseline[1];
+    double a[] = {100.0}, b[] = {200.0}, c[] = {300.0}, out[1], baseline[1];
     MTDestination plain[] = {
         {0, 0, a, MTEasingSmooth}, {4, 1, b, MTEasingSmooth}, {8, 1, c, MTEasingSmooth}
     };
@@ -174,36 +174,112 @@ static void testCustomMotionControls(void) {
         {0, 0, a, MTEasingSmooth, MTAddedMotionWave, NULL, NULL, 0, true, 1.0, 1.0},
         {4, 1, b, MTEasingSmooth}, {8, 1, c, MTEasingSmooth}
     };
-    assert(MTSample(custom, 3, 1, 3.5, out));
+    assert(MTSample(custom, 3, 1, 1.1, out));
     double defaultValue = out[0];
     custom[0].motionAmount = 2.0;
-    assert(MTSample(custom, 3, 1, 3.5, out));
+    assert(MTSample(custom, 3, 1, 1.1, out));
     assert(fabs(out[0] - defaultValue) > 1.0e-6);
     custom[0].motionAmount = 1.0;
     custom[0].motionSpeed = 2.0;
-    assert(MTSample(custom, 3, 1, 3.5, out));
+    assert(MTSample(custom, 3, 1, 1.1, out));
     assert(fabs(out[0] - defaultValue) > 1.0e-6);
 
     // Controls are validated only when opted in, and failures leave output untouched.
     custom[0].motionAmount = NAN; out[0] = 73.0;
-    assert(!MTSample(custom, 3, 1, 3.5, out) && out[0] == 73.0);
+    assert(!MTSample(custom, 3, 1, 1.1, out) && out[0] == 73.0);
     custom[0].motionAmount = -1.0;
-    assert(!MTSample(custom, 3, 1, 3.5, out) && out[0] == 73.0);
+    assert(!MTSample(custom, 3, 1, 1.1, out) && out[0] == 73.0);
     custom[0].motionAmount = 1.0; custom[0].motionSpeed = 0.0;
-    assert(!MTSample(custom, 3, 1, 3.5, out) && out[0] == 73.0);
+    assert(!MTSample(custom, 3, 1, 1.1, out) && out[0] == 73.0);
     custom[0].motionSpeed = INFINITY;
-    assert(!MTSample(custom, 3, 1, 3.5, out) && out[0] == 73.0);
+    assert(!MTSample(custom, 3, 1, 1.1, out) && out[0] == 73.0);
 
     // Different outgoing controls retain exact keys and a smooth join.
     custom[0].motionAmount = 0.7; custom[0].motionSpeed = 0.8;
     custom[0].addedMotion = MTAddedMotionWave;
     custom[1].customMotion = true; custom[1].motionAmount = 1.8; custom[1].motionSpeed = 1.6;
     custom[1].addedMotion = MTAddedMotionWiggle;
-    assert(MTSample(custom, 3, 1, 4.0, out) && out[0] == 100.0);
+    assert(MTSample(custom, 3, 1, 4.0, out) && out[0] == 200.0);
     double left[1], right[1];
     assert(MTSample(custom, 3, 1, 4.0 - 1.0e-4, left));
     assert(MTSample(custom, 3, 1, 4.0 + 1.0e-4, right));
     assert(fabs(left[0] - right[0]) < 0.1);
+}
+
+static void testAddedMotionTransitionContinuity(void) {
+    double cases[][2]={{0,100},{100,0},{-100,100},{100,200}};
+    double mins[]={-100,-100},maxs[]={100,100};
+    for (int motion=MTAddedMotionWave;motion<=MTAddedMotionHandheld;motion++)
+    for (int easing=MTEasingSmooth;easing<=MTEasingEaseOut;easing++)
+    for (size_t scenario=0;scenario<4;scenario++) {
+        double a[]={cases[scenario][0],cases[scenario][0]},b[]={cases[scenario][1],cases[scenario][1]};
+        MTDestination d[]={
+            {.arrival=0,.values=a,.addedMotion=(MTAddedMotion)motion,.modulationMins=mins,.modulationMaxs=maxs,.modulationRangeCount=2},
+            {.arrival=4,.duration=1.2,.values=b,.easing=(MTEasing)easing}
+        };
+        double left[2],middle[2],right[2],epsilon=1e-6;
+        assert(MTSample(d,2,2,2.8-epsilon,left));
+        assert(MTSample(d,2,2,2.8,middle));
+        assert(MTSample(d,2,2,2.8+epsilon,right));
+        for (size_t c=0;c<2;c++) {
+            assert(fabs(right[c]-left[c])<0.01);
+            double incoming=(middle[c]-left[c])/epsilon,outgoing=(right[c]-middle[c])/epsilon;
+            assert(fabs(incoming-outgoing)<0.05);
+        }
+        // The old zero threshold triggered just AFTER the transition started.
+        assert(MTSample(d,2,2,2.8001,right));
+        for (size_t c=0;c<2;c++) assert(fabs(right[c]-middle[c])<0.1);
+        assert(MTSample(d,2,2,0,left)); assertVector(left,a,2);
+        assert(MTSample(d,2,2,4,right)); assertVector(right,b,2);
+        MTDestination plain[2]={d[0],d[1]}; plain[0].addedMotion=MTAddedMotionNone;
+        // Beyond the handoff window, every transition sample equals plain easing.
+        for (int i=0;i<=100;i++) {
+            double t=3.31+0.69*i/100;
+            assert(MTSample(d,2,2,t,left) && MTSample(plain,2,2,t,right));
+            assertVector(left,right,2);
+        }
+        // Available-time transitions have no hold in which to add motion.
+        d[1].duration=4; plain[1].duration=4;
+        for (int i=0;i<=100;i++) {
+            assert(MTSample(d,2,2,i*0.04,left) && MTSample(plain,2,2,i*0.04,right));
+            assertVector(left,right,2);
+        }
+        d[1].duration=1.2;
+        // Dense samples also catch fallback jumps during zero-crossing moves.
+        assert(MTSample(d,2,2,0,left));
+        for (int i=1;i<=40000;i++) {
+            assert(MTSample(d,2,2,i*0.0001,right));
+            for (size_t c=0;c<2;c++) assert(fabs(right[c]-left[c])<1.0);
+            left[0]=right[0];left[1]=right[1];
+        }
+    }
+}
+
+static void testMotionComponentOptions(void) {
+    double values[]={100,100,100},out[3],repeat[3],independent[3];
+    MTDestination d[]={
+        {.arrival=0,.values=values,.customMotionComponents=true,.motionSeed=17,.motionLinked=true,.motionComponentMask=7},
+        {.arrival=4,.duration=1,.values=values}
+    };
+    for (int type=MTAddedMotionWave;type<=MTAddedMotionHandheld;type++) {
+        d[0].addedMotion=(MTAddedMotion)type;
+        assert(MTSample(d,2,3,0.73,out));
+        assert(out[0]==out[1] && out[1]==out[2]);
+        assert(MTSample(d,2,3,0.73,repeat)); assertVector(out,repeat,3);
+        d[0].motionSeed=18;
+        assert(MTSample(d,2,3,0.73,repeat)); assert(fabs(out[0]-repeat[0])>1e-6);
+        d[0].motionSeed=17; d[0].motionLinked=false;
+        assert(MTSample(d,2,3,0.73,independent));
+        assert(independent[0]==out[0] && fabs(independent[0]-independent[1])>1e-6);
+        d[0].motionComponentMask=2;
+        for (int i=0;i<=400;i++) {
+            assert(MTSample(d,2,3,i*0.01,out));
+            assert(fabs(out[0]-100)<1e-9 && fabs(out[2]-100)<1e-9);
+        }
+        d[0].motionComponentMask=0;
+        assert(MTSample(d,2,3,0.73,out)); assertVector(out,values,3);
+        d[0].motionLinked=true; d[0].motionComponentMask=7;
+    }
 }
 
 int main(void) {
@@ -212,6 +288,8 @@ int main(void) {
     testZeroDurationAndGapClamping(); testMultiComponentAndStatelessSampling();
     testDeterministicGeneratedInvariants(); testInvalidInputsLeaveOutputUntouched();
     testAddedMotion();
+    testAddedMotionTransitionContinuity();
+    testMotionComponentOptions();
     testCustomMotionControls();
     puts("MotionTiming: all tests passed");
 }
