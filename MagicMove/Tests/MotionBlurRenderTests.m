@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MockHost.h"
 #import "ShaderTypes.h"
+#import "MMScalarPose.h"
+#import "MMAnchorPose.h"
 #import <IOSurface/IOSurface.h>
 #import <CoreVideo/CoreVideo.h>
 #import <math.h>
@@ -10,9 +12,11 @@
 @interface BlurTile : FxImageTile
 @property(nonatomic, strong) id<MTLTexture> texture;
 @property(nonatomic, strong) IOSurface *surface;
+@property(nonatomic, strong) FxMatrix44 *referenceTransform;
 @end
 @implementation BlurTile
 - (IOSurface *)ioSurface { return self.surface; }
+- (FxMatrix44 *)inversePixelTransform { return self.referenceTransform; }
 - (uint64_t)deviceRegistryID { return self.texture.device.registryID; }
 - (id<MTLTexture>)metalTextureForDevice:(id<MTLDevice>)device { return self.texture; }
 - (FxRect)imagePixelBounds { return (FxRect){0,0,(int)self.texture.width,(int)self.texture.height}; }
@@ -94,6 +98,65 @@ int main(int argc, const char **argv) {
     [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
     assert(output[(16*64+30)*4+3] == 0 && fabsf(output[(16*64+45)*4+3]-.5f)<1e-6);
     assert(plugin.sampleDraws == 16);
-    puts("Motion blur GPU: 16 shared-buffer samples, premultiplied trail, alpha conservation and disabled sharp render passed");
+
+    // The production render path also applies the property Blur lane. With a
+    // zero radius it must remain sharp; a positive pixel radius spreads the
+    // source alpha into neighbouring pixels.
+    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:0 authored:NO
+        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.blobs[@(MMAnchorControls)] = [[MMAnchorPose alloc] initWithX:0 y:0 authored:NO
+        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.editors[@(MMMotionBlur)] = @NO;
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
+    [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
+    assert(output[(16*64+39)*4+3] == 0 && fabsf(output[(16*64+45)*4+3]-.5f)<1e-6);
+    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:3 authored:YES
+        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
+    [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
+    assert(output[(16*64+39)*4+3] > 0 && output[(16*64+45)*4+3] < .5f);
+
+    // Anchor is evaluated by the same production shader. Moving it and
+    // scaling the source changes the rendered centroid around that pivot.
+    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:0 authored:NO
+        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.blobs[@(MMAnchorControls)] = [[MMAnchorPose alloc] initWithX:12 y:0 authored:YES
+        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    TestAdd(host, MMScale, 0, 50);
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
+    [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
+    assert(output[(16*64+39)*4+3] == 0);
+    assert(output[(16*64+51)*4+3] > 0);
+
+    // Full-resolution pixel values and inverse preview scaling cancel out:
+    // doubling the authored dimensions/values on a half-size source must keep
+    // the exact same rendered pixels (including the anchor and Gaussian).
+    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:3 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
+    float reference[64*32*4];
+    [dest.texture getBytes:reference bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
+    Matrix44Data doubled={{2,0,0,0},{0,2,0,0},{0,0,1,0},{0,0,0,1}};
+    source.referenceTransform=[[FxMatrix44 alloc] initWithMatrix44Data:doubled];
+    host.blobs[@(MMAnchorControls)] = [[MMAnchorPose alloc] initWithX:24 y:0 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:6 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
+    [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
+    for(NSUInteger i=0;i<64*32*4;i++) assert(fabsf(output[i]-reference[i])<1e-6);
+    source.referenceTransform=nil;
+
+    // Spatial blur remains compatible with temporal motion blur and keeps the
+    // shared 16-sample command-buffer path.
+    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:3 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.editors[@(MMMotionBlur)] = @YES;
+    plugin.sampleDraws = 0; plugin.firstBuffer = nil;
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
+    assert(plugin.sampleDraws == 16 && plugin.firstBuffer.status == MTLCommandBufferStatusCompleted);
+    puts("Motion blur GPU: temporal samples, production spatial blur, anchor pivot and sharp identity passed");
   }
 }

@@ -50,7 +50,7 @@ int main(void) {
     assert(!error && state.length == sizeof(MMTransform));
     assert(IsFiniteTransform(TransformAt(state, 0)));
     NSUInteger snapshotReads=host.nativeKeyReads-unblurredReadsBefore;
-    assert(snapshotReads <= 12); // Includes one count read each for Scale, Opacity and Rotation.
+    assert(snapshotReads <= 14); // Includes one count read each for Scale, Opacity and Rotation.
 
     // Blur uses the fixed primitive defaults and appends the shared state after
     // the complete set of transform samples.

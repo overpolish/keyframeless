@@ -65,7 +65,7 @@ static void testParameterContract(void) {
     if (!([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN))
       visible++;
   }
-  assert(visible == 5); // Position, Scale, Rotation, Opacity and one shared timing editor.
+  assert(visible == 7); // Six properties and one shared timing editor.
   UInt32 refreshFlags=[h.flags[@(MMHostRefreshToken)] unsignedIntValue];
   assert(refreshFlags & kFxParameterFlag_HIDDEN);
   assert(refreshFlags & kFxParameterFlag_NOT_ANIMATABLE);
@@ -117,7 +117,7 @@ static void testParameterContract(void) {
   // Editor state changes must not reveal hidden rows during scrubbing.
   [f.plugin updateTimingEditorsAtTime:TestTime(1) mouseDown:NO error:nil];
   for (NSNumber *key in h.definitions)
-    if (key.unsignedIntValue != MMCustomControls && key.unsignedIntValue != MMScaleControls && key.unsignedIntValue != MMTimingControls && key.unsignedIntValue != MMOpacityControls && key.unsignedIntValue != MMRotationControls)
+    if (key.unsignedIntValue != MMCustomControls && key.unsignedIntValue != MMScaleControls && key.unsignedIntValue != MMTimingControls && key.unsignedIntValue != MMOpacityControls && key.unsignedIntValue != MMRotationControls && key.unsignedIntValue != MMBlurControls && key.unsignedIntValue != MMAnchorControls)
       assert([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN);
   NSDictionary *properties = nil;
   assert([f.plugin properties:&properties error:nil]);

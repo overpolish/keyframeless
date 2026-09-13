@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MockHost.h"
+#import "MMPropertyLane.h"
 #import <float.h>
 
 @implementation MockHost
@@ -225,7 +226,7 @@
                          atTime:(CMTime)t {
   if (self.failReadParameter == p)
     return NO;
-  *v = _blobs[@(p)] ?: ((p == MMScaleControls || p == MMOpacityControls || p == MMRotationControls) ? nil : [KKDataBlob blobWithString:@"[]"]);
+  *v = _blobs[@(p)] ?: ((p == MMScaleControls || MMPropertyLaneForParameter(p) != nil) ? nil : [KKDataBlob blobWithString:@"[]"]);
   return YES;
 }
 - (BOOL)setCustomParameterValue:(id)v toParameter:(UInt32)p atTime:(CMTime)t {

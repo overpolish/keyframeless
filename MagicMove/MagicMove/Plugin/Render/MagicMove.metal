@@ -36,7 +36,14 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                constant MMTransform &transform [[buffer(0)]],
                                texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]]) {
     if (transform.scale <= 0 || transform.scaleY <= 0) return float4(0);
+    float2 imageSize = float2(colorTexture.get_width(), colorTexture.get_height());
     float2 p = in.textureCoordinate - 0.5 - transform.offset;
+    // Anchor is a pixel offset from the source centre. Convert it to the
+    // centered normalized space used by the transform, then apply the same
+    // inverse transform around that pivot. This matches the old MagicMove
+    // render semantics while keeping the new state resolution independent.
+    float2 anchor = transform.anchorPixels / imageSize;
+    p -= anchor;
     // Orthographic projection of the source plane after local-axis scaling
     // and Euler rotation Rz * Ry * Rx. The inverse 2x2 projection maps the
     // destination sample back into the source texture.
@@ -54,6 +61,7 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     p.x *= transform.aspect;
     float2 source = float2((d*p.x-b*p.y)/determinant,
                            (-c*p.x+a*p.y)/determinant);
+    source += anchor;
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear,
                                      address::clamp_to_zero);
     return float4(colorTexture.sample(textureSampler, source + 0.5)) * clamp(transform.opacity, 0.0f, 1.0f);

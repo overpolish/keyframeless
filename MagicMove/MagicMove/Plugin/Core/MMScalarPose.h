@@ -17,3 +17,4 @@
 @end
 
 MMPropertyLane *MMOpacityLane(void);
+MMPropertyLane *MMBlurLane(void);

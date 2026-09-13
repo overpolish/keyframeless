@@ -42,3 +42,7 @@
 - (BOOL)writeComponent:(NSUInteger)component value:(double)value manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit;
 - (BOOL)writeValue:(double)value manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit;
 @end
+
+// Shared registry for properties using this adapter (Position/Scale retain their saved payloads).
+NSArray<MMPropertyLane *> *MMPropertyLanes(void);
+MMPropertyLane *MMPropertyLaneForParameter(UInt32 parameterID);

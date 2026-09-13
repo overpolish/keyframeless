@@ -190,3 +190,14 @@ static void MMPropertyError(NSError **error) {
   if(ok) [cache publishValuePose:pose atTime:target]; return ok;
 }
 @end
+
+#import "MMScalarPose.h"
+#import "MMRotationPose.h"
+#import "MMAnchorPose.h"
+NSArray<MMPropertyLane *> *MMPropertyLanes(void) {
+  return @[MMRotationLane(),MMOpacityLane(),MMBlurLane(),MMAnchorLane()];
+}
+MMPropertyLane *MMPropertyLaneForParameter(UInt32 parameterID) {
+  for(MMPropertyLane *lane in MMPropertyLanes()) if(lane.parameterID==parameterID) return lane;
+  return nil;
+}

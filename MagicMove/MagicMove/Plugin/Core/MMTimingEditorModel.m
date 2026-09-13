@@ -15,12 +15,8 @@ MMInspectorGap *MMReadInspectorGap(id<PROAPIAccessing> manager,
     entries = [MMCombinedCacheForManager(manager) snapshotEntries];
   else if (parameterID == MMScaleControls)
     entries = [MMScaleCacheForManager(manager) snapshotEntries];
-  else if (parameterID == MMRotationControls)
-    entries = [[MMRotationLane() cacheForManager:manager] snapshotEntries];
-  else if (parameterID == MMOpacityControls)
-    entries = [[MMOpacityLane() cacheForManager:manager] snapshotEntries];
   else
-    return nil;
+    entries = [[MMPropertyLaneForParameter(parameterID) cacheForManager:manager] snapshotEntries];
   if (entries.count < 2 || !entries.firstObject[@"nativeTime"])
     return nil;
   double now = CMTimeGetSeconds(time);
@@ -61,14 +57,10 @@ NSArray<NSValue *> *MMInspectorGraphSamples(MMInspectorGap *gap,
         return @[];
       [points addObject:[NSValue valueWithPoint:NSMakePoint(p.positionX,
                                                             p.positionY)]];
-    } else if (gap.parameterID == MMOpacityControls) {
-      MMScalarPose *p=[MMOpacityLane() sampleEntries:gap.entries time:t];
+    } else if (MMPropertyLaneForParameter(gap.parameterID)) {
+      id<MMPropertyPose> p=[MMPropertyLaneForParameter(gap.parameterID) sampleEntries:gap.entries time:t];
       if(!p) return @[];
-      [points addObject:[NSValue valueWithPoint:NSMakePoint(p.value,p.value)]];
-    } else if(gap.parameterID == MMRotationControls) {
-      id<MMPropertyPose> p=[MMRotationLane() sampleEntries:gap.entries time:t];
-      if(!p) return @[];
-      [points addObject:[NSValue valueWithPoint:NSMakePoint(p.values[0].doubleValue,p.values[1].doubleValue)]];
+      [points addObject:[NSValue valueWithPoint:NSMakePoint(p.values[0].doubleValue,p.values[p.values.count>1 ? 1:0].doubleValue)]];
     } else {
       MMScalePose *p = MMSampleScaleSnapshot(gap.entries, t);
       if (!p)
@@ -102,7 +94,7 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
       setting >= MMInspectorMotion ? gap.sourceTime : gap.destinationTime;
   id old = parameterID == MMCustomControls
                ? (id)MMReadCombinedValue(manager, target)
-               : (parameterID == MMRotationControls ? (id)[MMRotationLane() readValue:manager time:target] : (parameterID == MMOpacityControls ? (id)[MMOpacityLane() readValue:manager time:target] : MMReadScaleValue(manager, target)));
+               : (MMPropertyLaneForParameter(parameterID) ? (id)[MMPropertyLaneForParameter(parameterID) readValue:manager time:target] : MMReadScaleValue(manager, target));
   if (!old)
     return NO;
   MMPoseTiming *timing = [old timing];
@@ -130,7 +122,7 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
                                                easing:easing
                                           addedMotion:motion]
         poseByReplacingTiming:updated];
-  } else if(parameterID == MMOpacityControls || parameterID == MMRotationControls) {
+  } else if(MMPropertyLaneForParameter(parameterID)!=nil) {
     id<MMPropertyPose> p=old;
     pose=[p poseByReplacingValues:p.values authored:p.authored easing:easing addedMotion:motion timing:updated];
   } else {
@@ -145,7 +137,7 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
   if(timing.linkID.length && setting<MMInspectorMotionSeed) return MMWriteNativeLinkedPose(manager,parameterID,target,pose);
   id<FxParameterSettingAPI_v5> set =
       [manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  id cache=parameterID==MMCustomControls ? (id)MMCombinedCacheForManager(manager) : (parameterID==MMRotationControls ? (id)[MMRotationLane() cacheForManager:manager] : (parameterID==MMOpacityControls ? (id)[MMOpacityLane() cacheForManager:manager] : MMScaleCacheForManager(manager)));
+  id cache=parameterID==MMCustomControls ? (id)MMCombinedCacheForManager(manager) : (MMPropertyLaneForParameter(parameterID) ? (id)[MMPropertyLaneForParameter(parameterID) cacheForManager:manager] : MMScaleCacheForManager(manager));
   BOOL written=[set setCustomParameterValue:pose toParameter:parameterID atTime:target];
   if(!written) return NO;
   // Never enumerate native keys inside a UI write action: the host can block
@@ -156,12 +148,12 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
 
 NSArray<NSArray<NSNumber *> *> *MMInspectorGraphComponents(MMInspectorGap *gap, NSUInteger count) {
   if(!gap || count<2) return @[];
-  if(gap.parameterID!=MMRotationControls) {
+  if(!MMPropertyLaneForParameter(gap.parameterID)) {
     NSArray *points=MMInspectorGraphSamples(gap,count);
     NSMutableArray *samples=[NSMutableArray arrayWithCapacity:points.count];
     for(NSValue *value in points) {
       NSPoint point=value.pointValue;
-      [samples addObject:gap.parameterID==MMOpacityControls ? @[@(point.x)] : @[@(point.x),@(point.y)]];
+      [samples addObject:@[@(point.x),@(point.y)]];
     }
     return samples;
   }
@@ -169,7 +161,7 @@ NSArray<NSArray<NSNumber *> *> *MMInspectorGraphComponents(MMInspectorGap *gap, 
   double start=CMTimeGetSeconds(gap.sourceTime),end=CMTimeGetSeconds(gap.destinationTime);
   for(NSUInteger i=0;i<count;i++) {
     CMTime time=CMTimeMakeWithSeconds(start+(end-start)*i/(count-1),1000000);
-    id<MMPropertyPose> pose=[MMRotationLane() sampleEntries:gap.entries time:time];
+    id<MMPropertyPose> pose=[MMPropertyLaneForParameter(gap.parameterID) sampleEntries:gap.entries time:time];
     if(!pose) return @[];
     [samples addObject:pose.values];
   }
@@ -188,7 +180,7 @@ NSArray<MMInspectorGap *> *MMReadInspectorGraphGaps(id<PROAPIAccessing> manager,
   if (!selected && CMTIME_IS_NUMERIC(playhead)) {
     NSArray *entries=parameter==MMCustomControls ? [MMCombinedCacheForManager(manager) snapshotEntries] :
         parameter==MMScaleControls ? [MMScaleCacheForManager(manager) snapshotEntries] :
-        [[(parameter==MMRotationControls ? MMRotationLane() : MMOpacityLane()) cacheForManager:manager] snapshotEntries];
+        [[MMPropertyLaneForParameter(parameter) cacheForManager:manager] snapshotEntries];
     if (entries.count>=2 && entries.firstObject[@"nativeTime"]) {
       CMTime first; [entries.firstObject[@"nativeTime"] getValue:&first];
       if (CMTimeCompare(playhead,first)<0) selected=MMReadInspectorGap(manager,parameter,first);
@@ -197,7 +189,7 @@ NSArray<MMInspectorGap *> *MMReadInspectorGraphGaps(id<PROAPIAccessing> manager,
   if (!selected) return @[];
   NSString *link=[selected.destinationPose timing].linkID;
   NSMutableArray *gaps=[NSMutableArray new];
-  for (NSNumber *p in @[@(MMCustomControls),@(MMScaleControls),@(MMRotationControls),@(MMOpacityControls)]) {
+  for (NSNumber *p in @[@(MMCustomControls),@(MMScaleControls),@(MMRotationControls),@(MMOpacityControls),@(MMBlurControls),@(MMAnchorControls)]) {
     MMInspectorGap *gap=p.unsignedIntValue==parameter ? selected :
         link.length ? MMReadInspectorGap(manager,p.unsignedIntValue,selected.destinationTime) : nil;
     if (!gap || CMTimeCompare(gap.destinationTime,selected.destinationTime)!=0) continue;
@@ -207,7 +199,7 @@ NSArray<MMInspectorGap *> *MMReadInspectorGraphGaps(id<PROAPIAccessing> manager,
   return gaps;
 }
 static NSUInteger MMGraphComponentCount(UInt32 parameter) {
-  return parameter==MMOpacityControls ? 1 : parameter==MMRotationControls ? 3 : 2;
+  return MMPropertyLaneForParameter(parameter) ? MMPropertyLaneForParameter(parameter).componentCount : 2;
 }
 NSArray<NSNumber *> *MMInspectorGraphStartFractions(NSArray<MMInspectorGap *> *gaps) {
   NSMutableArray *starts=[NSMutableArray new];

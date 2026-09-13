@@ -44,6 +44,8 @@ static NSString *MMTimingPropertyName(UInt32 parameter) {
     case MMScaleControls: return @"Scale";
     case MMRotationControls: return @"Rotation";
     case MMOpacityControls: return @"Opacity";
+    case MMBlurControls: return @"Blur";
+    case MMAnchorControls: return @"Anchor";
     default: return @"Position";
   }
 }
@@ -266,7 +268,7 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   return menu;
 }
 - (instancetype)initWithPlugin:(MagicMovePlugin *)plugin {
-  if (!(self = [super initWithFrame:NSMakeRect(0, 0, 320, 256)]))
+  if (!(self = [super initWithFrame:NSMakeRect(0, 0, 320, 250)]))
     return nil;
   _plugin = plugin;
   _manager = plugin.apiManager;
@@ -362,30 +364,30 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   return self;
 }
 - (NSSize)intrinsicContentSize {
-  return NSMakeSize(NSViewNoIntrinsicMetric, 256);
+  return NSMakeSize(NSViewNoIntrinsicMetric, 250);
 }
 - (void)layout {
   [super layout];
   CGFloat width = NSWidth(self.bounds), right = MAX(140, width - 22),
           content = MAX(0, right - 21);
-  self.gapLabel.frame = NSMakeRect(21, 230, content, 18);
-  self.graph.frame = NSMakeRect(21, 130, content, 94);
-  self.durationRow.frame = NSMakeRect(0, 101, width, 24);
-  self.easingLabel.frame=NSMakeRect(21,77,140,18);
+  self.gapLabel.frame = NSMakeRect(21, 224, content, 18);
+  self.graph.frame = NSMakeRect(21, 124, content, 94);
+  self.durationRow.frame = NSMakeRect(0, 95, width, 24);
+  self.easingLabel.frame=NSMakeRect(21,74,140,18);
   CGFloat dividerWidth=MIN(48,content);
-  self.motionSeparator.frame=NSMakeRect(21+(content-dividerWidth)/2,64,dividerWidth,1);
+  self.motionSeparator.frame=NSMakeRect(21+(content-dividerWidth)/2,61,dividerWidth,1);
   [self.durationRow layoutSubtreeIfNeeded];
   CGFloat menuRight=NSMaxX(self.durationRow.unitLabels.lastObject.frame);
   self.easingMenu.frame =
-      NSMakeRect(165, 77, MAX(0, menuRight - 165), 18);
-  self.seedButton.frame=NSMakeRect(menuRight+4,34,16,18);
+      NSMakeRect(165, 74, MAX(0, menuRight - 165), 18);
+  self.seedButton.frame=NSMakeRect(menuRight+4,31,16,18);
   NSTextField *unit=self.durationRow.unitLabels.lastObject;
   CGFloat suffixCenter=NSMinY(self.durationRow.frame)+NSMaxY(unit.frame)-unit.firstBaselineOffsetFromTop+unit.font.capHeight/2;
   self.available.frame=NSMakeRect(menuRight+4,round((suffixCenter-9)*2)/2,16,18);
   CGFloat motionLabelWidth=MIN(160,MAX(0,menuRight-21-115));
-  self.motionLabel.frame = NSMakeRect(21, 34, motionLabelWidth, 18);
+  self.motionLabel.frame = NSMakeRect(21, 31, motionLabelWidth, 18);
   self.motionMenu.frame =
-      NSMakeRect(21+motionLabelWidth+4, 34, MAX(0, menuRight-21-motionLabelWidth-4), 18);
+      NSMakeRect(21+motionLabelWidth+4, 31, MAX(0, menuRight-21-motionLabelWidth-4), 18);
   self.motionRow.frame = NSMakeRect(0, 5, width, 24);
   self.motionRow.titleLabel.stringValue = @"Amount / Speed";
 }
@@ -559,7 +561,7 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
 }
 - (NSMenu *)motionContextMenu:(BOOL)controls {
   UInt32 parameter=self.displayedParameter;
-  NSUInteger count=parameter==MMRotationControls ? 3 : parameter==MMOpacityControls ? 1 : 2;
+  NSUInteger count=MMPropertyLaneForParameter(parameter) ? MMPropertyLaneForParameter(parameter).componentCount : 2;
   if (!controls && count<2) return nil;
   id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action) return nil;

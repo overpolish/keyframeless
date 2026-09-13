@@ -7,8 +7,10 @@
 #import "MMScalePose.h"
 #import "MMScalarPose.h"
 #import "MMRotationPose.h"
+#import "MMAnchorPose.h"
 @import MotionTiming;
 #import <math.h>
+@import MetalPerformanceShaders;
 
 
 static BOOL MMError(NSError **error, NSString *message) {
@@ -40,7 +42,10 @@ static BOOL MMError(NSError **error, NSString *message) {
       : @[[NSValue valueWithBytes:&renderTime objCType:@encode(CMTime)]];
   NSMutableData *transforms = [NSMutableData dataWithLength:times.count*sizeof(MMTransform)];
   MMTransform *states = transforms.mutableBytes;
-  for (NSUInteger sample=0; sample<times.count; ++sample) { states[sample].scale = 1; states[sample].scaleY = 1; }
+  for (NSUInteger sample=0; sample<times.count; ++sample) {
+    states[sample].scale = 1;
+    states[sample].scaleY = 1;
+  }
   BOOL combinedActive = NO;
   NSArray<MMCombinedPose *> *combined = MMReadCombinedPoseSamples(self.apiManager, times, &combinedActive, error);
   if (!combined) return NO;
@@ -101,6 +106,17 @@ static BOOL MMError(NSError **error, NSString *message) {
     states[sample].rotationY=fmod(angles[1].doubleValue,360)*M_PI/180;
     states[sample].rotation=fmod(angles[2].doubleValue,360)*M_PI/180;
   }
+  NSArray<MMScalarPose *> *blurs = [MMBlurLane() readSamples:self.apiManager times:times error:error];
+  if (!blurs) return NO;
+  NSArray<id<MMPropertyPose>> *anchors = [MMAnchorLane() readSamples:self.apiManager times:times error:error];
+  if (!anchors) return NO;
+  for (NSUInteger sample=0; sample<times.count; ++sample) {
+    NSArray<NSNumber *> *values = anchors[sample].values;
+    states[sample].anchorPixels = (vector_float2){
+      values.count > 0 ? values[0].doubleValue : 0.0,
+      values.count > 1 ? values[1].doubleValue : 0.0};
+    states[sample].blurPixels = (float)fmax(0.0, blurs[sample].value);
+  }
   // Preserve the one-transform unblurred payload. Blur adds all shutter samples
   // followed by its shared renderer state; sample zero is always renderTime.
   if (blur.enabled) [transforms appendBytes:&blur length:sizeof(blur)];
@@ -108,18 +124,53 @@ static BOOL MMError(NSError **error, NSString *message) {
   return YES;
 }
 
-// Ported from KKMiniViewerPixelReferenceSize: inversePixelTransform removes
-// preview/proxy scaling and accounts for pixel aspect ratio. No viewer feed.
+// Ported from MagicMove at cb0c3d9a (KKMagicMoveBlurredTexture): MPS Gaussian
+// before the transform, clamp edges, negligible-radius bypass and 256px cap.
+// The new control authors sigma in full-resolution pixels instead of percent;
+// render callers convert to preview/proxy pixels before entering this helper.
+static id<MTLTexture> MMBlurredSource(id<MTLTexture> source,
+                                      float blurPixels,
+                                      id<MTLDevice> device,
+                                      id<MTLCommandBuffer> commandBuffer) {
+  if (!source || !device || !commandBuffer || !isfinite(blurPixels) || blurPixels <= 0.0f)
+    return source;
+  float sigma = fminf(blurPixels, 256.0f);
+  if (sigma < 0.5f) return source;
+  MTLTextureDescriptor *descriptor = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:source.pixelFormat
+                                   width:source.width height:source.height mipmapped:NO];
+  descriptor.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite |
+                     MTLTextureUsageRenderTarget;
+  descriptor.storageMode = MTLStorageModePrivate;
+  id<MTLTexture> intermediate = [device newTextureWithDescriptor:descriptor];
+  if (!intermediate) return source;
+  MPSImageGaussianBlur *gaussian = [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:sigma];
+  gaussian.edgeMode = MPSImageEdgeModeClamp;
+  [gaussian encodeToCommandBuffer:commandBuffer sourceTexture:source destinationTexture:intermediate];
+  return intermediate;
+}
+
+// Inverse pixel transforms remove host preview/proxy scaling and pixel aspect.
+static CGSize MMImageReferenceSize(FxImageTile *image) {
+  FxRect bounds=image.imagePixelBounds;
+  FxMatrix44 *inverse=image.inversePixelTransform;
+  FxPoint2D lower={bounds.left,bounds.bottom}, upper={bounds.right,bounds.top};
+  if(inverse) { lower=[inverse transform2DPoint:lower]; upper=[inverse transform2DPoint:upper]; }
+  double width=fabs(upper.x-lower.x),height=fabs(upper.y-lower.y);
+  return isfinite(width)&&isfinite(height)&&width>0&&height>0 ? CGSizeMake(width,height) : CGSizeZero;
+}
+static MMTransform MMTransformForTexture(MMTransform state,id<MTLTexture> texture,CGSize reference) {
+  if(reference.width>0 && reference.height>0) {
+    state.anchorPixels.x *= texture.width/reference.width;
+    state.anchorPixels.y *= texture.height/reference.height;
+    state.blurPixels *= fmin(texture.width/reference.width,texture.height/reference.height);
+  }
+  return state;
+}
 - (void)publishInspectorGeometry:(FxImageTile *)image {
-  if (!image) return;
-  FxRect bounds = image.imagePixelBounds;
-  FxMatrix44 *inverse = image.inversePixelTransform;
-  if (!inverse) return;
-  FxPoint2D lower = [inverse transform2DPoint:(FxPoint2D){bounds.left, bounds.bottom}];
-  FxPoint2D upper = [inverse transform2DPoint:(FxPoint2D){bounds.right, bounds.top}];
-  double width = fabs(upper.x-lower.x), height = fabs(upper.y-lower.y);
-  if (isfinite(width) && isfinite(height) && width > 0 && height > 0)
-    self.inspectorImageSize = CGSizeMake(width, height);
+  if(!image) return;
+  CGSize size=MMImageReferenceSize(image);
+  if(size.width>0 && size.height>0) self.inspectorImageSize=size;
 }
 
 // Moving/rotating the source can require pixels outside the destination tile.
@@ -157,6 +208,7 @@ static BOOL MMError(NSError **error, NSString *message) {
   double width = bounds.right-bounds.left, height = bounds.top-bounds.bottom;
   if (width <= 0 || height <= 0) return MMError(error, @"Invalid Magic Move image size");
   state.aspect = width/height;
+  CGSize referenceSize=MMImageReferenceSize(sourceImages[0]);
   id<MTLRenderPipelineState> pipeline =
       [self pipelineStateForPluginID:kPluginID destinationImage:destinationImage
                         vertexShader:@"vertexShader" fragmentShader:@"fragmentShader"
@@ -171,8 +223,11 @@ static BOOL MMError(NSError **error, NSString *message) {
           MMTransform sample;
           [pluginState getBytes:&sample range:NSMakeRange((NSUInteger)sampleIndex*sizeof(sample),sizeof(sample))];
           sample.aspect = width/height;
+          sample=MMTransformForTexture(sample,textures[0],referenceSize);
+          id<MTLTexture> source = MMBlurredSource(textures[0], sample.blurPixels,
+                                                  commandBuffer.device, commandBuffer);
           return [self encodeFullScreenQuadIntoTexture:sampleDest destinationImage:destinationImage
-              commandBuffer:commandBuffer sourceTextures:textures
+              commandBuffer:commandBuffer sourceTextures:@[source]
               commands:^(id<MTLRenderCommandEncoder> encoder, NSArray<id<MTLTexture>> *inputs) {
                 [encoder setRenderPipelineState:pipeline];
                 [encoder setFragmentTexture:inputs[0] atIndex:KKTextureIndex_InputImage];
@@ -183,11 +238,22 @@ static BOOL MMError(NSError **error, NSString *message) {
     if (applied) return YES;
     // Retain the old fallback if shared blur resources cannot be prepared.
   }
+  __block id<MTLTexture> blurredSource = nil;
+  __block MMTransform textureState=state;
+  // Schedule the spatial pass on the renderer's command buffer before its
+  // encoder is opened. This keeps blur and transform in one GPU submission.
   return [self encodeRenderCommandsForDestinationImage:destinationImage sourceImages:sourceImages
+      setup:^(id<MTLCommandBuffer> commandBuffer) {
+        id<MTLTexture> input = [sourceImages[0] metalTextureForDevice:commandBuffer.device];
+        textureState=MMTransformForTexture(state,input,referenceSize);
+        blurredSource = MMBlurredSource(input, textureState.blurPixels,
+                                        commandBuffer.device, commandBuffer);
+      }
       commands:^(id<MTLRenderCommandEncoder> encoder, NSArray<id<MTLTexture>> *textures) {
         [encoder setRenderPipelineState:pipeline];
-        [encoder setFragmentTexture:textures[0] atIndex:KKTextureIndex_InputImage];
-        [encoder setFragmentBytes:&state length:sizeof(state) atIndex:0];
+        id<MTLTexture> input = blurredSource ?: textures[0];
+        [encoder setFragmentTexture:input atIndex:KKTextureIndex_InputImage];
+        [encoder setFragmentBytes:&textureState length:sizeof(textureState) atIndex:0];
         [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
       }];
 }

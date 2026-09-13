@@ -94,6 +94,7 @@ static MMTransform transform(float x, float y, float scale, float rotation, floa
   MMTransform result = {{x, y}, scale, rotation, aspect, scale, 1}; return result;
 }
 
+
 static MMTransform transform3(float x, float y, float scale, float z,
                               float aspect, float rotationX, float rotationY) {
   MMTransform result = transform(x, y, scale, z, aspect);
@@ -148,6 +149,18 @@ int main(int argc, const char **argv) {
       vector_float4 expected = {red, red * 0.5f, red * 0.25f, 128.0f / 255.0f};
       checkPixel(&pixels[(2 * 8 + x) * 4], expected, 0.02f);
     } // identity, premultiplied horizontal ramp, and non-square dimensions
+    // Anchor is authored in source pixels and must preserve non-square identity
+    // when it is centred at the default pivot.
+    MMTransform anchored = transform(0, 0, 0.5f, 0, 2);
+    anchored.anchorPixels = (vector_float2){0, 0};
+    render(device, queue, pipeline, ramp, anchored, pixels, 8, 4);
+    assert(pixels[(2 * 8 + 4) * 4 + 3] > 0.1f);
+    // Moving the pivot changes which source point lands at the destination
+    // centre. This catches accidental aspect scaling of the anchor itself.
+    anchored.anchorPixels = (vector_float2){2, 0};
+    render(device, queue, pipeline, ramp, anchored, pixels, 8, 4);
+    float pivotRed = pixels[(2 * 8 + 4) * 4];
+    assert(pivotRed > 0.05f && pivotRed < 0.25f);
     render(device, queue, pipeline, ramp, transform(1.0f / 8.0f, 0, 1, 0, 1), pixels, 8, 4);
     assert(pixels[(2 * 8) * 4 + 3] == 0); // exact positive one-pixel translation
     checkPixel(&pixels[(2 * 8 + 4) * 4], (vector_float4){4.0f / 7.0f * 0.5f, 4.0f / 7.0f * 0.25f,

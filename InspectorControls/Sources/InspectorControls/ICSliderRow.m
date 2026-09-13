@@ -9,8 +9,11 @@
 @implementation ICSliderRow
 - (instancetype)initWithLabel:(NSString *)label identifier:(NSInteger)identifier
                fractionDigits:(NSUInteger)fractionDigits {
+  return [self initWithLabel:label identifier:identifier suffix:@"%" fractionDigits:fractionDigits];
+}
+- (instancetype)initWithLabel:(NSString *)label identifier:(NSInteger)identifier suffix:(NSString *)suffix fractionDigits:(NSUInteger)fractionDigits {
   ICInspectorComponent *component = [[ICInspectorComponent alloc]
-      initWithIdentifier:identifier label:@"" suffix:@"%" fractionDigits:fractionDigits];
+      initWithIdentifier:identifier label:@"" suffix:suffix fractionDigits:fractionDigits];
   if ((self = [super initWithLabel:label components:@[ component] showsLink:NO])) {
     _sliderView = [ICSliderView styledSlider];
     _sliderView.minValue = 0; _sliderView.maxValue = 100;

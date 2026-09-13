@@ -12,6 +12,8 @@ static inline NSArray<NSColor *> *MMInspectorColors(UInt32 parameterID) {
     case MMScaleControls: return @[palette[2],palette[3]];
     case MMRotationControls: return @[palette[5],palette[6],palette[7]];
     case MMOpacityControls: return @[palette[4]];
+    case MMBlurControls: return @[palette[8]];
+    case MMAnchorControls: return @[palette[9],palette[10]];
     default: return @[];
   }
 }

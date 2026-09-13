@@ -13,6 +13,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithLabel:(NSString *)label
                     identifier:(NSInteger)identifier
                fractionDigits:(NSUInteger)fractionDigits;
+- (instancetype)initWithLabel:(NSString *)label identifier:(NSInteger)identifier
+                       suffix:(NSString *)suffix fractionDigits:(NSUInteger)fractionDigits;
 @end
 
 NS_ASSUME_NONNULL_END

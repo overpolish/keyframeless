@@ -6,6 +6,7 @@
 #import "MMScalarPose.h"
 #import "MMPropertyRow.h"
 #import "MMRotationPose.h"
+#import "MMAnchorPose.h"
 #import "MMInspectorColors.h"
 #import "MMShortcut.h"
 #import "MMTimingEditor.h"
@@ -312,6 +313,14 @@
     return [[MMVectorRow alloc] initWithPlugin:self lane:MMRotationLane() label:@"Rotation" components:components];
   }
   if (parameterID == MMOpacityControls) return [[MMScalarRow alloc] initWithPlugin:self lane:MMOpacityLane() label:@"Opacity"];
+  if (parameterID == MMBlurControls) return [[MMScalarRow alloc] initWithPlugin:self lane:MMBlurLane() label:@"Blur"];
+  if (parameterID == MMAnchorControls) {
+    NSMutableArray *components=[NSMutableArray array];
+    NSArray *labels=@[@"X",@"Y"];
+    for(NSUInteger axis=0;axis<2;axis++)
+      [components addObject:[[ICInspectorComponent alloc] initWithIdentifier:axis label:labels[axis] suffix:@"px" fractionDigits:0]];
+    return [[MMVectorRow alloc] initWithPlugin:self lane:MMAnchorLane() label:@"Anchor" components:components];
+  }
   if (parameterID == MMTimingControls) return [[MMTimingEditor alloc] initWithPlugin:self];
   if (parameterID == MMCustomControls || parameterID == MMScaleControls) {
     MMCustomRow *row = [[MMCustomRow alloc] initWithManager:self.apiManager scale:parameterID == MMScaleControls];

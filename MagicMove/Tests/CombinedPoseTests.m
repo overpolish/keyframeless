@@ -241,11 +241,16 @@ int main(void) {
     [plugin refreshDurationAtTime:TestTime(2)];
     assert([host.flags[@(MMCombinedAddedMotion)] unsignedIntValue] & kFxParameterFlag_DISABLED);
     // Blur takes one combined native snapshot, then evaluates every shutter time.
+    host.editors[@(MMMotionBlur)] = @NO;
+    NSUInteger sharpReads=host.nativeKeyReads;
+    NSData *sharpState;
+    assert([plugin pluginState:&sharpState atTime:TestTime(0.5) quality:0 error:&error]);
+    sharpReads=host.nativeKeyReads-sharpReads;
     host.editors[@(MMMotionBlur)] = @YES;
     NSUInteger blurReads = host.nativeKeyReads;
     NSData *blurState;
     assert([plugin pluginState:&blurState atTime:TestTime(0.5) quality:0 error:&error]);
-    assert(host.nativeKeyReads-blurReads < 7); // Includes the independent Rotation lane count.
+    assert(host.nativeKeyReads-blurReads == sharpReads); // One snapshot per lane, independent of shutter sample count.
     KKMotionBlurState blur;
     [blurState getBytes:&blur range:NSMakeRange(blurState.length-sizeof(blur),sizeof(blur))];
     assert(blur.enabled && blur.sampleCount == 16);

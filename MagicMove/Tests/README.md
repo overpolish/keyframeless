@@ -267,3 +267,12 @@ without the options retain independent components.
 Coverage includes secure metadata roundtrips and older archives, deterministic
 seeds, linked/unlinked phases, masks, Position's internal component ordering,
 amount-zero evaluation, rejected writes, reset scope, and menu/dice undo grouping.
+
+`BlurAnchorTests` covers the new lanes' secure persistence, interpolation,
+incoming/outgoing timing ownership, scalar bounds, unbounded anchor values,
+explicit edits, failed writes, linked combined graphs and release-only linked
+moves. It checks reset rollback, defaults, balanced undo groups, row order,
+animation flags, pixel suffix/precision, render state and read failures.
+The shared InspectorControls tests cover a slider row with a non-percent suffix.
+These checks do not establish host gesture delivery or save/reopen behavior;
+see the Blur/Anchor host checkpoint in the plugin README.

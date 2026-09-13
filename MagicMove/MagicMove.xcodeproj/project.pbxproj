@@ -106,6 +106,7 @@
 				Plugin/Core/MMNativeLinks.h,
 				Plugin/Core/MMNativeLinks.m,
 				Plugin/Core/MMRotationPose.m,
+				Plugin/Core/MMAnchorPose.m,
 				Plugin/Core/MMScalarPose.m,
 				Plugin/Core/MMScalePose.m,
 				Plugin/Core/MMShortcut.m,

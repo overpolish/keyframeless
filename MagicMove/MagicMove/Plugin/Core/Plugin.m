@@ -79,8 +79,8 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
   if (parameterID == MMHostRefreshToken) return [NSSet setWithObject:NSString.class];
   if (parameterID == MMTimingControls) return [NSSet setWithObject:NSNumber.class];
-  if (parameterID == MMRotationControls) return [NSSet setWithObject:MMRotationPose.class];
-  if (parameterID == MMOpacityControls) return [NSSet setWithObject:MMScalarPose.class];
+  MMPropertyLane *lane=MMPropertyLaneForParameter(parameterID);
+  if(lane) return [NSSet setWithObject:[(NSObject *)lane.defaultPose class]];
   if (parameterID == MMScaleControls) return [NSSet setWithObject:MMScalePose.class];
   if (parameterID == MMCustomControls) return [NSSet setWithObjects:MMCombinedPose.class, NSNumber.class, nil];
   if (parameterID == MMDurationData || parameterID == MMScaleDurationData) return [NSSet setWithObject:KKDataBlob.class];
@@ -330,15 +330,10 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
   if (parameterID == MMHostRefreshToken) return YES; // Host invalidation only.
   // FxPlug callbacks can overlap the timer on another thread. Never release a
   // prepared plan while a native callback is still updating its snapshots.
-  if (parameterID == MMRotationControls || parameterID == MMRotationCacheToken) {
-    [MMRotationLane() refreshCacheForManager:self.apiManager time:time];
-    MMObserveNativeLinks(self.apiManager,MMRotationControls,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
-    MMPropertyMenuParametersChanged(self.apiManager);
-    return YES;
-  }
-  if (parameterID == MMOpacityControls || parameterID == MMOpacityCacheToken) {
-    [MMOpacityLane() refreshCacheForManager:self.apiManager time:time];
-    MMObserveNativeLinks(self.apiManager,MMOpacityControls,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
+  for(MMPropertyLane *lane in MMPropertyLanes()) {
+    if(parameterID!=lane.parameterID && parameterID!=lane.cacheTokenID) continue;
+    [lane refreshCacheForManager:self.apiManager time:time];
+    MMObserveNativeLinks(self.apiManager,lane.parameterID,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
     MMPropertyMenuParametersChanged(self.apiManager);
     return YES;
   }

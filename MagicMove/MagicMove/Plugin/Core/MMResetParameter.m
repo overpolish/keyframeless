@@ -14,26 +14,24 @@ static id MMDefaultPose(UInt32 parameter, id previous) {
       return [[MMCombinedPose alloc] initWithPositionX:0 positionY:0
           scale:[previous isKindOfClass:MMCombinedPose.class] ? [(MMCombinedPose *)previous scale]:100 authored:YES];
     case MMScaleControls: return [[MMScalePose alloc] initWithX:100 y:100 authored:YES];
-    case MMOpacityControls: return [[MMScalarPose alloc] initWithValue:100 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
-    case MMRotationControls: return [[MMRotationPose alloc] initWithX:0 y:0 z:0 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
-    default: return nil;
+    default: {
+      id<MMPropertyPose> pose=MMPropertyLaneForParameter(parameter).defaultPose;
+      return [pose poseByReplacingValues:pose.values authored:YES easing:pose.easing addedMotion:pose.addedMotion timing:pose.timing];
+    }
   }
 }
 static NSArray *MMResetCachedEntries(id<PROAPIAccessing> manager, UInt32 parameter) {
   switch(parameter) {
     case MMCustomControls: return [MMCombinedCacheForManager(manager) snapshotEntries];
     case MMScaleControls: return [MMScaleCacheForManager(manager) snapshotEntries];
-    case MMOpacityControls: return [[MMOpacityLane() cacheForManager:manager] snapshotEntries];
-    case MMRotationControls: return [[MMRotationLane() cacheForManager:manager] snapshotEntries];
-    default: return nil;
+    default: return [[MMPropertyLaneForParameter(parameter) cacheForManager:manager] snapshotEntries];
   }
 }
 static void MMPublishReset(id<PROAPIAccessing> manager, UInt32 parameter, id pose) {
   switch(parameter) {
     case MMCustomControls: [MMCombinedCacheForManager(manager) publishConstantPose:pose]; break;
     case MMScaleControls: [MMScaleCacheForManager(manager) publishConstantPose:pose]; break;
-    case MMOpacityControls: [[MMOpacityLane() cacheForManager:manager] publishConstantPose:pose]; break;
-    case MMRotationControls: [[MMRotationLane() cacheForManager:manager] publishConstantPose:pose]; break;
+    default: [[MMPropertyLaneForParameter(parameter) cacheForManager:manager] publishConstantPose:pose]; break;
   }
 }
 BOOL MMResetParameter(id<PROAPIAccessing> manager, NSView *sender, UInt32 parameter) {

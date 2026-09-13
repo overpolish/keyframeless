@@ -59,3 +59,8 @@ MMPropertyLane *MMOpacityLane(void) {
   static MMPropertyLane *lane; static dispatch_once_t once;
   dispatch_once(&once,^{ lane=[[MMPropertyLane alloc] initWithParameterID:MMOpacityControls cacheTokenID:MMOpacityCacheToken defaultPose:[[MMScalarPose alloc] initWithValue:100 authored:NO easing:MTEasingSmooth addedMotion:MTAddedMotionNone] minimum:0 maximum:100 boundsValues:YES]; }); return lane;
 }
+
+MMPropertyLane *MMBlurLane(void) {
+  static MMPropertyLane *lane; static dispatch_once_t once;
+  dispatch_once(&once,^{ lane=[[MMPropertyLane alloc] initWithParameterID:MMBlurControls cacheTokenID:MMBlurCacheToken defaultPose:[[MMScalarPose alloc] initWithValue:0 authored:NO easing:MTEasingSmooth addedMotion:MTAddedMotionNone] minimum:0 maximum:100 boundsValues:YES]; }); return lane;
+}

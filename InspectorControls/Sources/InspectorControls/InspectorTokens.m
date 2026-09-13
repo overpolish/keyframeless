@@ -33,7 +33,10 @@
              [NSColor colorWithSRGBRed:0.96 green:0.77 blue:0.32 alpha:1],
              [NSColor colorWithSRGBRed:1 green:0.58 blue:0.26 alpha:1],
              [NSColor colorWithSRGBRed:0.30 green:0.85 blue:0.82 alpha:1],
-             [NSColor colorWithSRGBRed:0.97 green:0.47 blue:0.72 alpha:1]];
+             [NSColor colorWithSRGBRed:0.97 green:0.47 blue:0.72 alpha:1],
+             [NSColor colorWithSRGBRed:0.73 green:0.78 blue:0.88 alpha:1],
+             [NSColor colorWithSRGBRed:0.69 green:0.85 blue:0.38 alpha:1],
+             [NSColor colorWithSRGBRed:0.54 green:0.60 blue:1 alpha:1]];
   });
   return colors;
 }

@@ -463,3 +463,36 @@ colors stable across selection changes.
 Temporary timing latency and click-routing probes were removed after host validation.
 `MM_INSPECTOR_DEBUG_PAINT` retains opt-in layout painting, disabled by default and
 excluded from Release builds.
+
+### Blur and Anchor inspectors
+
+Blur (2300) and Anchor (2400) appear directly below Opacity, in that order.
+Both use `MMPropertyLane` and the existing native-keyframe timing, linking,
+reset, graph and Added Motion paths. The shared lane registry handles cache
+lookup, host callbacks and allowed secure-coded payload classes.
+
+Blur reuses the scalar payload and slider row, with a `px` suffix and whole-pixel
+readout (0–100). Its value is Gaussian sigma in full-resolution source pixels.
+The renderer ports `KKMagicMoveBlurredTexture` from old MagicMove commit
+`cb0c3d9a`: an MPS Gaussian pass before the transform, clamped edges, a
+negligible-radius bypass, and the original 256 texture-pixel performance cap.
+It has no Mirage dependency. The old percentage-to-sigma mapping is replaced
+by pixel units. Blur follows the clip's transform and is evaluated for each
+motion-blur sample on the same command buffer.
+
+Anchor uses a secure two-component payload, with X/Y whole-pixel fields and
+zero at the image centre. It controls the pivot for scaling and rotation;
+changing Anchor alone at identity leaves the image in place. Pixel values are
+converted using the source image's inverse pixel transform so reduced-resolution
+previews retain the full-resolution anchor and blur appearance. Anchor values
+can extend outside the image; its ±1000 range defines Added Motion amplitude,
+not an editing limit. Blur defaults to zero, Anchor to (0, 0).
+
+Host checkpoint: the user confirmed Blur and Anchor work well in the host.
+The timing panel row gaps were then reduced by 3pt to match the requested 16pt
+spacing, preserving divider padding. Build and timing panel tests passed.
+
+Extended host checks: check both rows below Opacity, create/move native
+keyframes, adjust incoming timing and outgoing Added Motion, link to another
+property, reset/undo, and save/reopen. Inspect Blur at full and reduced preview
+resolution; inspect Anchor while scaling/rotating, with motion blur on and off.

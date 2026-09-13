@@ -172,6 +172,10 @@ static BOOL rowDisposesWithoutCallbackCycle(void) {
 }
 
 static void testSliderRow(void) {
+  ICSliderRow *pixels=[[ICSliderRow alloc] initWithLabel:@"Blur" identifier:45 suffix:@"px" fractionDigits:0];
+  assert([pixels.unitLabels.firstObject.stringValue isEqual:@"px"]);
+  assert([[(NSNumberFormatter *)pixels.fields.firstObject.formatter stringFromNumber:@12.3] isEqual:@"12"]);
+
   ICSliderRow *row = [[ICSliderRow alloc] initWithLabel:@"Opacity"
       identifier:44 fractionDigits:1];
   assert(row.fields.count == 1 && row.sliderView != nil);

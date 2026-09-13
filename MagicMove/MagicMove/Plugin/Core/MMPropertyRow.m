@@ -163,7 +163,7 @@ static void MMDrawRowSelection(ICInspectorRow *row) {
 @end
 @implementation MMScalarRow
 - (instancetype)initWithPlugin:(MagicMovePlugin *)plugin lane:(MMPropertyLane *)lane label:(NSString *)label {
-  if((self=[super initWithLabel:label identifier:lane.parameterID fractionDigits:1]))
+  if((self=[super initWithLabel:label identifier:lane.parameterID suffix:lane.parameterID==MMBlurControls ? @"px":@"%" fractionDigits:lane.parameterID==MMBlurControls ? 0:1]))
     _binding=[[MMPropertyRowBinding alloc] initWithRow:self slider:self.sliderView plugin:plugin lane:lane label:label];
   return self;
 }

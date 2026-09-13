@@ -8,7 +8,7 @@
 static NSArray<NSNumber *> *MMProperties(void) {
   return @[
     @(MMCustomControls), @(MMScaleControls), @(MMRotationControls),
-    @(MMOpacityControls)
+    @(MMOpacityControls), @(MMBlurControls), @(MMAnchorControls)
   ];
 }
 static id MMCache(id<PROAPIAccessing> m, UInt32 p) {
@@ -16,11 +16,7 @@ static id MMCache(id<PROAPIAccessing> m, UInt32 p) {
     return MMCombinedCacheForManager(m);
   if (p == MMScaleControls)
     return MMScaleCacheForManager(m);
-  if (p == MMRotationControls)
-    return [MMRotationLane() cacheForManager:m];
-  if (p == MMOpacityControls)
-    return [MMOpacityLane() cacheForManager:m];
-  return nil;
+  return [MMPropertyLaneForParameter(p) cacheForManager:m];
 }
 static NSArray *MMEntries(id<PROAPIAccessing> m, UInt32 p) {
   return [MMCache(m, p) snapshotEntries];
@@ -58,7 +54,7 @@ static id MMSample(id<PROAPIAccessing> m, UInt32 p, CMTime t) {
     return MMSampleCombinedSnapshot(entries, t);
   if (p == MMScaleControls)
     return MMSampleScaleSnapshot(entries, t);
-  return [(p == MMOpacityControls ? MMOpacityLane() : MMRotationLane())
+  return [MMPropertyLaneForParameter(p)
       sampleEntries:entries
                time:t];
 }
@@ -203,7 +199,7 @@ static void MMRollbackLink(id<PROAPIAccessing> manager, NSArray *journal,
 static void MMRefreshLinkCache(id<PROAPIAccessing> manager, UInt32 parameter) {
   if (parameter==MMCustomControls) MMRefreshCombinedPoseCache(manager,kCMTimeZero);
   else if (parameter==MMScaleControls) MMRefreshScalePoseCache(manager,kCMTimeZero);
-  else [(parameter==MMRotationControls ? MMRotationLane() : MMOpacityLane()) refreshCacheForManager:manager time:kCMTimeZero];
+  else [MMPropertyLaneForParameter(parameter) refreshCacheForManager:manager time:kCMTimeZero];
 }
 
 // Apply complete, preflighted lane snapshots. Remove descending before inserts;
@@ -792,7 +788,9 @@ NSMenu *MMNativePropertyMenu(id<PROAPIAccessing> m, NSView *sender,
       @(MMCustomControls) : @"Position",
       @(MMScaleControls) : @"Scale",
       @(MMRotationControls) : @"Rotation",
-      @(MMOpacityControls) : @"Opacity"
+      @(MMOpacityControls) : @"Opacity",
+      @(MMBlurControls) : @"Blur",
+      @(MMAnchorControls) : @"Anchor"
     };
     for (NSNumber *p in MMProperties())
       if (p.unsignedIntValue != parameter) {

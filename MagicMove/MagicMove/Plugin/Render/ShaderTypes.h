@@ -8,8 +8,14 @@ typedef struct {
   float aspect;
   float scaleY;
   float opacity;
-  // Additional Euler axes, in radians. Appended to preserve the existing
-  // transform layout for older unblurred plugin states.
+  // Additional Euler axes, in radians. This transient render payload is rebuilt
+  // by pluginState; saved effects persist their property payloads separately.
   float rotationX;
   float rotationY;
+  // Authored full-resolution pixels relative to the image centre. The renderer
+  // converts to texture pixels before the shader normalizes them.
+  vector_float2 anchorPixels;
+  // Gaussian sigma in full-resolution pixels; scaled to texture pixels at render.
+  // A zero value is the identity path.
+  float blurPixels;
 } MMTransform;
