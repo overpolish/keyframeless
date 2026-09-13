@@ -121,3 +121,127 @@ covers blank/disabled initial fields, delayed cache loading, immediate attachmen
 refresh, valid zero values, preserved-but-disabled values after snapshot failure,
 and no native keyframe enumeration during UI refresh. Filter switching still
 needs a host check because FCP controls inspector recreation and callback timing.
+
+`ResetParameterTests` exercises each native property label menu, removal of all
+keys, default values and pose metadata, immediate constant-cache publication,
+property isolation, repeated resets, zero native key-info reads with a populated
+cache, balanced undo/action scopes, and recovery
+when the host rejects a value write. Read, deletion, and undo-start failures
+leave the original curve intact in the mock. The reset mock exposes keyframe,
+value, and undo APIs only inside an open custom action, matching the observed
+Motion host restriction. Cache publication follows the same action scope.
+The menu regression also verifies that reset waits for the default run-loop
+mode, performs no host work during menu tracking, and runs without a mouse event.
+The shared controls tests keep the
+menu scoped to the title label. In Motion/FCP, verify right-click and Control-click
+on each property label, reset from a gap, and a single Undo restoring its values,
+keyframes, timing, and added motion; other properties should remain unchanged.
+Actual host undo restoration and remote menu delivery are not established by mocks.
+
+The same-position synthetic mouse-event experiment did not resolve the host
+repaint issue and was removed; reset does not post input events.
+
+Reset now writes a fresh UUID to `MMHostRefreshToken` (2200) after restoring the
+property default, before closing the existing undo group. This adapts the legacy
+hidden scratch-parameter invalidation approach without linking legacy helpers.
+Tests verify hidden/non-animatable/saved flags, allowed payload class, unique
+values on successive resets, same-group writes, and no refresh write for failed
+resets. Actual Motion/FCP repainting and single-step Undo remain host checks.
+
+Host checkpoint: the user confirmed Reset Parameter and Undo work in Motion,
+and confirmed the hidden refresh-token write resolves the stale display without
+mouse movement. Temporary reset tracing was removed after that confirmation.
+
+`NativeLinksTests` covers keypose-level groups on Position, Scale, Rotation, and
+Opacity: reciprocal context menus, two-/three-property groups, sampled silent
+partners, unlinking, secure-coded group IDs, shared incoming duration/available
+time/easing and outgoing added motion, and independent values. It also exercises
+release-only partner moves, multiple selected groups, copied-key cleanup,
+undo-like snapshot restoration, failed-write rollback, and metadata writes with
+no native key enumeration. The gutter indicator is presentation-only in
+InspectorControls; group membership and FxPlug operations stay in MagicMove.
+
+Native linking host checkpoint (pending): link from an exact key and from a gap;
+check all participating menus/icons; add a third member; change duration/easing;
+drag one linked key and release; move multiple groups; undo/redo; unlink one
+member; reset one property; save/reopen. Verify the native drag keeps capture,
+partner values remain independent, no unrelated keys move, and undo grouping
+matches the earlier primitive behavior. Mocks do not establish host gesture or
+undo behavior.
+
+Unkeyed-row linking resolves the chosen property's destination at the current
+playhead, then creates the missing source key there using its sampled value.
+The menu test invokes Scale → Position from inside Position's gap and verifies
+creation at the destination (not at the playhead), unchanged Scale values,
+reciprocal group state and one undo group. When neither side has a destination,
+the linked pair is created at the playhead. The gutter now uses proportionally fitted `link.circle.fill`.
+
+Property-menu close handling now refreshes the hidden scratch parameter after
+cancellation as well as selection. Successful actions retain their existing
+in-group refresh; the close delegate suppresses a duplicate write. Failed menu
+actions receive a fallback refresh after their host action closes. Tests cover
+both close/action callback orders, default-mode deferral, balanced action scopes,
+and unchanged pose data on dismissal. The link badge uses the monochrome symbol
+variant with a shared tint for each linked group; its membership behavior remains unchanged.
+
+Persistent property link menu tests assert that button callbacks queue their
+host work on the main dispatch queue, with no host calls before returning.
+Multiple toggles update the same menu, retain other memberships, and create one
+undo group and host refresh per operation. Unkeyed pairs are created at the
+playhead with their original values; linking to an existing destination retains
+its time. Actual menu persistence and padding still require Motion/FCP testing.
+
+Open-menu history tests exercise FxCommandAPI_v2 undo/redo inside a host action,
+then refresh cached keyposes and menu checkmarks. They verify no additional
+scratch edit or undo group is introduced by history commands. Missing command
+API returns unhandled. Event delivery while a real host menu tracks remains a
+manual check. The user confirmed working apply, undo and redo after the cached
+link path and callback-driven menu refresh; temporary diagnostics were removed.
+
+Open-menu undo/redo also uses the existing shortcut capture, scoped to a weak
+menu owner. Router tests verify deferred execution outside the input callback,
+modifier/repeat handling, cancellation on close or replacement, and weak-owner
+expiry. The user confirmed event-tap undo/redo delivery in the host.
+
+Menu history regression: the host may return NO from `performCommand:` while
+applying undo asynchronously. Tests reproduce that result and a later parameter
+callback, then verify the checkmark follows published caches without new edits.
+The menu subscribes only while open; queued notifications after closing are
+ignored. Native parameter callbacks enqueue UI updates without blocking their
+callback thread.
+
+Apply dispatch regression tests also cover two rapid clicks, a menu closing
+before an accepted click runs, and the inspector control being destroyed before
+dispatch. Each accepted live-control click retains native keyframe validation,
+one undo group, and one scratch write. Host testing showed that dispatch alone did not release the keyframe-count
+query; the dedicated cached link path below resolved the delay.
+
+Link transaction regressions verify that successful linking/unlinking and silent
+partner creation use cached keyposes without keyframe-count or enumeration
+calls. Moves retain their host preflight. A failure test inserts an unrelated
+native key between link writes, then rejects the second write: recovery resolves
+current indices, removes only the transaction's additions, preserves the unrelated
+key, and refreshes the resulting cache. Link recovery never clears/rebuilds a
+whole lane. Failure recovery may query the host; the successful path does not.
+
+Group-colour tests verify that linked properties share one gutter tint, separate
+groups get distinct available palette slots, and moving or undo-restoring a
+group preserves its tint without native key queries. Assignment uses persisted
+group identity with collision resolution retained for the effect instance. The
+finite palette repeats when all slots are allocated. Colours are presentation
+state, not additional keypose data.
+
+Linked graph preview tests cover a Position gap from 0–4s and Scale from 2–4s,
+including selection before Scale's first key. Both share the same x-axis; rendered
+paths begin at their own source fractions and end together. Each property uses
+its existing evaluator (including Added Motion) and component colours, with
+vertical fitting per property when units differ. Unlinking removes the peer.
+Tests verify no native key reads and preserve existing playhead/path caching.
+Properties without an incoming gap have no transition curve to draw.
+
+The timing graph publishes its displayed parameter set via the inspector
+presentation notification. Row tests verify coloured axes on both Position and
+Scale while only Scale's label is selected, neutral suffixes, and clearing a
+peer's tint when it leaves the graph. Editor tests verify the published set after
+unlinking and clear it when the graph detaches. This uses the actual displayed
+curves, not a separate interpretation of group membership in each row.

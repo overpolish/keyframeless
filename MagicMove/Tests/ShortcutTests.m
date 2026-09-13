@@ -34,6 +34,36 @@
 }
 @end
 
+static void testMenuHistoryLifetime(void) {
+  MMMenuHistoryShortcut *route=[MMMenuHistoryShortcut new];
+  NSObject *menu=[NSObject new], *other=[NSObject new];
+  __block NSUInteger undo=0,redo=0;
+  NSEventModifierFlags cmd=NSEventModifierFlagCommand;
+  assert(![route enqueueKeyCode:6 modifiers:cmd repeat:NO]);
+  [route beginForOwner:menu action:^BOOL(BOOL isRedo) { if (isRedo) redo++; else undo++; return YES; }];
+  assert(![route enqueueKeyCode:7 modifiers:cmd repeat:NO]);
+  assert(![route enqueueKeyCode:6 modifiers:cmd | NSEventModifierFlagOption repeat:NO]);
+  assert(![route enqueueKeyCode:6 modifiers:0 repeat:NO]);
+  assert([route enqueueKeyCode:6 modifiers:cmd repeat:NO]);
+  assert([route enqueueKeyCode:6 modifiers:cmd repeat:YES]);
+  assert([route enqueueKeyCode:6 modifiers:cmd | NSEventModifierFlagShift repeat:NO]);
+  assert(undo==0 && redo==0); // Never call the host inside the input callback.
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode,0.01,false);
+  assert(undo==1 && redo==1);
+  assert([route enqueueKeyCode:6 modifiers:cmd repeat:NO]);
+  [route endForOwner:menu];
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode,0.01,false);
+  assert(undo==1 && !route.active);
+  [route beginForOwner:menu action:^BOOL(BOOL isRedo) { undo++; return YES; }];
+  assert([route enqueueKeyCode:6 modifiers:cmd repeat:NO]);
+  [route beginForOwner:other action:^BOOL(BOOL isRedo) { redo++; return YES; }];
+  [route endForOwner:menu]; // An old menu cannot detach the replacement.
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode,0.01,false);
+  assert(undo==1 && redo==1 && route.active);
+  other=nil;
+  assert(!route.active && ![route enqueueKeyCode:6 modifiers:cmd repeat:NO]);
+}
+
 static void testShortcutMatching(void) {
   NSEventModifierFlags required = NSEventModifierFlagControl | NSEventModifierFlagOption;
   assert(MMShortcutMatches(46, required));
@@ -173,6 +203,7 @@ static void testMotionBlurReadFailureAndExceptionBalance(void) {
 
 int main(void) {
   @autoreleasepool {
+    testMenuHistoryLifetime();
     testShortcutMatching();
     testRouterSelectionAndRepeat();
     testRouterEligibilityAndWeakOwners();

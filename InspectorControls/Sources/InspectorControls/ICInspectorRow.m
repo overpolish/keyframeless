@@ -5,6 +5,21 @@
 #import "ICInspectorRow.h"
 #import "InspectorTokens.h"
 
+@interface ICTitleMenuTextField : NSTextField
+@property(nonatomic, copy, nullable) NSMenu *(^menuProvider)(void);
+@end
+
+@implementation ICTitleMenuTextField
+- (NSMenu *)menuForEvent:(NSEvent *)event {
+  NSEventModifierFlags flags = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+  BOOL rightClick = event.type == NSEventTypeRightMouseDown;
+  BOOL controlClick = event.type == NSEventTypeLeftMouseDown &&
+      (flags & NSEventModifierFlagControl) != 0;
+  if (!rightClick && !controlClick) return nil;
+  return self.menuProvider ? self.menuProvider() : nil;
+}
+@end
+
 @implementation ICInspectorComponent
 - (instancetype)initWithIdentifier:(NSInteger)identifier label:(NSString *)label
                             suffix:(NSString *)suffix fractionDigits:(NSUInteger)digits {
@@ -22,7 +37,7 @@
   self=[super initWithFrame:NSMakeRect(0,0,320,ICInspectorRowHeight)];
   if (!self) return nil;
   self.autoresizingMask=NSViewWidthSizable;
-  _titleLabel=[NSTextField labelWithString:label];
+  _titleLabel=[ICTitleMenuTextField labelWithString:label];
   _titleLabel.font=ICInspectorTokens.labelFont;
   _titleLabel.textColor=ICInspectorTokens.labelColor;
   [self addSubview:_titleLabel];
@@ -54,6 +69,11 @@
   }
   _componentColors=@[];
   _fields=[fields copy]; _axisLabels=[labels copy]; _unitLabels=[units copy];
+  __weak ICInspectorRow *weakRow = self;
+  ((ICTitleMenuTextField *)_titleLabel).menuProvider = ^NSMenu *{
+    ICInspectorRow *row = weakRow;
+    return row.titleMenuProvider ? row.titleMenuProvider() : nil;
+  };
   for (NSUInteger i=1;i<_fields.count;i++) _fields[i-1].nextKeyView=_fields[i];
   if(showsLink) {
     NSImage *image=[NSImage imageWithSystemSymbolName:@"link" accessibilityDescription:nil];
@@ -70,7 +90,16 @@
   _selected=selected;
   self.titleLabel.font=selected ? ICInspectorTokens.selectedLabelFont : ICInspectorTokens.labelFont;
   self.titleLabel.textColor=selected ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.labelColor;
-  [self updateComponentColors];
+  self.needsDisplay=YES;
+}
+- (void)setKeyposeLinked:(BOOL)keyposeLinked {
+  if (_keyposeLinked == keyposeLinked) return;
+  _keyposeLinked = keyposeLinked;
+  self.needsDisplay = YES;
+}
+- (void)setKeyposeLinkColor:(NSColor *)color {
+  if (_keyposeLinkColor==color || [_keyposeLinkColor isEqual:color]) return;
+  _keyposeLinkColor=color;
   self.needsDisplay=YES;
 }
 - (void)setComponentColors:(NSArray<NSColor *> *)componentColors {
@@ -78,9 +107,14 @@
   _componentColors=[componentColors copy] ?: @[];
   [self updateComponentColors];
 }
+- (void)setComponentColorsVisible:(BOOL)visible {
+  if (_componentColorsVisible==visible) return;
+  _componentColorsVisible=visible;
+  [self updateComponentColors];
+}
 - (void)updateComponentColors {
   for(NSUInteger i=0;i<self.axisLabels.count;i++)
-    self.axisLabels[i].textColor=self.selected && i<self.componentColors.count
+    self.axisLabels[i].textColor=self.componentColorsVisible && i<self.componentColors.count
         ? self.componentColors[i] : ICInspectorTokens.decorationColor;
 }
 - (BOOL)interacting {
@@ -97,6 +131,38 @@
 - (NSSize)intrinsicContentSize { return NSMakeSize(NSViewNoIntrinsicMetric, ICInspectorRowHeight); }
 - (void)drawRect:(NSRect)dirtyRect {
   [super drawRect:dirtyRect];
+  if (self.keyposeLinked) {
+    NSImage *image = [NSImage imageWithSystemSymbolName:@"link.circle.fill"
+                                  accessibilityDescription:nil];
+    NSImageSymbolConfiguration *configuration =
+        [NSImageSymbolConfiguration configurationWithPointSize:11
+                                                          weight:NSFontWeightRegular
+                                                           scale:NSImageSymbolScaleSmall];
+    configuration = [configuration configurationByApplyingConfiguration:
+        NSImageSymbolConfiguration.configurationPreferringMonochrome];
+    NSImage *symbol=[image imageWithSymbolConfiguration:configuration];
+    image=[NSImage imageWithSize:symbol.size flipped:NO drawingHandler:^BOOL(NSRect rect) {
+      [symbol drawInRect:rect];
+      [(self.keyposeLinkColor ?: ICInspectorTokens.accentMatchingHost) setFill];
+      NSRectFillUsingOperation(rect,NSCompositingOperationSourceIn);
+      return YES;
+    }];
+    NSRect titleFrame = self.titleLabel.frame;
+    CGFloat labelBaseline = NSMaxY(titleFrame) - self.titleLabel.firstBaselineOffsetFromTop;
+    CGFloat labelTextCenter = labelBaseline + self.titleLabel.font.capHeight / 2;
+    NSRect iconFrame = NSMakeRect((ICInspectorLabelInset - ICInspectorLinkSize) / 2, round((labelTextCenter - ICInspectorLinkSize / 2) * 2) / 2,
+                                  ICInspectorLinkSize, ICInspectorLinkSize);
+    // Fit the symbol proportionally; its intrinsic canvas need not be square.
+    NSSize imageSize=image.size;
+    if(imageSize.width>0 && imageSize.height>0) {
+      CGFloat factor=MIN(NSWidth(iconFrame)/imageSize.width,NSHeight(iconFrame)/imageSize.height);
+      NSSize fitted=NSMakeSize(imageSize.width*factor,imageSize.height*factor);
+      iconFrame=NSMakeRect(NSMidX(iconFrame)-fitted.width/2,NSMidY(iconFrame)-fitted.height/2,fitted.width,fitted.height);
+    }
+    if (image && NSIntersectsRect(dirtyRect, iconFrame))
+      [image drawInRect:iconFrame fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
+                fraction:1.0 respectFlipped:YES hints:nil];
+  }
   for(NSTextField *unit in self.unitLabels) {
     if(unit.hidden || !NSIntersectsRect(dirtyRect,unit.frame)) continue;
     [NSGraphicsContext saveGraphicsState];

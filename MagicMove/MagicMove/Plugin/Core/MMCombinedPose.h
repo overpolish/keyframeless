@@ -32,6 +32,9 @@ MMCombinedPose *MMReadCombinedPose(id<PROAPIAccessing> manager, CMTime time,
 @interface MMCombinedPoseCache : NSObject
 @property(nonatomic, readonly) NSString *token;
 - (NSArray<NSDictionary *> *)snapshotEntries;
+- (void)publishEntries:(NSArray<NSDictionary *> *)entries;
+// Replace the disposable snapshot after a successful whole-parameter reset.
+- (void)publishConstantPose:(MMCombinedPose *)pose;
 // Publish a successful existing-key write without host enumeration. The pre-write
 // snapshot can restore an unavailable cache after the successful write.
 - (void)publishPose:(MMCombinedPose *)pose atTime:(CMTime)time

@@ -15,6 +15,9 @@
 @interface MMPropertyPoseCache : NSObject
 @property(nonatomic, readonly) NSString *token;
 - (NSArray<NSDictionary *> *)snapshotEntries;
+- (void)publishEntries:(NSArray<NSDictionary *> *)entries;
+// Replace the disposable snapshot after a successful whole-parameter reset.
+- (void)publishConstantPose:(id<MMPropertyPose>)pose;
 - (void)publishPose:(id<MMPropertyPose>)pose atTime:(CMTime)time inSnapshot:(NSArray<NSDictionary *> *)snapshot;
 @end
 

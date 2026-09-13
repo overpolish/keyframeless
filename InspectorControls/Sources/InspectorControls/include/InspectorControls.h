@@ -5,3 +5,5 @@
 #import "ICInspectorRow.h"
 #import "ICSliderView.h"
 #import "ICSliderRow.h"
+
+#import "ICMenuToggleView.h"

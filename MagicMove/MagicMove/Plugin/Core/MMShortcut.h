@@ -14,10 +14,21 @@ BOOL MMToggleMotionBlur(id<PROAPIAccessing> manager, id sender);
 - (BOOL)handleKeyCode:(unsigned short)code modifiers:(NSEventModifierFlags)modifiers repeat:(BOOL)repeat;
 @end
 
+// A temporary history route owned by the currently open menu. Commands are
+// queued so remote host work never blocks the input event-tap callback.
+@interface MMMenuHistoryShortcut : NSObject
+@property(nonatomic,readonly) BOOL active;
+- (void)beginForOwner:(id)owner action:(BOOL (^)(BOOL redo))action;
+- (void)endForOwner:(id)owner;
+- (BOOL)enqueueKeyCode:(unsigned short)code modifiers:(NSEventModifierFlags)flags repeat:(BOOL)repeat;
+@end
+
 // Plugin-local AppKit adapter; does not depend on the legacy shortcut helpers.
 @interface MMShortcutCapture : NSObject
 + (instancetype)sharedCapture;
 - (void)attachView:(NSView *)view action:(BOOL (^)(void))action;
 - (void)detachView:(NSView *)view;
 - (void)activateView:(NSView *)view;
+- (void)beginMenuHistory:(id)owner action:(BOOL (^)(BOOL redo))action;
+- (void)endMenuHistory:(id)owner;
 @end

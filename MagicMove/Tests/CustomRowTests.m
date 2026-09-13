@@ -285,7 +285,8 @@ int main(int argc, const char *argv[]) {
   NSArray *selectionIDs=@[@(MMCustomControls),@(MMScaleControls),@(MMOpacityControls)];
   for(NSUInteger selected=0;selected<selectionRows.count;selected++) {
     scalePlugin.activeInspectorParameterID=[selectionIDs[selected] unsignedIntValue];
-    [NSNotificationCenter.defaultCenter postNotificationName:@"MMActiveRowChanged" object:scalePlugin];
+    scalePlugin.graphedInspectorParameters=[NSSet setWithObject:selectionIDs[selected]];
+    [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:scalePlugin];
     for(NSUInteger i=0;i<selectionRows.count;i++) {
       ICInspectorRow *candidate=selectionRows[i];
       assert(candidate.selected==(i==selected));
@@ -297,8 +298,21 @@ int main(int argc, const char *argv[]) {
       assert([candidate.titleLabel.textColor isEqual:i==selected ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.labelColor]);
     }
   }
+  scalePlugin.activeInspectorParameterID=MMScaleControls;
+  scalePlugin.graphedInspectorParameters=[NSSet setWithArray:@[@(MMCustomControls),@(MMScaleControls)]];
+  [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:scalePlugin];
+  for (NSUInteger i=0;i<selectionRows.count;i++) {
+    ICInspectorRow *candidate=selectionRows[i];
+    assert(candidate.selected==(i==1));
+    for (NSUInteger axis=0;axis<candidate.axisLabels.count;axis++)
+      assert([candidate.axisLabels[axis].textColor isEqual:i<2 ? MMInspectorColors([selectionIDs[i] unsignedIntValue])[axis] : ICInspectorTokens.decorationColor]);
+    for (NSTextField *suffix in candidate.unitLabels) assert([suffix.textColor isEqual:ICInspectorTokens.decorationColor]);
+  }
+  scalePlugin.graphedInspectorParameters=[NSSet setWithObject:@(MMScaleControls)];
+  [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:scalePlugin];
+  assert([positionRow.axisLabels[0].textColor isEqual:ICInspectorTokens.decorationColor]);
   scalePlugin.activeInspectorParameterID=0;
-  [NSNotificationCenter.defaultCenter postNotificationName:@"MMActiveRowChanged" object:scalePlugin];
+  [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:scalePlugin];
   [positionRow removeFromSuperview]; [scaleRow removeFromSuperview];
   assert([opacityRow.titleLabel.stringValue isEqualToString:@"Opacity"]);
   assert(opacityRow.fields[0].enabled && opacityRow.sliderView.enabled);
@@ -351,7 +365,8 @@ int main(int argc, const char *argv[]) {
   assert(scaleHost.undoGroupsStarted==rotationGroups+1 && scaleHost.undoDepth==0);
   assert(rotationRow.fields[0].doubleValue==720 && rotationRow.fields[1].doubleValue==0 && rotationRow.fields[2].doubleValue==-360);
   scalePlugin.activeInspectorParameterID=MMRotationControls;
-  [NSNotificationCenter.defaultCenter postNotificationName:@"MMActiveRowChanged" object:scalePlugin];
+  scalePlugin.graphedInspectorParameters=[NSSet setWithObject:@(MMRotationControls)];
+  [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:scalePlugin];
   assert(rotationRow.selected);
   for(NSUInteger axis=0;axis<3;axis++) assert([rotationRow.axisLabels[axis].textColor isEqual:MMInspectorColors(MMRotationControls)[axis]]);
   MMPropertyPoseCache *rotationCache=[MMRotationLane() cacheForManager:scaleHost];

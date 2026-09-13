@@ -69,11 +69,43 @@ BOOL MMToggleMotionBlur(id<PROAPIAccessing> manager, id sender) {
 }
 @end
 
+@interface MMMenuHistoryShortcut ()
+@property(nonatomic,weak) id owner;
+@property(nonatomic,copy) BOOL (^action)(BOOL redo);
+@property(nonatomic) NSUInteger generation;
+@end
+@implementation MMMenuHistoryShortcut
+- (BOOL)active { return self.owner != nil && self.action != nil; }
+- (void)beginForOwner:(id)owner action:(BOOL (^)(BOOL))action {
+  self.generation++; self.owner=owner; self.action=action;
+}
+- (void)endForOwner:(id)owner {
+  if (self.owner != owner) return;
+  self.generation++; self.owner=nil; self.action=nil;
+}
+- (BOOL)enqueueKeyCode:(unsigned short)code modifiers:(NSEventModifierFlags)flags repeat:(BOOL)repeat {
+  if (!self.active || code!=6 || !(flags & NSEventModifierFlagCommand) ||
+      (flags & (NSEventModifierFlagControl | NSEventModifierFlagOption | NSEventModifierFlagFunction))) return NO;
+  if (repeat) return YES;
+  NSUInteger generation=self.generation;
+  BOOL redo=(flags & NSEventModifierFlagShift)!=0;
+  __weak typeof(self) weakSelf=self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    MMMenuHistoryShortcut *strong=weakSelf;
+    if (!strong.active || strong.generation!=generation) return;
+    strong.action(redo);
+  });
+  return YES;
+}
+@end
+
 @interface MMShortcutCapture () {
   CFMachPortRef _tap;
   CFRunLoopSourceRef _source;
 }
 @property(nonatomic, strong) MMShortcutRouter *router;
+@property(nonatomic, strong) MMMenuHistoryShortcut *menuHistory;
+- (void)ensureCapture;
 @property(nonatomic, strong) NSHashTable<NSView *> *views;
 @property(nonatomic, strong) id localMonitor;
 - (BOOL)handleHostEvent:(CGEventRef)event;
@@ -109,7 +141,7 @@ static BOOL MMTextEditorIsFocused(void) {
 @implementation MMShortcutCapture
 + (instancetype)sharedCapture {
   static MMShortcutCapture *capture; static dispatch_once_t once;
-  dispatch_once(&once, ^{ capture=[self new]; capture.router=[MMShortcutRouter new]; capture.views=[NSHashTable weakObjectsHashTable]; });
+  dispatch_once(&once, ^{ capture=[self new]; capture.router=[MMShortcutRouter new]; capture.menuHistory=[MMMenuHistoryShortcut new]; capture.views=[NSHashTable weakObjectsHashTable]; });
   return capture;
 }
 - (void)attachView:(NSView *)view action:(BOOL (^)(void))action {
@@ -119,6 +151,9 @@ static BOOL MMTextEditorIsFocused(void) {
     NSView *v=weakView;
     return v && v.window.isVisible && !v.hiddenOrHasHiddenAncestor;
   } action:action];
+  [self ensureCapture];
+}
+- (void)ensureCapture {
   if (!self.localMonitor) {
     __weak MMShortcutCapture *weakSelf=self;
     self.localMonitor=[NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown handler:^NSEvent *(NSEvent *event) {
@@ -139,14 +174,25 @@ static BOOL MMTextEditorIsFocused(void) {
 }
 - (void)detachView:(NSView *)view {
   [self.router unregisterOwner:view]; [self.views removeObject:view];
-  if (!self.views.allObjects.count) [self stop];
+  if (!self.views.allObjects.count && !self.menuHistory.active) [self stop];
 }
 - (void)activateView:(NSView *)view { [self.router activateOwner:view]; }
+- (void)beginMenuHistory:(id)owner action:(BOOL (^)(BOOL))action {
+  [self.menuHistory beginForOwner:owner action:action];
+  [self ensureCapture];
+}
+- (void)endMenuHistory:(id)owner {
+  [self.menuHistory endForOwner:owner];
+  if (!self.views.allObjects.count && !self.menuHistory.active) [self stop];
+}
 - (BOOL)handleHostEvent:(CGEventRef)event {
   unsigned short code=(unsigned short)CGEventGetIntegerValueField(event,kCGKeyboardEventKeycode);
   NSEventModifierFlags flags=(NSEventModifierFlags)CGEventGetFlags(event);
-  if (!MMShortcutMatches(code,flags) || CGEventGetIntegerValueField(event,kCGEventTargetUnixProcessID)==getpid() ||
-      !MMHostIsFrontmost() || MMTextEditorIsFocused()) return NO;
+  if (CGEventGetIntegerValueField(event,kCGEventTargetUnixProcessID)==getpid() || !MMHostIsFrontmost()) return NO;
+  // An explicitly open menu owns history commands, regardless of the host's
+  // underlying text focus. Outside that lifetime, normal host routing wins.
+  if ([self.menuHistory enqueueKeyCode:code modifiers:flags repeat:CGEventGetIntegerValueField(event,kCGKeyboardEventAutorepeat)!=0]) return YES;
+  if (!MMShortcutMatches(code,flags) || MMTextEditorIsFocused()) return NO;
   return [self.router handleKeyCode:code modifiers:flags
                             repeat:CGEventGetIntegerValueField(event,kCGKeyboardEventAutorepeat)!=0];
 }

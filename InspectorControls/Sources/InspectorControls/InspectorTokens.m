@@ -36,6 +36,7 @@
   });
   return colors;
 }
++ (NSArray<NSColor *> *)linkGroupColors { return self.curveColors; }
 + (NSColor *)sliderTrackColor { return [NSColor colorWithWhite:0x16/255.0 alpha:1]; }
 + (NSColor *)sliderKnobColor { return [NSColor colorWithWhite:0x80/255.0 alpha:1]; }
 + (NSColor *)sliderKnobOutlineColor { return [NSColor colorWithWhite:0x14/255.0 alpha:1]; }

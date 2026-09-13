@@ -51,7 +51,7 @@
   if(![rightValue isKindOfClass:MMScalarPose.class] || !isfinite(weight)) return self;
   MMScalarPose *right=(MMScalarPose *)rightValue; double w=fmax(0,fmin(1,weight));
   MMScalarPose *metadata=w>=1 ? right:self;
-  return [[[MMScalarPose alloc] initWithValue:self.value+(right.value-self.value)*w authored:self.authored||right.authored easing:metadata.easing addedMotion:metadata.addedMotion] poseByReplacingTiming:metadata.timing];
+  return [[[MMScalarPose alloc] initWithValue:self.value+(right.value-self.value)*w authored:self.authored||right.authored easing:metadata.easing addedMotion:metadata.addedMotion] poseByReplacingTiming:(w>0 && w<1) ? [metadata.timing timingByReplacingLinkID:@""]:metadata.timing];
 }
 @end
 

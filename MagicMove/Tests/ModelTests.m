@@ -65,6 +65,11 @@ static void testParameterContract(void) {
       visible++;
   }
   assert(visible == 5); // Position, Scale, Rotation, Opacity and one shared timing editor.
+  UInt32 refreshFlags=[h.flags[@(MMHostRefreshToken)] unsignedIntValue];
+  assert(refreshFlags & kFxParameterFlag_HIDDEN);
+  assert(refreshFlags & kFxParameterFlag_NOT_ANIMATABLE);
+  assert(!(refreshFlags & (kFxParameterFlag_DONT_SAVE | kFxParameterFlag_CUSTOM_UI)));
+  assert([[f.plugin classesForCustomParameterID:MMHostRefreshToken] containsObject:NSString.class]);
   UInt32 timingFlags=[h.flags[@(MMTimingControls)] unsignedIntValue];
   assert(timingFlags & kFxParameterFlag_NOT_ANIMATABLE);
   assert(timingFlags & kFxParameterFlag_DONT_SAVE);

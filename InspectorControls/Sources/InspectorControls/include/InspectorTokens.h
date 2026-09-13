@@ -28,6 +28,7 @@ static const CGFloat ICInspectorLinkSize = 15;
 @property(class, nonatomic, readonly) NSColor *inactiveControlColor;
 @property(class, nonatomic, readonly) NSColor *selectionColor;
 @property(class, nonatomic, readonly) NSArray<NSColor *> *curveColors;
+@property(class, nonatomic, readonly) NSArray<NSColor *> *linkGroupColors;
 @property(class, nonatomic, readonly) NSColor *sliderTrackColor;
 @property(class, nonatomic, readonly) NSColor *sliderKnobColor;
 @property(class, nonatomic, readonly) NSColor *sliderKnobOutlineColor;

@@ -9,6 +9,13 @@
 - (void)publishValuePose:(id<MMPropertyPose>)pose atTime:(CMTime)time;
 @end
 @implementation MMPropertyPoseCache
+- (void)publishEntries:(NSArray<NSDictionary *> *)entries {
+  @synchronized(self) { self.generation++; self.entries=[entries copy]; }
+}
+- (void)publishConstantPose:(id<MMPropertyPose>)pose {
+  @synchronized(self) { self.generation++; self.entries=@[@{@"pose":pose}]; }
+}
+
 - (NSArray *)snapshotEntries { @synchronized(self) { return self.entries; } }
 - (void)publishPose:(id<MMPropertyPose>)pose atTime:(CMTime)time inSnapshot:(NSArray *)snapshot {
   if(!pose || !CMTIME_IS_NUMERIC(time)) return;
@@ -92,7 +99,7 @@ static void MMPropertyError(NSError **error) {
     if(failure) { if(error) *error=failure; return nil; }
     id<MMPropertyPose> pose=[self readValue:manager time:key.time];
     if(!pose) { MMPropertyError(error); return nil; }
-    [entries addObject:@{@"time":@(CMTimeGetSeconds(key.time)),@"nativeTime":[NSValue valueWithBytes:&key.time objCType:@encode(CMTime)],@"pose":pose}];
+    [entries addObject:@{@"time":@(CMTimeGetSeconds(key.time)),@"nativeTime":[NSValue valueWithBytes:&key.time objCType:@encode(CMTime)],@"nativeKey":[NSValue valueWithBytes:&key objCType:@encode(FxKeyframe)],@"pose":pose}];
   }
   [entries sortUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b) { return [a[@"time"] compare:b[@"time"]]; }];
   return [entries copy];
@@ -165,7 +172,8 @@ static void MMPropertyError(NSError **error) {
   if(!source) return NO;
   NSMutableArray *values=[source.values mutableCopy];
   values[component]=@(self.boundsValues ? fmax(self.minimum,fmin(self.maximum,value)) : value);
-  id<MMPropertyPose> pose=[source poseByReplacingValues:values authored:YES easing:source.easing addedMotion:source.addedMotion timing:source.timing];
+  MMPoseTiming *timing=(!explicit && !exact) ? [source.timing timingByReplacingLinkID:@""]:source.timing;
+  id<MMPropertyPose> pose=[source poseByReplacingValues:values authored:YES easing:source.easing addedMotion:source.addedMotion timing:timing];
   id<FxParameterSettingAPI_v5> set=[manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   BOOL ok=[set setCustomParameterValue:pose toParameter:self.parameterID atTime:target];
   if(ok) [cache publishValuePose:pose atTime:target]; return ok;

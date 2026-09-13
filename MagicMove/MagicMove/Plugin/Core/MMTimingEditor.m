@@ -9,6 +9,7 @@
 @interface MMGapGraph : NSView
 @property(nonatomic, copy) NSArray<NSArray<NSNumber *> *> *points;
 @property(nonatomic) double progress;
+@property(nonatomic,copy) NSArray<NSNumber *> *startFractions;
 @property(copy) NSArray<NSBezierPath *> *curvePaths;
 @property(nonatomic, copy) NSArray<NSColor *> *componentColors;
 @property NSRect curveBounds;
@@ -21,6 +22,10 @@
   _points = [points copy];
   self.curvePaths = nil;
   self.needsDisplay = YES;
+}
+- (void)setStartFractions:(NSArray<NSNumber *> *)starts {
+  if ([_startFractions isEqualToArray:starts]) return;
+  _startFractions=[starts copy]; self.curvePaths=nil; self.needsDisplay=YES;
 }
 - (void)setComponentColors:(NSArray<NSColor *> *)componentColors {
   if([_componentColors isEqualToArray:componentColors]) return;
@@ -59,7 +64,8 @@
     for (NSUInteger i = 0; i < self.points.count; i++) {
       double sample = self.points[i][axis].doubleValue;
       NSPoint p = NSMakePoint(
-          NSMinX(plot) + NSWidth(plot) * i / (self.points.count - 1),
+          NSMinX(plot) + NSWidth(plot) * ((axis<self.startFractions.count ? self.startFractions[axis].doubleValue : 0) +
+              (1-(axis<self.startFractions.count ? self.startFractions[axis].doubleValue : 0))*i/(self.points.count-1)),
           NSMinY(plot) +
               NSHeight(plot) * (sample - low) / span);
       if (i)
@@ -93,6 +99,11 @@
     [(axis<self.componentColors.count ? self.componentColors[axis]
            : ICInspectorTokens.accentMatchingHost) setStroke];
     [self.curvePaths[axis] stroke];
+    if (self.startFractions.count && self.curvePaths[axis].elementCount) {
+      NSPoint start; [self.curvePaths[axis] elementAtIndex:0 associatedPoints:&start];
+      [(axis<self.componentColors.count ? self.componentColors[axis] : ICInspectorTokens.accentMatchingHost) setFill];
+      [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(start.x-2,start.y-2,4,4)] fill];
+    }
   }
   [NSColor.whiteColor setStroke];
   NSBezierPath *cursor = [NSBezierPath bezierPath];
@@ -148,9 +159,8 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
 @property(strong) ICInspectorRow *motionRow;
 @property(strong) id<FxUndoAPI> scrubUndo;
 @property UInt32 displayedParameter;
-@property(copy) NSArray<NSDictionary *> *plottedEntries;
+@property(copy) NSArray<MMInspectorGap *> *plottedGaps;
 @property UInt32 plottedParameter;
-@property NSUInteger plottedDestination;
 @property CGSize plottedSize;
 @end
 @implementation MMTimingEditor
@@ -274,11 +284,18 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   self.motionRow.frame = NSMakeRect(0, 5, width, 24);
   self.motionRow.titleLabel.stringValue = @"Amount / Speed";
 }
+- (void)publishGraphParameters:(NSSet<NSNumber *> *)parameters {
+  if (!self.plugin) return;
+  if ([self.plugin.graphedInspectorParameters isEqualToSet:parameters]) return;
+  self.plugin.graphedInspectorParameters=parameters;
+  [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:self.plugin];
+}
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   [self.timer invalidate];
   self.timer = nil;
   if (!self.window) {
+    [self publishGraphParameters:[NSSet set]];
     [self endScrub];
     return;
   }
@@ -365,43 +382,45 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
               : (self.plugin.activeInspectorParameterID ?: MMCustomControls);
   CMTime now;
   MMInspectorGap *gap;
+  NSArray<MMInspectorGap *> *graphGaps;
   [action startAction:self];
   @try {
     now = [action currentTime];
     gap = MMReadInspectorGap(self.manager, parameter, now);
+    graphGaps=MMReadInspectorGraphGaps(self.manager,parameter,now);
   } @finally {
     [action endAction:self];
   }
   // The host action covers only reads. Publish controls/playhead before curve
   // work.
   self.displayedParameter = parameter;
-  self.graph.componentColors = MMInspectorColors(parameter);
+  NSMutableArray *colors=[NSMutableArray new];
+  for (MMInspectorGap *plotted in graphGaps) [colors addObjectsFromArray:MMInspectorColors(plotted.parameterID)];
+  self.graph.componentColors=graphGaps.count ? colors : MMInspectorColors(parameter);
   [self updateControlsForGap:gap editing:editing];
-  self.graph.progress =
-      gap ? CMTimeGetSeconds(CMTimeSubtract(now, gap.sourceTime)) /
-                CMTimeGetSeconds(
-                    CMTimeSubtract(gap.destinationTime, gap.sourceTime))
-          : 0;
-  CGSize size = parameter == MMCustomControls ? self.plugin.inspectorImageSize
-                                              : CGSizeMake(100, 100);
-  if (!MMGraphEntriesEqual(self.plottedEntries, gap.entries) ||
-      self.plottedParameter != parameter ||
-      self.plottedDestination != gap.destinationIndex ||
-      !CGSizeEqualToSize(self.plottedSize, size)) {
-    self.plottedEntries = gap.entries;
-    self.plottedParameter = parameter;
-    self.plottedDestination = gap.destinationIndex;
-    self.plottedSize = size;
-    NSArray *points = MMInspectorGraphComponents(gap, 1024);
-    if (gap && parameter == MMCustomControls && size.width > 0 &&
-        size.height > 0) {
-      NSMutableArray *pixels = [NSMutableArray arrayWithCapacity:points.count];
-      for (NSArray<NSNumber *> *point in points)
-        [pixels addObject:@[@(point[0].doubleValue*size.width/100),@(point[1].doubleValue*size.height/100)]];
-      points = pixels;
-    }
-    self.graph.points = points;
+  CMTime graphStart=MMInspectorGraphStart(graphGaps);
+  CMTime graphEnd=graphGaps.firstObject.destinationTime;
+  self.graph.progress=graphGaps.count ? CMTimeGetSeconds(CMTimeSubtract(now,graphStart))/CMTimeGetSeconds(CMTimeSubtract(graphEnd,graphStart)) : 0;
+  if (graphGaps.count)
+    MMText(self.gapLabel,[NSString stringWithFormat:@"%@s → %@s",[self.gapTimeFormatter stringFromNumber:@(CMTimeGetSeconds(graphStart))],[self.gapTimeFormatter stringFromNumber:@(CMTimeGetSeconds(graphEnd))]]);
+  CGSize size=self.plugin.inspectorImageSize;
+  BOOL changed=self.plottedGaps.count!=graphGaps.count;
+  for (NSUInteger i=0;!changed && i<graphGaps.count;i++) {
+    MMInspectorGap *previous=self.plottedGaps[i], *next=graphGaps[i];
+    changed=previous.parameterID!=next.parameterID || previous.destinationIndex!=next.destinationIndex ||
+      !MMGraphEntriesEqual(previous.entries,next.entries);
   }
+  if (changed || self.plottedParameter!=parameter || !CGSizeEqualToSize(self.plottedSize,size)) {
+    self.plottedGaps=graphGaps;
+    self.plottedParameter=parameter;
+    self.plottedSize=size;
+    self.graph.startFractions=graphGaps.count>1 ? MMInspectorGraphStartFractions(graphGaps) : @[];
+    self.graph.points=MMInspectorCombinedGraphPoints(graphGaps,1024,size);
+  }
+  NSMutableSet *visible=[NSMutableSet new];
+  if (self.graph.points.count>=2)
+    for (MMInspectorGap *plotted in graphGaps) [visible addObject:@(plotted.parameterID)];
+  [self publishGraphParameters:visible];
 }
 - (void)menuChanged:(NSPopUpButton *)menu {
   [self writeSetting:menu.tag value:menu.indexOfSelectedItem];

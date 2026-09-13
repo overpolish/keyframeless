@@ -25,6 +25,9 @@
 @interface MMScalePoseCache : NSObject
 @property(nonatomic, readonly) NSString *token;
 - (NSArray<NSDictionary *> *)snapshotEntries;
+- (void)publishEntries:(NSArray<NSDictionary *> *)entries;
+// Replace the disposable snapshot after a successful whole-parameter reset.
+- (void)publishConstantPose:(MMScalePose *)pose;
 // Publish a successful existing-key write without host enumeration. The pre-write
 // snapshot can restore an unavailable cache after the successful write.
 - (void)publishPose:(MMScalePose *)pose atTime:(CMTime)time

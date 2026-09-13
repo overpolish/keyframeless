@@ -46,7 +46,7 @@
   if(![rightValue isKindOfClass:MMRotationPose.class]||!isfinite(weight)) return self;
   MMRotationPose *right=(MMRotationPose *)rightValue; double w=fmax(0,fmin(1,weight));
   MMRotationPose *metadata=w>=1 ? right:self;
-  return [[[MMRotationPose alloc] initWithX:self.x+(right.x-self.x)*w y:self.y+(right.y-self.y)*w z:self.z+(right.z-self.z)*w authored:self.authored||right.authored easing:metadata.easing addedMotion:metadata.addedMotion] poseByReplacingTiming:metadata.timing];
+  return [[[MMRotationPose alloc] initWithX:self.x+(right.x-self.x)*w y:self.y+(right.y-self.y)*w z:self.z+(right.z-self.z)*w authored:self.authored||right.authored easing:metadata.easing addedMotion:metadata.addedMotion] poseByReplacingTiming:(w>0 && w<1) ? [metadata.timing timingByReplacingLinkID:@""]:metadata.timing];
 }
 @end
 MMPropertyLane *MMRotationLane(void) {

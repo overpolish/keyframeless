@@ -1,8 +1,10 @@
+#import "MMResetParameter.h"
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "MMNativeLinks.h"
 #import "Plugin_Private.h"
 #import "Constants.h"
 #import "MMDestinations.h"
@@ -20,6 +22,8 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
+
+NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentationChanged";
 
 @implementation MMTimingLane
 - (void)publishDurationSnapshot:(NSData *)data generation:(NSUInteger)generation {
@@ -73,6 +77,7 @@
 }
 
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == MMHostRefreshToken) return [NSSet setWithObject:NSString.class];
   if (parameterID == MMTimingControls) return [NSSet setWithObject:NSNumber.class];
   if (parameterID == MMRotationControls) return [NSSet setWithObject:MMRotationPose.class];
   if (parameterID == MMOpacityControls) return [NSSet setWithObject:MMScalarPose.class];
@@ -105,7 +110,7 @@
       // Scrubbing may refresh cached inspector state while held. A native
       // linked-key drag still avoids host actions until release.
       BOOL mouseDown = CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState, kCGMouseButtonLeft);
-      if (mouseDown && p.hasPendingNativeEdits) return;
+      if (mouseDown && (p.hasPendingNativeEdits || MMHasPendingNativeLinkMoves(p.apiManager))) return;
       id<FxCustomParameterActionAPI_v4> action =
           [p.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
       if (!action) return;
@@ -130,6 +135,7 @@
 
 - (BOOL)updateTimingEditorsAtTime:(CMTime)time mouseDown:(BOOL)mouseDown error:(NSError **)error {
   if (self.syncingDuration || self.activeNativeCallbacks) return YES;
+  if (!MMCommitNativeLinkMoves(self.apiManager,mouseDown,error)) return NO;
   if (![self commitPendingEditsWithMouseDown:mouseDown atTime:time error:error]) return NO;
   [self refreshDurationAtTime:time allowNativeReads:!mouseDown];
   return YES;
@@ -321,22 +327,31 @@
 }
 
 - (BOOL)parameterChanged:(UInt32)parameterID atTime:(CMTime)time error:(NSError **)error {
+  if (parameterID == MMHostRefreshToken) return YES; // Host invalidation only.
   // FxPlug callbacks can overlap the timer on another thread. Never release a
   // prepared plan while a native callback is still updating its snapshots.
   if (parameterID == MMRotationControls || parameterID == MMRotationCacheToken) {
     [MMRotationLane() refreshCacheForManager:self.apiManager time:time];
+    MMObserveNativeLinks(self.apiManager,MMRotationControls,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
+    MMPropertyMenuParametersChanged(self.apiManager);
     return YES;
   }
   if (parameterID == MMOpacityControls || parameterID == MMOpacityCacheToken) {
     [MMOpacityLane() refreshCacheForManager:self.apiManager time:time];
+    MMObserveNativeLinks(self.apiManager,MMOpacityControls,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
+    MMPropertyMenuParametersChanged(self.apiManager);
     return YES;
   }
   if (parameterID == MMScaleControls || parameterID == MMScaleCacheToken) {
     MMRefreshScalePoseCache(self.apiManager, time);
+    MMObserveNativeLinks(self.apiManager,MMScaleControls,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
+    MMPropertyMenuParametersChanged(self.apiManager);
     return YES;
   }
   if (parameterID == MMCustomControls || parameterID == MMCombinedCacheToken) {
     MMRefreshCombinedPoseCache(self.apiManager, time);
+    MMObserveNativeLinks(self.apiManager,MMCustomControls,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
+    MMPropertyMenuParametersChanged(self.apiManager);
     return YES;
   }
   BOOL native = NO;

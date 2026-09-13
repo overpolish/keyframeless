@@ -35,3 +35,9 @@ NSArray<NSArray<NSNumber *> *> *MMInspectorGraphComponents(MMInspectorGap *gap, 
 BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
                              CMTime playhead, MMInspectorSetting setting,
                              double value);
+
+// Incoming gaps sharing the selected destination's link, using cached poses only.
+NSArray<MMInspectorGap *> *MMReadInspectorGraphGaps(id<PROAPIAccessing> manager, UInt32 parameter, CMTime playhead);
+CMTime MMInspectorGraphStart(NSArray<MMInspectorGap *> *gaps);
+NSArray<NSNumber *> *MMInspectorGraphStartFractions(NSArray<MMInspectorGap *> *gaps);
+NSArray<NSArray<NSNumber *> *> *MMInspectorCombinedGraphPoints(NSArray<MMInspectorGap *> *gaps, NSUInteger count, CGSize imageSize);

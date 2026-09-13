@@ -28,12 +28,20 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly, nullable) NSButton *linkButton;
 @property(nonatomic, readonly) BOOL interacting;
 @property(nonatomic, getter=isSelected) BOOL selected;
+// Presentation-only indicator for a host-linked keypose. This is independent
+// of the optional scale/proportional linkButton.
+@property(nonatomic, getter=isKeyposeLinked) BOOL keyposeLinked;
+// Optional group tint for the gutter badge; nil uses the host accent.
+@property(nonatomic, strong, nullable) NSColor *keyposeLinkColor;
 // Presentation-only colors in component order; selected axes use these colors.
 @property(nonatomic, copy) NSArray<NSColor *> *componentColors;
+// Axis tint visibility is independent of the selected label/background.
+@property(nonatomic) BOOL componentColorsVisible;
 @property(nonatomic, copy, nullable) void (^onValueCommit)(ICValueTextField *field);
 @property(nonatomic, copy, nullable) void (^onScrubBegin)(void);
 @property(nonatomic, copy, nullable) void (^onScrubEnd)(void);
 @property(nonatomic, copy, nullable) void (^onLinkToggle)(NSButton *button);
+@property(nonatomic, copy, nullable) NSMenu *(^titleMenuProvider)(void);
 - (instancetype)initWithLabel:(NSString *)label
                   components:(NSArray<ICInspectorComponent *> *)components
                    showsLink:(BOOL)showsLink;

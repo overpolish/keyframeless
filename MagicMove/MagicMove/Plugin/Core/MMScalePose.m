@@ -83,7 +83,7 @@
                                       y:_y + (r.y - _y) * w
                                authored:_authored || r.authored
                                  easing:w >= 1 ? r.easing : _easing
-                            addedMotion:w >= 1 ? r.addedMotion : _addedMotion] poseByReplacingTiming:w >= 1 ? r.timing : self.timing];
+                            addedMotion:w >= 1 ? r.addedMotion : _addedMotion] poseByReplacingTiming:(w>0 && w<1) ? [self.timing timingByReplacingLinkID:@""]:(w>=1 ? r.timing:self.timing)];
 }
 @end
 
@@ -169,7 +169,8 @@ static NSArray *MMScaleEntries(id<PROAPIAccessing> manager, CMTime time,
     [a addObject:@{
       @"time" : @(CMTimeGetSeconds(k.time)),
       @"pose" : p,
-      @"nativeTime" : [NSValue valueWithBytes:&k.time objCType:@encode(CMTime)]
+      @"nativeTime" : [NSValue valueWithBytes:&k.time objCType:@encode(CMTime)],
+      @"nativeKey" : [NSValue valueWithBytes:&k objCType:@encode(FxKeyframe)]
     }];
   }
   [a sortUsingComparator:^NSComparisonResult(NSDictionary *x, NSDictionary *y) {
@@ -227,6 +228,13 @@ static MMScalePose *MMScaleSample(NSArray *e, CMTime t, BOOL *active,
 - (MMScalePose *)poseForEditingAtTime:(CMTime)time latest:(MMScalePose *)latest;
 @end
 @implementation MMScalePoseCache
+- (void)publishEntries:(NSArray<NSDictionary *> *)entries {
+  @synchronized(self) { self.generation++; self.entries=[entries copy]; }
+}
+- (void)publishConstantPose:(MMScalePose *)pose {
+  @synchronized(self) { self.generation++; self.entries=@[@{@"pose":pose}]; }
+}
+
 - (void)publishPose:(MMScalePose *)pose atTime:(CMTime)time
         inSnapshot:(NSArray<NSDictionary *> *)snapshot {
   if (!pose || !CMTIME_IS_NUMERIC(time)) return;

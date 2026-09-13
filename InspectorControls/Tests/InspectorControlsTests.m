@@ -27,6 +27,18 @@
   self.commits++; return YES;
 }
 @end
+
+@interface ICTrackingInspectorRow : ICInspectorRow
+@property(nonatomic) BOOL dirtied;
+@end
+
+@implementation ICTrackingInspectorRow
+- (void)setNeedsDisplay:(BOOL)needsDisplay {
+  if (needsDisplay) self.dirtied = YES;
+  [super setNeedsDisplay:needsDisplay];
+}
+@end
+
 static void testScrubBounds(void) {
   ICBoundedField *field=[ICBoundedField valueField];
   NSNumberFormatter *format=[NSNumberFormatter new];
@@ -106,6 +118,43 @@ static void assertSuffixDrawing(ICInspectorRow *row) {
   assert(counts[0]>0 && counts[1]>0); // Both px and % remain visible after detaching.
 }
 
+static void testKeyposeLinkedPresentation(ICInspectorRow *row) {
+  ICTrackingInspectorRow *tracked = [[ICTrackingInspectorRow alloc]
+      initWithLabel:row.titleLabel.stringValue components:@[
+        [[ICInspectorComponent alloc] initWithIdentifier:1 label:@"X"
+            suffix:@"px" fractionDigits:1],
+        [[ICInspectorComponent alloc] initWithIdentifier:2 label:@"Y"
+            suffix:@"px" fractionDigits:1]] showsLink:YES];
+  tracked.frame = NSMakeRect(0, 0, 403, ICInspectorRowHeight);
+  [tracked setNeedsLayout:YES]; [tracked layoutSubtreeIfNeeded];
+  tracked.dirtied = NO;
+  NSRect titleFrame = tracked.titleLabel.frame;
+  NSArray<NSValue *> *fieldFrames = [tracked.fields valueForKey:@"frame"];
+  NSArray<NSValue *> *axisFrames = [tracked.axisLabels valueForKey:@"frame"];
+  NSArray<NSValue *> *unitFrames = [tracked.unitLabels valueForKey:@"frame"];
+  NSView *titleHit = [tracked hitTest:NSMakePoint(NSMidX(titleFrame), NSMidY(titleFrame))];
+  tracked.keyposeLinked = YES;
+  assert(tracked.isKeyposeLinked && tracked.dirtied);
+  NSColor *titleColor=tracked.titleLabel.textColor;
+  NSArray *components=tracked.componentColors;
+  tracked.dirtied=NO;
+  tracked.keyposeLinkColor=NSColor.systemOrangeColor;
+  assert(tracked.dirtied && [tracked.keyposeLinkColor isEqual:NSColor.systemOrangeColor]);
+  tracked.dirtied=NO;
+  tracked.keyposeLinkColor=NSColor.systemOrangeColor;
+  assert(!tracked.dirtied);
+  assert([titleColor isEqual:tracked.titleLabel.textColor] && components==tracked.componentColors);
+  assert(NSEqualRects(tracked.titleLabel.frame, titleFrame));
+  assert([[tracked.fields valueForKey:@"frame"] isEqualToArray:fieldFrames]);
+  assert([[tracked.axisLabels valueForKey:@"frame"] isEqualToArray:axisFrames]);
+  assert([[tracked.unitLabels valueForKey:@"frame"] isEqualToArray:unitFrames]);
+  assert([tracked hitTest:NSMakePoint(NSMidX(titleFrame), NSMidY(titleFrame))] == titleHit);
+  assert([tracked hitTest:NSMakePoint(4, NSMidY(tracked.bounds))] == tracked);
+  tracked.dirtied = NO;
+  tracked.keyposeLinked = NO;
+  assert(!tracked.keyposeLinked && tracked.dirtied);
+}
+
 static BOOL rowDisposesWithoutCallbackCycle(void) {
   __weak ICInspectorRow *weakRow = nil;
   @autoreleasepool {
@@ -167,6 +216,32 @@ static void testSliderRow(void) {
   assert(NSMaxX(row.unitLabels.firstObject.frame) <= 403 - ICInspectorHostGutter);
 }
 
+static NSEvent *contextEvent(NSEventType type, NSEventModifierFlags flags) {
+  return [NSEvent mouseEventWithType:type location:NSMakePoint(4, 4)
+      modifierFlags:flags timestamp:0 windowNumber:0 context:nil eventNumber:0
+      clickCount:1 pressure:1];
+}
+
+static void testTitleMenuScope(ICInspectorRow *row) {
+  NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Title menu"];
+  __block NSUInteger invocations = 0;
+  row.titleMenuProvider = ^NSMenu *{ invocations++; return menu; };
+  NSEvent *rightClick = contextEvent(NSEventTypeRightMouseDown, 0);
+  NSEvent *controlClick = contextEvent(NSEventTypeLeftMouseDown, NSEventModifierFlagControl);
+  NSEvent *leftClick = contextEvent(NSEventTypeLeftMouseDown, 0);
+  assert([row.titleLabel menuForEvent:rightClick] == menu && invocations == 1);
+  assert([row.titleLabel menuForEvent:controlClick] == menu && invocations == 2);
+  assert([row.titleLabel menuForEvent:leftClick] == nil && invocations == 2);
+  for (ICValueTextField *field in row.fields)
+    assert([field menuForEvent:rightClick] == nil);
+  for (NSTextField *axis in row.axisLabels)
+    assert([axis menuForEvent:rightClick] == nil);
+  assert([row menuForEvent:rightClick] == nil);
+  assert(invocations == 2);
+  row.titleMenuProvider = nil;
+  assert([row.titleLabel menuForEvent:rightClick] == nil);
+}
+
 int main(void) {
   @autoreleasepool {
     [NSApplication sharedApplication];
@@ -192,6 +267,7 @@ int main(void) {
     NSRect fieldFrame=row.fields[0].frame;
     row.componentColors=@[NSColor.redColor,NSColor.greenColor];
     row.selected=YES;
+    row.componentColorsVisible=YES;
     assert([row.titleLabel.font isEqual:ICInspectorTokens.selectedLabelFont]);
     assert([row.titleLabel.textColor isEqual:ICInspectorTokens.accentMatchingHost]);
     assert([row.fields[0].font isEqual:valueFont] && [row.unitLabels[0].font isEqual:decorationFont]);
@@ -203,9 +279,29 @@ int main(void) {
     assert([row.axisLabels[0].textColor isEqual:NSColor.blueColor]);
     assert([row.axisLabels[1].textColor isEqual:ICInspectorTokens.decorationColor]);
     row.selected=NO;
+    assert([row.axisLabels[0].textColor isEqual:NSColor.blueColor]);
+    assert([row.unitLabels[0].textColor isEqual:ICInspectorTokens.decorationColor]);
+    row.componentColorsVisible=NO;
     assert([row.axisLabels[0].textColor isEqual:ICInspectorTokens.decorationColor]);
     assert([row.titleLabel.font isEqual:ICInspectorTokens.labelFont]);
     assert([row.titleLabel.textColor isEqual:ICInspectorTokens.labelColor]);
+    testTitleMenuScope(row);
+    NSMenuItem *toggleItem=[[NSMenuItem alloc] initWithTitle:@"Scale" action:nil keyEquivalent:@""];
+    ICMenuToggleView *toggle=[[ICMenuToggleView alloc] initWithMenuItem:toggleItem];
+    assert(toggle.focusRingType==NSFocusRingTypeNone);
+    assert(!toggle.bordered);
+    NSBitmapImageRep *hoverBitmap=[[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL
+        pixelsWide:180 pixelsHigh:22 bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES
+        isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+    for (NSNumber *highlight in @[@NO,@YES]) {
+      memset(hoverBitmap.bitmapData,0,hoverBitmap.bytesPerRow*22);
+      [toggle highlight:highlight.boolValue];
+      [NSGraphicsContext saveGraphicsState];
+      NSGraphicsContext.currentContext=[NSGraphicsContext graphicsContextWithBitmapImageRep:hoverBitmap];
+      [toggle drawRect:toggle.bounds];
+      [NSGraphicsContext restoreGraphicsState];
+      assert(([hoverBitmap colorAtX:150 y:11].alphaComponent > 0.5)==highlight.boolValue);
+    }
 
     row.fields[0].doubleValue = 12.3456;
     assert(fabs(row.fields[0].doubleValue - 12.3456) < 1e-12);
@@ -239,6 +335,7 @@ int main(void) {
     CGFloat glyphCenter = NSMaxY(row.titleLabel.frame) -
         row.titleLabel.firstBaselineOffsetFromTop + row.titleLabel.font.capHeight / 2;
     assert(fabs(NSMidY(row.linkButton.frame) - glyphCenter) <= 0.25);
+    testKeyposeLinkedPresentation(row);
 
     ICTestEditorField *styled = [ICTestEditorField valueField];
     styled.testEditor = [NSTextView new];

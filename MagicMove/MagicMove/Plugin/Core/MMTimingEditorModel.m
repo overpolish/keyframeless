@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MMTimingEditorModel.h"
 #import "Constants.h"
+#import "MMNativeLinks.h"
 #import <AppKit/AppKit.h>
 #import <math.h>
 @implementation MMInspectorGap
@@ -108,6 +109,7 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
                                                        : timing.available
                 amount:setting == MMInspectorAmount ? value : timing.amount
                  speed:setting == MMInspectorSpeed ? value : timing.speed];
+  updated=[updated timingByReplacingLinkID:timing.linkID];
   MTEasing easing =
       setting == MMInspectorEasing ? (MTEasing)value : [old easing];
   MTAddedMotion motion =
@@ -134,6 +136,7 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
                                  easing:easing
                             addedMotion:motion] poseByReplacingTiming:updated];
   }
+  if(timing.linkID.length) return MMWriteNativeLinkedPose(manager,parameterID,target,pose);
   id<FxParameterSettingAPI_v5> set =
       [manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   id cache=parameterID==MMCustomControls ? (id)MMCombinedCacheForManager(manager) : (parameterID==MMRotationControls ? (id)[MMRotationLane() cacheForManager:manager] : (parameterID==MMOpacityControls ? (id)[MMOpacityLane() cacheForManager:manager] : MMScaleCacheForManager(manager)));
@@ -165,4 +168,71 @@ NSArray<NSArray<NSNumber *> *> *MMInspectorGraphComponents(MMInspectorGap *gap, 
     [samples addObject:pose.values];
   }
   return samples;
+}
+
+CMTime MMInspectorGraphStart(NSArray<MMInspectorGap *> *gaps) {
+  CMTime start=kCMTimeInvalid;
+  for (MMInspectorGap *gap in gaps)
+    if (!CMTIME_IS_NUMERIC(start) || CMTimeCompare(gap.sourceTime,start)<0) start=gap.sourceTime;
+  return start;
+}
+NSArray<MMInspectorGap *> *MMReadInspectorGraphGaps(id<PROAPIAccessing> manager, UInt32 parameter, CMTime playhead) {
+  MMInspectorGap *selected=MMReadInspectorGap(manager,parameter,playhead);
+  // A property's first gap may start later than a linked peer's gap.
+  if (!selected && CMTIME_IS_NUMERIC(playhead)) {
+    NSArray *entries=parameter==MMCustomControls ? [MMCombinedCacheForManager(manager) snapshotEntries] :
+        parameter==MMScaleControls ? [MMScaleCacheForManager(manager) snapshotEntries] :
+        [[(parameter==MMRotationControls ? MMRotationLane() : MMOpacityLane()) cacheForManager:manager] snapshotEntries];
+    if (entries.count>=2 && entries.firstObject[@"nativeTime"]) {
+      CMTime first; [entries.firstObject[@"nativeTime"] getValue:&first];
+      if (CMTimeCompare(playhead,first)<0) selected=MMReadInspectorGap(manager,parameter,first);
+    }
+  }
+  if (!selected) return @[];
+  NSString *link=[selected.destinationPose timing].linkID;
+  NSMutableArray *gaps=[NSMutableArray new];
+  for (NSNumber *p in @[@(MMCustomControls),@(MMScaleControls),@(MMRotationControls),@(MMOpacityControls)]) {
+    MMInspectorGap *gap=p.unsignedIntValue==parameter ? selected :
+        link.length ? MMReadInspectorGap(manager,p.unsignedIntValue,selected.destinationTime) : nil;
+    if (!gap || CMTimeCompare(gap.destinationTime,selected.destinationTime)!=0) continue;
+    if (gap==selected || [[gap.destinationPose timing].linkID isEqual:link]) [gaps addObject:gap];
+  }
+  if (CMTimeCompare(playhead,MMInspectorGraphStart(gaps))<0 || CMTimeCompare(playhead,selected.destinationTime)>0) return @[];
+  return gaps;
+}
+static NSUInteger MMGraphComponentCount(UInt32 parameter) {
+  return parameter==MMOpacityControls ? 1 : parameter==MMRotationControls ? 3 : 2;
+}
+NSArray<NSNumber *> *MMInspectorGraphStartFractions(NSArray<MMInspectorGap *> *gaps) {
+  NSMutableArray *starts=[NSMutableArray new];
+  double start=CMTimeGetSeconds(MMInspectorGraphStart(gaps));
+  double end=CMTimeGetSeconds(gaps.firstObject.destinationTime);
+  for (MMInspectorGap *gap in gaps)
+    for (NSUInteger axis=0;axis<MMGraphComponentCount(gap.parameterID);axis++)
+      [starts addObject:@((CMTimeGetSeconds(gap.sourceTime)-start)/(end-start))];
+  return starts;
+}
+NSArray<NSArray<NSNumber *> *> *MMInspectorCombinedGraphPoints(NSArray<MMInspectorGap *> *gaps, NSUInteger count, CGSize imageSize) {
+  if (!gaps.count || count<2) return @[];
+  NSMutableArray<NSMutableArray *> *output=[NSMutableArray new];
+  for (NSUInteger i=0;i<count;i++) [output addObject:[NSMutableArray new]];
+  for (MMInspectorGap *gap in gaps) {
+    NSArray *samples=MMInspectorGraphComponents(gap,count);
+    if (samples.count!=count) return @[];
+    NSMutableArray *converted=[NSMutableArray new];
+    double low=INFINITY, high=-INFINITY;
+    for (NSArray *sample in samples) {
+      NSMutableArray *values=[sample mutableCopy];
+      if (gap.parameterID==MMCustomControls && imageSize.width>0 && imageSize.height>0) {
+        values[0]=@([values[0] doubleValue]*imageSize.width/100);
+        values[1]=@([values[1] doubleValue]*imageSize.height/100);
+      }
+      for (NSNumber *value in values) { low=fmin(low,value.doubleValue); high=fmax(high,value.doubleValue); }
+      [converted addObject:values];
+    }
+    for (NSUInteger i=0;i<count;i++)
+      for (NSNumber *value in converted[i])
+        [output[i] addObject:gaps.count==1 ? value : @(high-low<1e-6 ? 0.5 : (value.doubleValue-low)/(high-low))];
+  }
+  return output;
 }

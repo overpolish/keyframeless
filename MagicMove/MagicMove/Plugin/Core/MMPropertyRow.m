@@ -5,6 +5,8 @@
 #import "Constants.h"
 #import "MMShortcut.h"
 #import "MMInspectorColors.h"
+#import "MMResetParameter.h"
+#import "MMNativeLinks.h"
 
 @interface MMPropertyRowBinding : NSObject
 @property(nonatomic, weak) ICInspectorRow *row;
@@ -35,6 +37,7 @@
       formatter.maximum=lane.boundsValues ? @(lane.maximum) : nil;
     }
     __weak MMPropertyRowBinding *weakSelf=self;
+    row.titleMenuProvider=^NSMenu *{ MMPropertyRowBinding *binding=weakSelf; return binding ? MMNativePropertyMenu(binding.manager,binding.row,binding.lane.parameterID):nil; };
     row.onValueCommit=^(ICValueTextField *field) { [weakSelf writeField:field]; };
     row.onScrubBegin=^{ [weakSelf beginScrub]; }; row.onScrubEnd=^{ [weakSelf endScrub]; };
     id<FxCustomParameterActionAPI_v4> action=[_manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -52,7 +55,7 @@
   [[MMShortcutCapture sharedCapture] detachView:self.row];
   if(!self.row.window) return;
   __weak MMPropertyRowBinding *weakSelf=self;
-  self.selectionObserver=[NSNotificationCenter.defaultCenter addObserverForName:@"MMActiveRowChanged" object:self.plugin queue:nil usingBlock:^(NSNotification *note) { [weakSelf updateSelection]; }];
+  self.selectionObserver=[NSNotificationCenter.defaultCenter addObserverForName:MMInspectorPresentationChanged object:self.plugin queue:nil usingBlock:^(NSNotification *note) { [weakSelf updateSelection]; }];
   [self updateSelection];
   [[MMShortcutCapture sharedCapture] attachView:self.row action:^BOOL {
     MMPropertyRowBinding *row=weakSelf; if(!row || row.row.interacting || NSEvent.pressedMouseButtons) return NO;
@@ -75,6 +78,8 @@
   [action startAction:self.row];
   @try {
     CMTime time=[action currentTime]; BOOL explicit=NO;
+    self.row.keyposeLinkColor=MMNativePropertyLinkColor(self.manager,self.lane.parameterID,time);
+    self.row.keyposeLinked=self.row.keyposeLinkColor!=nil;
     id<FxParameterRetrievalAPI_v6> get=[self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     if(![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time]) return;
     NSArray *entries=[self.cache snapshotEntries];
@@ -89,7 +94,7 @@
     if(values.count!=self.row.fields.count) return;
     for(NSUInteger i=0;i<values.count;i++) {
       ICValueTextField *field=self.row.fields[i]; field.enabled=YES;
-      if(!field.objectValue || field.doubleValue!=values[i].doubleValue) field.doubleValue=values[i].doubleValue;
+      if(!field.objectValue || field.doubleValue!=values[i].doubleValue) { field.doubleValue=values[i].doubleValue; }
     }
     self.slider.enabled=YES;
     if(self.slider && self.slider.doubleValue!=pose.value) self.slider.doubleValue=pose.value;
@@ -97,6 +102,7 @@
 }
 - (void)updateSelection {
   self.row.selected=self.plugin && self.plugin.activeInspectorParameterID==self.lane.parameterID;
+  self.row.componentColorsVisible=[self.plugin.graphedInspectorParameters containsObject:@(self.lane.parameterID)];
 }
 - (void)beginScrub {
   id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)]; if(!action) return;
@@ -119,6 +125,8 @@
     BOOL grouped=[undo startUndoGroup:self.undoName];
     @try {
       CMTime time=[action currentTime]; BOOL explicit=NO;
+    self.row.keyposeLinkColor=MMNativePropertyLinkColor(self.manager,self.lane.parameterID,time);
+    self.row.keyposeLinked=self.row.keyposeLinkColor!=nil;
       id<FxParameterRetrievalAPI_v6> get=[self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       if(![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time] || ![self.lane writeComponent:component value:field.doubleValue manager:self.manager cache:self.cache time:time explicit:explicit]) NSBeep();
     } @finally { if(grouped) [undo endUndoGroup]; }
@@ -126,7 +134,7 @@
 }
 - (void)activate {
   self.plugin.activeInspectorParameterID=self.lane.parameterID;
-  [NSNotificationCenter.defaultCenter postNotificationName:@"MMActiveRowChanged" object:self.plugin];
+  [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:self.plugin];
   [[MMShortcutCapture sharedCapture] activateView:self.row];
 }
 - (void)dealloc {

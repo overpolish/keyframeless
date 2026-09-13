@@ -9,6 +9,8 @@
 #import "MMInspectorColors.h"
 #import "MMShortcut.h"
 #import "MMTimingEditor.h"
+#import "MMResetParameter.h"
+#import "MMNativeLinks.h"
 @import InspectorControls;
 #import <Cocoa/Cocoa.h>
 
@@ -17,7 +19,6 @@
 #define MM_INSPECTOR_DEBUG_PAINT 0
 #endif
 
-static NSNotificationName const MMActiveRowChanged = @"MMActiveRowChanged";
 
 // KKPlugin implements the view host in a private category.
 @interface KKPlugin (MMCustomRowHost)
@@ -70,6 +71,7 @@ static NSNotificationName const MMActiveRowChanged = @"MMActiveRowChanged";
   }
 #endif
   __weak MMCustomRow *weakSelf=self;
+  self.titleMenuProvider=^NSMenu *{ MMCustomRow *row=weakSelf; return row ? MMNativePropertyMenu(row.manager,row,row.scaleRow ? MMScaleControls:MMCustomControls):nil; };
   self.onValueCommit=^(ICValueTextField *field) { [weakSelf commitValue:field]; };
   self.onScrubBegin=^{ [weakSelf beginScrub]; };
   self.onScrubEnd=^{ [weakSelf endScrub]; };
@@ -99,7 +101,7 @@ static NSNotificationName const MMActiveRowChanged = @"MMActiveRowChanged";
   if (!self.window) return;
   __weak MMCustomRow *weakSelf = self;
   if(self.owner) self.selectionObserver=[NSNotificationCenter.defaultCenter
-      addObserverForName:MMActiveRowChanged object:self.owner queue:nil
+      addObserverForName:MMInspectorPresentationChanged object:self.owner queue:nil
       usingBlock:^(NSNotification *note) { [weakSelf updateSelection]; }];
   [self updateSelection];
   [[MMShortcutCapture sharedCapture] attachView:self action:^BOOL {
@@ -127,6 +129,7 @@ static NSNotificationName const MMActiveRowChanged = @"MMActiveRowChanged";
 - (void)updateSelection {
   UInt32 active=self.owner.activeInspectorParameterID ?: MMCustomControls;
   self.selected=self.owner && active==(self.scaleRow ? MMScaleControls:MMCustomControls);
+  self.componentColorsVisible=[self.owner.graphedInspectorParameters containsObject:@(self.scaleRow ? MMScaleControls:MMCustomControls)];
 }
 - (NSView *)hitTest:(NSPoint)point {
   // Match KKParameterRowView's reserved host-controls region. A full-width
@@ -137,7 +140,7 @@ static NSNotificationName const MMActiveRowChanged = @"MMActiveRowChanged";
   if(hostRegion) return nil;
   if (hit && NSApp.currentEvent.type==NSEventTypeLeftMouseDown) {
     self.owner.activeInspectorParameterID=self.scaleRow ? MMScaleControls : MMCustomControls;
-    if(self.owner) [NSNotificationCenter.defaultCenter postNotificationName:MMActiveRowChanged object:self.owner];
+    if(self.owner) [NSNotificationCenter.defaultCenter postNotificationName:MMInspectorPresentationChanged object:self.owner];
     [[MMShortcutCapture sharedCapture] activateView:self];
   }
   return hit;
@@ -196,6 +199,8 @@ static NSNotificationName const MMActiveRowChanged = @"MMActiveRowChanged";
     if (!isfinite(size.width) || !isfinite(size.height) || size.width <= 0 || size.height <= 0) return;
     self.pixelSize = NSSizeFromCGSize(size);
     CMTime time = [action currentTime];
+    self.keyposeLinkColor=MMNativePropertyLinkColor(self.manager,self.scaleRow ? MMScaleControls:MMCustomControls,time);
+    self.keyposeLinked=self.keyposeLinkColor!=nil;
     id pose = self.scaleRow ? [self.scaleCache sampleAtTime:time] : [self.poseCache sampleAtTime:time];
     id<FxParameterRetrievalAPI_v6> get = [self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     BOOL explicit = NO;
@@ -221,7 +226,9 @@ static NSNotificationName const MMActiveRowChanged = @"MMActiveRowChanged";
       NSNumberFormatter *formatter = (NSNumberFormatter *)field.formatter;
       formatter.minimum = self.scaleRow ? @0 : @(-2 * dimension);
       formatter.maximum = self.scaleRow ? @400 : @(2 * dimension);
-      if (!field.objectValue || field.doubleValue != value) field.doubleValue = value;
+      if (!field.objectValue || field.doubleValue != value) {
+        field.doubleValue = value;
+      }
     }
   } @finally { [action endAction:self]; }
 }

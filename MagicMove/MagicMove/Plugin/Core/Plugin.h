@@ -8,6 +8,8 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
+FOUNDATION_EXPORT NSNotificationName const MMInspectorPresentationChanged;
+
 // Per-parameter cache and editor state; the host persists each lane separately.
 @interface MMTimingLane : NSObject
 @property(nonatomic) UInt32 valueID;
@@ -49,6 +51,7 @@
 // Canonical image dimensions published by image callbacks, read by the inspector.
 @property(atomic) CGSize inspectorImageSize;
 @property(atomic) UInt32 activeInspectorParameterID;
+@property(atomic,copy) NSSet<NSNumber *> *graphedInspectorParameters;
 @property(atomic) BOOL syncingDuration;
 @property(atomic) NSUInteger activeNativeCallbacks;
 @property(atomic) BOOL hasPendingNativeEdits;

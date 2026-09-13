@@ -69,7 +69,7 @@
   return [[[MMCombinedPose alloc] initWithPositionX:self.positionX + (right.positionX-self.positionX)*w
                                           positionY:self.positionY + (right.positionY-self.positionY)*w
                                            scale:self.scale + (right.scale-self.scale)*w
-                                        authored:self.authored || right.authored easing:w >= 1 ? right.easing : self.easing addedMotion:w >= 1 ? right.addedMotion : self.addedMotion] poseByReplacingTiming:w >= 1 ? right.timing : self.timing];
+                                        authored:self.authored || right.authored easing:w >= 1 ? right.easing : self.easing addedMotion:w >= 1 ? right.addedMotion : self.addedMotion] poseByReplacingTiming:(w>0 && w<1) ? [self.timing timingByReplacingLinkID:@""]:(w>=1 ? right.timing:self.timing)];
 }
 @end
 
@@ -109,7 +109,7 @@ static NSArray *MMReadCombinedEntries(id<PROAPIAccessing> manager, CMTime time, 
     if (!CMTIME_IS_NUMERIC(key.time)) return MMCombinedFailure(error);
     MMCombinedPose *pose = MMCombinedValue(get, key.time);
     if (!pose) return MMCombinedFailure(error);
-    [entries addObject:@{@"time":@(CMTimeGetSeconds(key.time)), @"pose":pose, @"nativeTime":[NSValue valueWithBytes:&key.time objCType:@encode(CMTime)]}];
+    [entries addObject:@{@"time":@(CMTimeGetSeconds(key.time)), @"pose":pose, @"nativeTime":[NSValue valueWithBytes:&key.time objCType:@encode(CMTime)],@"nativeKey":[NSValue valueWithBytes:&key objCType:@encode(FxKeyframe)]}];
   }
   [entries sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
     return [a[@"time"] compare:b[@"time"]];
@@ -148,6 +148,13 @@ static MMCombinedPose *MMSampleCombinedEntries(NSArray *entries, CMTime time, BO
 @property(nonatomic) NSUInteger generation;
 @end
 @implementation MMCombinedPoseCache
+- (void)publishEntries:(NSArray<NSDictionary *> *)entries {
+  @synchronized(self) { self.generation++; self.entries=[entries copy]; }
+}
+- (void)publishConstantPose:(MMCombinedPose *)pose {
+  @synchronized(self) { self.generation++; self.entries=@[@{@"pose":pose}]; }
+}
+
 - (void)publishPose:(MMCombinedPose *)pose atTime:(CMTime)time
         inSnapshot:(NSArray<NSDictionary *> *)snapshot {
   if (!pose || !CMTIME_IS_NUMERIC(time)) return;

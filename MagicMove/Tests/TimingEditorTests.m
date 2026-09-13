@@ -421,8 +421,74 @@ static void testEditorActions(void) {
   [panel removeFromSuperview];
   [window close];
 }
+static void testStaggeredLinkedGraph(void) {
+  TimingHost *host=[TimingHost new];
+  MMCombinedPoseCache *positionCache=MMCreateCombinedPoseCache();
+  MMScalePoseCache *scaleCache=MMCreateScalePoseCache();
+  host.staticValues[@(MMCombinedCacheToken)]=positionCache.token;
+  host.staticValues[@(MMScaleCacheToken)]=scaleCache.token;
+  MMCombinedPose *p0=combined(0,10,100,1,NO,MTEasingSmooth,MTAddedMotionWave,1,1);
+  MMCombinedPose *p1=combined(80,50,100,1,NO,MTEasingSmooth,MTAddedMotionNone,1,1);
+  MMScalePose *s0=scale(100,110,1,NO,MTEasingSmooth,MTAddedMotionWave,1,1);
+  MMScalePose *s1=scale(150,160,1,NO,MTEasingSmooth,MTAddedMotionNone,1,1);
+  p1=[p1 poseByReplacingTiming:[p1.timing timingByReplacingLinkID:@"shared-end"]];
+  s1=[s1 poseByReplacingTiming:[s1.timing timingByReplacingLinkID:@"shared-end"]];
+  addKey(host,MMCustomControls,0,p0); addKey(host,MMCustomControls,4,p1);
+  addKey(host,MMScaleControls,2,s0); addKey(host,MMScaleControls,4,s1);
+  host.blobs[@(MMScaleControls)]=s0; // Host returns the held value before its first key.
+  MMRefreshCombinedPoseCache(host,TestTime(1)); MMRefreshScalePoseCache(host,TestTime(1));
+  NSUInteger reads=host.nativeKeyReads;
+  NSArray<MMInspectorGap *> *gaps=MMReadInspectorGraphGaps(host,MMScaleControls,TestTime(1));
+  assert(gaps.count==2 && CMTimeCompare(MMInspectorGraphStart(gaps),TestTime(0))==0);
+  NSArray *starts=MMInspectorGraphStartFractions(gaps);
+  assert(([starts isEqualToArray:@[@0,@0,@0.5,@0.5]]));
+  assert(MMReadInspectorGraphGaps(host,MMCustomControls,TestTime(3)).count==2);
+  assert(MMReadInspectorGraphGaps(host,MMCustomControls,TestTime(4)).count==2);
+  assert(MMReadInspectorGraphGaps(host,MMCustomControls,TestTime(5)).count==0);
+  NSArray *points=MMInspectorCombinedGraphPoints(gaps,65,CGSizeMake(100,100));
+  assert(points.count==65 && [points[0] count]==4 && host.nativeKeyReads==reads);
+  // Each property retains exactly the evaluated shape, fitted independently
+  // because their units differ. Includes outgoing wave + incoming easing.
+  for (NSUInteger property=0;property<2;property++) {
+    NSArray *raw=MMInspectorGraphComponents(gaps[property],65);
+    double low=INFINITY,high=-INFINITY;
+    for (NSArray *sample in raw) for (NSNumber *value in sample) { low=fmin(low,value.doubleValue); high=fmax(high,value.doubleValue); }
+    for (NSUInteger i=0;i<65;i++) for (NSUInteger axis=0;axis<2;axis++)
+      assert(fabs([points[i][property*2+axis] doubleValue]-([raw[i][axis] doubleValue]-low)/(high-low))<1e-9);
+  }
+  NSView *graph=[[NSClassFromString(@"MMGapGraph") alloc] initWithFrame:NSMakeRect(0,0,400,114)];
+  [graph setValue:points forKey:@"points"]; [graph setValue:starts forKey:@"startFractions"];
+  [graph performSelector:@selector(prepareCurves)];
+  NSArray<NSBezierPath *> *paths=[graph valueForKey:@"curvePaths"];
+  NSPoint early,late,end;
+  [paths[0] elementAtIndex:0 associatedPoints:&early];
+  [paths[2] elementAtIndex:0 associatedPoints:&late];
+  [paths[2] elementAtIndex:paths[2].elementCount-1 associatedPoints:&end];
+  assert(fabs(early.x-8)<1e-6 && fabs(late.x-200)<1e-6 && fabs(end.x-392)<1e-6);
+  [NSApplication sharedApplication];
+  host.playhead=TestTime(3);
+  MagicMovePlugin *plugin=[[MagicMovePlugin alloc] initWithAPIManager:host];
+  plugin.activeInspectorParameterID=MMScaleControls;
+  NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,395,256) styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+  window.releasedWhenClosed=NO;
+  MMTimingEditor *panel=[[MMTimingEditor alloc] initWithPlugin:plugin];
+  [window.contentView addSubview:panel];
+  [panel refresh];
+  assert(([plugin.graphedInspectorParameters isEqualToSet:[NSSet setWithArray:@[@(MMCustomControls),@(MMScaleControls)]]]));
+  s1=[s1 poseByReplacingTiming:[s1.timing timingByReplacingLinkID:@""]];
+  [host lane:MMScaleControls][1][@"value"]=s1;
+  MMRefreshScalePoseCache(host,TestTime(3));
+  assert(MMReadInspectorGraphGaps(host,MMCustomControls,TestTime(3)).count==1);
+  [panel refresh];
+  assert([plugin.graphedInspectorParameters isEqualToSet:[NSSet setWithObject:@(MMScaleControls)]]);
+  [panel removeFromSuperview];
+  assert(plugin.graphedInspectorParameters.count==0);
+  [window close];
+}
+
 int main(void) {
   @autoreleasepool {
+    testStaggeredLinkedGraph();
     testTimingCoding();
     testEditorModel();
     testCachePublication();

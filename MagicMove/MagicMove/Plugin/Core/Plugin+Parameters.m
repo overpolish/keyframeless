@@ -15,6 +15,10 @@
   BOOL ok = api && [api addToggleButtonWithName:@"Legacy Link Properties"
                                   parameterID:MMLinkProperties defaultValue:NO
                                parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
+  // A saved, non-animatable scratch value invalidates the host's cached frame.
+  // Legacy testing found DONT_SAVE writes propagated late; keep normal flags.
+  ok = ok && [api addCustomParameterWithName:@"Host Refresh" parameterID:MMHostRefreshToken
+      defaultValue:@"" parameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE)];
   ok = ok && [api addCustomParameterWithName:@"" parameterID:MMScaleControls
                                 defaultValue:[[MMScalePose alloc] initWithX:100 y:100 authored:NO]
                               parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
