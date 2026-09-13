@@ -154,15 +154,22 @@ static NSString *MMTimingPropertyName(UInt32 parameter) {
   [[NSColor colorWithWhite:0 alpha:0.15] setFill];
   [[NSBezierPath bezierPathWithRoundedRect:self.bounds xRadius:4
                                    yRadius:4] fill];
-  [[NSColor colorWithWhite:1 alpha:0.08] setStroke];
+  // A quiet square backdrop, independent of the displayed time/value range.
+  [[NSColor colorWithWhite:1 alpha:0.04] setStroke];
   NSBezierPath *grid = [NSBezierPath bezierPath];
-  for (int i = 0; i <= 4; i++) {
-    CGFloat x = NSMinX(plot) + NSWidth(plot) * i / 4;
+  const CGFloat spacing = 16;
+  grid.lineWidth = 0.5;
+  for (CGFloat x = NSMinX(plot); x <= NSMaxX(plot); x += spacing) {
     [grid moveToPoint:NSMakePoint(x, NSMinY(plot))];
     [grid lineToPoint:NSMakePoint(x, NSMaxY(plot))];
   }
-  [grid moveToPoint:NSMakePoint(NSMinX(plot), NSMidY(plot))];
-  [grid lineToPoint:NSMakePoint(NSMaxX(plot), NSMidY(plot))];
+  for (CGFloat y = NSMinY(plot); y < NSMaxY(plot); y += spacing) {
+    [grid moveToPoint:NSMakePoint(NSMinX(plot), y)];
+    [grid lineToPoint:NSMakePoint(NSMaxX(plot), y)];
+  }
+  // Close the top even when the plot height is not a multiple of the grid spacing.
+  [grid moveToPoint:NSMakePoint(NSMinX(plot), NSMaxY(plot))];
+  [grid lineToPoint:NSMakePoint(NSMaxX(plot), NSMaxY(plot))];
   [grid stroke];
   if (self.points.count < 2)
     return;
@@ -268,7 +275,7 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   return menu;
 }
 - (instancetype)initWithPlugin:(MagicMovePlugin *)plugin {
-  if (!(self = [super initWithFrame:NSMakeRect(0, 0, 320, 250)]))
+  if (!(self = [super initWithFrame:NSMakeRect(0, 0, 320, 252)]))
     return nil;
   _plugin = plugin;
   _manager = plugin.apiManager;
@@ -364,14 +371,14 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   return self;
 }
 - (NSSize)intrinsicContentSize {
-  return NSMakeSize(NSViewNoIntrinsicMetric, 250);
+  return NSMakeSize(NSViewNoIntrinsicMetric, 252);
 }
 - (void)layout {
   [super layout];
   CGFloat width = NSWidth(self.bounds), right = MAX(140, width - 22),
           content = MAX(0, right - 21);
-  self.gapLabel.frame = NSMakeRect(21, 224, content, 18);
-  self.graph.frame = NSMakeRect(21, 124, content, 94);
+  self.gapLabel.frame = NSMakeRect(21, 226, content, 18);
+  self.graph.frame = NSMakeRect(21, 124, content, 96);
   self.durationRow.frame = NSMakeRect(0, 95, width, 24);
   self.easingLabel.frame=NSMakeRect(21,74,140,18);
   CGFloat dividerWidth=MIN(48,content);
