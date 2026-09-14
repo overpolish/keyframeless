@@ -4,6 +4,7 @@
 - Plugin adapters own FxPlug lifecycle, parameter registration, persistence, undo, keyframe ownership, host reads/writes, value conversion, source tile selection, and image geometry.
 - `MotionTiming` owns deterministic timing and Added Motion evaluation. Keep it independent of plugin UI, Foundation, and host APIs.
 - `InspectorControls` owns reusable AppKit controls, layout, and tokens. Reuse its rows and value fields for inspector UI. Keep it free of FxPlug, plugin parameter IDs, timing, and persistence.
+- `PluginPreferences` owns reusable preference storage and validation hooks. Plugins define defaults and when to apply them; keep document values and host writes out of the package.
 - `RenderSupport` owns reusable Metal resources and rendering operations. Keep it free of FxPlug, plugin parameter IDs, and timing-engine dependencies.
 - Preserve saved-document compatibility when changing parameter identifiers or encoded values. Keep the plugin-owned `KKDataBlob` runtime name and archive keys so existing documents still decode.
 

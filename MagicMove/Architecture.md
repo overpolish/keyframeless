@@ -43,3 +43,9 @@ The shared accumulation shader is compiled into the plugin's own default Metal l
 ## Verification
 
 Run the [automated tests](Tests/README.md). They use the production code with simulated host APIs and real Metal textures. Event handling, undo grouping, visual layout, and export also need to be checked in Motion/FCP.
+
+## User defaults
+
+`MMDefaults` defines duration, easing, and per-type Added Motion preferences using `PluginPreferences`. Pose decoding and rendering never read preferences. Automatic value edits apply defaults when they create a keyframe; native insertions use the existing deferred host-edit path. The insertion tracker rejects moves and remembers observed key states so undo restoration does not apply current preferences. A queued insertion is discarded if the key changes before the write.
+
+`MMPoseTiming` archives Amount / Speed history by Added Motion type. Missing history is valid for existing documents. Changing a type records its current values and restores the chosen type's history, falling back to preferences only on its first use.

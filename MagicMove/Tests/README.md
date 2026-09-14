@@ -69,3 +69,9 @@ For changes involving host integration, also check these in Motion/FCP:
 8. Exercise the published effect in FCP as well as Motion when changing parameter registration or custom views.
 
 Include the application versions, checks you ran, and results in the pull request.
+
+`DefaultsTests` covers preference validation, creation defaults, native insertion tracking, undo restoration, stale queued edits, per-type Added Motion settings, secure archive round trips, and context-menu actions. Test runs use an isolated preferences suite through `MM_PREFERENCES_SUITE` and remove it on exit.
+
+For host verification, set duration and easing defaults, add keys with the native keyframe button and automatic value editing, then undo/redo and move existing keys. Check that existing keys retain their settings. Save Wave and Wiggle defaults, switch types after editing them, and reopen the document to verify that each type retains its edits.
+
+Reset-menu tests verify saved-default and factory fallback, incoming versus outgoing ownership, one undo group per reset, and preservation of Use Available Time. `InspectorControls/Tests/ValueFocusTests.m` exercises text entry and focus dismissal in an AppKit window.

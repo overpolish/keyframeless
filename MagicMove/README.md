@@ -58,3 +58,11 @@ scripts/test-magicmove.sh
 ```
 
 See [architecture](Architecture.md) for how the plugin works and [tests](Tests/README.md) for automated tests and checks to run in Motion/FCP.
+
+## Setting defaults
+
+Right-click Duration or Easing and choose **Set Default** to use the current setting for new keyframes. Duration saves only the time, not Use Available Time. These preferences apply across effect instances; existing keyframes keep their settings.
+
+Right-click Amount / Speed to save both values for the selected Added Motion type. Wave, Wiggle, and Handheld have separate defaults. Switching types on a keyframe restores its previous edits, including after saving and reopening the document.
+
+**Restore Factory Default** clears that saved preference for future use. It does not reset the current animation. **Reset Parameter** applies the saved default to the current Duration, Easing, or Amount / Speed values, falling back to the factory value when no preference is saved. It leaves Use Available Time unchanged.

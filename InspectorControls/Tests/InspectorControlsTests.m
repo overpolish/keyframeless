@@ -263,7 +263,7 @@ static NSEvent *contextEvent(NSEventType type, NSEventModifierFlags flags) {
       clickCount:1 pressure:1];
 }
 
-static void testTitleMenuScope(ICInspectorRow *row) {
+static void testRowMenuScope(ICInspectorRow *row) {
   NSMenu *menu = [[NSMenu alloc] initWithTitle:@"Title menu"];
   __block NSUInteger invocations = 0;
   row.titleMenuProvider = ^NSMenu *{ invocations++; return menu; };
@@ -274,11 +274,11 @@ static void testTitleMenuScope(ICInspectorRow *row) {
   assert([row.titleLabel menuForEvent:controlClick] == menu && invocations == 2);
   assert([row.titleLabel menuForEvent:leftClick] == nil && invocations == 2);
   for (ICValueTextField *field in row.fields)
-    assert([field menuForEvent:rightClick] == nil);
+    assert([field menuForEvent:rightClick] == menu);
   for (NSTextField *axis in row.axisLabels)
-    assert([axis menuForEvent:rightClick] == nil);
-  assert([row menuForEvent:rightClick] == nil);
-  assert(invocations == 2);
+    assert([axis menuForEvent:rightClick] == menu);
+  assert([row menuForEvent:rightClick] == menu);
+  assert(invocations == 3 + row.fields.count + row.axisLabels.count);
   row.titleMenuProvider = nil;
   assert([row.titleLabel menuForEvent:rightClick] == nil);
 }
@@ -327,7 +327,7 @@ int main(void) {
     assert([row.axisLabels[0].textColor isEqual:ICInspectorTokens.decorationColor]);
     assert([row.titleLabel.font isEqual:ICInspectorTokens.labelFont]);
     assert([row.titleLabel.textColor isEqual:ICInspectorTokens.labelColor]);
-    testTitleMenuScope(row);
+    testRowMenuScope(row);
     NSMenuItem *toggleItem=[[NSMenuItem alloc] initWithTitle:@"Scale" action:nil keyEquivalent:@""];
     ICMenuToggleView *toggle=[[ICMenuToggleView alloc] initWithMenuItem:toggleItem];
     assert(toggle.focusRingType==NSFocusRingTypeNone);
@@ -438,6 +438,22 @@ int main(void) {
       assert(item.state==(item==popup.selectedItem ? NSControlStateValueOn : NSControlStateValueOff));
     [popup selectItemAtIndex:1];
     assert([popup.title isEqualToString:@"Wave"]);
+    ICContextMenu *parameterMenu=[[ICContextMenu alloc] initWithTitle:@"Parameter"];
+    assert(!parameterMenu.allowsContextMenuPlugIns);
+    if (@available(macOS 15.2,*)) assert(!parameterMenu.automaticallyInsertsWritingToolsItems);
+    NSMenu *defaultsMenu=[NSMenu new]; defaultsMenu.autoenablesItems=NO;
+    NSDictionary *context=@{@"key":@"duration"};
+    ICAppendDefaultMenuItems(defaultsMenu,nil,NULL,context,NO);
+    assert(defaultsMenu.numberOfItems==3);
+    assert(defaultsMenu.itemArray[1].isSeparatorItem);
+    assert(!defaultsMenu.itemArray[0].enabled && defaultsMenu.itemArray[2].enabled);
+    assert(defaultsMenu.itemArray[0].representedObject==context);
+    assert(defaultsMenu.itemArray[0].tag==0 && defaultsMenu.itemArray[2].tag==1);
+    ICValueTextField *contextField=[ICValueTextField valueField];
+    contextField.contextMenuProvider=^{ return defaultsMenu; };
+    popup.contextMenuProvider=^{ return defaultsMenu; };
+    NSEvent *rightClick=[NSEvent mouseEventWithType:NSEventTypeRightMouseDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:0 context:nil eventNumber:1 clickCount:1 pressure:1];
+    assert([contextField menuForEvent:rightClick]==defaultsMenu && [popup menuForEvent:rightClick]==defaultsMenu);
     testScrubBounds();
     testSliderRow();
     puts("InspectorControls: configuration, blank state, callbacks, precision, layout, styling, and disposal passed");

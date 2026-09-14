@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMDefaults.h"
 #import "MMTimingEditor.h"
 #import "Constants.h"
 #import "MMInspectorColors.h"
@@ -298,6 +299,8 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
                                     suffix:@"s"
                             fractionDigits:2] ]
           showsLink:NO];
+  _durationRow.titleMenuProvider=^{ return [weakEditor defaultContextMenu:MMInspectorDuration]; };
+  _durationRow.fields.firstObject.contextMenuProvider=_durationRow.titleMenuProvider;
   [self addSubview:_durationRow];
   _available = [NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:@"arrow.left.and.right"
       accessibilityDescription:@"Use available time"] target:self action:@selector(availableChanged:)];
@@ -310,6 +313,8 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   _easingLabel=[self label:@"Easing"];
   _easingMenu = [self menu:@[ @"Smooth", @"Linear", @"Ease In", @"Ease Out" ]
                    setting:MMInspectorEasing];
+  ((ICMenuTextField *)_easingLabel).menuProvider=^{ return [weakEditor defaultContextMenu:MMInspectorEasing]; };
+  ((ICPopUpButton *)_easingMenu).contextMenuProvider=((ICMenuTextField *)_easingLabel).menuProvider;
   _easingMenu.accessibilityLabel = @"Incoming easing";
   _motionLabel = [self label:@"Position Added Motion"];
   ((ICMenuTextField *)_motionLabel).menuProvider=^{ return [weakEditor motionContextMenu:NO]; };
@@ -334,6 +339,8 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
          ]
           showsLink:NO];
   _motionRow.titleMenuProvider=^{ return [weakEditor motionContextMenu:YES]; };
+  for (ICValueTextField *field in _motionRow.fields)
+    field.contextMenuProvider=_motionRow.titleMenuProvider;
   [self addSubview:_motionRow];
   __weak MMTimingEditor *weakSelf = self;
   for (ICInspectorRow *row in @[ _durationRow, _motionRow ]) {
@@ -578,7 +585,10 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
     item.representedObject=@{@"parameter":@(parameter),@"time":boxedTime,@"setting":@(setting),@"value":@(value)};
     [destination addItem:item];
   };
-  if (controls) add(menu,@"Reset Parameter",MMInspectorResetMotionControls,0,NO);
+  if (controls) {
+    add(menu,@"Reset Parameter",MMInspectorResetMotionControls,0,NO);
+    [self appendDefaults:menu setting:MMInspectorAmount gap:gap];
+  }
   else {
     add(menu,@"Independent Motion",MMInspectorMotionLinked,!timing.motionLinked,!timing.motionLinked);
     [menu addItem:NSMenuItem.separatorItem];
@@ -590,6 +600,46 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
     }
   }
   return menu;
+}
+- (void)appendDefaults:(NSMenu *)menu setting:(MMInspectorSetting)setting gap:(MMInspectorGap *)gap {
+  NSString *key; NSDictionary *value;
+  if (setting==MMInspectorDuration) {
+    key=@"duration"; value=@{@"value":@([[gap.destinationPose timing] duration])};
+  } else if (setting==MMInspectorEasing) {
+    key=@"easing"; value=@{@"value":@([gap.destinationPose easing])};
+  } else {
+    MTAddedMotion type=[gap.sourcePose addedMotion];
+    if (!gap || type==MTAddedMotionNone) return;
+    key=MMMotionDefaultKey(type);
+    value=@{@"amount":@([[gap.sourcePose timing] amount]),@"speed":@([[gap.sourcePose timing] speed])};
+  }
+  if (setting==MMInspectorDuration || setting==MMInspectorEasing) {
+    NSMenuItem *reset=[[NSMenuItem alloc] initWithTitle:@"Reset Parameter" action:@selector(motionContextAction:) keyEquivalent:@""];
+    CMTime target=gap ? gap.destinationTime : kCMTimeInvalid;
+    reset.target=self; reset.enabled=gap!=nil;
+    reset.representedObject=@{@"parameter":@(gap.parameterID),
+        @"time":[NSValue valueWithBytes:&target objCType:@encode(CMTime)],
+        @"setting":@(setting),@"value":MMReadDefault(key)[@"value"]};
+    [menu addItem:reset];
+  }
+  ICAppendDefaultMenuItems(menu,self,@selector(defaultContextAction:),@{@"key":key,@"value":value},gap!=nil);
+}
+- (NSMenu *)defaultContextMenu:(MMInspectorSetting)setting {
+  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!action) return nil;
+  MMInspectorGap *gap;
+  [action startAction:self];
+  @try { gap=MMReadInspectorGap(self.manager,self.displayedParameter,[action currentTime]); }
+  @finally { [action endAction:self]; }
+  NSMenu *menu=MMCreatePropertyMenu(self.manager,self); menu.autoenablesItems=NO;
+  [self appendDefaults:menu setting:setting gap:gap];
+  return menu;
+}
+- (void)defaultContextAction:(NSMenuItem *)item {
+  NSDictionary *request=item.representedObject;
+  if (item.tag) [MMDefaultStore() restoreFactoryForKey:request[@"key"]];
+  else MMSaveDefault(request[@"key"],request[@"value"]);
+  // No host edit was made. The shared menu lifecycle still refreshes after closing.
 }
 - (void)motionContextAction:(NSMenuItem *)item {
   NSDictionary *request=item.representedObject;

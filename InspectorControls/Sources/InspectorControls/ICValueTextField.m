@@ -48,11 +48,107 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
   return NO;
 }
 
+@interface ICValueTextField (CursorGeometry)
+- (NSRect)visibleValueRect;
+- (BOOL)eventIsOverValue:(NSEvent *)event;
+- (void)blurForOutsideClick:(NSEvent *)event;
+@end
+
+static void ICRegisterValueCursorRects(NSView *view, NSRect text, BOOL enabled) {
+  NSRect bounds=view.bounds;
+  text=NSIntersectionRect(bounds,text);
+  if (!enabled || NSIsEmptyRect(text)) {
+    [view addCursorRect:bounds cursor:NSCursor.arrowCursor];
+    return;
+  }
+  // Disjoint rectangles keep AppKit's text cursor out of the surrounding space.
+  NSRect blanks[]={
+    NSMakeRect(NSMinX(bounds),NSMinY(bounds),NSWidth(bounds),NSMinY(text)-NSMinY(bounds)),
+    NSMakeRect(NSMinX(bounds),NSMaxY(text),NSWidth(bounds),NSMaxY(bounds)-NSMaxY(text)),
+    NSMakeRect(NSMinX(bounds),NSMinY(text),NSMinX(text)-NSMinX(bounds),NSHeight(text)),
+    NSMakeRect(NSMaxX(text),NSMinY(text),NSMaxX(bounds)-NSMaxX(text),NSHeight(text))
+  };
+  for (NSUInteger i=0;i<4;i++) if (!NSIsEmptyRect(blanks[i]))
+    [view addCursorRect:blanks[i] cursor:NSCursor.arrowCursor];
+  [view addCursorRect:text cursor:NSCursor.IBeamCursor];
+}
+
+@interface ICValueFieldEditor : NSTextView
+@property(nonatomic,weak) ICValueTextField *valueField;
+@end
+@implementation ICValueFieldEditor
+- (void)mouseDown:(NSEvent *)event {
+  ICValueTextField *field=self.valueField;
+  if ((event.modifierFlags & NSEventModifierFlagControl) && field.contextMenuProvider) {
+    [field.window makeFirstResponder:nil];
+    [field mouseDown:event];
+    return;
+  }
+  // Editor clicks must also work without the app-local event monitor.
+  if (field && ![field eventIsOverValue:event]) {
+    [field blurForOutsideClick:event];
+    return;
+  }
+  [super mouseDown:event];
+}
+- (void)rightMouseDown:(NSEvent *)event {
+  ICValueTextField *field=self.valueField;
+  if (field.contextMenuProvider) {
+    [field.window makeFirstResponder:nil];
+    [field rightMouseDown:event];
+    return;
+  }
+  [super rightMouseDown:event];
+}
+- (NSRange)rangeForUserCompletion { return NSMakeRange(NSNotFound,0); }
+- (void)configureNumericInput {
+  self.contentType=nil;
+  self.automaticTextCompletionEnabled=NO;
+  self.automaticSpellingCorrectionEnabled=NO;
+  self.continuousSpellCheckingEnabled=NO;
+  self.grammarCheckingEnabled=NO;
+  self.automaticTextReplacementEnabled=NO;
+  self.automaticQuoteSubstitutionEnabled=NO;
+  self.automaticDashSubstitutionEnabled=NO;
+  self.automaticDataDetectionEnabled=NO;
+  self.automaticLinkDetectionEnabled=NO;
+  if (@available(macOS 14.0,*)) self.inlinePredictionType=NSTextInputTraitTypeNo;
+  if (@available(macOS 15.0,*)) {
+    self.mathExpressionCompletionType=NSTextInputTraitTypeNo;
+    self.writingToolsBehavior=NSWritingToolsBehaviorNone;
+  }
+}
+- (void)resetCursorRects {
+  ICValueTextField *field=self.valueField;
+  NSRect text=field ? [self convertRect:[field visibleValueRect] fromView:field] : NSZeroRect;
+  ICRegisterValueCursorRects(self,text,field.enabled);
+}
+- (NSMenu *)menuForEvent:(NSEvent *)event {
+  ICValueTextField *field=self.valueField;
+  if (field.contextMenuProvider) {
+    [self.window makeFirstResponder:nil];
+    return [field menuForEvent:event];
+  }
+  return [super menuForEvent:event];
+}
+@end
+
 // AppKit substitutes its own disabled text colour. Draw using our explicit
 // token while retaining the disabled state for editing and hit testing.
 @interface ICValueTextFieldCell : NSTextFieldCell
+@property(nonatomic,strong) ICValueFieldEditor *valueEditor;
 @end
 @implementation ICValueTextFieldCell
+- (NSTextView *)fieldEditorForView:(NSView *)view {
+  if (![view isKindOfClass:ICValueTextField.class]) return [super fieldEditorForView:view];
+  if (!self.valueEditor) {
+    self.valueEditor=[[ICValueFieldEditor alloc] initWithFrame:NSZeroRect];
+    self.valueEditor.fieldEditor=YES;
+  }
+  [self.valueEditor configureNumericInput];
+  self.valueEditor.valueField=(ICValueTextField *)view;
+  return self.valueEditor;
+}
 - (void)drawInteriorWithFrame:(NSRect)frame inView:(NSView *)view {
   BOOL enabled=self.enabled;
   if (!enabled) self.enabled=YES;
@@ -72,12 +168,44 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
   BOOL _inMouseDown;
   id _outsideClickMonitor;
 }
+- (NSMenu *)menuForEvent:(NSEvent *)event {
+  BOOL context=event.type==NSEventTypeRightMouseDown ||
+      (event.type==NSEventTypeLeftMouseDown && (event.modifierFlags & NSEventModifierFlagControl));
+  if (context && self.contextMenuProvider) {
+    NSMenu *menu=self.contextMenuProvider(); return menu;
+  }
+  return [super menuForEvent:event];
+}
 
+- (void)resetCursorRects {
+  ICRegisterValueCursorRects(self,[self visibleValueRect],self.enabled);
+}
+- (void)invalidateValueCursorRects {
+  [self.window invalidateCursorRectsForView:self];
+  if (self.currentEditor) [self.window invalidateCursorRectsForView:self.currentEditor];
+}
+- (void)setObjectValue:(id)value {
+  [super setObjectValue:value];
+  [self invalidateValueCursorRects];
+}
+- (void)setDoubleValue:(double)value {
+  [super setDoubleValue:value];
+  [self invalidateValueCursorRects];
+}
+- (void)setStringValue:(NSString *)value {
+  [super setStringValue:value];
+  [self invalidateValueCursorRects];
+}
+- (void)textDidChange:(NSNotification *)notification {
+  [super textDidChange:notification];
+  [self invalidateValueCursorRects];
+}
 + (Class)cellClass { return ICValueTextFieldCell.class; }
 
 - (void)setEnabled:(BOOL)enabled {
   [super setEnabled:enabled];
   self.textColor=enabled ? ICInspectorTokens.valueColor : ICInspectorTokens.disabledTextColor;
+  [self invalidateValueCursorRects];
 }
 
 + (instancetype)valueField {
@@ -91,6 +219,8 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
   field.bezeled = NO;
   field.drawsBackground = NO;
   field.focusRingType = NSFocusRingTypeNone;
+  field.contentType = nil;
+  field.automaticTextCompletionEnabled = NO;
   field.editable = YES;
   field.selectable = YES;
   field.usesSingleLineMode = YES;
@@ -106,8 +236,46 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
 - (BOOL)acceptsFirstResponder { return _userClickPending && self.isEnabled; }
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
 
+- (NSRect)visibleValueRect {
+  NSTextView *editor=[self.currentEditor isKindOfClass:NSTextView.class] ? (NSTextView *)self.currentEditor : nil;
+  if (editor.layoutManager && editor.textContainer) {
+    NSLayoutManager *layout=editor.layoutManager;
+    [layout ensureLayoutForTextContainer:editor.textContainer];
+    NSRange glyphs=[layout glyphRangeForTextContainer:editor.textContainer];
+    NSRect rect=[layout boundingRectForGlyphRange:glyphs inTextContainer:editor.textContainer];
+    rect=NSOffsetRect(rect,editor.textContainerOrigin.x,editor.textContainerOrigin.y);
+    return NSIntersectionRect(self.bounds,[self convertRect:rect fromView:editor]);
+  }
+  NSRect rect=[self.cell titleRectForBounds:self.bounds];
+  NSSize size=[self.stringValue sizeWithAttributes:@{NSFontAttributeName:self.font ?: ICInspectorTokens.valueFont}];
+  CGFloat width=MIN(size.width,NSWidth(rect));
+  if (self.alignment==NSTextAlignmentRight) rect.origin.x=NSMaxX(rect)-width;
+  else if (self.alignment==NSTextAlignmentCenter) rect.origin.x+=(NSWidth(rect)-width)/2;
+  rect.size.width=width;
+  CGFloat height=MIN(size.height,NSHeight(rect));
+  rect.origin.y+=(NSHeight(rect)-height)/2;
+  rect.size.height=height;
+  return NSIntersectionRect(self.bounds,rect);
+}
+- (BOOL)eventIsOverValue:(NSEvent *)event {
+  return event.window==self.window &&
+      NSPointInRect([self convertPoint:event.locationInWindow fromView:nil],[self visibleValueRect]);
+}
+- (void)blurForOutsideClick:(NSEvent *)event {
+  if (![self eventIsOverValue:event]) [self.window makeFirstResponder:nil];
+}
+
 - (void)mouseDown:(NSEvent *)event {
+  if ((event.modifierFlags & NSEventModifierFlagControl) && self.contextMenuProvider) {
+    NSMenu *menu=self.contextMenuProvider();
+    if (menu) [NSMenu popUpContextMenu:menu withEvent:event forView:self];
+    return;
+  }
   if (!self.isEnabled) return;
+  if (![self eventIsOverValue:event]) {
+    [self.window makeFirstResponder:nil];
+    return;
+  }
   if (self.currentEditor || self.scrubDisabled || !self.isEditable) {
     [self beginClickEditing:event];
     return;
@@ -216,10 +384,9 @@ static BOOL ICHandleEditMenuKeyEquivalent(NSText *editor, NSEvent *event) {
   __weak typeof(self) weakSelf = self;
   _outsideClickMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:(NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown) handler:^NSEvent *(NSEvent *event) {
     ICValueTextField *field = weakSelf;
-    if (!field || !field.currentEditor) return event;
-    NSRect rect = [field convertRect:field.bounds toView:nil];
-    if (!(event.window == field.window && NSPointInRect(event.locationInWindow, rect)))
-      [field.window makeFirstResponder:nil];
+    // This monitor exists only while focused. currentEditor can be nil during
+    // host event routing, so it must not gate the outside-click check.
+    [field blurForOutsideClick:event];
     return event;
   }];
 }

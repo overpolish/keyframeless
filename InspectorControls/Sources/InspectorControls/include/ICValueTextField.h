@@ -19,6 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onScrubEnd)(void);
 
 + (instancetype)valueField;
+@property(nonatomic, copy, nullable) NSMenu * _Nullable (^contextMenuProvider)(void);
 @end
 
 /// Converts accumulated horizontal travel into whole scrub steps. Remaining

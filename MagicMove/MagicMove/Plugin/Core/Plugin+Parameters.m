@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMDefaults.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import "MMCombinedPose.h"
@@ -22,13 +23,13 @@
   ok = ok && [api addCustomParameterWithName:@"" parameterID:MMHeaderControls defaultValue:@0
       parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   ok = ok && [api addCustomParameterWithName:@"" parameterID:MMScaleControls
-                                defaultValue:[[MMScalePose alloc] initWithX:100 y:100 authored:NO]
+                                defaultValue:MMPoseWithCreationDefaults([[MMScalePose alloc] initWithX:100 y:100 authored:NO])
                               parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
   ok = ok && [api addCustomParameterWithName:@"" parameterID:MMCustomControls
-                                defaultValue:[[MMCombinedPose alloc] initWithPositionX:0 scale:100 authored:NO]
+                                defaultValue:MMPoseWithCreationDefaults([[MMCombinedPose alloc] initWithPositionX:0 scale:100 authored:NO])
                               parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
   for(MMPropertyLane *lane in MMPropertyLanes()) {
-    ok = ok && [api addCustomParameterWithName:@"" parameterID:lane.parameterID defaultValue:(id)lane.defaultPose
+    ok = ok && [api addCustomParameterWithName:@"" parameterID:lane.parameterID defaultValue:MMPoseWithCreationDefaults(lane.defaultPose)
         parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
     ok = ok && [api addStringParameterWithName:@"Property view cache" parameterID:lane.cacheTokenID defaultValue:@""
         parameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];

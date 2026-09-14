@@ -9,5 +9,6 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ICPopUpButton : NSPopUpButton
 // True through native menu tracking and delivery of its selection action.
 @property(nonatomic, readonly, getter=isInteracting) BOOL interacting;
+@property(nonatomic, copy, nullable) NSMenu * _Nullable (^contextMenuProvider)(void);
 @end
 NS_ASSUME_NONNULL_END

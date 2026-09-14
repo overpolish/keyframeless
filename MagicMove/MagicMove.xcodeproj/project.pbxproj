@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AD0000000000000000000001 /* PluginPreferences in Frameworks */ = {isa = PBXBuildFile; productRef = AD0000000000000000000002 /* PluginPreferences */; };
 		AC0000000000000000000001 /* RenderSupport in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000002 /* RenderSupport */; };
 		AA0000000000000000000001 /* MotionTiming in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* MotionTiming */; };
 		AB0000000000000000000001 /* InspectorControls in Frameworks */ = {isa = PBXBuildFile; productRef = AB0000000000000000000002 /* InspectorControls */; };
@@ -98,6 +99,7 @@
 				Plugin/Core/MMInspectorHeader.m,
 				Plugin/Core/MMNativeLinks.m,
 				Plugin/Core/MMPoseTiming.m,
+				Plugin/Core/MMDefaults.m,
 				Plugin/Core/MMPropertyLane.m,
 				Plugin/Core/MMPropertyRow.m,
 				Plugin/Core/MMResetParameter.m,
@@ -163,6 +165,7 @@
 				AA0000000000000000000001 /* MotionTiming in Frameworks */,
 				AB0000000000000000000001 /* InspectorControls in Frameworks */,
 				AC0000000000000000000001 /* RenderSupport in Frameworks */,
+				AD0000000000000000000001 /* PluginPreferences in Frameworks */,
 				F2E2ED892F4CA530008620D9 /* Accelerate.framework in Frameworks */,
 				F2E2ED8B2F4CA530008620D9 /* PluginManager.framework in Frameworks */,
 				F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */,
@@ -258,6 +261,7 @@
 				AA0000000000000000000002 /* MotionTiming */,
 				AB0000000000000000000002 /* InspectorControls */,
 				AC0000000000000000000002 /* RenderSupport */,
+				AD0000000000000000000002 /* PluginPreferences */,
 			);
 			productName = "XPC Service";
 			productReference = F2E2ED802F4CA530008620D9 /* MagicMove XPC Service.pluginkit */;
@@ -293,6 +297,7 @@
 				AA0000000000000000000003 /* XCLocalSwiftPackageReference "../MotionTiming" */,
 				AB0000000000000000000003 /* XCLocalSwiftPackageReference "../InspectorControls" */,
 				AC0000000000000000000003 /* XCLocalSwiftPackageReference "../RenderSupport" */,
+				AD0000000000000000000003 /* XCLocalSwiftPackageReference "../PluginPreferences" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F2E2ED762F4CA530008620D9 /* Products */;
@@ -664,6 +669,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		AD0000000000000000000003 /* PluginPreferences */ = {isa = XCLocalSwiftPackageReference; relativePath = ../PluginPreferences; };
 		AA0000000000000000000003 /* XCLocalSwiftPackageReference "../MotionTiming" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../MotionTiming;
@@ -676,6 +682,7 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		AD0000000000000000000002 /* PluginPreferences */ = {isa = XCSwiftPackageProductDependency; package = AD0000000000000000000003 /* PluginPreferences */; productName = PluginPreferences; };
 		AA0000000000000000000002 /* MotionTiming */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000000000000000000003 /* XCLocalSwiftPackageReference "../MotionTiming" */;

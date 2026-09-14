@@ -7,6 +7,7 @@ Motion graphics plugins for Final Cut Pro and Motion, with native keyframes and 
 - [Magic Move](MagicMove/README.md): animate position, scale, rotation, opacity, blur, and anchor with incoming transition timing and Added Motion.
 - [MotionTiming](MotionTiming/README.md): keyframe timing and Added Motion.
 - [InspectorControls](InspectorControls/README.md): reusable AppKit inspector controls.
+- [PluginPreferences](PluginPreferences/README.md): saved defaults for plugin settings.
 - [RenderSupport](RenderSupport/README.md): Metal rendering, spatial blur, and motion blur.
 
 ## Build and test

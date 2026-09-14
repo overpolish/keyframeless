@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMDefaults.h"
 #import "MMPropertyLane.h"
 #import <math.h>
 
@@ -185,7 +186,9 @@ static void MMPropertyError(NSError **error) {
   NSMutableArray *values=[source.values mutableCopy];
   values[component]=@(self.boundsValues ? fmax(self.minimum,fmin(self.maximum,value)) : value);
   MMPoseTiming *timing=(!explicit && !exact) ? [source.timing timingByReplacingLinkID:@""]:source.timing;
-  id<MMPropertyPose> pose=[source poseByReplacingValues:values authored:YES easing:source.easing addedMotion:source.addedMotion timing:timing];
+  BOOL creating=!explicit && MMIsNewKeyTime(entries,target);
+  if (creating) timing=MMTimingWithCreationDefaults(timing);
+  id<MMPropertyPose> pose=[source poseByReplacingValues:values authored:YES easing:creating ? (MTEasing)[MMReadDefault(@"easing")[@"value"] integerValue] : source.easing addedMotion:source.addedMotion timing:timing];
   id<FxParameterSettingAPI_v5> set=[manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   BOOL ok=[set setCustomParameterValue:pose toParameter:self.parameterID atTime:target];
   if(ok) [cache publishValuePose:pose atTime:target]; return ok;

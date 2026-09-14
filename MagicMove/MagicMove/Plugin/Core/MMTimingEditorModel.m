@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMDefaults.h"
 #import "MMTimingEditorModel.h"
 #import "Constants.h"
 #import "MMNativeLinks.h"
@@ -98,12 +99,22 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
   if (!old)
     return NO;
   MMPoseTiming *timing = [old timing];
+  NSMutableDictionary *history=[timing.motionSettings mutableCopy];
+  MTAddedMotion previousMotion=[old addedMotion];
+  if (previousMotion!=MTAddedMotionNone)
+    history[@(previousMotion).stringValue]=@{@"amount":@(timing.amount),@"speed":@(timing.speed)};
+  NSDictionary *motionDefault=nil;
+  if (setting==MMInspectorMotion && (MTAddedMotion)value!=previousMotion && (MTAddedMotion)value!=MTAddedMotionNone)
+    motionDefault=history[@((NSInteger)value).stringValue] ?: MMReadDefault(MMMotionDefaultKey((MTAddedMotion)value));
+  if (setting==MMInspectorResetMotionControls)
+    motionDefault=MMReadDefault(MMMotionDefaultKey(previousMotion));
   MMPoseTiming *updated = [[MMPoseTiming alloc]
       initWithDuration:setting == MMInspectorDuration ? value : timing.duration
              available:setting == MMInspectorAvailable ? value != 0
                                                        : timing.available
-                amount:setting == MMInspectorResetMotionControls ? 1 : setting == MMInspectorAmount ? value : timing.amount
-                 speed:setting == MMInspectorResetMotionControls ? 1 : setting == MMInspectorSpeed ? value : timing.speed];
+                amount:setting == MMInspectorAmount ? value : motionDefault ? [motionDefault[@"amount"] doubleValue] : timing.amount
+                 speed:setting == MMInspectorSpeed ? value : motionDefault ? [motionDefault[@"speed"] doubleValue] : timing.speed];
+  updated=[updated timingByReplacingMotionSettings:history];
   updated=[updated timingByReplacingLinkID:timing.linkID];
   updated=[updated timingByReplacingMotionSeed:setting==MMInspectorMotionSeed ? (uint32_t)value : timing.motionSeed
       linked:setting==MMInspectorMotionLinked ? value!=0 : timing.motionLinked

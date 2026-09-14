@@ -5,6 +5,7 @@
 - `MagicMove/` owns FxPlug integration, parameter registration, persistence, undo, and the plugin inspector.
 - `MotionTiming/` owns deterministic timing and Added Motion evaluation, independent of host APIs and UI.
 - `InspectorControls/` owns reusable AppKit layout and interaction. Plugins supply values, actions, and host-specific behavior.
+- `PluginPreferences/` stores user preferences. Plugins define their schemas and apply them to newly created content.
 - `RenderSupport/` owns reusable Metal resources and rendering operations. Image tiles and host parameter access remain in plugin adapters.
 
 Shared packages should build on their own. Keep plugin-specific code in the plugin. See [MagicMove architecture](MagicMove/Architecture.md) for how the parts fit together and the host behavior they need to preserve.

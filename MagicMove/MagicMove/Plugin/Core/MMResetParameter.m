@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MMResetParameter.h"
+@import InspectorControls;
 #import "MMShortcut.h"
 #import "Constants.h"
 #import "MMCombinedPose.h"
@@ -110,7 +111,7 @@ BOOL MMResetParameter(id<PROAPIAccessing> manager, NSView *sender, UInt32 parame
 
 static NSString *const MMMenuParametersChanged=@"MMMenuParametersChanged";
 
-@interface MMPropertyMenu : NSMenu <NSMenuDelegate>
+@interface MMPropertyMenu : ICContextMenu <NSMenuDelegate>
 @property(nonatomic,strong) id<PROAPIAccessing> manager;
 @property(nonatomic,weak) NSView *sender;
 @property(nonatomic) BOOL actionScheduled;

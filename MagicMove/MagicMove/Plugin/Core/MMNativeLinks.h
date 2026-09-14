@@ -22,3 +22,6 @@ NSMenu *MMNativePropertyMenu(id<PROAPIAccessing> manager, NSView *sender,
 
 // Stable per-group gutter tint; nil when this property has no linked group.
 NSColor *MMNativePropertyLinkColor(id<PROAPIAccessing> manager, UInt32 parameter, CMTime playhead);
+
+// Seed creation tracking before a native callback replaces the cached snapshot.
+void MMPrimeDefaultKeyTracker(id<PROAPIAccessing> manager, UInt32 parameter);

@@ -88,8 +88,19 @@
 @property(nonatomic) NSUInteger interactionDepth;
 @end
 @implementation ICPopUpButton
+- (NSMenu *)menuForEvent:(NSEvent *)event {
+  BOOL context=event.type==NSEventTypeRightMouseDown ||
+      (event.type==NSEventTypeLeftMouseDown && (event.modifierFlags & NSEventModifierFlagControl));
+  if (context && self.contextMenuProvider) return self.contextMenuProvider();
+  return [super menuForEvent:event];
+}
 - (BOOL)isInteracting { return self.interactionDepth>0; }
 - (void)mouseDown:(NSEvent *)event {
+  if ((event.modifierFlags & NSEventModifierFlagControl) && self.contextMenuProvider) {
+    NSMenu *menu=self.contextMenuProvider();
+    if (menu) [NSMenu popUpContextMenu:menu withEvent:event forView:self];
+    return;
+  }
   self.interactionDepth++;
   @try { [super mouseDown:event]; }
   @finally { self.interactionDepth--; }

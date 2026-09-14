@@ -72,3 +72,11 @@ scripts/test-magicmove.sh --cpu-only
 ```
 
 Standalone tests compile the controls with AppKit and CoreGraphics under AddressSanitizer and UndefinedBehaviorSanitizer. MagicMove's tests cover host writes, caches, units, linking, and undo. Check event handling and visual alignment in Motion/FCP as well.
+
+Value fields and popup triggers accept a `contextMenuProvider` for right-click and Control-click menus. `ICAppendDefaultMenuItems` adds Set Default and Restore Factory Default actions to a consumer-owned menu. The consumer supplies the action target, context, storage, and host refresh handling.
+
+Numeric fields use the displayed text bounds for click-to-edit and scrubbing. Clicking blank space, including unused space inside a field, commits the current edit and clears focus. Editing hit bounds follow the field editor’s glyph layout, including horizontal scrolling.
+
+The arrow cursor covers unused numeric-field space; the I-beam is limited to the displayed text, including during editing. Row menus are available from the label, axis labels, numeric fields, and row background. A field may override its row menu with its own provider.
+
+The active field editor handles blank-space clicks directly and forwards right-click to its owning field. This keeps focus dismissal independent of app-local event monitors and keeps context menus attached to the field when editing ends.

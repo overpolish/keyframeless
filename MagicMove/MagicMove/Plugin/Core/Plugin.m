@@ -346,18 +346,21 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
   // prepared plan while a native callback is still updating its snapshots.
   for(MMPropertyLane *lane in MMPropertyLanes()) {
     if(parameterID!=lane.parameterID && parameterID!=lane.cacheTokenID) continue;
+    MMPrimeDefaultKeyTracker(self.apiManager,lane.parameterID);
     [lane refreshCacheForManager:self.apiManager time:time];
     MMObserveNativeLinks(self.apiManager,lane.parameterID,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
     MMPropertyMenuParametersChanged(self.apiManager);
     return YES;
   }
   if (parameterID == MMScaleControls || parameterID == MMScaleCacheToken) {
+    MMPrimeDefaultKeyTracker(self.apiManager,MMScaleControls);
     MMRefreshScalePoseCache(self.apiManager, time);
     MMObserveNativeLinks(self.apiManager,MMScaleControls,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
     MMPropertyMenuParametersChanged(self.apiManager);
     return YES;
   }
   if (parameterID == MMCustomControls || parameterID == MMCombinedCacheToken) {
+    MMPrimeDefaultKeyTracker(self.apiManager,MMCustomControls);
     MMRefreshCombinedPoseCache(self.apiManager, time);
     MMObserveNativeLinks(self.apiManager,MMCustomControls,CGEventSourceButtonState(kCGEventSourceStateCombinedSessionState,kCGMouseButtonLeft));
     MMPropertyMenuParametersChanged(self.apiManager);

@@ -10,3 +10,7 @@
 
 #import "ICPopUpButton.h"
 #import "ICInspectorHeader.h"
+
+#import "ICDefaultMenu.h"
+
+#import "ICContextMenu.h"

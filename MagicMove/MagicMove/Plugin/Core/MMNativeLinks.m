@@ -1,5 +1,6 @@
 @import InspectorControls;
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMDefaults.h"
 #import "MMNativeLinks.h"
 #import "Constants.h"
 #import "MMResetParameter.h"
@@ -114,6 +115,8 @@ static NSArray *MMReplacing(NSArray *entries, NSDictionary *before,
   return result;
 }
 @interface MMNativeLinkState : NSObject
+@property(nonatomic,strong) NSMutableDictionary<NSNumber *,MMDefaultKeyTracker *> *defaultTrackers;
+@property(nonatomic,strong) NSMutableArray<NSDictionary *> *defaultInsertions;
 @property(nonatomic) BOOL applying;
 @property(nonatomic, strong)
     NSMutableDictionary<NSNumber *, NSArray *> *observed;
@@ -126,6 +129,8 @@ static NSArray *MMReplacing(NSArray *entries, NSDictionary *before,
 - (instancetype)init {
   if ((self = [super init])) {
     _observed = [NSMutableDictionary new];
+    _defaultTrackers=[NSMutableDictionary new];
+    _defaultInsertions=[NSMutableArray new];
     _moves = [NSMutableDictionary new];
     _copies = [NSMutableArray new];
     _colorSlots = [NSMutableDictionary new];
@@ -146,6 +151,17 @@ static MMNativeLinkState *MMState(id manager) {
       [states setObject:s forKey:manager];
     }
     return s;
+  }
+}
+void MMPrimeDefaultKeyTracker(id<PROAPIAccessing> manager,UInt32 parameter) {
+  MMNativeLinkState *state=MMState(manager);
+  @synchronized(state) {
+    if (state.defaultTrackers[@(parameter)]) return;
+    NSArray *entries=MMEntries(manager,parameter);
+    if (!entries) return;
+    MMDefaultKeyTracker *tracker=[MMDefaultKeyTracker new];
+    [tracker insertionsInEntries:entries];
+    state.defaultTrackers[@(parameter)]=tracker;
   }
 }
 typedef NS_ENUM(NSUInteger, MMNativeEditKind) {
@@ -344,6 +360,8 @@ static BOOL MMApply(id<PROAPIAccessing> m,
         [MMCache(m, p.unsignedIntValue) publishEntries:published[p]];
         @synchronized(state) {
           state.observed[p] = published[p];
+          if (!state.defaultTrackers[p]) state.defaultTrackers[p]=[MMDefaultKeyTracker new];
+          [state.defaultTrackers[p] insertionsInEntries:published[p]];
         }
       }
       if (ok) {
@@ -554,6 +572,12 @@ void MMObserveNativeLinks(id<PROAPIAccessing> m, UInt32 parameter,
     if (!next)
       return;
     NSArray *before = state.observed[@(parameter)];
+    MMDefaultKeyTracker *tracker=state.defaultTrackers[@(parameter)];
+    if (!tracker) { tracker=[MMDefaultKeyTracker new]; state.defaultTrackers[@(parameter)]=tracker; }
+    for (NSDictionary *e in [tracker insertionsInEntries:next]) {
+      id pose=MMPoseWithCreationDefaults(e[@"pose"]);
+      if (![pose isEqual:e[@"pose"]]) [state.defaultInsertions addObject:@{@"parameter":@(parameter),@"entry":e,@"pose":pose}];
+    }
     for (NSDictionary *e in next) {
       NSString *link = MMLink(e[@"pose"]);
       if (!link.length || !e[@"nativeTime"])
@@ -604,20 +628,22 @@ void MMObserveNativeLinks(id<PROAPIAccessing> m, UInt32 parameter,
 BOOL MMHasPendingNativeLinkMoves(id<PROAPIAccessing> m) {
   MMNativeLinkState *s = MMState(m);
   @synchronized(s) {
-    return s.moves.count > 0 || s.copies.count > 0;
+    return s.moves.count > 0 || s.copies.count > 0 || s.defaultInsertions.count > 0;
   }
 }
 BOOL MMCommitNativeLinkMoves(id<PROAPIAccessing> m, BOOL mouseDown,
                              NSError **error) {
   MMNativeLinkState *state = MMState(m);
   NSDictionary *moves;
-  NSArray *copies;
+  NSArray *copies, *defaults;
   @synchronized(state) {
     if (mouseDown || state.applying ||
-        (!state.moves.count && !state.copies.count))
+        (!state.moves.count && !state.copies.count && !state.defaultInsertions.count))
       return YES;
     moves = [state.moves copy];
     copies = [state.copies copy];
+    defaults=[state.defaultInsertions copy];
+    [state.defaultInsertions removeAllObjects];
     [state.moves removeAllObjects];
     [state.copies removeAllObjects];
   }
@@ -670,6 +696,14 @@ BOOL MMCommitNativeLinkMoves(id<PROAPIAccessing> m, BOOL mouseDown,
       if (changed)
         after[p] = entries;
     }
+    for (NSDictionary *request in defaults) {
+      NSNumber *p=request[@"parameter"];
+      NSArray *entries=after[p] ?: MMEntries(m,p.unsignedIntValue);
+      NSDictionary *before=request[@"entry"], *current=MMAt(entries,MMTime(before));
+      // A value edit, undo, or removal may have overtaken the queued creation.
+      if (!current || ![current[@"pose"] isEqual:before[@"pose"]]) continue;
+      after[p]=MMReplacing(entries,current,MMEntry(request[@"pose"],MMTime(current),current));
+    }
     for (NSDictionary *copy in copies) {
       NSNumber *p = copy[@"parameter"];
       CMTime t;
@@ -686,10 +720,10 @@ BOOL MMCommitNativeLinkMoves(id<PROAPIAccessing> m, BOOL mouseDown,
     if (!after.count)
       return YES;
     id<FxUndoAPI> undo = [m apiForProtocol:@protocol(FxUndoAPI)];
-    if (![undo startUndoGroup:@"Move linked keyposes"])
+    if (![undo startUndoGroup:defaults.count && !moves.count && !copies.count ? @"Set keyframe defaults" : @"Move linked keyposes"])
       return NO;
     @try {
-      return MMApply(m, after, MMNativeEditStructural);
+      return MMApply(m, after, defaults.count && !moves.count && !copies.count ? MMNativeEditMetadata : MMNativeEditStructural);
     } @finally {
       [undo endUndoGroup];
     }

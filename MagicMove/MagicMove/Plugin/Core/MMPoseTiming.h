@@ -6,6 +6,10 @@
 // OUT.
 @interface MMPoseTiming : NSObject <NSSecureCoding, NSCopying>
 @property(nonatomic, readonly, copy) NSString *linkID;
+@property(nonatomic, readonly, copy)
+    NSDictionary<NSString *, NSDictionary *> *motionSettings;
+- (MMPoseTiming *)timingByReplacingMotionSettings:
+    (NSDictionary<NSString *, NSDictionary *> *)settings;
 - (MMPoseTiming *)timingByReplacingMotionSeed:(uint32_t)motionSeed
                                        linked:(BOOL)motionLinked
                                 componentMask:(uint32_t)motionComponentMask;

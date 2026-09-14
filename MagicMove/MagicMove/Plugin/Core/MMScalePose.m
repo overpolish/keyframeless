@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMDefaults.h"
 #import "MMScalePose.h"
 #import "Constants.h"
 #import <math.h>
@@ -470,12 +471,13 @@ BOOL MMWriteScaleComponent(id<PROAPIAccessing> m, MMScalePoseCache *c,
   }
   x = fmax(0, fmin(400, x));
   y = fmax(0, fmin(400, y));
+  BOOL creating=!explicit && MMIsNewKeyTime([c snapshotEntries],target);
   MMScalePose *p = [[MMScalePose alloc] initWithX:x
                                                 y:y
                                          authored:YES
-                                           easing:old.easing
+                                           easing:creating ? (MTEasing)[MMReadDefault(@"easing")[@"value"] integerValue] : old.easing
                                       addedMotion:old.addedMotion];
-  p=[p poseByReplacingTiming:old.timing];
+  p=[p poseByReplacingTiming:creating ? MMTimingWithCreationDefaults(old.timing) : old.timing];
   BOOL ok = p && [s setCustomParameterValue:p
                                 toParameter:MMScaleControls
                                      atTime:target];

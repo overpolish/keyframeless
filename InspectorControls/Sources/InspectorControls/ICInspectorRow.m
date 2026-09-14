@@ -12,7 +12,8 @@
   BOOL controlClick = event.type == NSEventTypeLeftMouseDown &&
       (flags & NSEventModifierFlagControl) != 0;
   if (!rightClick && !controlClick) return nil;
-  return self.menuProvider ? self.menuProvider() : nil;
+  NSMenu *menu=self.menuProvider ? self.menuProvider() : nil;
+  return menu;
 }
 @end
 
@@ -27,6 +28,22 @@
 @end
 
 @implementation ICInspectorRow
+- (NSMenu *)menuForEvent:(NSEvent *)event {
+  BOOL context=event.type==NSEventTypeRightMouseDown ||
+      (event.type==NSEventTypeLeftMouseDown && (event.modifierFlags & NSEventModifierFlagControl));
+  if (context && self.titleMenuProvider) {
+    NSMenu *menu=self.titleMenuProvider(); return menu;
+  }
+  return [super menuForEvent:event];
+}
+- (void)mouseDown:(NSEvent *)event {
+  if ((event.modifierFlags & NSEventModifierFlagControl) && self.titleMenuProvider) {
+    NSMenu *menu=self.titleMenuProvider();
+    if (menu) [NSMenu popUpContextMenu:menu withEvent:event forView:self];
+    return;
+  }
+  [super mouseDown:event];
+}
 - (instancetype)initWithLabel:(NSString *)label components:(NSArray<ICInspectorComponent *> *)components
                    showsLink:(BOOL)showsLink {
   NSParameterAssert(components.count > 0);
@@ -40,11 +57,13 @@
   NSMutableArray *fields=[NSMutableArray array], *labels=[NSMutableArray array], *units=[NSMutableArray array];
   __weak ICInspectorRow *weakSelf=self;
   for (ICInspectorComponent *component in components) {
-    NSTextField *axis=[NSTextField labelWithString:component.label];
+    ICMenuTextField *axis=[ICMenuTextField labelWithString:component.label];
+    axis.menuProvider=^NSMenu *{ ICInspectorRow *row=weakSelf; return row.titleMenuProvider ? row.titleMenuProvider() : nil; };
     axis.font=ICInspectorTokens.decorationFont; axis.textColor=ICInspectorTokens.decorationColor;
     NSTextField *unit=[NSTextField labelWithString:component.suffix];
     unit.font=axis.font; unit.textColor=axis.textColor;
     ICValueTextField *field=[ICValueTextField valueField];
+    field.contextMenuProvider=axis.menuProvider;
     field.tag=component.identifier;
     field.objectValue=nil; field.enabled=NO;
     field.accessibilityLabel=[NSString stringWithFormat:@"%@ %@",label,component.label];

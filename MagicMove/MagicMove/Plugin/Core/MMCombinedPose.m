@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMDefaults.h"
 #import "MMCombinedPose.h"
 #import "Constants.h"
 #import <math.h>
@@ -316,11 +317,12 @@ BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *
   MMCombinedPose *latest = MMReadCombinedValue(manager,target);
   MMCombinedPose *old = explicit ? latest : [cache poseForEditingAtTime:time latestValue:latest];
   if (!old) return NO;
+  BOOL creating=!explicit && MMIsNewKeyTime([cache snapshotEntries],target);
   MMCombinedPose *pose = [[MMCombinedPose alloc]
       initWithPositionX:component == MMPositionX ? value : old.positionX
               positionY:component == MMPositionY ? value : old.positionY
-                  scale:component == MMScale ? value : old.scale authored:YES easing:old.easing addedMotion:old.addedMotion];
-  pose=[pose poseByReplacingTiming:old.timing];
+                  scale:component == MMScale ? value : old.scale authored:YES easing:creating ? (MTEasing)[MMReadDefault(@"easing")[@"value"] integerValue] : old.easing addedMotion:old.addedMotion];
+  pose=[pose poseByReplacingTiming:creating ? MMTimingWithCreationDefaults(old.timing) : old.timing];
   if (!pose || ![set setCustomParameterValue:pose toParameter:MMCustomControls atTime:target]) return NO;
   if (cache) {
     NSArray *entries = [cache snapshotEntries];
