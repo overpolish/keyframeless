@@ -109,7 +109,10 @@ by the consumer; host actions and menu contents remain outside this package.
 `ICInspectorLayoutValue` owns the value/suffix frames for both vector and slider
 rows. Each component reserves the same suffix slot, including degree and empty
 suffixes; component count changes the available value width, not the trailing
-alignment guides. The popup readout accounts for the numeric cell's text inset
+alignment guides. Three-axis rows reserve a formatted signed three-digit value
+at their configured precision, tighten component gaps when necessary, and let
+the label column yield space first. Measurement uses a stable reference value
+so scrubbing does not move the columns. The popup readout accounts for the numeric cell's text inset
 when aligning its directly drawn title to those guides. Suffix cells remain
 outside the view hierarchy to preserve native keyframe-button hit testing.
 

@@ -350,9 +350,14 @@ int main(int argc, const char *argv[]) {
   for(CGFloat width=320;width<=550;width+=115) {
     rotationRow.frame=NSMakeRect(13,7,width,24); [rotationRow setNeedsLayout:YES]; [rotationRow layoutSubtreeIfNeeded];
     assert([rotationRow hitTest:NSMakePoint(13+width-60,19)]==nil);
-    assert(NSWidth(rotationRow.titleLabel.frame)>40);
+    assert(NSWidth(rotationRow.titleLabel.frame)>0); // Label yields space to signed decimal readouts.
     for(NSUInteger axis=0;axis<3;axis++) {
-      assert(NSWidth(rotationRow.fields[axis].frame)>20);
+      ICValueTextField *field=rotationRow.fields[axis];
+      for(NSNumber *value in @[@123.4,@(-123.4),@888.8,@(-888.8)]) {
+        NSString *text=[field.formatter stringForObjectValue:value];
+        CGFloat required=ceil([text sizeWithAttributes:@{NSFontAttributeName:field.font}].width)+2*ICInspectorFieldTextInset;
+        assert(NSWidth(field.frame)>=required);
+      }
       assert(NSMaxX(rotationRow.fields[axis].frame)<=NSMinX(rotationRow.unitLabels[axis].frame));
       assert(NSMaxX(rotationRow.unitLabels[axis].frame)<=width-ICInspectorHostGutter);
     }

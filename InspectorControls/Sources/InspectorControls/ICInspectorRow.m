@@ -185,12 +185,26 @@
   // rather than letting the old required constraints overflow the row.
   CGFloat contentWidth = MAX(0, width-ICInspectorHostGutter);
   // Measure component gaps from the suffix edge, independent of its inset.
-  const CGFloat groupSpacing = (self.fields.count>2 ? 10:ICInspectorGroupSpacing)-ICInspectorSuffixTrailingInset;
+  CGFloat groupSpacing = (self.fields.count>2 ? 10:ICInspectorGroupSpacing)-ICInspectorSuffixTrailingInset;
   const CGFloat axisWidth = self.fields.count>2 ? 10:12;
-  // Reserve usable numeric space before allocating the label column. A third
-  // axis still needs the full suffix slot; compress the label first in narrow hosts.
+  // Measure a stable signed, three-digit readout at the configured precision.
+  // Do not size from the current value: that would shift columns while scrubbing.
+  CGFloat minimumValueWidth=24;
+  if(self.fields.count>2) {
+    for(ICValueTextField *field in self.fields) {
+      NSString *readout=[field.formatter stringForObjectValue:@(-888.8)] ?: @"-888.8";
+      CGFloat textWidth=[readout sizeWithAttributes:@{NSFontAttributeName:field.font}].width;
+      minimumValueWidth=MAX(minimumValueWidth,ceil(textWidth)+2*ICInspectorFieldTextInset);
+    }
+  }
+  CGFloat componentMinimum=axisWidth+ICInspectorSuffixWidth+ICInspectorSuffixTrailingInset+ICInspectorValueSuffixGap+minimumValueWidth;
+  if(self.fields.count>2) {
+    CGFloat labelMinimum=ICInspectorLabelInset+[self.titleLabel.stringValue sizeWithAttributes:@{NSFontAttributeName:ICInspectorTokens.selectedLabelFont}].width+6;
+    CGFloat availableGap=(contentWidth-labelMinimum-componentMinimum*self.fields.count)/(self.fields.count-1);
+    groupSpacing=MAX(3,MIN(groupSpacing,availableGap));
+  }
   CGFloat minimumContent=self.fields.count>2
-      ? (axisWidth+ICInspectorSuffixWidth+ICInspectorSuffixTrailingInset+ICInspectorValueSuffixGap+24)*self.fields.count+groupSpacing*(self.fields.count-1)
+      ? componentMinimum*self.fields.count+groupSpacing*(self.fields.count-1)
       : 70*self.fields.count;
   CGFloat labelWidth = ICInspectorLabelColumnWidth(width,minimumContent);
   CGFloat pairWidth = MAX(0,contentWidth-labelWidth-groupSpacing*(self.fields.count-1))/self.fields.count;
