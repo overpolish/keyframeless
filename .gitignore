@@ -11,21 +11,23 @@ scripts/*.fcpxml
 !scripts/*.template.fcpxml
 # Per-product installer artifacts (generated transiently by build-and-sign.sh from
 # the combined project + uninstall.template; never committed).
-Distribution/*.pkgproj
-!Distribution/Keyframeless.pkgproj
-Distribution/scripts/uninstall-*
-!Distribution/scripts/uninstall-motionblur
-!Distribution/scripts/uninstall-legacy-plugins
+Legacy/Distribution/*.pkgproj
+!Legacy/Distribution/Keyframeless.pkgproj
+Legacy/Distribution/scripts/uninstall-*
+!Legacy/Distribution/scripts/uninstall-motionblur
+!Legacy/Distribution/scripts/uninstall-legacy-plugins
 
 # Staged kk-ai-helper binary + metallib (built by build-and-sign.sh keyframelessai;
 # the plist/uninstaller/postinstall/entitlements alongside them ARE committed source).
-Distribution/helper/staging/
+Legacy/Distribution/helper/staging/
 .derived-data*
 .claude
 CLAUDE.md
 .compile
 .cache
-# Vendored transpiler build artifacts (run ThirdParty/build-transpiler.sh)
-ThirdParty/build/
+# Vendored transpiler build artifacts (run Legacy/ThirdParty/build-transpiler.sh)
+Legacy/ThirdParty/build/
 
 .wrangler
+Legacy/scripts/*.fcpxml
+!Legacy/scripts/*.template.fcpxml

@@ -25,7 +25,6 @@
   static NSArray<NSColor *> *colors;
   static dispatch_once_t once;
   dispatch_once(&once,^{
-    // Coral, green, blue, violet and gold, chosen for dark inspector surfaces.
     colors=@[[NSColor colorWithSRGBRed:0.96 green:0.43 blue:0.40 alpha:1],
              [NSColor colorWithSRGBRed:0.35 green:0.82 blue:0.56 alpha:1],
              [NSColor colorWithSRGBRed:0.33 green:0.70 blue:0.98 alpha:1],

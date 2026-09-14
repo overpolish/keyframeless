@@ -15,12 +15,6 @@
 #import "MMRotationPose.h"
 #import <CoreGraphics/CoreGraphics.h>
 
-// KKPlugin implements this optional FxTileableEffect callback but does not
-// expose it in its public interface. Preserve its existing lifecycle work.
-@interface KKPlugin (MMDocumentLifecycle)
-- (void)pluginInstanceAddedToDocument;
-@end
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
@@ -40,9 +34,9 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  KKLogInfo(@"MagicMovePlugin: initialized");
-  self = [super initWithAPIManager:newApiManager];
+  self = [super init];
   if (self) {
+    _apiManager = newApiManager;
     MMTimingLane *position = [MMTimingLane new];
     position.valueID = MMPositionX;
     position.durationID = MMTransitionDuration;
@@ -85,16 +79,31 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
   if (parameterID == MMScaleControls) return [NSSet setWithObject:MMScalePose.class];
   if (parameterID == MMCustomControls) return [NSSet setWithObjects:MMCombinedPose.class, NSNumber.class, nil];
   if (parameterID == MMDurationData || parameterID == MMScaleDurationData) return [NSSet setWithObject:KKDataBlob.class];
-  return [super classesForCustomParameterID:parameterID];
+  return [NSSet set];
+}
+
+- (BOOL)destinationImageRect:(FxRect *)rect sourceImages:(NSArray<FxImageTile *> *)sources
+           destinationImage:(FxImageTile *)destination pluginState:(NSData *)state
+                     atTime:(CMTime)time error:(NSError **)error {
+  if (!rect || sources.count == 0) {
+    if (error) *error = [NSError errorWithDomain:FxPlugErrorDomain code:1
+        userInfo:@{NSLocalizedDescriptionKey:@"Missing source image bounds."}];
+    return NO;
+  }
+  *rect = sources.firstObject.imagePixelBounds;
+  return YES;
 }
 
 - (void)pluginInstanceAddedToDocument {
 
-  [super pluginInstanceAddedToDocument];
   // Parameter creation also happens for detached library/drag instances.
   // A timer action there makes Motion request timing for a nonexistent input.
   // FxPlug guarantees host API readiness only after document attachment.
   [self startDurationRefresh];
+}
+
+- (void)dealloc {
+  [_durationTimer invalidate];
 }
 
 - (void)startDurationRefresh {
@@ -122,7 +131,7 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
         NSError *error = nil;
         CMTime time = [action currentTime];
         if (![p updateTimingEditorsAtTime:time mouseDown:mouseDown error:&error])
-          KKLogError(@"Magic Move deferred linked edit failed: %@", error);
+          NSLog(@"Magic Move deferred linked edit failed: %@", error);
       }
       @finally {
 

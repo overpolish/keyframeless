@@ -122,8 +122,7 @@ static inline CGFloat ICClamp(CGFloat value, CGFloat low, CGFloat high) {
   NSRect knob=[self knobRectFlipped:NO];
   self.icTrackingOffset = NSPointInRect(p, knob) ? p.x - NSMidX(knob) : 0;
   if (!NSPointInRect(p, knob)) [self jumpToPoint:p];
-  // Own pointer mapping as the legacy slider did for its custom scale;
-  // AppKit continues to own the surrounding mouse tracking lifecycle.
+  // Pointer mapping must use the drawn track geometry to avoid jumps when grabbing the thumb.
   if(self.doubleValue!=previous) [self icSendActionFromView:view];
   return YES;
 }

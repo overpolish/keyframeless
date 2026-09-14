@@ -12,8 +12,8 @@ static double mt_seed_hash(int seed, int index) {
     return (double)(v & 0xFFFF) / 65535.0;
 }
 
-// KKEasing hold algorithms, with intensity/frequency controls, seed=0.
-// Additional components retain the existing deterministic phase variation.
+// Hold algorithms adapted from KKEasing. Component seeds keep independent
+// axes distinct while producing the same motion on every evaluation.
 static double mt_motion_factor(double t, MTAddedMotion motion, size_t component,
                                double amount, double speed, uint32_t baseSeed) {
     t = fmax(0.0, fmin(1.0, t));
@@ -121,8 +121,8 @@ static double mt_hermite(const MTDestination *d, size_t count, size_t c,
            (-2*u3+3*u2)*p1 + (u3-u2)*m1*(hi-lo);
 }
 
-// Round the hold-to-transition join inside a gap using the same two-half
-// Hermite blend as legacy keypose joins. Its window never reaches either key.
+// Hermite blend adapted from KKEasing keypose joins. Keep the blend window
+// clear of both keys so their authored values remain exact.
 static double mt_transition_component(const MTDestination *d,size_t count,size_t c,double seconds) {
     for (size_t i=1;i<count;i++) {
         if (!mt_motion_enabled(&d[i-1],c)) continue;

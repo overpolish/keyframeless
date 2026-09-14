@@ -25,15 +25,20 @@
 @end
 @interface BlurPlugin : MagicMovePlugin
 @property(nonatomic, strong) id<MTLRenderPipelineState> testPipeline;
+@property(nonatomic, strong) id<MTLRenderPipelineState> accumulationPipeline;
 @property(nonatomic) NSUInteger sampleDraws;
 @property(nonatomic, strong) id<MTLCommandBuffer> firstBuffer;
 @end
 @implementation BlurPlugin
-- (id<MTLRenderPipelineState>)pipelineStateForPluginID:(NSString *)pluginID destinationImage:(FxImageTile *)image vertexShader:(NSString *)vertex fragmentShader:(NSString *)fragment blendMode:(KKBlendMode)blend { return self.testPipeline; }
+- (id<MTLRenderPipelineState>)renderPipelineForImage:(FxImageTile *)image vertex:(NSString *)vertex fragment:(NSString *)fragment { return [vertex isEqualToString:@"vertexShader"] ? self.testPipeline : self.accumulationPipeline; }
 - (BOOL)encodeFullScreenQuadIntoTexture:(id<MTLTexture>)dest destinationImage:(FxImageTile *)image commandBuffer:(id<MTLCommandBuffer>)buffer sourceTextures:(NSArray<id<MTLTexture>> *)sources commands:(void (^)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *))commands {
-  if (!self.firstBuffer) self.firstBuffer = buffer;
-  assert(buffer == self.firstBuffer); // All samples share one command buffer.
-  self.sampleDraws++;
+  // The adapter shares its quad encoder with the sharp path. Count only
+  // offscreen sample destinations, not the final output image.
+  if (dest != [image metalTextureForDevice:buffer.device]) {
+    if (!self.firstBuffer) self.firstBuffer = buffer;
+    assert(buffer == self.firstBuffer); // All samples share one command buffer.
+    self.sampleDraws++;
+  }
   return [super encodeFullScreenQuadIntoTexture:dest destinationImage:image commandBuffer:buffer sourceTextures:sources commands:commands];
 }
 @end
@@ -63,6 +68,10 @@ int main(int argc, const char **argv) {
     MockHost *host = [MockHost new];
     BlurPlugin *plugin = [[BlurPlugin alloc] initWithAPIManager:host]; host.plugin = plugin;
     plugin.testPipeline = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+    desc.vertexFunction=[library newFunctionWithName:@"RSRenderBlurVertex"];
+    desc.fragmentFunction=[library newFunctionWithName:@"RSRenderBlurAccumulate"];
+    plugin.accumulationPipeline=[device newRenderPipelineStateWithDescriptor:desc error:&error];
+    assert(plugin.accumulationPipeline);
     assert(plugin.testPipeline && [plugin addParametersWithError:&error]);
     BlurTile *source = Tile(device), *dest = Tile(device);
     float input[64*32*4] = {0}, output[64*32*4] = {0};

@@ -1,9 +1,9 @@
 [submodule "ThirdParty/glslang"]
-	path = ThirdParty/glslang
+	path = Legacy/ThirdParty/glslang
 	url = https://github.com/KhronosGroup/glslang.git
 [submodule "ThirdParty/SPIRV-Cross"]
-	path = ThirdParty/SPIRV-Cross
+	path = Legacy/ThirdParty/SPIRV-Cross
 	url = https://github.com/KhronosGroup/SPIRV-Cross.git
 [submodule "ThirdParty/astyle"]
-	path = ThirdParty/astyle
+	path = Legacy/ThirdParty/astyle
 	url = https://gitlab.com/saalen/astyle.git

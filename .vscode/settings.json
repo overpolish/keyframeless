@@ -139,18 +139,5 @@
     "xform",
     "xmark"
   ],
-  "conventionalCommits.scopes": [
-    "KeyframelessKit",
-    "FxPlug",
-    "Canvas",
-    "Timing",
-    "MotionBlur",
-    "Joyride",
-    "Feedback",
-    "Keyframeless X - Steno",
-    "KeyframelessAI",
-    "Mirage",
-    "Keyframeless X - Sonar",
-    "keyframeless.com"
-  ]
+  "conventionalCommits.scopes": ["MagicMove", "MotionTiming", "InspectorControls", "RenderSupport", "Legacy", "build", "docs"]
 }

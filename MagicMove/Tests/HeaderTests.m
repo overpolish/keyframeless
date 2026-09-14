@@ -56,6 +56,16 @@
 @implementation HeaderTestWindow
 - (BOOL)isVisible { return YES; }
 @end
+// Wait for queued UI actions deterministically, rather than assuming a 10ms
+// slice is enough during cold AppKit startup and concurrent build activity.
+static void DrainHeaderActions(void) {
+  __block BOOL drained=NO;
+  dispatch_async(dispatch_get_main_queue(), ^{ drained=YES; });
+  NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:1];
+  while(!drained && deadline.timeIntervalSinceNow>0)
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode,.01,false);
+  assert(drained);
+}
 static void testClosedMenuRouting(void) {
   HeaderTestCapture *capture=[HeaderTestCapture new];
   HeaderHost *a=[HeaderHost new], *b=[HeaderHost new];
@@ -67,7 +77,7 @@ static void testClosedMenuRouting(void) {
   __block NSUInteger rowCalls=0;
   [capture attachView:propertyRow effect:a action:^BOOL { rowCalls++; return YES; }];
   assert([capture.testRouter handleKeyCode:46 modifiers:MMMotionBlurShortcutModifiers() repeat:NO]);
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode,.01,false);
+  DrainHeaderActions();
   assert([a.editors[@(MMMotionBlur)] boolValue] && rowCalls==0);
   [a setBoolValue:NO toParameter:MMMotionBlur atTime:TestTime(1)];
   [capture detachView:propertyRow]; [propertyRow removeFromSuperview];
@@ -80,21 +90,21 @@ static void testClosedMenuRouting(void) {
   NSUInteger before=a.hostWrites;
   assert([capture.testRouter handleKeyCode:46 modifiers:flags repeat:NO]);
   assert(a.hostWrites==before); // Remote work is deferred out of the input callback.
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode,.01,false);
+  DrainHeaderActions();
   assert([a.editors[@(MMMotionBlur)] boolValue] && b.hostWrites==0);
   before=a.hostWrites;
   assert([capture.testRouter handleKeyCode:46 modifiers:flags repeat:YES]);
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode,.01,false); assert(a.hostWrites==before);
+  DrainHeaderActions(); assert(a.hostWrites==before);
   [second motionBlurMenu];
   assert([capture.testRouter handleKeyCode:46 modifiers:flags repeat:NO]);
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode,.01,false);
+  DrainHeaderActions();
   assert([b.editors[@(MMMotionBlur)] boolValue] && a.hostWrites==before);
   [first.accessoryButtons.firstObject performClick:nil]; // Left-click activates too.
   assert(![a.editors[@(MMMotionBlur)] boolValue]);
   assert([capture.testRouter handleKeyCode:46 modifiers:flags repeat:NO]);
   before=a.hostWrites;
   [first removeFromSuperview]; // A queued shortcut must not edit a detached effect.
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode,.01,false); assert(a.hostWrites==before);
+  DrainHeaderActions(); assert(a.hostWrites==before);
   [second removeFromSuperview];
   assert(![capture.testRouter handleKeyCode:46 modifiers:flags repeat:NO]);
   assert(a.starts==a.ends && b.starts==b.ends);
@@ -122,10 +132,10 @@ int main(void) { @autoreleasepool {
   assert(blur.keyEquivalentModifierMask==(NSEventModifierFlagControl|NSEventModifierFlagOption));
   [blurMenu.delegate menuWillOpen:blurMenu];
   assert(MMToggleMotionBlur(host,view));
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode,.01,false);
+  DrainHeaderActions();
   assert(blur.state==NSControlStateValueOn);
   assert(MMToggleMotionBlur(host,view));
-  CFRunLoopRunInMode(kCFRunLoopDefaultMode,.01,false);
+  DrainHeaderActions();
   assert(blur.state==NSControlStateValueOff);
   MMPropertyMenuActionScheduled(blurMenu);
   [blurMenu.delegate menuDidClose:blurMenu];

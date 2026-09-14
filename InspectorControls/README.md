@@ -1,16 +1,10 @@
 # InspectorControls
 
-Reusable AppKit inspector controls extracted from the host-validated MagicMove
-Position and Scale rows. This is a local static Swift package. It depends only on
-AppKit/CoreGraphics; it does not import FxPlug, MotionTiming, Mirage, or the legacy
-Keyframeless libraries.
+AppKit controls styled for the Motion and Final Cut Pro inspectors. The package handles layout and interaction; the plugin supplies values and handles host APIs, saving, and undo.
 
-## Use from another plugin
+## Using the controls
 
-Add the local `InspectorControls` package to the plugin project and link its
-`InspectorControls` product into the target that hosts the custom views. Import
-`InspectorControls` from Objective-C or Swift. A separate embedded framework is
-not required.
+Add the local `InspectorControls` package to your project and link its product into the target that displays the views. It is a static library, so no separate framework needs to be embedded. You can use it from Objective-C or Swift.
 
 ```objc
 @import InspectorControls;
@@ -31,38 +25,45 @@ row.onScrubBegin = ^{ /* Begin the plugin's undo group. */ };
 row.onScrubEnd = ^{ /* End the plugin's undo group. */ };
 ```
 
-The library owns:
+Rows provide labels, units, numeric fields, an optional link button, and space for the host's keyframe buttons. Fields support click-to-edit, scrubbing, modifier keys, Return/Tab navigation, and clipboard actions. `ICValueTextField` and `ICInspectorTokens` can also be used without a row.
 
-- Row layout, native-control gutter, labels, units, and optional chain button.
-- Typography, colors, and FCP/Motion accent tokens.
-- Numeric fields, formatting, click-to-edit, scrubbing and modifier keys.
-- Return/Tab navigation, clipboard handling, and edit/drag lifecycle callbacks.
+Component identifiers are integers passed through `field.tag`. Set `field.scrubStep` and the number formatter's limits to suit the parameter. Display formatting does not change the stored precision. Scrubbing stops at the limits; reversing direction changes the value immediately.
 
-The consumer owns parameter registration, native keyframes, values, display-unit
-conversion, bounds, undo, refresh scheduling, and persistence. Component identifiers
-are opaque integers, carried in `field.tag`. Configure `field.scrubStep` and its
-number formatter's minimum/maximum where appropriate. Formatting preserves the
-underlying numeric precision.
+Rows start blank and disabled. Set values and enabled states after reading them from the host, and skip refreshes while `row.interacting` is true. The plugin handles parameter registration, keyframes, unit conversion, undo, and saving. Use weak references in callbacks that refer to the owning view or adapter.
 
-Rows start blank and disabled. When a valid snapshot arrives, set field values and
-enabled states, skipping refresh while `row.interacting` is true. The library does
-not fetch or store host state. A link-button consumer supplies its accessibility
-label/tooltip and handles `onLinkToggle`, including saved state and tint updates.
-Use weak captures when a callback refers back to its owning adapter.
+## Selection and linking
 
-Set `row.keyposeLinked` when the host reports that the current keypose is linked.
-The row draws a small host-accent link symbol in the left gutter; this indicator
-is independent of the optional `showsLink` scale/proportional link button.
+Set `row.keyposeLinked` to show the link badge in the left gutter. This is separate from the proportional-scale button enabled by `showsLink`. The plugin supplies that button's tooltip and accessibility label and handles `onLinkToggle`.
 
-`ICValueTextField` and `ICInspectorTokens` can also be used independently of the
-row. Numeric scrubbing respects the attached `NSNumberFormatter` minimum and
-maximum before dispatching a value. Further travel at a bound sends no action;
-reversing direction immediately changes the value without accumulated overshoot.
-Layout supports a nonempty component array; the validated two-component rows
-retain their exact spacing and numeric baseline offset. OSC controls are outside
-this package's scope.
+`ICInspectorRow.keyposeLinkColor` sets the badge colour; nil uses the host accent. `ICInspectorTokens.linkGroupColors` provides a palette for linked groups.
 
-## Verification
+Set `componentColorsVisible` when the graph displays the row's curves, including when another row is selected. This colours the axis labels. Selection controls the property label and background; unit suffixes keep their neutral colour.
+
+## Menus and dropdowns
+
+`ICInspectorRow.titleMenuProvider` supplies the menu for right-click or Control-click on the property label. The plugin handles its actions. Numeric fields, axis labels, and native keyframe buttons keep their own interactions.
+
+`ICMenuTextField` offers the same menu hook for a standalone label through `menuProvider`.
+
+`ICMenuToggleView` displays a checkmarked option that keeps its menu open when clicked. The plugin handles the `NSMenuItem` action and updates its state. Text starts at 28pt: the native 16pt heading inset plus 12pt.
+
+`ICPopUpButton` is a borderless `NSPopUpButton` with right-aligned text and drawn chevrons. Use its standard item, selection, and target/action APIs. Align its trailing edge with the row's final unit label to line up with numeric fields. Disabled text and chevrons use the shared disabled colour.
+
+## Layout
+
+`ICInspectorLayoutValue` calculates value and suffix frames for vector and slider rows. Every component reserves the same suffix space, including degrees and empty suffixes. Three-axis rows allow for a signed three-digit value at the configured precision, then reduce gaps and label space when necessary. A fixed reference value keeps columns from shifting as values change.
+
+Popup text accounts for the numeric field's text inset. Suffixes are drawn outside the view hierarchy so they do not intercept clicks on the host's keyframe buttons.
+
+Slider rows reserve their value area separately from the track. Changing suffix spacing therefore does not move the track endpoint. The same track and thumb geometry is used for drawing and pointer-to-value conversion.
+
+## Header
+
+`ICInspectorHeader` accepts a logo, accessory buttons, and a `menuProvider` block for the settings cog. The plugin supplies the menu, button states, actions, and undo handling. Keep logo resources in the plugin bundle and use a weak reference to the header in the menu callback.
+
+## Build and test
+
+From the repository root:
 
 ```sh
 swift build --package-path InspectorControls --scratch-path DerivedData/InspectorControls
@@ -70,59 +71,4 @@ InspectorControls/Tests/run.sh
 scripts/test-magicmove.sh --cpu-only
 ```
 
-Standalone tests compile the public API and production sources with AppKit and
-CoreGraphics only, under AddressSanitizer/UndefinedBehaviorSanitizer. MagicMove's
-integration tests verify the consumer's host writes, caches, units, linking, and
-undo. Actual host event delivery and visual matching remain host-test checkpoints.
-
-`ICInspectorRow.titleMenuProvider` supplies a context menu for the title label
-only (right-click or Control-click). The consumer owns menu actions and host
-behavior; numeric fields, axis decorations, and the native keyframe gutter keep
-their existing interactions.
-
-`ICMenuToggleView` presents an indented, checkmarked menu option that keeps the
-menu open on mouse activation. The consumer owns the NSMenuItem action and
-updates its state after each operation. Text starts at 28pt (the native 16pt
-heading inset plus 12pt); it has no host or timing dependencies.
-
-`ICInspectorRow.keyposeLinkColor` supplies an optional gutter-badge tint. The
-consumer assigns group colours; nil falls back to the host accent. This does not
-affect row selection, component colours, or the separate aspect-link button.
-`ICInspectorTokens.linkGroupColors` provides the shared categorical palette.
-
-`componentColorsVisible` controls axis decoration tint independently of row
-selection. Consumers enable it for rows whose curves are displayed. Selection
-continues to control the label and background; suffixes retain their neutral tint.
-
-`ICPopUpButton` is a reusable native `NSPopUpButton` with borderless inspector
-styling, right-aligned titles, and directly drawn stacked chevrons. Use the normal
-item/selection and target/action APIs. Align its trailing edge with a row's final
-unit label to share the numeric readout and decoration columns. Disabled titles
-and chevrons use the shared disabled text token.
-
-`ICMenuTextField` provides the same lazy right-click/control-click menu hook used
-by inspector row titles, for standalone labels. Its `menuProvider` is supplied
-by the consumer; host actions and menu contents remain outside this package.
-
-### Value columns and slider geometry
-
-`ICInspectorLayoutValue` owns the value/suffix frames for both vector and slider
-rows. Each component reserves the same suffix slot, including degree and empty
-suffixes; component count changes the available value width, not the trailing
-alignment guides. Three-axis rows reserve a formatted signed three-digit value
-at their configured precision, tighten component gaps when necessary, and let
-the label column yield space first. Measurement uses a stable reference value
-so scrubbing does not move the columns. The popup readout accounts for the numeric cell's text inset
-when aligning its directly drawn title to those guides. Suffix cells remain
-outside the view hierarchy to preserve native keyframe-button hit testing.
-
-Slider rows reserve a fixed value region independently of that region's internal
-text layout, so changes to suffix spacing do not shift the track endpoint.
-The slider cell's track and thumb travel geometry also drives pointer-to-value
-mapping; drawing-only offsets would desynchronize clicks and dragging.
-
-`ICInspectorHeader` accepts a plugin-supplied logo, accessory buttons, and a
-`menuProvider` block. It lays out the logo and compact controls with a settings
-cog; the consumer supplies the menu content, button state, host actions and undo.
-Use a weak capture when the provider refers back to the owning header. Logo
-resources remain in the consuming plugin bundle.
+Standalone tests compile the controls with AppKit and CoreGraphics under AddressSanitizer and UndefinedBehaviorSanitizer. MagicMove's tests cover host writes, caches, units, linking, and undo. Check event handling and visual alignment in Motion/FCP as well.

@@ -23,7 +23,7 @@ typedef struct {
     bool customMotion; // When true, use motionAmount and motionSpeed below.
     double motionAmount; // Motion intensity; must be finite and nonnegative when custom.
     double motionSpeed; // Motion frequency multiplier; must be finite and positive when custom.
-    // Opt in to explicit component options; omitted fields preserve legacy defaults.
+    // Opt in to explicit component options; omitted fields use the defaults below.
     bool customMotionComponents;
     uint32_t motionSeed;
     bool motionLinked;
@@ -36,9 +36,9 @@ typedef struct {
 /// Destinations must have finite, nonnegative times/durations, strictly
 /// increasing arrivals, and componentCount finite values each. Returns false
 /// for invalid input and leaves output untouched. No allocation or host state.
-/// Outgoing addedMotion uses legacy intensity/frequency=1 unless customMotion is true,
+/// Outgoing addedMotion uses intensity/frequency=1 unless customMotion is true,
 /// in which case motionAmount and motionSpeed control intensity and frequency.
-/// Motion runs during the hold, with a legacy 0.42-span Hermite handoff into the
+/// Motion runs during the hold, with a 0.42-span Hermite handoff into the
 /// plain transition. Available-time transitions have no hold and no added motion.
 /// Joins touching motion pass through each key exactly; zero-duration cuts stay exact.
 /// Optional modulation ranges have modulationRangeCount entries in both arrays;

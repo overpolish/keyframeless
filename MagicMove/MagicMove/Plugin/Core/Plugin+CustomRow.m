@@ -22,12 +22,7 @@
 #endif
 
 
-// KKPlugin implements the view host in a private category.
-@interface KKPlugin (MMCustomRowHost)
-- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
-@end
-
-// Position and Scale inspector checkpoint. Native keyframe controls remain host-provided.
+// Native keyframe controls are supplied by the host.
 @interface MMCustomRow : ICInspectorRow
 @property(nonatomic, strong) id<PROAPIAccessing> manager;
 @property(nonatomic, strong) NSTimer *refreshTimer;
@@ -331,7 +326,7 @@
     row.imageSizeProvider = ^CGSize { return plugin.inspectorImageSize; };
     return row;
   }
-  return [super createViewForParameterID:parameterID];
+  return nil;
 }
 @end
 

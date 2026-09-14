@@ -154,7 +154,6 @@ static NSString *MMTimingPropertyName(UInt32 parameter) {
   [[NSColor colorWithWhite:0 alpha:0.15] setFill];
   [[NSBezierPath bezierPathWithRoundedRect:self.bounds xRadius:4
                                    yRadius:4] fill];
-  // A quiet square backdrop, independent of the displayed time/value range.
   [[NSColor colorWithWhite:1 alpha:0.04] setStroke];
   NSBezierPath *grid = [NSBezierPath bezierPath];
   const CGFloat spacing = 16;
@@ -491,9 +490,8 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   @try {
     id<FxCommandAPI_v2> command=[self.manager apiForProtocol:@protocol(FxCommandAPI_v2)];
     if (!command) return;
-    // These native-key times share the action's host clock. No clip-relative
-    // fraction conversion is needed, unlike the legacy whole-clip timeline.
-    // Legacy host tests showed NO can accompany a successful FCP seek.
+    // Native key times already use the host clock.
+    // FCP can return NO even when the seek succeeds.
     [command movePlayheadToTime:target error:nil];
     self.graph.progress=fraction;
   } @finally { [action endAction:self]; }

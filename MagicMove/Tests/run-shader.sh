@@ -8,14 +8,14 @@ fi
 tmp=$(mktemp -d -t magicmove-shader-tests)
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/include"
-ln -s "$root/KeyframelessKit/KeyframelessKit/Metal" "$tmp/include/KeyframelessKit"
+
 air="$tmp/MagicMove.air"
 library="$tmp/MagicMove.metallib"
 binary="$tmp/ShaderTests"
-"$metal" -c -I "$root/MagicMove/MagicMove/Plugin/Render" -I "$tmp/include" \
+"$metal" -c -I "$root/MagicMove/MagicMove/Plugin/Render" -I "$root/RenderSupport/Sources/RenderSupport/include" \
   "$root/MagicMove/MagicMove/Plugin/Render/MagicMove.metal" -o "$air"
 xcrun metallib "$air" -o "$library"
 xcrun clang -fobjc-arc -fmodules -I "$root/MagicMove/MagicMove/Plugin/Render" \
-  -I "$tmp/include" -framework Foundation -framework Metal \
+  -I "$root/RenderSupport/Sources/RenderSupport/include" -framework Foundation -framework Metal \
   "$root/MagicMove/Tests/ShaderTests.m" -o "$binary"
 "$binary" "$library"

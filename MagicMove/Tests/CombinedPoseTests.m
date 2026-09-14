@@ -269,10 +269,10 @@ int main(void) {
     NSData *blurState;
     assert([plugin pluginState:&blurState atTime:TestTime(0.5) quality:0 error:&error]);
     assert(host.nativeKeyReads-blurReads == sharpReads); // One snapshot per lane, independent of shutter sample count.
-    KKMotionBlurState blur;
+    RSRenderBlurState blur;
     [blurState getBytes:&blur range:NSMakeRange(blurState.length-sizeof(blur),sizeof(blur))];
     assert(blur.enabled && blur.sampleCount == 16);
-    NSArray<NSValue *> *blurTimes = [KKMotionBlur sampleTimesForState:blur renderTime:TestTime(0.5)];
+    NSArray<NSValue *> *blurTimes = RSRenderBlurSampleTimes(blur, TestTime(0.5));
     for (NSUInteger i=0;i<blurTimes.count;++i) {
       CMTime sampleTime; [blurTimes[i] getValue:&sampleTime];
       MMCombinedPose *expected = MMReadCombinedPose(host,sampleTime,&active,&error);

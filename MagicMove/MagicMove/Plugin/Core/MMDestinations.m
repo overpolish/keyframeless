@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MMDestinations.h"
 #import "Constants.h"
-#import <KeyframelessKit/KKDataBlob.h>
+#import "MMParameterData.h"
 #import <math.h>
 
 static NSData *MMFail(NSError **error, NSString *message) {

@@ -3,7 +3,7 @@
 #import <Metal/Metal.h>
 #import <simd/simd.h>
 #import "ShaderTypes.h"
-#import <KeyframelessKit/KKShaderTypes.h>
+#import "RenderSupportTypes.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -71,7 +71,7 @@ static void render(id<MTLDevice> device, id<MTLCommandQueue> queue,
   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
   pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
   float halfWidth = (float)width / 2.0f, halfHeight = (float)height / 2.0f;
-  KKVertex2D vertices[] = {
+  RSRenderVertex2D vertices[] = {
     {{-halfWidth, -halfHeight}, {0, 0}}, {{halfWidth, -halfHeight}, {1, 0}},
     {{-halfWidth, halfHeight}, {0, 1}}, {{halfWidth, halfHeight}, {1, 1}}
   };
@@ -79,10 +79,10 @@ static void render(id<MTLDevice> device, id<MTLCommandQueue> queue,
   id<MTLCommandBuffer> command = [queue commandBuffer];
   id<MTLRenderCommandEncoder> encoder = [command renderCommandEncoderWithDescriptor:pass];
   [encoder setRenderPipelineState:pipeline];
-  [encoder setVertexBytes:vertices length:sizeof(vertices) atIndex:KKVertexInputIndex_Vertices];
-  [encoder setVertexBytes:&viewport length:sizeof(viewport) atIndex:KKVertexInputIndex_ViewportSize];
+  [encoder setVertexBytes:vertices length:sizeof(vertices) atIndex:RSRenderVertexIndexVertices];
+  [encoder setVertexBytes:&viewport length:sizeof(viewport) atIndex:RSRenderVertexIndexViewportSize];
   [encoder setFragmentBytes:&transform length:sizeof(transform) atIndex:0];
-  [encoder setFragmentTexture:input atIndex:KKTextureIndex_InputImage];
+  [encoder setFragmentTexture:input atIndex:RSRenderTextureIndexInputImage];
   [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   [encoder endEncoding]; [command commit]; [command waitUntilCompleted];
   assert(!command.error);

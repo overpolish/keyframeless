@@ -9,6 +9,11 @@ case "${1:-}" in
 esac
 "$root/InspectorControls/Tests/run.sh"
 "$root/MotionTiming/Tests/run.sh"
+if [ "$gpu" = yes ]; then
+  "$root/RenderSupport/Tests/run.sh"
+else
+  "$root/RenderSupport/Tests/run.sh" --cpu-only
+fi
 "$root/MagicMove/Tests/run.sh"
 if [ "$gpu" = yes ]; then
   "$root/MagicMove/Tests/run-shader.sh"

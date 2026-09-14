@@ -3,7 +3,7 @@
 #import "MMCombinedPose.h"
 #import "Constants.h"
 #import "ShaderTypes.h"
-@import KeyframelessKit;
+@import RenderSupport;
 #import <math.h>
 
 @interface MockHost (PositionTestsSorting)
@@ -102,7 +102,7 @@ int main(void) {
     host.frameDuration = TestTime(1.0 / 30.0);
     host.editors[@(MMMotionBlur)] = @YES;
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
-    KKMotionBlurState blur;
+    RSRenderBlurState blur;
     [state getBytes:&blur range:NSMakeRange(state.length - sizeof(blur), sizeof(blur))];
     assert(blur.enabled && blur.sampleCount > 1);
     BOOL sawY = NO;

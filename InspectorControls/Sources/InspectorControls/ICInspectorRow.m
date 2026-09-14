@@ -180,15 +180,12 @@
 - (void)layout {
   [super layout];
   CGFloat width = NSWidth(self.bounds);
-  // Adapted from KKParameterRowView / KKLabelView: leave the host-control
-  // gutter clear and inset our own label. Relax column minima in narrow hosts
-  // rather than letting the old required constraints overflow the row.
+  // Layout adapted from KKParameterRowView / KKLabelView. Column minima
+  // must shrink in narrow inspectors to leave the host-control gutter clear.
   CGFloat contentWidth = MAX(0, width-ICInspectorHostGutter);
-  // Measure component gaps from the suffix edge, independent of its inset.
   CGFloat groupSpacing = (self.fields.count>2 ? 10:ICInspectorGroupSpacing)-ICInspectorSuffixTrailingInset;
   const CGFloat axisWidth = self.fields.count>2 ? 10:12;
-  // Measure a stable signed, three-digit readout at the configured precision.
-  // Do not size from the current value: that would shift columns while scrubbing.
+  // A fixed reference value prevents columns from shifting while scrubbing.
   CGFloat minimumValueWidth=24;
   if(self.fields.count>2) {
     for(ICValueTextField *field in self.fields) {

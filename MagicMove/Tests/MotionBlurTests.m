@@ -1,15 +1,15 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MockHost.h"
 #import "ShaderTypes.h"
-#import <KeyframelessKit/KKMotionBlur.h>
+@import RenderSupport;
 #import <math.h>
 
 static NSUInteger BlurStateOffset(NSData *state) {
-  return state.length - sizeof(KKMotionBlurState);
+  return state.length - sizeof(RSRenderBlurState);
 }
 
-static KKMotionBlurState BlurStateFrom(NSData *state) {
-  KKMotionBlurState blur = {0};
+static RSRenderBlurState BlurStateFrom(NSData *state) {
+  RSRenderBlurState blur = {0};
   [state getBytes:&blur
             range:NSMakeRange(BlurStateOffset(state), sizeof(blur))];
   return blur;
@@ -59,7 +59,7 @@ int main(void) {
     error = nil;
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
     assert(!error);
-    KKMotionBlurState blur = BlurStateFrom(state);
+    RSRenderBlurState blur = BlurStateFrom(state);
     assert(blur.enabled && blur.sampleCount == MMMotionBlurDefaultSamples);
     assert(fabs(blur.shutterSec - (1.0 / 60.0)) < 1e-9);
     assert(state.length == MMMotionBlurDefaultSamples * sizeof(MMTransform) + sizeof(blur));
@@ -82,7 +82,7 @@ int main(void) {
     error = nil;
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
     assert(!error && state.length == MMMotionBlurDefaultSamples * sizeof(MMTransform) + sizeof(blur));
-    NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:blur renderTime:TestTime(3.5)];
+    NSArray<NSValue *> *times = RSRenderBlurSampleTimes(blur, TestTime(3.5));
     host.editors[@(MMMotionBlur)] = @NO;
     for (NSUInteger i = 0; i < MMMotionBlurDefaultSamples; ++i) {
       CMTime sampleTime; [times[i] getValue:&sampleTime];

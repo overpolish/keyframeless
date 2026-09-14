@@ -6,7 +6,7 @@
 #pragma once
 
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KeyframelessKit.h>
+#import "MMParameterData.h"
 
 FOUNDATION_EXPORT NSNotificationName const MMInspectorPresentationChanged;
 
@@ -47,7 +47,11 @@ FOUNDATION_EXPORT NSNotificationName const MMInspectorPresentationChanged;
 
 @class MMLinkEdit;
 
-@interface MagicMovePlugin : KKPlugin <FxTileableEffect, FxCustomParameterViewHost_v2>
+@interface MagicMovePlugin : NSObject <FxTileableEffect, FxCustomParameterViewHost_v2>
+@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)manager;
+- (void)pluginInstanceAddedToDocument;
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID;
 // Canonical image dimensions published by image callbacks, read by the inspector.
 @property(atomic) CGSize inspectorImageSize;
 @property(atomic) UInt32 activeInspectorParameterID;

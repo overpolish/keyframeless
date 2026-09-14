@@ -5,8 +5,8 @@
 #import "ICPopUpButton.h"
 #import "InspectorTokens.h"
 
-// Adapted from legacy KKPopupSelectView: retain native menu behavior, replace
-// the bezel/arrow presentation. Direct drawing keeps decorations out of hit testing.
+// Drawing adapted from KKPopupSelectView. Decorations are drawn directly
+// so they cannot intercept clicks on adjacent host controls.
 @interface ICPopUpButtonCell : NSPopUpButtonCell
 @end
 @implementation ICPopUpButtonCell
@@ -76,7 +76,6 @@
       NSRectFillUsingOperation(rect,NSCompositingOperationSourceIn);
       return YES;
     }];
-    // Match the legacy 8 x 6 pt stacked symbol canvases in either coordinate system.
     BOOL top=i==0;
     CGFloat originY=(top==view.isFlipped) ? y-6 : y;
     [tinted drawInRect:NSMakeRect(x,originY,8,6) fromRect:NSZeroRect

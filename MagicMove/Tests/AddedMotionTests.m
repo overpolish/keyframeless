@@ -2,8 +2,7 @@
 #import "MockHost.h"
 #import "ShaderTypes.h"
 #import <math.h>
-#import <KeyframelessKit/KKEasing.h>
-#import <KeyframelessKit/KKTimingEvaluation.h>
+#import "Fixtures/AddedMotionGolden.h"
 static MTDurationRecord Record(MockHost *h, UInt32 value, UInt32 data, NSUInteger index) {
   NSData *records = TestData(h,value,data);
   assert(records.length > index*sizeof(MTDurationRecord));
@@ -20,24 +19,17 @@ int main(void) {
         double t=i/40.0;
         assert(MTSample(flat,2,2,t*4,output));
         for (NSUInteger c=0;c<2;++c)
-          assert(fabs(output[c]-100*KKApplyHoldEffectForComponent(t,(KKHoldEffect)motion,1,1,0,c))<1e-9);
+          assert(fabs(output[c]-MMHoldGolden[motion-1][i-1][c])<1e-9);
       }
     }
     // Compare the entire join window with the old two-half Hermite implementation.
     double a[]={100}, b[]={200}, c[]={150};
     MTDestination joined[] = {{.arrival=0,.values=a,.addedMotion=MTAddedMotionWave},
       {.arrival=4,.duration=1.2,.values=b,.addedMotion=MTAddedMotionWave}, {.arrival=8,.duration=1.2,.values=c}};
-    const MTDestination *joinSource = joined;
-    double (^raw)(double) = ^double(double seconds) {
-      MTDestination pair[2];
-      if (seconds < 4) { pair[0]=joinSource[0]; pair[1]=joinSource[1]; }
-      else { pair[0]=joinSource[1]; pair[1]=joinSource[2]; }
-      double value; assert(MTSample(pair,2,1,seconds,&value)); return value;
-    };
     for (int i=0;i<100;++i) {
       double seconds=2.4+i*0.032;
       assert(MTSample(joined,3,1,seconds,output));
-      assert(fabs(output[0]-KKHermiteJoinBlend(seconds,4,1.2*KK_JOIN_BLEND_MOD_FRAC,raw))<1e-9);
+      assert(fabs(output[0]-MMJoinGolden[i])<1e-9);
     }
     MockHost *h = [MockHost new];
     MagicMovePlugin *plugin = [[MagicMovePlugin alloc] initWithAPIManager:h]; h.plugin = plugin;

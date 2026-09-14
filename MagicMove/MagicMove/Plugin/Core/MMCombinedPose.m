@@ -83,7 +83,7 @@ static MMCombinedPose *MMCombinedValue(id<FxParameterRetrievalAPI_v6> get, CMTim
   BOOL success = [get getCustomParameterValue:&value fromParameter:MMCustomControls atTime:time];
   if (!success) return nil;
   if ([value isKindOfClass:MMCombinedPose.class]) return (MMCombinedPose *)value;
-  // Older capability-checkpoint instances saved a numeric placeholder.
+  // Some saved effects contain a numeric placeholder instead of a pose.
   if ([value isKindOfClass:NSNumber.class])
     return [[MMCombinedPose alloc] initWithPositionX:0 scale:100 authored:NO];
   return nil;

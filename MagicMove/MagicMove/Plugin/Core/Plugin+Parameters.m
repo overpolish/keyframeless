@@ -16,7 +16,7 @@
                                   parameterID:MMLinkProperties defaultValue:NO
                                parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   // A saved, non-animatable scratch value invalidates the host's cached frame.
-  // Legacy testing found DONT_SAVE writes propagated late; keep normal flags.
+  // DONT_SAVE writes propagate late in the host, so this value must be saved.
   ok = ok && [api addCustomParameterWithName:@"Host Refresh" parameterID:MMHostRefreshToken
       defaultValue:@"" parameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE)];
   ok = ok && [api addCustomParameterWithName:@"" parameterID:MMHeaderControls defaultValue:@0

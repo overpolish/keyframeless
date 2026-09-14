@@ -4,6 +4,9 @@
  */
 
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KeyframelessKit.h>
-
-KK_PLUGIN_MAIN()
+int main(int argc, const char *argv[]) {
+  @autoreleasepool {
+    [FxPrincipal startServicePrincipalWithDelegate:nil];
+  }
+  return 0;
+}

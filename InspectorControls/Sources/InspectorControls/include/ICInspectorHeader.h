@@ -4,7 +4,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// AppKit-only inspector chrome with a leading logo and trailing controls.
+/// Inspector header with a logo and optional trailing controls.
 @interface ICInspectorHeader : NSView
 - (instancetype)initWithLogo:(nullable NSImage *)logo;
 - (instancetype)initWithLogo:(nullable NSImage *)logo
@@ -13,7 +13,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, copy, nullable) NSArray<NSButton *> *accessoryButtons;
 @property(nonatomic, copy, nullable) NSMenu *(^menuProvider)(void);
-/// The trailing settings button, exposed for integration and standalone tests.
 @property(nonatomic, readonly) NSButton *settingsButton;
 @end
 

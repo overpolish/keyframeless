@@ -6,7 +6,8 @@
 #pragma once
 
 #import "Plugin.h"
-#import <KeyframelessKit/KeyframelessKit.h>
+#import "MMRenderHost.h"
+#import "MMParameterData.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

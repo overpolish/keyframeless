@@ -141,7 +141,7 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
   BOOL written=[set setCustomParameterValue:pose toParameter:parameterID atTime:target];
   if(!written) return NO;
   // Never enumerate native keys inside a UI write action: the host can block
-  // until that action ends. Publish the known result, as Scale value edits do.
+  // until that action ends. Publish the known result instead.
   [cache publishPose:pose atTime:target inSnapshot:gap.entries];
   return YES;
 }

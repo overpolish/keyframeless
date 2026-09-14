@@ -3,21 +3,17 @@
     {
       "name": "Mac",
       "includePath": [
-        "${workspaceFolder}/KeyframelessKit/**",
-        "${workspaceFolder}/Canvas/**",
-        "${workspaceFolder}/CanvasRenderer/**",
-        "${workspaceFolder}/MotionTemplates/**",
-        "${workspaceFolder}/Template/**",
-        "${workspaceFolder}/Keyframeless X/**"
+        "${workspaceFolder}/MagicMove/**",
+        "${workspaceFolder}/MotionTiming/Sources/**",
+        "${workspaceFolder}/InspectorControls/Sources/**",
+        "${workspaceFolder}/RenderSupport/Sources/**"
       ],
       "browse": {
         "path": [
-          "${workspaceFolder}/KeyframelessKit",
-          "${workspaceFolder}/Canvas",
-          "${workspaceFolder}/CanvasRenderer",
-          "${workspaceFolder}/MotionTemplates",
-          "${workspaceFolder}/Template",
-          "${workspaceFolder}/Keyframeless X"
+          "${workspaceFolder}/MagicMove",
+          "${workspaceFolder}/MotionTiming/Sources",
+          "${workspaceFolder}/InspectorControls/Sources",
+          "${workspaceFolder}/RenderSupport/Sources"
         ],
         "limitSymbolsToIncludedHeaders": true
       },
@@ -28,7 +24,9 @@
         "/System/Library/Frameworks"
       ],
       "compilerPath": "/usr/bin/clang",
-      "compilerArgs": ["-fmodules"],
+      "compilerArgs": [
+        "-fmodules"
+      ],
       "cStandard": "c17",
       "cppStandard": "c++17",
       "intelliSenseMode": "macos-clang-arm64"

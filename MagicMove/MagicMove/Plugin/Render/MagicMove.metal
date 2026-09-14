@@ -4,7 +4,7 @@
  */
 
 #include "ShaderTypes.h"
-#include <KeyframelessKit/KKShaderTypes.h>
+#include "RenderSupportTypes.h"
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -16,9 +16,9 @@ typedef struct {
 } RasterizerData;
 
 vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
-                                   constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+                                   constant RSRenderVertex2D *vertexArray [[buffer(RSRenderVertexIndexVertices)]],
                                    constant vector_uint2 *viewportSizePointer
-                                   [[buffer(KKVertexInputIndex_ViewportSize)]]) {
+                                   [[buffer(RSRenderVertexIndexViewportSize)]]) {
     RasterizerData out;
 
     float2 pixelSpacePosition = vertexArray[vertexID].position.xy;
@@ -34,14 +34,12 @@ vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
 
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                constant MMTransform &transform [[buffer(0)]],
-                               texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]]) {
+                               texture2d<half> colorTexture [[texture(0)]]) {
     if (transform.scale <= 0 || transform.scaleY <= 0) return float4(0);
     float2 imageSize = float2(colorTexture.get_width(), colorTexture.get_height());
     float2 p = in.textureCoordinate - 0.5 - transform.offset;
-    // Anchor is a pixel offset from the source centre. Convert it to the
-    // centered normalized space used by the transform, then apply the same
-    // inverse transform around that pivot. This matches the old MagicMove
-    // render semantics while keeping the new state resolution independent.
+    // Normalize the pixel anchor around the source centre so the pivot
+    // stays in the same place at different render resolutions.
     float2 anchor = transform.anchorPixels / imageSize;
     p -= anchor;
     // Orthographic projection of the source plane after local-axis scaling
