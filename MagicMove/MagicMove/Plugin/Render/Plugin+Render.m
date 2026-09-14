@@ -19,6 +19,14 @@ static BOOL MMError(NSError **error, NSString *message) {
                                      userInfo:@{NSLocalizedDescriptionKey:message}];
   return NO;
 }
+static int MMBlurIntegerSetting(id<FxParameterRetrievalAPI_v6> api, UInt32 parameter,
+                                CMTime time, int fallback, int minimum, int maximum) {
+  int value = fallback;
+  if (![api getIntValue:&value fromParameter:parameter atTime:time]) value = fallback;
+  if (value < minimum) value = minimum;
+  if (value > maximum) value = maximum;
+  return (int)value;
+}
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation MagicMovePlugin (Render)
@@ -33,10 +41,24 @@ static BOOL MMError(NSError **error, NSString *message) {
   KKMotionBlurState blur = {0};
   if (blurEnabled) {
     id<FxTimingAPI_v4> timing = [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-    blur = [KKMotionBlur snapshotStateFromJSON:@"{\"enabled\":true,\"shutterAngle\":180,\"samples\":16,\"technique\":1}"
+    int samples = MMBlurIntegerSetting(api, MMMotionBlurSamples, renderTime,
+                                       MMMotionBlurDefaultSamples, MMMotionBlurMinSamples,
+                                       MMMotionBlurMaxSamples);
+    int shutterAngle = MMBlurIntegerSetting(api, MMMotionBlurShutterAngle, renderTime,
+                                            MMMotionBlurDefaultShutterAngle,
+                                            MMMotionBlurMinShutterAngle,
+                                            MMMotionBlurMaxShutterAngle);
+    // A zero shutter is an intentional sharp-frame setting, even when the
+    // Motion Blur toggle remains enabled.
+    if (shutterAngle > MMMotionBlurMinShutterAngle) {
+      NSString *json = [NSString stringWithFormat:
+          @"{\"enabled\":true,\"shutterAngle\":%d,\"samples\":%d,\"technique\":1}",
+          shutterAngle, samples];
+      blur = [KKMotionBlur snapshotStateFromJSON:json
                                      timingAPI:timing atTime:renderTime];
-    if (!isfinite(blur.shutterSec) || blur.shutterSec <= 0)
-      return MMError(error, @"Unable to read the frame duration for motion blur");
+      if (!isfinite(blur.shutterSec) || blur.shutterSec <= 0)
+        return MMError(error, @"Unable to read the frame duration for motion blur");
+    }
   }
   NSArray<NSValue *> *times = blur.enabled ? [KKMotionBlur sampleTimesForState:blur renderTime:renderTime]
       : @[[NSValue valueWithBytes:&renderTime objCType:@encode(CMTime)]];

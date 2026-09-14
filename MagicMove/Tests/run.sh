@@ -20,7 +20,7 @@ for source in MotionTiming MTDurationRecords; do
     -I "$root/MotionTiming/Sources/MotionTiming/include" \
     -c "$root/MotionTiming/Sources/MotionTiming/$source.c" -o "$test_tmp/$source.o"
 done
-for suite in ${MM_TEST_SUITES:-LinkedPosesTests ModelTests MatchEndpointsTests CombinedPoseTests EasingTests AddedMotionTests MotionBlurTests ShortcutTests CustomRowTests PositionTests ScaleTests TimingEditorTests OpacityTests RotationTests BlurAnchorTests ResetParameterTests NativeLinksTests}; do
+for suite in ${MM_TEST_SUITES:-HeaderTests LinkedPosesTests ModelTests MatchEndpointsTests CombinedPoseTests EasingTests AddedMotionTests MotionBlurTests ShortcutTests CustomRowTests PositionTests ScaleTests TimingEditorTests OpacityTests RotationTests BlurAnchorTests ResetParameterTests NativeLinksTests}; do
   xcrun clang -fobjc-arc -fmodules -Wno-protocol -fsanitize=address,undefined \
     -I "$inspector/include" -fmodule-map-file="$test_tmp/InspectorControls.modulemap" \
     -I "$core" -I "$render" -I "$root/MagicMove/Tests" \
@@ -31,7 +31,7 @@ for suite in ${MM_TEST_SUITES:-LinkedPosesTests ModelTests MatchEndpointsTests C
     -Wl,-rpath,"$build/Products/Debug" \
     "$root/MagicMove/Tests/$suite.m" "$root/MagicMove/Tests/MockHost.m" \
     "$core/Plugin.m" "$core/Plugin+CustomRow.m" "$core/Plugin+Links.m" "$core/Plugin+Parameters.m" \
-    "$inspector/ICPopUpButton.m" "$inspector/ICMenuToggleView.m" "$inspector/InspectorTokens.m" "$inspector/ICValueTextField.m" "$inspector/ICInspectorRow.m" "$inspector/ICSliderView.m" "$inspector/ICSliderRow.m" "$core/MMPoseTiming.m" "$core/MMTimingEditorModel.m" "$core/MMTimingEditor.m" "$core/MMScalePose.m" "$core/MMScalarPose.m" "$core/MMPropertyLane.m" "$core/MMRotationPose.m" "$core/MMAnchorPose.m" "$core/MMPropertyRow.m" "$core/MMResetParameter.m" "$core/MMNativeLinks.m" "$core/MMShortcut.m" "$core/MMCombinedPose.m" "$core/MMDestinations.m" "$render/Plugin+Render.m" \
+    "$core/MMInspectorHeader.m" "$inspector/ICInspectorHeader.m" "$inspector/ICPopUpButton.m" "$inspector/ICMenuToggleView.m" "$inspector/InspectorTokens.m" "$inspector/ICValueTextField.m" "$inspector/ICInspectorRow.m" "$inspector/ICSliderView.m" "$inspector/ICSliderRow.m" "$core/MMPoseTiming.m" "$core/MMTimingEditorModel.m" "$core/MMTimingEditor.m" "$core/MMScalePose.m" "$core/MMScalarPose.m" "$core/MMPropertyLane.m" "$core/MMRotationPose.m" "$core/MMAnchorPose.m" "$core/MMPropertyRow.m" "$core/MMResetParameter.m" "$core/MMNativeLinks.m" "$core/MMShortcut.m" "$core/MMCombinedPose.m" "$core/MMDestinations.m" "$render/Plugin+Render.m" \
     "$test_tmp/MotionTiming.o" "$test_tmp/MTDurationRecords.o" -o "$test_tmp/$suite"
   DYLD_FRAMEWORK_PATH="$runtime" "$test_tmp/$suite" "$@"
 done

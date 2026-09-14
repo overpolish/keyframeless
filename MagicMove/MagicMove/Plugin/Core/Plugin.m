@@ -7,6 +7,7 @@
 #import "MMNativeLinks.h"
 #import "Plugin_Private.h"
 #import "Constants.h"
+#import "MMInspectorHeader.h"
 #import "MMDestinations.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
@@ -78,7 +79,7 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
 
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
   if (parameterID == MMHostRefreshToken) return [NSSet setWithObject:NSString.class];
-  if (parameterID == MMTimingControls) return [NSSet setWithObject:NSNumber.class];
+  if (parameterID == MMTimingControls || parameterID == MMHeaderControls) return [NSSet setWithObject:NSNumber.class];
   MMPropertyLane *lane=MMPropertyLaneForParameter(parameterID);
   if(lane) return [NSSet setWithObject:[(NSObject *)lane.defaultPose class]];
   if (parameterID == MMScaleControls) return [NSSet setWithObject:MMScalePose.class];
@@ -327,6 +328,10 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
 }
 
 - (BOOL)parameterChanged:(UInt32)parameterID atTime:(CMTime)time error:(NSError **)error {
+  if (parameterID == MMMotionBlur || parameterID == MMExplicitCreation || parameterID == MMMotionBlurSamples || parameterID == MMMotionBlurShutterAngle) {
+    [NSNotificationCenter.defaultCenter postNotificationName:MMHeaderSettingsChanged object:self.apiManager];
+    MMPropertyMenuParametersChanged(self.apiManager);
+  }
   if (parameterID == MMHostRefreshToken) return YES; // Host invalidation only.
   // FxPlug callbacks can overlap the timer on another thread. Never release a
   // prepared plan while a native callback is still updating its snapshots.

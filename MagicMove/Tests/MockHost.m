@@ -65,6 +65,8 @@
 }
 - (BOOL)getIntValue:(int *)value fromParameter:(UInt32)p atTime:(CMTime)time {
   if (self.failReadParameter == p) return NO;
+  if ((p == MMMotionBlurSamples || p == MMMotionBlurShutterAngle) &&
+      !_editors[@(p)]) return NO;
   *value = [self.editors[@(p)] intValue]; return YES;
 }
 - (BOOL)setIntValue:(int)value toParameter:(UInt32)p atTime:(CMTime)time {
@@ -105,6 +107,28 @@
   };
   self.flags[@(p)] = @(flags);
   self.staticValues[@(p)] = @(v);
+  self.editors[@(p)] = @(v);
+  return YES;
+}
+- (BOOL)addIntSliderWithName:(NSString *)name
+                  parameterID:(UInt32)p
+                 defaultValue:(int)v
+                  parameterMin:(int)lo
+                  parameterMax:(int)hi
+                     sliderMin:(int)slo
+                     sliderMax:(int)shi
+                         delta:(int)delta
+                parameterFlags:(FxParameterFlags)flags {
+  assert(!self.definitions[@(p)]);
+  self.definitions[@(p)] = @{
+    @"name" : name,
+    @"kind" : @"int",
+    @"default" : @(v),
+    @"min" : @(lo),
+    @"max" : @(hi),
+    @"delta" : @(delta)
+  };
+  self.flags[@(p)] = @(flags);
   self.editors[@(p)] = @(v);
   return YES;
 }
@@ -157,6 +181,9 @@
 }
 - (BOOL)getFloatValue:(double *)v fromParameter:(UInt32)p atTime:(CMTime)t {
   if (self.failReadParameter == p)
+    return NO;
+  if ((p == MMMotionBlurSamples || p == MMMotionBlurShutterAngle) &&
+      !_editors[@(p)])
     return NO;
   if (p != MMPositionX && p != MMScale) {
     *v = [_editors[@(p)] doubleValue];

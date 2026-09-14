@@ -74,6 +74,25 @@ static void key(ScaleHost *host, double time, double x, double y) {
         @"key" : [NSValue valueWithBytes:&k objCType:@encode(FxKeyframe)]
       } mutableCopy]];
 }
+static void targetBoundaries(void) {
+  MMScalePoseCache *cache=MMCreateScalePoseCache();
+  [cache publishConstantPose:pose(20,30)]; CMTime target=kCMTimeInvalid;
+  assert([cache valueTargetAtTime:TestTime(9) targetTime:&target] && CMTimeCompare(target,TestTime(9))==0);
+  CMTime t1=TestTime(1),t2=TestTime(3),t3=TestTime(5);
+  NSArray *all=@[
+    @{ @"time":@1,@"nativeTime":[NSValue valueWithBytes:&t1 objCType:@encode(CMTime)],@"pose":pose(1,1) },
+    @{ @"time":@3,@"nativeTime":[NSValue valueWithBytes:&t2 objCType:@encode(CMTime)],@"pose":pose(3,3) },
+    @{ @"time":@5,@"nativeTime":[NSValue valueWithBytes:&t3 objCType:@encode(CMTime)],@"pose":pose(5,5) }];
+  double times[]={-1,1,2,3,4,5,8};
+  double expected[3][7]={{1,1,1,1,1,1,1},{1,1,3,3,3,3,3},{1,1,3,3,5,5,5}};
+  for(NSUInteger count=1;count<=3;count++) {
+    [cache publishEntries:[all subarrayWithRange:NSMakeRange(0,count)]];
+    for(NSUInteger i=0;i<7;i++) {
+      assert([cache valueTargetAtTime:TestTime(times[i]) targetTime:&target]);
+      assert(fabs(CMTimeGetSeconds(target)-expected[count-1][i])<1e-6);
+    }
+  }
+}
 static void integration(void) {
   ScaleHost *host = [ScaleHost new];
   MMScalePoseCache *cache = MMCreateScalePoseCache();
@@ -171,6 +190,7 @@ static void integration(void) {
 
 int main(void) {
   @autoreleasepool {
+    targetBoundaries();
     integration();
     MMScalePose *base = [[MMScalePose alloc] initWithX:100 y:200 authored:NO];
     NSError *error = nil;

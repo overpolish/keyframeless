@@ -65,8 +65,30 @@ static void Check(CombinedHost *host, double time, double x, double scale) {
   MMTransform transform; [state getBytes:&transform length:sizeof(transform)];
   assert(fabs(transform.offset.x-x/100)<1e-6 && fabs(transform.scale-scale/100)<1e-6);
 }
+static void testExplicitTargetBoundaries(void) {
+  MMCombinedPoseCache *cache=MMCreateCombinedPoseCache();
+  [cache publishConstantPose:Pose(10,100)];
+  CMTime target=kCMTimeInvalid;
+  assert([cache valueTargetAtTime:TestTime(7) targetTime:&target] && CMTimeCompare(target,TestTime(7))==0);
+  CMTime t1=TestTime(1),t2=TestTime(3),t3=TestTime(5);
+  NSArray *allEntries=@[
+    @{ @"time":@1, @"nativeTime":[NSValue valueWithBytes:&t1 objCType:@encode(CMTime)], @"pose":Pose(1,1) },
+    @{ @"time":@3, @"nativeTime":[NSValue valueWithBytes:&t2 objCType:@encode(CMTime)], @"pose":Pose(3,3) },
+    @{ @"time":@5, @"nativeTime":[NSValue valueWithBytes:&t3 objCType:@encode(CMTime)], @"pose":Pose(5,5) }];
+  double times[]={-1,1,1.5,3,4,5,8};
+  double expected[3][7]={{1,1,1,1,1,1,1},{1,1,3,3,3,3,3},{1,1,3,3,5,5,5}};
+  for(NSUInteger count=1;count<=3;count++) {
+    [cache publishEntries:[allEntries subarrayWithRange:NSMakeRange(0,count)]];
+    for(NSUInteger i=0;i<7;i++) {
+      target=kCMTimeInvalid;
+      assert([cache valueTargetAtTime:TestTime(times[i]) targetTime:&target]);
+      assert(fabs(CMTimeGetSeconds(target)-expected[count-1][i])<1e-6);
+    }
+  }
+}
 int main(void) {
   @autoreleasepool {
+    testExplicitTargetBoundaries();
     MMCombinedPose *original = Pose(-35, 180);
     NSError *error = nil;
     NSData *archive = [NSKeyedArchiver archivedDataWithRootObject:original requiringSecureCoding:YES error:&error];
@@ -209,16 +231,12 @@ int main(void) {
     assert(MMWriteCombinedComponent(host,cache,MMPositionX,10,TestTime(1)));
     assert(CMTimeCompare(host.lastCombinedWrite,TestTime(1)) == 0);
     host.editors[@(MMExplicitCreation)] = @YES;
-    // The native keyframe button creates the first key in an empty explicit lane.
+    // Explicit editing of an empty lane updates its static payload and does
+    // not create a native keyframe.
     second.editors[@(MMExplicitCreation)] = @YES;
-    assert(!MMWriteCombinedComponent(second,other,MMPositionX,25,TestTime(1)));
-    error = nil;
-    FxKeyframe firstKey; FxInitKeyframe(firstKey,kFxKeyframe_CurrentVersion);
-    firstKey.time = TestTime(1);
-    assert(![second addKeyframe:&firstKey toParameter:MMCustomControls andChannel:0]);
-    assert([second lane:MMCustomControls].count == 1);
-    assert(MMWriteCombinedComponent(second,other,MMPositionX,25,TestTime(0)));
-    assert(CMTimeCompare(second.lastCombinedWrite,TestTime(1)) == 0);
+    assert(MMWriteCombinedComponent(second,other,MMPositionX,25,TestTime(1)));
+    assert([second lane:MMCustomControls].count == 0);
+    assert([(MMCombinedPose *)second.blobs[@(MMCustomControls)] positionX] == 25);
     // Outgoing motion uses the previous key, independently of incoming easing.
     [plugin refreshDurationAtTime:TestTime(0.5)];
     host.editors[@(MMCombinedAddedMotion)] = @(MTAddedMotionWiggle);

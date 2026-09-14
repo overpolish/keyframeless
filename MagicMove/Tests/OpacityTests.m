@@ -161,6 +161,16 @@ static void testWritesAndCache(void) {
   cached = cache.snapshotEntries.lastObject[@"pose"];
   assert(cached.value==66);
 }
+static void testStaticExplicitWrite(void) {
+  MockHost *host=[MockHost new]; MMPropertyLane *lane=MMOpacityLane();
+  MMPropertyPoseCache *cache=[lane createCache]; host.staticValues[@(MMOpacityCacheToken)]=cache.token;
+  host.blobs[@(MMOpacityControls)]=opacity(20,NO,MTEasingSmooth,MTAddedMotionNone,nil);
+  [lane refreshCacheForManager:host time:TestTime(0)];
+  host.editors[@(MMExplicitCreation)]=@YES;
+  assert([lane writeValue:55 manager:host cache:cache time:TestTime(7) explicit:YES]);
+  assert([host lane:MMOpacityControls].count==0 && cache.snapshotEntries.count==1 && !cache.snapshotEntries[0][@"nativeTime"]);
+  assert(fabs([(MMScalarPose *)cache.snapshotEntries[0][@"pose"] value]-55)<1e-6);
+}
 
 static void testTimingModel(void) {
   OpacityHost *host=[OpacityHost new]; MMPropertyLane *lane=MMOpacityLane();
@@ -208,7 +218,7 @@ static void testRenderOpacity(void) {
 }
 
 int main(void) {
-  @autoreleasepool { testCodingAndValidation(); testLaneSamplingAndBounds(); testWritesAndCache(); testTimingModel(); testRenderOpacity(); }
+  @autoreleasepool { testCodingAndValidation(); testLaneSamplingAndBounds(); testWritesAndCache(); testStaticExplicitWrite(); testTimingModel(); testRenderOpacity(); }
   puts("Opacity: secure payload, scalar sampling, timing, cached writes, failures and native moves passed");
   return 0;
 }

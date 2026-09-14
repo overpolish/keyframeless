@@ -201,10 +201,40 @@ static void testMotionBlurReadFailureAndExceptionBalance(void) {
   assert(host.undoGroupsStarted == 1 && host.undoGroupsEnded == 1);
 }
 
+static void testEffectSelectionWithoutInspectorInteraction(void) {
+  MMShortcutRouter *router=[MMShortcutRouter new];
+  NSObject *effectA=[NSObject new], *effectB=[NSObject new];
+  NSArray *a=@[[NSObject new],[NSObject new],[NSObject new]];
+  NSArray *b=@[[NSObject new],[NSObject new]];
+  __block NSInteger selected=1;
+  __block NSUInteger callsA=0,callsB=0;
+  for(id owner in a) [router registerOwner:owner effect:effectA eligible:^BOOL { return selected==1; } action:^BOOL { callsA++; return YES; }];
+  for(id owner in b) [router registerOwner:owner effect:effectB eligible:^BOOL { return selected==2; } action:^BOOL { callsB++; return YES; }];
+  NSEventModifierFlags flags=MMMotionBlurShortcutModifiers();
+  assert([router handleKeyCode:46 modifiers:flags repeat:NO]);
+  assert(callsA==1 && callsB==0); // Three visible rows still make one effect.
+  selected=0; // Selecting an unrelated host object makes no effect eligible.
+  assert(![router handleKeyCode:46 modifiers:flags repeat:NO]);
+  selected=1; // Return to the effect, without activating any inspector row.
+  assert([router handleKeyCode:46 modifiers:flags repeat:NO]);
+  assert(callsA==2 && callsB==0);
+  selected=2;
+  assert([router handleKeyCode:46 modifiers:flags repeat:NO]);
+  assert(callsA==2 && callsB==1);
+  [router activateOwner:b[0]];
+  selected=1; // A previously active row cannot override current eligibility.
+  assert([router handleKeyCode:46 modifiers:flags repeat:NO]);
+  assert(callsA==3 && callsB==1);
+  [router unregisterOwner:a[0]];
+  assert([router handleKeyCode:46 modifiers:flags repeat:NO]);
+  assert(callsA==4 && callsB==1);
+}
+
 int main(void) {
   @autoreleasepool {
     testMenuHistoryLifetime();
     testShortcutMatching();
+    testEffectSelectionWithoutInspectorInteraction();
     testRouterSelectionAndRepeat();
     testRouterEligibilityAndWeakOwners();
     testMotionBlurToggle();

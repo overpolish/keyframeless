@@ -157,6 +157,17 @@ int main(int argc, const char **argv) {
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
     assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
     assert(plugin.sampleDraws == 16 && plugin.firstBuffer.status == MTLCommandBufferStatusCompleted);
+    host.editors[@(MMMotionBlurSamples)]=@8;
+    host.editors[@(MMMotionBlurShutterAngle)]=@90;
+    plugin.sampleDraws=0; plugin.firstBuffer=nil;
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
+    assert(plugin.sampleDraws==8 && plugin.firstBuffer.status==MTLCommandBufferStatusCompleted);
+    host.editors[@(MMMotionBlurShutterAngle)]=@0;
+    plugin.sampleDraws=0; plugin.firstBuffer=nil;
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
+    assert(plugin.sampleDraws==0);
     puts("Motion blur GPU: temporal samples, production spatial blur, anchor pivot and sharp identity passed");
   }
 }

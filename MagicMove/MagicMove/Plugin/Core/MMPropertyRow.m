@@ -57,7 +57,7 @@
   __weak MMPropertyRowBinding *weakSelf=self;
   self.selectionObserver=[NSNotificationCenter.defaultCenter addObserverForName:MMInspectorPresentationChanged object:self.plugin queue:nil usingBlock:^(NSNotification *note) { [weakSelf updateSelection]; }];
   [self updateSelection];
-  [[MMShortcutCapture sharedCapture] attachView:self.row action:^BOOL {
+  [[MMShortcutCapture sharedCapture] attachView:self.row effect:self.manager action:^BOOL {
     MMPropertyRowBinding *row=weakSelf; if(!row || row.row.interacting || NSEvent.pressedMouseButtons) return NO;
     dispatch_async(dispatch_get_main_queue(),^{ MMPropertyRowBinding *target=weakSelf;
       if(!target.row.window.isVisible || target.row.hiddenOrHasHiddenAncestor) return;
@@ -84,10 +84,12 @@
     if(![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time]) return;
     NSArray *entries=[self.cache snapshotEntries];
     if(explicit) {
-      if(!entries.count || !entries[0][@"nativeTime"]) return;
-      NSDictionary *destination=entries.lastObject;
-      for(NSDictionary *entry in entries) if(CMTimeGetSeconds(time)<=[entry[@"time"] doubleValue]+1e-6) { destination=entry; break; }
-      [destination[@"nativeTime"] getValue:&time];
+      if(!entries.count) return;
+      if(entries[0][@"nativeTime"]) {
+        NSDictionary *destination=entries.lastObject;
+        for(NSDictionary *entry in entries) if(CMTimeGetSeconds(time)<=[entry[@"time"] doubleValue]+1e-6) { destination=entry; break; }
+        [destination[@"nativeTime"] getValue:&time];
+      }
     }
     id<MMPropertyPose> pose=[self.lane sampleEntries:entries time:time]; if(!pose) return;
     NSArray<NSNumber *> *values=pose.values;

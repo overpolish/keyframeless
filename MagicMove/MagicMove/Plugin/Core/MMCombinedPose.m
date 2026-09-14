@@ -190,7 +190,8 @@ static MMCombinedPose *MMSampleCombinedEntries(NSArray *entries, CMTime time, BO
   if (!CMTIME_IS_NUMERIC(time)) return NO;
   NSArray *entries;
   @synchronized (self) { entries = self.entries; }
-  if (!entries.count || !entries[0][@"nativeTime"]) return NO;
+  if (!entries.count) return NO;
+  if (!entries[0][@"nativeTime"]) { if (target) *target = time; return YES; }
   double seconds = CMTimeGetSeconds(time);
   NSDictionary *chosen = entries.lastObject;
   for (NSDictionary *entry in entries)
@@ -320,7 +321,13 @@ BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *
               positionY:component == MMPositionY ? value : old.positionY
                   scale:component == MMScale ? value : old.scale authored:YES easing:old.easing addedMotion:old.addedMotion];
   pose=[pose poseByReplacingTiming:old.timing];
-  return pose && [set setCustomParameterValue:pose toParameter:MMCustomControls atTime:target];
+  if (!pose || ![set setCustomParameterValue:pose toParameter:MMCustomControls atTime:target]) return NO;
+  if (cache) {
+    NSArray *entries = [cache snapshotEntries];
+    if (entries.count && !entries[0][@"nativeTime"]) [cache publishConstantPose:pose];
+    else [cache publishPose:pose atTime:target inSnapshot:entries];
+  }
+  return YES;
 }
 
 BOOL MMCombinedOutgoingMotion(id<PROAPIAccessing> manager, CMTime time, int *motion, CMTime *targetTime) {

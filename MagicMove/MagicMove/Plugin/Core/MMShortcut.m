@@ -4,11 +4,15 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <unistd.h>
 
+NSString *MMMotionBlurShortcutKey(void) { return @"m"; }
+NSEventModifierFlags MMMotionBlurShortcutModifiers(void) { return NSEventModifierFlagControl | NSEventModifierFlagOption; }
+NSString *MMMotionBlurShortcutDisplay(void) { return @"⌃⌥M"; }
+
 // Binding is separate from routing/capture so a settings recorder can replace it.
 BOOL MMShortcutMatches(unsigned short code, NSEventModifierFlags flags) {
   NSEventModifierFlags meaningful = NSEventModifierFlagCommand | NSEventModifierFlagControl |
       NSEventModifierFlagOption | NSEventModifierFlagShift | NSEventModifierFlagFunction;
-  return code == 46 && (flags & meaningful) == (NSEventModifierFlagControl | NSEventModifierFlagOption);
+  return code == 46 && (flags & meaningful) == MMMotionBlurShortcutModifiers();
 }
 BOOL MMToggleMotionBlur(id<PROAPIAccessing> manager, id sender) {
   id<FxCustomParameterActionAPI_v4> action = [manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -29,6 +33,7 @@ BOOL MMToggleMotionBlur(id<PROAPIAccessing> manager, id sender) {
 
 @interface MMShortcutEntry : NSObject
 @property(nonatomic, weak) id owner;
+@property(nonatomic, weak) id effect;
 @property(nonatomic, copy) BOOL (^eligible)(void);
 @property(nonatomic, copy) BOOL (^action)(void);
 @end
@@ -41,8 +46,11 @@ BOOL MMToggleMotionBlur(id<PROAPIAccessing> manager, id sender) {
 @implementation MMShortcutRouter
 - (instancetype)init { if ((self=[super init])) _entries=[NSMutableArray new]; return self; }
 - (void)registerOwner:(id)owner eligible:(BOOL (^)(void))eligible action:(BOOL (^)(void))action {
+  [self registerOwner:owner effect:owner eligible:eligible action:action];
+}
+- (void)registerOwner:(id)owner effect:(id)effect eligible:(BOOL (^)(void))eligible action:(BOOL (^)(void))action {
   [self unregisterOwner:owner];
-  MMShortcutEntry *entry=[MMShortcutEntry new]; entry.owner=owner; entry.eligible=eligible; entry.action=action;
+  MMShortcutEntry *entry=[MMShortcutEntry new]; entry.owner=owner; entry.effect=effect; entry.eligible=eligible; entry.action=action;
   [self.entries addObject:entry];
 }
 - (void)unregisterOwner:(id)owner {
@@ -55,14 +63,16 @@ BOOL MMToggleMotionBlur(id<PROAPIAccessing> manager, id sender) {
 - (void)activateOwner:(id)owner { self.activeOwner=owner; }
 - (BOOL)handleKeyCode:(unsigned short)code modifiers:(NSEventModifierFlags)flags repeat:(BOOL)repeat {
   if (!MMShortcutMatches(code,flags)) return NO;
-  MMShortcutEntry *only=nil, *active=nil; NSUInteger count=0;
+  MMShortcutEntry *only=nil, *active=nil; id soleEffect=nil; BOOL multipleEffects=NO;
   for (MMShortcutEntry *entry in self.entries) {
     id owner=entry.owner;
-    if (!owner || !entry.eligible()) continue;
-    only=entry; count++;
+    id effect=entry.effect;
+    if (!owner || !effect || !entry.eligible()) continue;
+    if (!soleEffect) { soleEffect=effect; only=entry; }
+    else if (effect!=soleEffect) multipleEffects=YES;
     if (owner==self.activeOwner) active=entry;
   }
-  MMShortcutEntry *target=active ?: (count==1 ? only : nil);
+  MMShortcutEntry *target=active ?: (!multipleEffects ? only : nil);
   if (!target) return NO;
   if (repeat) return YES;
   return target.action();
@@ -145,9 +155,12 @@ static BOOL MMTextEditorIsFocused(void) {
   return capture;
 }
 - (void)attachView:(NSView *)view action:(BOOL (^)(void))action {
+  [self attachView:view effect:view action:action];
+}
+- (void)attachView:(NSView *)view effect:(id)effect action:(BOOL (^)(void))action {
   [self.views addObject:view];
   __weak NSView *weakView=view;
-  [self.router registerOwner:view eligible:^BOOL {
+  [self.router registerOwner:view effect:effect eligible:^BOOL {
     NSView *v=weakView;
     return v && v.window.isVisible && !v.hiddenOrHasHiddenAncestor;
   } action:action];

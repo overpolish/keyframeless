@@ -59,13 +59,25 @@ static MTDurationRecord record(Fixture *f, UInt32 valueID, UInt32 dataID,
 static void testParameterContract(void) {
   Fixture *f = [Fixture new];
   MockHost *h = f.host;
+  UInt32 headerFlags=[h.flags[@(MMHeaderControls)] unsignedIntValue];
+  assert(headerFlags & kFxParameterFlag_CUSTOM_UI);
+  assert(headerFlags & kFxParameterFlag_NOT_ANIMATABLE);
+  assert(headerFlags & kFxParameterFlag_DONT_SAVE);
+  for(NSNumber *parameter in @[@(MMMotionBlurSamples),@(MMMotionBlurShutterAngle)]) {
+    assert([h.definitions[parameter][@"kind"] isEqual:@"int"]);
+    UInt32 flags=[h.flags[parameter] unsignedIntValue];
+    assert((flags & kFxParameterFlag_HIDDEN) && (flags & kFxParameterFlag_NOT_ANIMATABLE));
+    assert(!(flags & kFxParameterFlag_DONT_SAVE));
+  }
+  assert([h.editors[@(MMMotionBlurSamples)] intValue]==16);
+  assert([h.editors[@(MMMotionBlurShutterAngle)] intValue]==180);
   NSUInteger visible = 0;
   for (NSNumber *key in h.definitions) {
     assert(key.unsignedIntValue >= 1 && key.unsignedIntValue <= 9999);
     if (!([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN))
       visible++;
   }
-  assert(visible == 7); // Six properties and one shared timing editor.
+  assert(visible == 8); // Header, six properties and one shared timing editor.
   UInt32 refreshFlags=[h.flags[@(MMHostRefreshToken)] unsignedIntValue];
   assert(refreshFlags & kFxParameterFlag_HIDDEN);
   assert(refreshFlags & kFxParameterFlag_NOT_ANIMATABLE);
@@ -117,7 +129,7 @@ static void testParameterContract(void) {
   // Editor state changes must not reveal hidden rows during scrubbing.
   [f.plugin updateTimingEditorsAtTime:TestTime(1) mouseDown:NO error:nil];
   for (NSNumber *key in h.definitions)
-    if (key.unsignedIntValue != MMCustomControls && key.unsignedIntValue != MMScaleControls && key.unsignedIntValue != MMTimingControls && key.unsignedIntValue != MMOpacityControls && key.unsignedIntValue != MMRotationControls && key.unsignedIntValue != MMBlurControls && key.unsignedIntValue != MMAnchorControls)
+    if (key.unsignedIntValue != MMHeaderControls && key.unsignedIntValue != MMCustomControls && key.unsignedIntValue != MMScaleControls && key.unsignedIntValue != MMTimingControls && key.unsignedIntValue != MMOpacityControls && key.unsignedIntValue != MMRotationControls && key.unsignedIntValue != MMBlurControls && key.unsignedIntValue != MMAnchorControls)
       assert([h.flags[key] unsignedIntValue] & kFxParameterFlag_HIDDEN);
   NSDictionary *properties = nil;
   assert([f.plugin properties:&properties error:nil]);

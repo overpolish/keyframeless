@@ -120,3 +120,9 @@ Slider rows reserve a fixed value region independently of that region's internal
 text layout, so changes to suffix spacing do not shift the track endpoint.
 The slider cell's track and thumb travel geometry also drives pointer-to-value
 mapping; drawing-only offsets would desynchronize clicks and dragging.
+
+`ICInspectorHeader` accepts a plugin-supplied logo, accessory buttons, and a
+`menuProvider` block. It lays out the logo and compact controls with a settings
+cog; the consumer supplies the menu content, button state, host actions and undo.
+Use a weak capture when the provider refers back to the owning header. Logo
+resources remain in the consuming plugin bundle.

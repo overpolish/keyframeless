@@ -60,9 +60,9 @@ int main(void) {
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
     assert(!error);
     KKMotionBlurState blur = BlurStateFrom(state);
-    assert(blur.enabled && blur.sampleCount == 16);
+    assert(blur.enabled && blur.sampleCount == MMMotionBlurDefaultSamples);
     assert(fabs(blur.shutterSec - (1.0 / 60.0)) < 1e-9);
-    assert(state.length == 16 * sizeof(MMTransform) + sizeof(blur));
+    assert(state.length == MMMotionBlurDefaultSamples * sizeof(MMTransform) + sizeof(blur));
     assert(host.nativeKeyReads - readsBefore == snapshotReads); // Independent of shutter sample count.
     MMTransform current = TransformAt(state, 0);
     MMTransform earlier = TransformAt(state, 15);
@@ -81,10 +81,10 @@ int main(void) {
     TestChange(host, MMPositionAddedMotion, 0);
     error = nil;
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
-    assert(!error && state.length == 16 * sizeof(MMTransform) + sizeof(blur));
+    assert(!error && state.length == MMMotionBlurDefaultSamples * sizeof(MMTransform) + sizeof(blur));
     NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:blur renderTime:TestTime(3.5)];
     host.editors[@(MMMotionBlur)] = @NO;
-    for (NSUInteger i = 0; i < 16; ++i) {
+    for (NSUInteger i = 0; i < MMMotionBlurDefaultSamples; ++i) {
       CMTime sampleTime; [times[i] getValue:&sampleTime];
       NSData *reference;
       assert([plugin pluginState:&reference atTime:sampleTime quality:0 error:&error]);
@@ -99,9 +99,9 @@ int main(void) {
     CMTime coarseTime = CMTimeMake(1, 2);
     error = nil;
     assert([plugin pluginState:&state atTime:coarseTime quality:0 error:&error]);
-    assert(!error && state.length == 16 * sizeof(MMTransform) + sizeof(blur));
+    assert(!error && state.length == MMMotionBlurDefaultSamples * sizeof(MMTransform) + sizeof(blur));
     NSUInteger distinct = 0;
-    for (NSUInteger i = 1; i < 16; ++i) {
+    for (NSUInteger i = 1; i < MMMotionBlurDefaultSamples; ++i) {
       if (fabs(TransformAt(state, i - 1).offset.x -
                TransformAt(state, i).offset.x) > 1e-7)
         distinct++;
@@ -114,6 +114,41 @@ int main(void) {
     assert(![plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
     assert(error != nil);
 
+    // Persisted settings alter both the sample count and shutter window.
+    host.frameDuration = TestTime(1.0 / 30.0);
+    host.editors[@(MMMotionBlurSamples)] = @32;
+    host.editors[@(MMMotionBlurShutterAngle)] = @90;
+    error = nil;
+    assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
+    blur = BlurStateFrom(state);
+    assert(blur.enabled && blur.sampleCount == 32);
+    assert(fabs(blur.shutterSec - (1.0 / 120.0)) < 1e-9);
+    assert(state.length == 32 * sizeof(MMTransform) + sizeof(blur));
+
+    // A zero shutter intentionally bypasses temporal sampling.
+    host.editors[@(MMMotionBlurShutterAngle)] = @0;
+    assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
+    assert(state.length == sizeof(MMTransform));
+
+    host.editors[@(MMMotionBlurSamples)]=@999;
+    host.editors[@(MMMotionBlurShutterAngle)]=@999;
+    assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
+    blur=BlurStateFrom(state);
+    assert(blur.sampleCount==128 && fabs(blur.shutterSec-1.0/30.0)<1e-9);
+    host.editors[@(MMMotionBlurSamples)]=@(-1);
+    host.editors[@(MMMotionBlurShutterAngle)]=@180;
+    assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
+    assert(BlurStateFrom(state).sampleCount==2);
+
+    // Missing settings in effects saved before these parameters existed use
+    // the original primitive defaults.
+    [host.editors removeObjectForKey:@(MMMotionBlurSamples)];
+    [host.editors removeObjectForKey:@(MMMotionBlurShutterAngle)];
+    assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
+    blur = BlurStateFrom(state);
+    assert(blur.enabled && blur.sampleCount == MMMotionBlurDefaultSamples);
+    assert(fabs(blur.shutterSec - (1.0 / 60.0)) < 1e-9);
+
     // Turning blur off returns to the one-transform payload again.
     host.frameDuration = TestTime(1.0 / 30.0);
     host.editors[@(MMMotionBlur)] = @NO;
@@ -121,6 +156,6 @@ int main(void) {
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
     assert(!error && state.length == sizeof(MMTransform));
 
-    puts("Motion blur: compact payload, 16 sampled transforms, timing/motion evaluation, coarse clock, bounded reads, validation and fallback passed");
+    puts("Motion blur: compact payload, persisted settings, timing/motion evaluation, coarse clock, bounded reads, validation and fallback passed");
   }
 }

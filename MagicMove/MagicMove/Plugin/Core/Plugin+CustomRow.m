@@ -9,6 +9,7 @@
 #import "MMAnchorPose.h"
 #import "MMInspectorColors.h"
 #import "MMShortcut.h"
+#import "MMInspectorHeader.h"
 #import "MMTimingEditor.h"
 #import "MMResetParameter.h"
 #import "MMNativeLinks.h"
@@ -105,7 +106,7 @@
       addObserverForName:MMInspectorPresentationChanged object:self.owner queue:nil
       usingBlock:^(NSNotification *note) { [weakSelf updateSelection]; }];
   [self updateSelection];
-  [[MMShortcutCapture sharedCapture] attachView:self action:^BOOL {
+  [[MMShortcutCapture sharedCapture] attachView:self effect:self.manager action:^BOOL {
     MMCustomRow *view=weakSelf;
     if (!view || NSEvent.pressedMouseButtons) return NO;
     if (view.interacting) return NO;
@@ -305,6 +306,7 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation MagicMovePlugin (CustomRow)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == MMHeaderControls) return [[MMInspectorHeader alloc] initWithManager:self.apiManager];
   if (parameterID == MMRotationControls) {
     NSMutableArray *components=[NSMutableArray array];
     NSArray *labels=@[@"X",@"Y",@"Z"];

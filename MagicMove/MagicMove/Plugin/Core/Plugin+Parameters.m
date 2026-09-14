@@ -19,6 +19,8 @@
   // Legacy testing found DONT_SAVE writes propagated late; keep normal flags.
   ok = ok && [api addCustomParameterWithName:@"Host Refresh" parameterID:MMHostRefreshToken
       defaultValue:@"" parameterFlags:(kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE)];
+  ok = ok && [api addCustomParameterWithName:@"" parameterID:MMHeaderControls defaultValue:@0
+      parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   ok = ok && [api addCustomParameterWithName:@"" parameterID:MMScaleControls
                                 defaultValue:[[MMScalePose alloc] initWithX:100 y:100 authored:NO]
                               parameterFlags:(kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH)];
@@ -45,6 +47,16 @@
                            defaultValue:NO parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   ok = ok && [api addToggleButtonWithName:@"Motion Blur" parameterID:MMMotionBlur
                            defaultValue:NO parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
+  ok = ok && [api addIntSliderWithName:@"Motion Blur Samples" parameterID:MMMotionBlurSamples
+                         defaultValue:MMMotionBlurDefaultSamples
+                          parameterMin:MMMotionBlurMinSamples parameterMax:MMMotionBlurMaxSamples
+                              sliderMin:MMMotionBlurMinSamples sliderMax:MMMotionBlurMaxSamples
+                                  delta:1 parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
+  ok = ok && [api addIntSliderWithName:@"Motion Blur Shutter Angle" parameterID:MMMotionBlurShutterAngle
+                         defaultValue:MMMotionBlurDefaultShutterAngle
+                          parameterMin:MMMotionBlurMinShutterAngle parameterMax:MMMotionBlurMaxShutterAngle
+                              sliderMin:MMMotionBlurMinShutterAngle sliderMax:MMMotionBlurMaxShutterAngle
+                                  delta:1 parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   NSArray *motions = @[@"None", @"Wave", @"Wiggle", @"Handheld"];
   NSArray *easings = @[@"Smooth", @"Linear", @"Ease In", @"Ease Out"];
   FxParameterFlags editorFlags = kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE | kFxParameterFlag_DISABLED;

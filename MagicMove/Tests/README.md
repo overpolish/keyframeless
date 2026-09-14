@@ -276,3 +276,57 @@ animation flags, pixel suffix/precision, render state and read failures.
 The shared InspectorControls tests cover a slider row with a non-percent suffix.
 These checks do not establish host gesture delivery or save/reopen behavior;
 see the Blur/Anchor host checkpoint in the plugin README.
+
+`HeaderTests` covers the integrated settings subtitle, separate Motion Blur
+right-click menu and shortcut presentation, deferred
+menu writes without further pointer input, balanced host actions/undo groups,
+readback after external changes, and read/write failures. The parameter contract
+checks that the header is a non-animatable custom row. InspectorControls tests
+cover reusable header layout and plugin-supplied menu/accessories.
+
+Header host checkpoint (pending user verification): reopen the inspector and
+check the logo, Motion Blur button, and settings cog above Scale. Toggle both
+settings without moving the mouse (Motion Blur options are on its button’s
+right-click menu); check undo/redo and Ctrl-Option-M update the
+Motion Blur button, and Explicit Keyframe Editing changes property-edit behavior.
+Automated mocks do not establish real host repaint or undo history behavior.
+
+Explicit-editing host checkpoint: with the setting on, edit a property with no
+keyframes at several playhead positions; it must stay static and editable. With
+one keyframe, every playhead position edits that keyframe. With two or more,
+before/on the first edits the first, each (previous, next] interval edits the next,
+and beyond the last edits the last. Keyframe count must stay unchanged. Verify
+both a vector row and a slider row; these host behaviors remain user-test items.
+
+Motion Blur menu checkpoint: right-click the walking-figure button. Samples offers
+2, 4, 8, 16, 32, 64, and 128; Shutter Angle offers 0°, 45°, 90°, 180°, 270°,
+and 360°. Defaults remain 16 / 180°. Change either while blur is off, then enable
+it; settings must persist. Check one-step undo/redo, reopening the menu, and
+save/reopen in the host. A 0° shutter must bypass temporal blur.
+
+Automated blur-settings coverage: HeaderTests checks preset selection, deferred
+host writes, one undo group, bounds and unavailable reads; ModelTests checks
+integer parameter registration and saved flags. MotionBlurTests checks custom
+sample counts, shutter duration, clamping, zero shutter and missing-parameter
+defaults. MotionBlurRenderTests exercises custom sample counts and zero-shutter
+bypass through the production Metal rendering path.
+
+Header shortcut coverage uses the production header and shortcut router with a
+capture test double, avoiding system input permissions. It checks closed-menu
+activation, effect selection, deferred writes, held-key repeat suppression and
+cancellation after detachment. Host checkpoint: click the header or close either
+header menu, then use Ctrl-Option-M without clicking a property row first. The
+real event tap and host focus routing still require FCP/Motion verification.
+
+Effect-level shortcut routing: header and property rows use the same API-manager
+identity as their effect group. On each keypress, the router rechecks eligible
+host views and counts effect groups, so a sole selected effect needs no inspector
+click even after selecting away and back. Tests simulate that visibility cycle
+and verify one write per keypress. Open header menus subscribe to parameter
+changes and refresh their toggle state after shortcuts/undo. Actual Motion/FCP
+selection visibility and event-tap delivery remain host-test checkpoints.
+
+Motion Blur menu layout uses ordinary AppKit menu items and submenus, with no
+custom row views or reserved off-state images. HeaderTests verifies the native
+items, preset actions, shortcut state updates, and undo handling. macOS owns
+checkmark spacing, submenu indicators, hover, and keyboard navigation.

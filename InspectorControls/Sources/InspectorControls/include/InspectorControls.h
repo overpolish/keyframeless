@@ -9,3 +9,4 @@
 #import "ICMenuToggleView.h"
 
 #import "ICPopUpButton.h"
+#import "ICInspectorHeader.h"

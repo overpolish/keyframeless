@@ -289,8 +289,9 @@ static MMScalePose *MMScaleSample(NSArray *e, CMTime t, BOOL *active,
   @synchronized(self) {
     e = _entries;
   }
-  if (!CMTIME_IS_NUMERIC(t) || !e.count || !e[0][@"nativeTime"])
+  if (!CMTIME_IS_NUMERIC(t) || !e.count)
     return NO;
+  if (!e[0][@"nativeTime"]) { if (target) *target = t; return YES; }
   double s = CMTimeGetSeconds(t);
   NSDictionary *c = e.lastObject;
   for (NSDictionary *x in e)

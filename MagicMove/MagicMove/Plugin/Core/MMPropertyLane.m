@@ -169,10 +169,11 @@ static void MMPropertyError(NSError **error) {
   NSArray *entries=[cache snapshotEntries]; if(!entries.count) return NO;
   CMTime target=time;
   if(explicit) {
-    if(!entries[0][@"nativeTime"]) return NO;
-    NSDictionary *destination=entries.lastObject;
-    for(NSDictionary *entry in entries) if(CMTimeGetSeconds(time)<=[entry[@"time"] doubleValue]+1e-6) { destination=entry; break; }
-    [destination[@"nativeTime"] getValue:&target];
+    if(entries[0][@"nativeTime"]) {
+      NSDictionary *destination=entries.lastObject;
+      for(NSDictionary *entry in entries) if(CMTimeGetSeconds(time)<=[entry[@"time"] doubleValue]+1e-6) { destination=entry; break; }
+      [destination[@"nativeTime"] getValue:&target];
+    }
   }
   id<MMPropertyPose> old=[self readValue:manager time:target]; if(!old) return NO;
   // In a gap, sample unedited components from our engine, not host interpolation.
