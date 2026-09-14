@@ -14,6 +14,13 @@ static const CGFloat kKnobOutlineWidth = 0.5;
 static const CGFloat kKnobPointCurveOffset = 0.5;
 static const CGFloat kKnobPointCurveControl = 1.0;
 static const CGFloat kKnobSideCurveRatio = 0.3;
+// AppKit's bar rect includes a small amount of trailing cell space. Keep one
+// geometry model for the painted track, thumb travel, and pointer mapping so
+// the control remains aligned at both ends of compact inspector rows.
+static const CGFloat kTrackLeadingOffset = -0.25;
+static const CGFloat kTrackTrailingInset = 4.75;
+static const CGFloat kMinimumThumbCenter = 3.75;
+static const CGFloat kMaximumThumbTrailingInset = 4.0;
 
 static inline CGFloat ICClamp(CGFloat value, CGFloat low, CGFloat high) {
   return fmax(low, fmin(high, value));
@@ -21,6 +28,9 @@ static inline CGFloat ICClamp(CGFloat value, CGFloat low, CGFloat high) {
 
 @interface ICSliderCell : NSSliderCell
 @property(nonatomic, strong, nullable) NSColor *trackFillColor;
+- (NSRect)icTrackRectForBarRect:(NSRect)barRect;
+- (CGFloat)icThumbCenterForBarRect:(NSRect)barRect normalizedValue:(CGFloat)n;
+@property(nonatomic) CGFloat icTrackingOffset;
 @end
 
 @interface ICDragSlider : NSSlider
@@ -34,10 +44,17 @@ static inline CGFloat ICClamp(CGFloat value, CGFloat low, CGFloat high) {
   return self;
 }
 - (NSRect)trackRectForBarRect:(NSRect)barRect {
-  CGFloat inset = kKnobWidth / 2.0;
-  return NSMakeRect(NSMinX(barRect) + inset,
+  return [self icTrackRectForBarRect:barRect];
+}
+- (NSRect)icTrackRectForBarRect:(NSRect)barRect {
+  return NSMakeRect(NSMinX(barRect) + kTrackLeadingOffset,
                     NSMidY(barRect) - kTrackHeight / 2.0,
-                    MAX(0, NSWidth(barRect) - inset * 2.0), kTrackHeight);
+                    MAX(0, NSWidth(barRect) - kTrackTrailingInset - kTrackLeadingOffset), kTrackHeight);
+}
+- (CGFloat)icThumbCenterForBarRect:(NSRect)barRect normalizedValue:(CGFloat)n {
+  CGFloat minX = NSMinX(barRect) + kMinimumThumbCenter;
+  CGFloat maxX = MAX(minX, NSMaxX(barRect) - kMaximumThumbTrailingInset - kKnobWidth / 2.0);
+  return minX + (maxX - minX) * ICClamp(n, 0, 1);
 }
 - (void)drawBarInside:(NSRect)rect flipped:(BOOL)flipped {
   NSRect track = [self trackRectForBarRect:rect];
@@ -46,7 +63,9 @@ static inline CGFloat ICClamp(CGFloat value, CGFloat low, CGFloat high) {
   [ICInspectorTokens.sliderTrackColor setFill]; [path fill];
   CGFloat normalized = self.maxValue > self.minValue
       ? (self.doubleValue - self.minValue) / (self.maxValue - self.minValue) : 0;
-  NSRect fill = NSMakeRect(NSMinX(track), NSMinY(track), NSWidth(track) * ICClamp(normalized, 0, 1), NSHeight(track));
+  CGFloat knobCenter = [self icThumbCenterForBarRect:rect normalizedValue:normalized];
+  CGFloat fillWidth=normalized<=0 ? 0 : normalized>=1 ? NSWidth(track) : ICClamp(knobCenter-NSMinX(track),0,NSWidth(track));
+  NSRect fill = NSMakeRect(NSMinX(track), NSMinY(track),fillWidth,NSHeight(track));
   if (NSWidth(fill) > 0) {
     NSBezierPath *fillPath = [NSBezierPath bezierPathWithRoundedRect:fill xRadius:1 yRadius:1];
     [(_trackFillColor ?: ICInspectorTokens.accentMatchingHost) setFill]; [fillPath fill];
@@ -82,21 +101,37 @@ static inline CGFloat ICClamp(CGFloat value, CGFloat low, CGFloat high) {
 }
 - (NSRect)knobRectFlipped:(BOOL)flipped {
   NSRect bar = [self barRectFlipped:flipped];
-  CGFloat usable = MAX(0, NSWidth(bar) - kKnobWidth);
   CGFloat n = self.maxValue > self.minValue
       ? (self.doubleValue-self.minValue)/(self.maxValue-self.minValue) : 0;
-  CGFloat x = NSMinX(bar)+kKnobWidth/2+usable*ICClamp(n,0,1);
+  CGFloat x = [self icThumbCenterForBarRect:bar normalizedValue:n];
   return NSMakeRect(x-kKnobWidth/2, NSMidY(bar)-kKnobHeight/2, kKnobWidth, kKnobHeight);
 }
 - (void)jumpToPoint:(NSPoint)point {
   NSRect bar=[self barRectFlipped:NO];
-  CGFloat usable=NSWidth(bar)-kKnobWidth;
-  CGFloat n=usable>0 ? (point.x-NSMinX(bar)-kKnobWidth/2)/usable : 0;
+  CGFloat minX = [self icThumbCenterForBarRect:bar normalizedValue:0];
+  CGFloat maxX = [self icThumbCenterForBarRect:bar normalizedValue:1];
+  CGFloat n=(maxX>minX) ? (point.x-minX)/(maxX-minX) : 0;
   self.doubleValue=self.minValue+(self.maxValue-self.minValue)*ICClamp(n,0,1);
 }
+- (void)icSendActionFromView:(NSView *)view {
+  if (self.action)
+    [NSApp sendAction:self.action to:self.target from:view];
+}
 - (BOOL)startTrackingAt:(NSPoint)p inView:(NSView *)view {
-  if (!NSPointInRect(p, [self knobRectFlipped:NO])) [self jumpToPoint:p];
-  return [super startTrackingAt:p inView:view];
+  double previous=self.doubleValue;
+  NSRect knob=[self knobRectFlipped:NO];
+  self.icTrackingOffset = NSPointInRect(p, knob) ? p.x - NSMidX(knob) : 0;
+  if (!NSPointInRect(p, knob)) [self jumpToPoint:p];
+  // Own pointer mapping as the legacy slider did for its custom scale;
+  // AppKit continues to own the surrounding mouse tracking lifecycle.
+  if(self.doubleValue!=previous) [self icSendActionFromView:view];
+  return YES;
+}
+- (BOOL)continueTracking:(NSPoint)lastPoint at:(NSPoint)currentPoint inView:(NSView *)view {
+  double previous=self.doubleValue;
+  [self jumpToPoint:NSMakePoint(currentPoint.x-self.icTrackingOffset,currentPoint.y)];
+  if(self.doubleValue!=previous) [self icSendActionFromView:view];
+  return YES;
 }
 @end
 

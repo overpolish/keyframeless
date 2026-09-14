@@ -220,6 +220,43 @@ static void testSliderRow(void) {
   assert(NSMaxX(row.unitLabels.firstObject.frame) <= 403 - ICInspectorHostGutter);
 }
 
+// Compare the consumer-visible columns across row kinds, including the old
+// three-axis special case. The same content must not shift when a property
+// changes unit, component count, selection, or inspector width.
+static void testSharedValueColumns(void) {
+  for(NSNumber *width in @[@320,@395,@403,@500,@640]) {
+    NSMutableArray<ICInspectorRow *> *rows=[NSMutableArray new];
+    for(NSString *suffix in @[@"px",@"%",@"°",@""]) {
+      for(NSUInteger count=1;count<=3;count++) {
+        NSMutableArray *components=[NSMutableArray new];
+        for(NSUInteger i=0;i<count;i++)
+          [components addObject:[[ICInspectorComponent alloc] initWithIdentifier:i label:@"X" suffix:suffix fractionDigits:1]];
+        [rows addObject:[[ICInspectorRow alloc] initWithLabel:@"Property" components:components showsLink:NO]];
+      }
+      [rows addObject:[[ICSliderRow alloc] initWithLabel:@"Scalar" identifier:1 suffix:suffix fractionDigits:1]];
+    }
+    CGFloat referenceValue=0,referenceSuffix=0;
+    for(ICInspectorRow *row in rows) {
+      row.frame=NSMakeRect(0,0,width.doubleValue,24);
+      [row setNeedsLayout:YES]; [row layoutSubtreeIfNeeded];
+      CGFloat valueEnd=NSMaxX(row.fields.lastObject.frame);
+      CGFloat suffixStart=NSMinX(row.unitLabels.lastObject.frame);
+      if(row==rows.firstObject) { referenceValue=valueEnd; referenceSuffix=suffixStart; }
+      assert(fabs(valueEnd-referenceValue)<1e-9 && fabs(suffixStart-referenceSuffix)<1e-9);
+      assert(valueEnd<suffixStart && NSMaxX(row.unitLabels.lastObject.frame)<width.doubleValue-ICInspectorHostGutter);
+      for(NSUInteger i=0;i<row.fields.count;i++) {
+        assert(NSWidth(row.fields[i].frame)>=0);
+        assert(row.unitLabels[i].superview==nil); // No suffix can steal a native keyframe hit.
+        assert(fabs(NSMinX(row.unitLabels[i].frame)-NSMaxX(row.fields[i].frame)-(suffixStart-valueEnd))<1e-9);
+      }
+      row.selected=YES; row.enabled=NO;
+      [row setNeedsLayout:YES]; [row layoutSubtreeIfNeeded];
+      assert(fabs(NSMaxX(row.fields.lastObject.frame)-referenceValue)<1e-9);
+      assert(fabs(NSMinX(row.unitLabels.lastObject.frame)-referenceSuffix)<1e-9);
+    }
+  }
+}
+
 static NSEvent *contextEvent(NSEventType type, NSEventModifierFlags flags) {
   return [NSEvent mouseEventWithType:type location:NSMakePoint(4, 4)
       modifierFlags:flags timestamp:0 windowNumber:0 context:nil eventNumber:0
@@ -249,6 +286,7 @@ static void testTitleMenuScope(ICInspectorRow *row) {
 int main(void) {
   @autoreleasepool {
     [NSApplication sharedApplication];
+    testSharedValueColumns();
 
     ICInspectorComponent *x = [[ICInspectorComponent alloc]
         initWithIdentifier:101 label:@"X" suffix:@"px" fractionDigits:2];

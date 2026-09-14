@@ -11,6 +11,13 @@ for source in InspectorTokens ICValueTextField ICInspectorRow ICSliderView ICSli
     -c "$root/InspectorControls/Sources/InspectorControls/$source.m" \
     -o "$test_tmp/$source.o"
 done
+xcrun clang -fobjc-arc -fmodules -Wall -Wextra -Werror -I "$root/InspectorControls/Sources/InspectorControls/include" \
+  -fsanitize=address,undefined \
+  -framework AppKit -framework Foundation \
+  "$root/InspectorControls/Tests/SliderGeometryTests.m" \
+  "$test_tmp/ICSliderView.o" \
+  "$test_tmp/InspectorTokens.o" -o "$test_tmp/SliderGeometryTests"
+"$test_tmp/SliderGeometryTests"
 xcrun clang -fobjc-arc -fmodules -Wall -Wextra -Werror \
   -fsanitize=address,undefined \
   -I "$root/InspectorControls/Sources/InspectorControls/include" \

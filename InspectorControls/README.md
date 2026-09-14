@@ -103,3 +103,17 @@ and chevrons use the shared disabled text token.
 `ICMenuTextField` provides the same lazy right-click/control-click menu hook used
 by inspector row titles, for standalone labels. Its `menuProvider` is supplied
 by the consumer; host actions and menu contents remain outside this package.
+
+### Value columns and slider geometry
+
+`ICInspectorLayoutValue` owns the value/suffix frames for both vector and slider
+rows. Each component reserves the same suffix slot, including degree and empty
+suffixes; component count changes the available value width, not the trailing
+alignment guides. The popup readout accounts for the numeric cell's text inset
+when aligning its directly drawn title to those guides. Suffix cells remain
+outside the view hierarchy to preserve native keyframe-button hit testing.
+
+Slider rows reserve a fixed value region independently of that region's internal
+text layout, so changes to suffix spacing do not shift the track endpoint.
+The slider cell's track and thumb travel geometry also drives pointer-to-value
+mapping; drawing-only offsets would desynchronize clicks and dragging.

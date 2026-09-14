@@ -157,11 +157,7 @@
       NSRectFillUsingOperation(rect,NSCompositingOperationSourceIn);
       return YES;
     }];
-    NSRect titleFrame = self.titleLabel.frame;
-    CGFloat labelBaseline = NSMaxY(titleFrame) - self.titleLabel.firstBaselineOffsetFromTop;
-    CGFloat labelTextCenter = labelBaseline + self.titleLabel.font.capHeight / 2;
-    NSRect iconFrame = NSMakeRect((ICInspectorLabelInset - ICInspectorLinkSize) / 2 + 2, round((labelTextCenter - ICInspectorLinkSize / 2) * 2) / 2,
-                                  ICInspectorLinkSize, ICInspectorLinkSize);
+    NSRect iconFrame = ICInspectorGutterIconFrame(self.titleLabel);
     // Fit the symbol proportionally; its intrinsic canvas need not be square.
     NSSize imageSize=image.size;
     if(imageSize.width>0 && imageSize.height>0) {
@@ -188,13 +184,15 @@
   // gutter clear and inset our own label. Relax column minima in narrow hosts
   // rather than letting the old required constraints overflow the row.
   CGFloat contentWidth = MAX(0, width-ICInspectorHostGutter);
-  CGFloat labelWidth = round((width < 475 ? width*0.3670886076-11.860759
-      : width*0.3176696611+10.848616)*2)/2;
-  labelWidth = MIN(labelWidth, MAX(0,contentWidth - (self.fields.count>2 ? 54:70)*self.fields.count));
-  // Add 12 pt to the existing 6 px visible gap between the component groups.
-  const CGFloat groupSpacing = self.fields.count>2 ? 8:ICInspectorGroupSpacing;
+  // Measure component gaps from the suffix edge, independent of its inset.
+  const CGFloat groupSpacing = (self.fields.count>2 ? 10:ICInspectorGroupSpacing)-ICInspectorSuffixTrailingInset;
   const CGFloat axisWidth = self.fields.count>2 ? 10:12;
-  const CGFloat unitWidth = self.fields.count>2 ? 8:16;
+  // Reserve usable numeric space before allocating the label column. A third
+  // axis still needs the full suffix slot; compress the label first in narrow hosts.
+  CGFloat minimumContent=self.fields.count>2
+      ? (axisWidth+ICInspectorSuffixWidth+ICInspectorSuffixTrailingInset+ICInspectorValueSuffixGap+24)*self.fields.count+groupSpacing*(self.fields.count-1)
+      : 70*self.fields.count;
+  CGFloat labelWidth = ICInspectorLabelColumnWidth(width,minimumContent);
   CGFloat pairWidth = MAX(0,contentWidth-labelWidth-groupSpacing*(self.fields.count-1))/self.fields.count;
   self.titleLabel.frame = NSMakeRect(ICInspectorLabelInset, ICInspectorLabelY, MAX(0,labelWidth-(self.linkButton != nil ? 47 : 27)), ICInspectorTextHeight);
   // Center the symbol on the label's capital letters, not the lowered values
@@ -206,8 +204,9 @@
   for (NSUInteger i=0; i<self.fields.count; ++i) {
     CGFloat x = labelWidth+i*(pairWidth+groupSpacing);
     self.axisLabels[i].frame = NSMakeRect(x, ICInspectorLabelY, axisWidth, ICInspectorTextHeight);
-    self.fields[i].frame = NSMakeRect(x+axisWidth, ICInspectorLabelY-ICInspectorValueDrop, MAX(0,pairWidth-axisWidth-unitWidth-4), ICInspectorTextHeight);
-    self.unitLabels[i].frame = NSMakeRect(x+pairWidth-unitWidth-2, ICInspectorLabelY, unitWidth, ICInspectorTextHeight);
+    ICInspectorValueLayout valueLayout=ICInspectorLayoutValue(x+axisWidth,x+pairWidth);
+    self.fields[i].frame=valueLayout.value;
+    self.unitLabels[i].frame=valueLayout.suffix;
   }
   self.needsDisplay=YES;
 }

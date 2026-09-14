@@ -42,14 +42,13 @@
 - (void)layout {
   [super layout];
   CGFloat width=NSWidth(self.bounds), contentWidth=MAX(0,width-ICInspectorHostGutter);
-  CGFloat labelWidth=round((width < 475 ? width*0.3670886076-11.860759 : width*0.3176696611+10.848616)*2)/2;
-  labelWidth=MIN(labelWidth,MAX(0,contentWidth-100));
+  CGFloat labelWidth=ICInspectorLabelColumnWidth(width,100);
   self.titleLabel.frame=NSMakeRect(ICInspectorLabelInset,ICInspectorLabelY,MAX(0,labelWidth-27),ICInspectorTextHeight);
-  CGFloat suffixWidth=16, valueWidth=54;
-  CGFloat valueX=contentWidth-valueWidth-suffixWidth;
-  self.sliderView.frame=NSMakeRect(labelWidth,ICInspectorLabelY,MAX(0,valueX-labelWidth-8),ICInspectorTextHeight);
+  CGFloat valueX=MAX(labelWidth,contentWidth-ICInspectorSliderValueSlotWidth);
+  ICInspectorValueLayout valueLayout=ICInspectorLayoutValue(valueX,contentWidth);
+  self.sliderView.frame=NSMakeRect(labelWidth,ICInspectorLabelY,MAX(0,valueX-labelWidth-ICInspectorSliderValueGap),ICInspectorTextHeight);
   self.axisLabels.firstObject.hidden=YES;
-  self.fields.firstObject.frame=NSMakeRect(valueX,ICInspectorLabelY-ICInspectorValueDrop,valueWidth,ICInspectorTextHeight);
-  self.unitLabels.firstObject.frame=NSMakeRect(contentWidth-suffixWidth,ICInspectorLabelY,suffixWidth,ICInspectorTextHeight);
+  self.fields.firstObject.frame=valueLayout.value;
+  self.unitLabels.firstObject.frame=valueLayout.suffix;
 }
 @end

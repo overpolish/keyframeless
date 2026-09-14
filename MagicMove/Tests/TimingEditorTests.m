@@ -374,13 +374,12 @@ static void testEditorActions(void) {
   assert(fabs(NSMidX(availableButton.frame)-NSMidX(seedButton.frame))<1e-9);
   NSTextField *easingLabel=[panel valueForKey:@"easingLabel"];
   assert([easingLabel.stringValue isEqualToString:@"Easing"]);
-  NSBox *separator=[panel valueForKey:@"motionSeparator"];
-  assert(separator.boxType==NSBoxSeparator && NSMaxY(separator.frame)<=NSMinY(easingLabel.frame));
-  NSView *preview=[panel valueForKey:@"graph"];
-  assert(NSWidth(separator.frame)==48 && fabs(NSMidX(separator.frame)-NSMidX(preview.frame))<1e-9);
-  assert(NSMinY(easingLabel.frame)-NSMaxY(separator.frame)>=12);
   NSTextField *motionLabel=[panel valueForKey:@"motionLabel"];
-  assert(NSMinY(separator.frame)-NSMaxY(motionLabel.frame)>=12);
+  NSView *motionMenuView=[panel valueForKey:@"motionMenu"];
+  assert(NSMinX(motionLabel.frame)==ICInspectorLabelInset);
+  assert(NSMinY(motionLabel.frame)==NSMinY(motionMenuView.frame));
+  assert(NSMaxX(motionLabel.frame)<NSMinX(motionMenuView.frame));
+  assert(NSMinY(easingLabel.frame)-NSMaxY(motionLabel.frame)>18);
   NSTextField *suffix=duration.unitLabels.lastObject;
   CGFloat suffixCenter=NSMinY(duration.frame)+NSMaxY(suffix.frame)-suffix.firstBaselineOffsetFromTop+suffix.font.capHeight/2;
   assert(fabs(NSMidY(availableButton.frame)-suffixCenter)<=0.25);

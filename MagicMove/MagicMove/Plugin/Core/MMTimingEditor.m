@@ -241,7 +241,6 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
 @property(strong) NSNumberFormatter *gapTimeFormatter;
 @property(strong) NSTextField *motionLabel;
 @property(strong) NSTextField *easingLabel;
-@property(strong) NSBox *motionSeparator;
 @property(strong) MMGapGraph *graph;
 @property(strong) ICInspectorRow *durationRow;
 @property(strong) ICInspectorRow *motionRow;
@@ -313,8 +312,6 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   _easingMenu = [self menu:@[ @"Smooth", @"Linear", @"Ease In", @"Ease Out" ]
                    setting:MMInspectorEasing];
   _easingMenu.accessibilityLabel = @"Incoming easing";
-  _motionSeparator=[NSBox new]; _motionSeparator.boxType=NSBoxSeparator;
-  [self addSubview:_motionSeparator];
   _motionLabel = [self label:@"Position Added Motion"];
   ((ICMenuTextField *)_motionLabel).menuProvider=^{ return [weakEditor motionContextMenu:NO]; };
   _seedButton=[NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:@"dice" accessibilityDescription:@"Randomize Added Motion"] target:self action:@selector(randomizeMotionSeed:)];
@@ -381,8 +378,6 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   self.graph.frame = NSMakeRect(21, 124, content, 96);
   self.durationRow.frame = NSMakeRect(0, 95, width, 24);
   self.easingLabel.frame=NSMakeRect(21,74,140,18);
-  CGFloat dividerWidth=MIN(48,content);
-  self.motionSeparator.frame=NSMakeRect(21+(content-dividerWidth)/2,61,dividerWidth,1);
   [self.durationRow layoutSubtreeIfNeeded];
   CGFloat menuRight=NSMaxX(self.durationRow.unitLabels.lastObject.frame);
   self.easingMenu.frame =
@@ -392,9 +387,8 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
   CGFloat suffixCenter=NSMinY(self.durationRow.frame)+NSMaxY(unit.frame)-unit.firstBaselineOffsetFromTop+unit.font.capHeight/2;
   self.available.frame=NSMakeRect(menuRight+4,round((suffixCenter-9)*2)/2,16,18);
   CGFloat motionLabelWidth=MIN(160,MAX(0,menuRight-21-115));
-  self.motionLabel.frame = NSMakeRect(21, 31, motionLabelWidth, 18);
-  self.motionMenu.frame =
-      NSMakeRect(21+motionLabelWidth+4, 31, MAX(0, menuRight-21-motionLabelWidth-4), 18);
+  self.motionLabel.frame=NSMakeRect(21,31,motionLabelWidth,18);
+  self.motionMenu.frame=NSMakeRect(21+motionLabelWidth+4,31,MAX(0,menuRight-21-motionLabelWidth-4),18);
   self.motionRow.frame = NSMakeRect(0, 5, width, 24);
   self.motionRow.titleLabel.stringValue = @"Amount / Speed";
 }

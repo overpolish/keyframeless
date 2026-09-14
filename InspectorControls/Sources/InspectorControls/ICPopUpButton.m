@@ -33,8 +33,11 @@
   NSDictionary *attributes=@{NSFontAttributeName:[NSFont systemFontOfSize:11],
       NSForegroundColorAttributeName:textColor, NSParagraphStyleAttributeName:paragraph};
   CGFloat height=[@"Ag" sizeWithAttributes:attributes].height;
+  // The trigger ends at the suffix slot's trailing edge. Match the actual
+  // text inset of the numeric cell rather than its outer field frame.
+  CGFloat contentEnd=NSMaxX(frame)-ICInspectorSuffixWidth-ICInspectorValueSuffixGap-ICInspectorFieldTextInset;
   NSRect title=NSMakeRect(NSMinX(frame)+2,NSMidY(frame)-height/2,
-      MAX(0,NSWidth(frame)-22),height);
+      MAX(0,contentEnd-NSMinX(frame)-2),height);
   NSImage *selectedImage=self.selectedItem.image;
   if (selectedImage) {
     CGFloat imageWidth=MIN(28,MAX(0,NSWidth(title)-12));
@@ -64,7 +67,7 @@
       [[NSImage imageWithSystemSymbolName:@"chevron.down" accessibilityDescription:nil]
           imageWithSymbolConfiguration:configuration]];
   });
-  CGFloat x=NSMaxX(frame)-14, y=NSMidY(frame);
+  CGFloat x=NSMaxX(frame)-ICInspectorSuffixWidth+ICInspectorFieldTextInset, y=NSMidY(frame);
   for (NSUInteger i=0;i<chevrons.count;i++) {
     NSImage *symbol=chevrons[i];
     NSImage *tinted=[NSImage imageWithSize:symbol.size flipped:NO drawingHandler:^BOOL(NSRect rect) {
