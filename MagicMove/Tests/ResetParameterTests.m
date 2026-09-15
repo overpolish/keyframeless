@@ -126,7 +126,8 @@ int main(void) { @autoreleasepool {
     MagicMovePlugin *plugin=[[MagicMovePlugin alloc] initWithAPIManager:rowHost]; rowHost.plugin=plugin;
     ICInspectorRow *row=(ICInspectorRow *)[plugin createViewForParameterID:p];
     assert(row.titleMenuProvider); NSMenu *menu=row.titleMenuProvider();
-    assert(menu.numberOfItems==8 && [menu.itemArray[0].title isEqualToString:@"Reset Parameter"]);
+    assert(menu.numberOfItems==9 && [menu.itemArray[0].title isEqualToString:@"Reset Parameter"]);
+    assert([menu.itemArray[1].title isEqualToString:@"Match In/Out"]);
     NSMenuItem *item=menu.itemArray[0];
     seed(rowHost,p);
     refreshSnapshots(rowHost);

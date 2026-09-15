@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MMDefaults.h"
+#import "MMMatchEndpoints.h"
+#import "MMNativeEdits.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import "MMCombinedPose.h"
@@ -46,6 +48,12 @@
                                     kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   ok = ok && [api addToggleButtonWithName:@"Explicit Keypose Creation" parameterID:MMExplicitCreation
                            defaultValue:NO parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
+  // Match In/Out is lane-wide, so each property keeps one saved toggle rather
+  // than repeating the setting in every keyframed pose.
+  for (NSNumber *property in MMProperties())
+    ok = ok && [api addToggleButtonWithName:[MMPropertyDisplayName(property.unsignedIntValue) stringByAppendingString:@" Match In/Out"]
+                                parameterID:MMMatchToggleForProperty(property.unsignedIntValue) defaultValue:NO
+                             parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   ok = ok && [api addToggleButtonWithName:@"Motion Blur" parameterID:MMMotionBlur
                            defaultValue:NO parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   ok = ok && [api addIntSliderWithName:@"Motion Blur Samples" parameterID:MMMotionBlurSamples

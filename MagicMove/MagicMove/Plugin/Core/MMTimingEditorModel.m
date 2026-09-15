@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMMatchEndpoints.h"
 #import "MMDefaults.h"
 #import "MMTimingEditorModel.h"
 #import "Constants.h"
@@ -145,7 +146,10 @@ BOOL MMWriteInspectorSetting(id<PROAPIAccessing> manager, UInt32 parameterID,
                                  easing:easing
                             addedMotion:motion] poseByReplacingTiming:updated];
   }
-  if(timing.linkID.length && setting<MMInspectorMotionSeed) return MMWriteNativeLinkedPose(manager,parameterID,target,pose);
+  BOOL transition = setting==MMInspectorDuration || setting==MMInspectorAvailable || setting==MMInspectorEasing;
+  if((timing.linkID.length && setting<MMInspectorMotionSeed) ||
+     (transition && MMMirrorsTimingEdit(manager,parameterID,target)))
+    return MMWriteNativeLinkedPose(manager,parameterID,target,pose);
   id<FxParameterSettingAPI_v5> set =
       [manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   id cache=parameterID==MMCustomControls ? (id)MMCombinedCacheForManager(manager) : (MMPropertyLaneForParameter(parameterID) ? (id)[MMPropertyLaneForParameter(parameterID) cacheForManager:manager] : MMScaleCacheForManager(manager));

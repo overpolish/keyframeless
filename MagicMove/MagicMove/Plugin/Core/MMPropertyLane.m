@@ -1,4 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMMatchEndpoints.h"
+#import "MMNativeLinks.h"
 #import "MMDefaults.h"
 #import "MMPropertyLane.h"
 #import <math.h>
@@ -189,6 +191,7 @@ static void MMPropertyError(NSError **error) {
   BOOL creating=!explicit && MMIsNewKeyTime(entries,target);
   if (creating) timing=MMTimingWithCreationDefaults(timing);
   id<MMPropertyPose> pose=[source poseByReplacingValues:values authored:YES easing:creating ? (MTEasing)[MMReadDefault(@"easing")[@"value"] integerValue] : source.easing addedMotion:source.addedMotion timing:timing];
+  if(MMMirrorsValueEdit(manager,self.parameterID,target)) return MMWriteNativeLinkedPose(manager,self.parameterID,target,pose);
   id<FxParameterSettingAPI_v5> set=[manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   BOOL ok=[set setCustomParameterValue:pose toParameter:self.parameterID atTime:target];
   if(ok) [cache publishValuePose:pose atTime:target]; return ok;

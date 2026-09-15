@@ -97,6 +97,7 @@
 				Plugin/Core/MMDestinations.m,
 				Plugin/Core/MMParameterData.m,
 				Plugin/Core/MMInspectorHeader.m,
+				Plugin/Core/MMMatchEndpoints.m,
 				Plugin/Core/MMNativeLinks.m,
 				Plugin/Core/MMPoseTiming.m,
 				Plugin/Core/MMDefaults.m,

@@ -44,6 +44,7 @@ Standalone package runners do not require a built plugin. RenderSupport accepts 
 | Keyframe association | Matching by time/value/order, insertion, deletion, crossing, multi-selection, and retained settings |
 | Property editing | Static values, single and multiple keyframes, component preservation, explicit editing, and reset |
 | Links and endpoint matching | Partner creation, independent values, shared timing, moves, deletion, unlinking, and failed-write rollback |
+| Match In/Out | Endpoint pairing with two and three or more keys, created partner and no-room failure, value mirroring both ways, paired transitions, Added Motion staying put, linked partners not inheriting the setting, and re-pairing after key structure changes |
 | Inspector and graph | Gap selection, cached curve samples, enablement, property switching, units, and one undo group per drag |
 | Saved data | Secure coding, older records, full-width IDs, duplicate effects, corrupt data, and restoration without extra writes |
 | Callbacks | Reentrant and delayed notifications, undo restoration, drag completion, stale reads, and missing host APIs |
@@ -73,5 +74,7 @@ Include the application versions, checks you ran, and results in the pull reques
 `DefaultsTests` covers preference validation, creation defaults, native insertion tracking, undo restoration, stale queued edits, per-type Added Motion settings, secure archive round trips, and context-menu actions. Test runs use an isolated preferences suite through `MM_PREFERENCES_SUITE` and remove it on exit.
 
 For host verification, set duration and easing defaults, add keys with the native keyframe button and automatic value editing, then undo/redo and move existing keys. Check that existing keys retain their settings. Save Wave and Wiggle defaults, switch types after editing them, and reopen the document to verify that each type retains its edits.
+
+`PropertyMatchTests` covers Match In/Out on the custom pose properties. For host verification, turn matching on from a property label menu with one, two, and three keys, check the created endpoint and the undo of turning it on, edit an endpoint value and an endpoint transition from both ends, insert and delete keys at both ends, and save and reopen the document. With a matched property linked to an unmatched one, check that the partner follows the timing but keeps its own Match In/Out state.
 
 Reset-menu tests verify saved-default and factory fallback, incoming versus outgoing ownership, one undo group per reset, and preservation of Use Available Time. `InspectorControls/Tests/ValueFocusTests.m` exercises text entry and focus dismissal in an AppKit window.

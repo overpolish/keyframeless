@@ -1,4 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMMatchEndpoints.h"
+#import "MMNativeLinks.h"
 #import "MMDefaults.h"
 #import "MMScalePose.h"
 #import "Constants.h"
@@ -478,9 +480,13 @@ BOOL MMWriteScaleComponent(id<PROAPIAccessing> m, MMScalePoseCache *c,
                                            easing:creating ? (MTEasing)[MMReadDefault(@"easing")[@"value"] integerValue] : old.easing
                                       addedMotion:old.addedMotion];
   p=[p poseByReplacingTiming:creating ? MMTimingWithCreationDefaults(old.timing) : old.timing];
-  BOOL ok = p && [s setCustomParameterValue:p
-                                toParameter:MMScaleControls
-                                     atTime:target];
+  if (!p)
+    return NO;
+  if (MMMirrorsValueEdit(m, MMScaleControls, target))
+    return MMWriteNativeLinkedPose(m, MMScaleControls, target, p);
+  BOOL ok = [s setCustomParameterValue:p
+                           toParameter:MMScaleControls
+                                atTime:target];
   if (ok && c)
     [c publishPose:p atTime:target];
   return ok;

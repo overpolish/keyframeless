@@ -25,6 +25,14 @@ Duration holds the preceding value until the transition needs to begin. If the r
 
 Easing choices are Smooth, Linear, Ease In, and Ease Out. Before and after the animated sequence, the endpoint value holds. Properties with no keyframes use their static value.
 
+## Match In/Out
+
+Right-click a property label and choose **Match In/Out** to pair its first and last keyframes. The endpoint values mirror each other, so editing either one updates the other. With three or more keyframes the first incoming transition and the final one also share Duration, Use available time and Easing. Interior keyframes stay independent, and Added Motion never pairs, because it belongs to the keyframe that precedes a gap.
+
+Enabling the setting applies the first endpoint to the last, so the entrance you authored defines the exit. With a single keyframe, enabling creates the opposite endpoint: an Out on the effect's last frame, or an In at the start when the sole keyframe already sits on the last frame. A property with no keyframes has nothing to pair, so the menu item is unavailable.
+
+Matching is per property and is not shared with linked properties. A linked partner still follows the timing of a matched endpoint, because linking shares timing, but its own Match In/Out stays as you left it. Endpoints are positional, so inserting or moving keyframes re-pairs the keyframes the property ends up with. Deleting an endpoint leaves the remaining keyframe alone rather than recreating a partner.
+
 ## Added Motion
 
 Added Motion belongs to the keyframe at the start of the selected gap. Choose None, Wave, Wiggle, or Handheld, then adjust Amount and Speed. The dice button changes the seed. The label's context menu provides component selection and an **Independent** option for varying motion between axes.

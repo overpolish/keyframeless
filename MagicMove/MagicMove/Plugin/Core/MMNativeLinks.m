@@ -1,16 +1,28 @@
 @import InspectorControls;
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MMDefaults.h"
+#import "MMMatchEndpoints.h"
+#import "MMNativeEdits.h"
 #import "MMNativeLinks.h"
 #import "Constants.h"
 #import "MMResetParameter.h"
 #import "MMTimingEditorModel.h"
 
-static NSArray<NSNumber *> *MMProperties(void) {
+NSArray<NSNumber *> *MMProperties(void) {
   return @[
     @(MMCustomControls), @(MMScaleControls), @(MMRotationControls),
     @(MMOpacityControls), @(MMBlurControls), @(MMAnchorControls)
   ];
+}
+NSString *MMPropertyDisplayName(UInt32 parameter) {
+  return @{
+    @(MMCustomControls) : @"Position",
+    @(MMScaleControls) : @"Scale",
+    @(MMRotationControls) : @"Rotation",
+    @(MMOpacityControls) : @"Opacity",
+    @(MMBlurControls) : @"Blur",
+    @(MMAnchorControls) : @"Anchor"
+  }[@(parameter)];
 }
 static id MMCache(id<PROAPIAccessing> m, UInt32 p) {
   if (p == MMCustomControls)
@@ -19,20 +31,20 @@ static id MMCache(id<PROAPIAccessing> m, UInt32 p) {
     return MMScaleCacheForManager(m);
   return [MMPropertyLaneForParameter(p) cacheForManager:m];
 }
-static NSArray *MMEntries(id<PROAPIAccessing> m, UInt32 p) {
+NSArray<NSDictionary *> *MMEntries(id<PROAPIAccessing> m, UInt32 p) {
   return [MMCache(m, p) snapshotEntries];
 }
 static NSString *MMLink(id pose) { return [[pose timing] linkID] ?: @""; }
-static CMTime MMTime(NSDictionary *e) {
+CMTime MMTime(NSDictionary *e) {
   CMTime t = kCMTimeInvalid;
   [e[@"nativeTime"] getValue:&t];
   return t;
 }
-static BOOL MMSame(CMTime a, CMTime b) {
+BOOL MMSame(CMTime a, CMTime b) {
   return CMTIME_IS_NUMERIC(a) && CMTIME_IS_NUMERIC(b) &&
          fabs(CMTimeGetSeconds(CMTimeSubtract(a, b))) < 1e-6;
 }
-static NSDictionary *MMAt(NSArray *entries, CMTime t) {
+NSDictionary *MMAt(NSArray *entries, CMTime t) {
   for (NSDictionary *e in entries)
     if (MMSame(MMTime(e), t))
       return e;
@@ -49,7 +61,7 @@ static NSDictionary *MMTarget(NSArray *entries, CMTime t) {
       return e;
   return nil;
 }
-static id MMSample(id<PROAPIAccessing> m, UInt32 p, CMTime t) {
+id MMSample(id<PROAPIAccessing> m, UInt32 p, CMTime t) {
   NSArray *entries = MMEntries(m, p);
   if (p == MMCustomControls)
     return MMSampleCombinedSnapshot(entries, t);
@@ -59,7 +71,7 @@ static id MMSample(id<PROAPIAccessing> m, UInt32 p, CMTime t) {
       sampleEntries:entries
                time:t];
 }
-static id MMReplace(id old, MMPoseTiming *timing, MTEasing easing,
+id MMReplace(id old, MMPoseTiming *timing, MTEasing easing,
                     MTAddedMotion motion) {
   if ([old isKindOfClass:MMCombinedPose.class]) {
     MMCombinedPose *p = old;
@@ -87,7 +99,37 @@ static id MMReplace(id old, MMPoseTiming *timing, MTEasing easing,
                       addedMotion:motion
                            timing:timing];
 }
-static NSDictionary *MMEntry(id pose, CMTime time, NSDictionary *old) {
+NSArray<NSNumber *> *MMValues(id pose) {
+  if ([pose isKindOfClass:MMCombinedPose.class])
+    return @[ @([pose positionX]), @([pose positionY]) ];
+  if ([pose isKindOfClass:MMScalePose.class])
+    return @[ @([pose x]), @([pose y]) ];
+  return [pose values];
+}
+id MMPoseWithValues(id old, NSArray<NSNumber *> *values, MMPoseTiming *timing,
+                    MTEasing easing, MTAddedMotion motion) {
+  if ([old isKindOfClass:MMCombinedPose.class])
+    return [[[MMCombinedPose alloc]
+        initWithPositionX:[values[0] doubleValue]
+                positionY:[values[1] doubleValue]
+                    scale:[(MMCombinedPose *)old scale]
+                 authored:YES
+                   easing:easing
+              addedMotion:motion] poseByReplacingTiming:timing];
+  if ([old isKindOfClass:MMScalePose.class])
+    return [[[MMScalePose alloc] initWithX:[values[0] doubleValue]
+                                         y:[values[1] doubleValue]
+                                  authored:YES
+                                    easing:easing
+                               addedMotion:motion]
+        poseByReplacingTiming:timing];
+  return [(id<MMPropertyPose>)old poseByReplacingValues:values
+                                               authored:YES
+                                                 easing:easing
+                                            addedMotion:motion
+                                                 timing:timing];
+}
+NSDictionary *MMEntry(id pose, CMTime time, NSDictionary *old) {
   FxKeyframe key;
   FxInitKeyframe(key, kFxKeyframe_CurrentVersion);
   if (old[@"nativeKey"])
@@ -100,7 +142,7 @@ static NSDictionary *MMEntry(id pose, CMTime time, NSDictionary *old) {
     @"nativeKey" : [NSValue valueWithBytes:&key objCType:@encode(FxKeyframe)]
   };
 }
-static NSArray *MMReplacing(NSArray *entries, NSDictionary *before,
+NSArray *MMReplacing(NSArray *entries, NSDictionary *before,
                             NSDictionary *after) {
   NSMutableArray *result = [NSMutableArray array];
   for (NSDictionary *entry in entries)
@@ -123,6 +165,8 @@ static NSArray *MMReplacing(NSArray *entries, NSDictionary *before,
 @property(nonatomic, strong)
     NSMutableDictionary<NSString *, NSDictionary *> *moves;
 @property(nonatomic, strong) NSMutableArray<NSDictionary *> *copies;
+// Properties whose key structure changed, so a matched pairing may be stale.
+@property(nonatomic, strong) NSMutableSet<NSNumber *> *matchCandidates;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *colorSlots;
 @end
 @implementation MMNativeLinkState
@@ -133,6 +177,7 @@ static NSArray *MMReplacing(NSArray *entries, NSDictionary *before,
     _defaultInsertions=[NSMutableArray new];
     _moves = [NSMutableDictionary new];
     _copies = [NSMutableArray new];
+    _matchCandidates = [NSMutableSet new];
     _colorSlots = [NSMutableDictionary new];
   }
   return self;
@@ -164,11 +209,6 @@ void MMPrimeDefaultKeyTracker(id<PROAPIAccessing> manager,UInt32 parameter) {
     state.defaultTrackers[@(parameter)]=tracker;
   }
 }
-typedef NS_ENUM(NSUInteger, MMNativeEditKind) {
-  MMNativeEditMetadata,
-  MMNativeEditLink,
-  MMNativeEditStructural
-};
 
 // Failure recovery only. Resolve the index from the host now, never from a
 // cached ordinal: an unrelated key may have been added since the snapshot.
@@ -220,7 +260,7 @@ static void MMRefreshLinkCache(id<PROAPIAccessing> manager, UInt32 parameter) {
 
 // Apply complete, preflighted lane snapshots. Remove descending before inserts;
 // FxPlug's remote setKeyframeIndex wrapper cannot reliably move an indexed key.
-static BOOL MMApply(id<PROAPIAccessing> m,
+BOOL MMApply(id<PROAPIAccessing> m,
                     NSDictionary<NSNumber *, NSArray *> *after,
                     MMNativeEditKind kind) {
   BOOL structural=kind==MMNativeEditStructural;
@@ -518,47 +558,135 @@ BOOL MMSetNativePropertyLink(id<PROAPIAccessing> m, UInt32 sourceID,
   }
   return MMApply(m, after, MMNativeEditLink);
 }
+// A timing edit reaches its link partners and, for a matched property, the
+// opposite endpoint, transitively. Each edge carries only the settings it owns,
+// so values mirror across a match but never across a link.
+typedef struct {
+  BOOL duration, available, amount, speed, easing, motion, values;
+} MMEditMask;
+static const MMEditMask MMMaskAll = {YES, YES, YES, YES, YES, YES, YES};
+static const MMEditMask MMMaskLink = {YES, YES, YES, YES, YES, YES, NO};
+// Matching pairs the incoming transitions of K2 and Kn, and the values of K1
+// and Kn. Added Motion belongs to the key preceding a gap, so it never crosses.
+static const MMEditMask MMMaskMatchTransition = {YES, YES, NO, NO, YES, NO, NO};
+static const MMEditMask MMMaskMatchValue = {NO, NO, NO, NO, NO, NO, YES};
+static MMEditMask MMMaskIntersect(MMEditMask a, MMEditMask b) {
+  return (MMEditMask){a.duration && b.duration, a.available && b.available,
+                      a.amount && b.amount,     a.speed && b.speed,
+                      a.easing && b.easing,     a.motion && b.motion,
+                      a.values && b.values};
+}
+static BOOL MMMaskEmpty(MMEditMask m) {
+  return !m.duration && !m.available && !m.amount && !m.speed && !m.easing &&
+         !m.motion && !m.values;
+}
+@interface MMEditNode : NSObject
+@property UInt32 parameter;
+@property(strong) NSDictionary *entry;
+@property MMEditMask mask;
+@end
+@implementation MMEditNode
+@end
+static MMEditNode *MMNode(UInt32 parameter, NSDictionary *entry,
+                          MMEditMask mask) {
+  MMEditNode *node = [MMEditNode new];
+  node.parameter = parameter;
+  node.entry = entry;
+  node.mask = mask;
+  return node;
+}
+static NSString *MMNodeKey(MMEditNode *node) {
+  return [NSString stringWithFormat:@"%u@%.6f", node.parameter,
+                                    CMTimeGetSeconds(MMTime(node.entry))];
+}
+// Adopts whatever the seed edit changed and this edge allows, leaving every
+// other setting as this pose had it.
+static id MMUpdatedPose(id old, id before, id after, MMEditMask mask) {
+  MMPoseTiming *own = [old timing], *was = [before timing],
+               *now = [after timing];
+  MMPoseTiming *timing = [[[[MMPoseTiming alloc]
+      initWithDuration:mask.duration && now.duration != was.duration
+                           ? now.duration
+                           : own.duration
+             available:mask.available && now.available != was.available
+                           ? now.available
+                           : own.available
+                amount:mask.amount && now.amount != was.amount ? now.amount
+                                                               : own.amount
+                 speed:mask.speed && now.speed != was.speed ? now.speed
+                                                            : own.speed]
+      timingByCopyingMotionOptionsFrom:own] timingByReplacingLinkID:MMLink(old)];
+  MTEasing easing = mask.easing && [after easing] != [before easing]
+                        ? [after easing]
+                        : [old easing];
+  MTAddedMotion motion =
+      mask.motion && [after addedMotion] != [before addedMotion]
+          ? [after addedMotion]
+          : [old addedMotion];
+  if (mask.values && ![MMValues(before) isEqual:MMValues(after)])
+    return MMPoseWithValues(old, MMValues(after), timing, easing, motion);
+  return MMReplace(old, timing, easing, motion);
+}
+// The keys this one pairs with while its property matches its endpoints.
+static void MMEnqueueMatched(id<PROAPIAccessing> m, MMEditNode *node,
+                             NSMutableArray<MMEditNode *> *queue) {
+  if (!MMPropertyMatchEnabled(m, node.parameter))
+    return;
+  NSArray *entries = MMEntries(m, node.parameter);
+  if (entries.count < 2 || !entries.firstObject[@"nativeTime"])
+    return;
+  CMTime time = MMTime(node.entry);
+  NSDictionary *first = entries.firstObject, *last = entries.lastObject;
+  MMEditMask values = MMMaskIntersect(node.mask, MMMaskMatchValue);
+  if (!MMMaskEmpty(values)) {
+    if (MMSame(time, MMTime(first)))
+      [queue addObject:MMNode(node.parameter, last, values)];
+    else if (MMSame(time, MMTime(last)))
+      [queue addObject:MMNode(node.parameter, first, values)];
+  }
+  // Two keys share one incoming transition, so there is nothing to pair it with.
+  if (entries.count < 3)
+    return;
+  MMEditMask transition = MMMaskIntersect(node.mask, MMMaskMatchTransition);
+  if (MMMaskEmpty(transition))
+    return;
+  NSDictionary *second = entries[1];
+  if (MMSame(time, MMTime(second)))
+    [queue addObject:MMNode(node.parameter, last, transition)];
+  else if (MMSame(time, MMTime(last)))
+    [queue addObject:MMNode(node.parameter, second, transition)];
+}
 BOOL MMWriteNativeLinkedPose(id<PROAPIAccessing> m, UInt32 parameter,
                              CMTime time, id pose) {
   NSDictionary *entry = MMAt(MMEntries(m, parameter), time);
   if (!entry)
     return NO;
-  NSString *link = MMLink(entry[@"pose"]);
-  NSMutableArray *members = [MMMembers(m, link) mutableCopy];
-  if (!members.count)
-    [members addObject:@{@"parameter" : @(parameter), @"entry" : entry}];
+  id before = entry[@"pose"];
   NSMutableDictionary *after = [NSMutableDictionary new];
-  id oldSource = entry[@"pose"];
-  MMPoseTiming *beforeTiming = [oldSource timing], *newTiming = [pose timing];
-  for (NSDictionary *member in members) {
-    UInt32 p = [member[@"parameter"] unsignedIntValue];
-    NSDictionary *e = member[@"entry"];
-    id old = e[@"pose"], updated = pose;
-    if (p != parameter) {
-      MMPoseTiming *own = [old timing];
-      MMPoseTiming *timing = [[[[MMPoseTiming alloc]
-          initWithDuration:newTiming.duration != beforeTiming.duration
-                               ? newTiming.duration
-                               : own.duration
-                 available:newTiming.available != beforeTiming.available
-                               ? newTiming.available
-                               : own.available
-                    amount:newTiming.amount != beforeTiming.amount
-                               ? newTiming.amount
-                               : own.amount
-                     speed:newTiming.speed != beforeTiming.speed
-                               ? newTiming.speed
-                               : own.speed]
-          timingByCopyingMotionOptionsFrom:own]
-          timingByReplacingLinkID:MMLink(old)];
-      updated = MMReplace(
-          old, timing,
-          [pose easing] != [oldSource easing] ? [pose easing] : [old easing],
-          [pose addedMotion] != [oldSource addedMotion] ? [pose addedMotion]
-                                                        : [old addedMotion]);
-    }
-    after[@(p)] =
-        MMReplacing(MMEntries(m, p), e, MMEntry(updated, MMTime(e), e));
+  NSMutableSet *seen = [NSMutableSet new];
+  NSMutableArray<MMEditNode *> *queue =
+      [NSMutableArray arrayWithObject:MMNode(parameter, entry, MMMaskAll)];
+  while (queue.count) {
+    MMEditNode *node = queue.lastObject;
+    [queue removeLastObject];
+    NSString *key = MMNodeKey(node);
+    if ([seen containsObject:key])
+      continue;
+    [seen addObject:key];
+    id updated = node.entry == entry && node.parameter == parameter
+                     ? pose
+                     : MMUpdatedPose(node.entry[@"pose"], before, pose,
+                                     node.mask);
+    NSArray *entries = after[@(node.parameter)] ?: MMEntries(m, node.parameter);
+    after[@(node.parameter)] =
+        MMReplacing(entries, node.entry,
+                    MMEntry(updated, MMTime(node.entry), node.entry));
+    MMEditMask linked = MMMaskIntersect(node.mask, MMMaskLink);
+    if (!MMMaskEmpty(linked))
+      for (NSDictionary *member in MMMembers(m, MMLink(node.entry[@"pose"])))
+        [queue addObject:MMNode([member[@"parameter"] unsignedIntValue],
+                                member[@"entry"], linked)];
+    MMEnqueueMatched(m, node, queue);
   }
   return MMApply(m, after, MMNativeEditMetadata);
 }
@@ -622,6 +750,13 @@ void MMObserveNativeLinks(id<PROAPIAccessing> m, UInt32 parameter,
           break;
         }
     }
+    // Endpoints are positional, so any change of the first or last key can
+    // leave a matched property paired with the wrong keys. Evaluating that
+    // needs host reads, which belong on the commit path, not in this callback.
+    if (before && (before.count != next.count ||
+                   !MMSame(MMTime(before.firstObject), MMTime(next.firstObject)) ||
+                   !MMSame(MMTime(before.lastObject), MMTime(next.lastObject))))
+      [state.matchCandidates addObject:@(parameter)];
     state.observed[@(parameter)] = next;
   }
 }
@@ -636,16 +771,20 @@ BOOL MMCommitNativeLinkMoves(id<PROAPIAccessing> m, BOOL mouseDown,
   MMNativeLinkState *state = MMState(m);
   NSDictionary *moves;
   NSArray *copies, *defaults;
+  NSSet *matches;
   @synchronized(state) {
     if (mouseDown || state.applying ||
-        (!state.moves.count && !state.copies.count && !state.defaultInsertions.count))
+        (!state.moves.count && !state.copies.count && !state.defaultInsertions.count &&
+         !state.matchCandidates.count))
       return YES;
     moves = [state.moves copy];
     copies = [state.copies copy];
     defaults=[state.defaultInsertions copy];
+    matches=[state.matchCandidates copy];
     [state.defaultInsertions removeAllObjects];
     [state.moves removeAllObjects];
     [state.copies removeAllObjects];
+    [state.matchCandidates removeAllObjects];
   }
   {
     NSMutableDictionary *after = [NSMutableDictionary new],
@@ -717,19 +856,89 @@ BOOL MMCommitNativeLinkMoves(id<PROAPIAccessing> m, BOOL mouseDown,
                           [old easing], [old addedMotion]);
       after[p] = MMReplacing(entries, e, MMEntry(pose, t, e));
     }
+    // Last, so a matched property pairs the keys it ends this edit with.
+    BOOL matched = NO;
+    for (NSNumber *p in matches) {
+      UInt32 parameter = p.unsignedIntValue;
+      if (!MMPropertyMatchEnabled(m, parameter))
+        continue;
+      NSArray *entries = after[p] ?: MMEntries(m, parameter);
+      NSArray *paired = MMMatchedEntries(m, parameter, entries);
+      if (!paired)
+        continue;
+      after[p] = paired;
+      matched = YES;
+    }
     if (!after.count)
       return YES;
+    BOOL metadataOnly = !moves.count && !copies.count;
     id<FxUndoAPI> undo = [m apiForProtocol:@protocol(FxUndoAPI)];
-    if (![undo startUndoGroup:defaults.count && !moves.count && !copies.count ? @"Set keyframe defaults" : @"Move linked keyposes"])
+    if (![undo startUndoGroup:!metadataOnly              ? @"Move linked keyposes"
+                              : defaults.count            ? @"Set keyframe defaults"
+                              : matched                   ? @"Match In/Out"
+                                                          : @"Set keyframe defaults"])
       return NO;
     @try {
-      return MMApply(m, after, defaults.count && !moves.count && !copies.count ? MMNativeEditMetadata : MMNativeEditStructural);
+      return MMApply(m, after, metadataOnly ? MMNativeEditMetadata : MMNativeEditStructural);
     } @finally {
       [undo endUndoGroup];
     }
   }
 }
 
+@interface MMMatchMenuTarget : NSObject
+@property(nonatomic, strong) id<PROAPIAccessing> manager;
+@property(nonatomic, weak) NSView *sender;
+@property UInt32 parameter;
+- (void)refreshItem:(NSMenuItem *)item;
+@end
+@implementation MMMatchMenuTarget
+- (void)refreshItem:(NSMenuItem *)item {
+  item.enabled = MMPropertyMatchAvailable(self.manager, self.parameter);
+  item.state = MMPropertyMatchEnabled(self.manager, self.parameter)
+                   ? NSControlStateValueOn
+                   : NSControlStateValueOff;
+}
+- (void)toggle:(NSMenuItem *)sender {
+  NSMenu *menu = sender.menu;
+  MMPropertyMenuActionScheduled(menu);
+  // Return the ViewBridge button callback before asking the host for keyframes.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self applyToggle:sender menu:menu];
+  });
+}
+- (void)applyToggle:(NSMenuItem *)sender menu:(NSMenu *)menu {
+  NSView *view = self.sender;
+  if (!view)
+    return;
+  id<FxCustomParameterActionAPI_v4> action =
+      [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!action) {
+    MMPropertyMenuActionFinished(menu, NO);
+    return;
+  }
+  BOOL ok = NO;
+  [action startAction:view];
+  @try {
+    id<FxUndoAPI> undo = [self.manager apiForProtocol:@protocol(FxUndoAPI)];
+    if (![undo startUndoGroup:@"Match In/Out"])
+      return;
+    @try {
+      BOOL enabled = MMPropertyMatchEnabled(self.manager, self.parameter);
+      ok = MMSetPropertyMatch(self.manager, self.parameter, !enabled, NULL);
+      if (ok)
+        [self refreshItem:sender];
+      else
+        NSBeep();
+    } @finally {
+      [undo endUndoGroup];
+    }
+  } @finally {
+    [action endAction:view];
+    MMPropertyMenuActionFinished(menu, ok);
+  }
+}
+@end
 @interface MMNativeLinkMenuTarget : NSObject
 @property(nonatomic, strong) id<PROAPIAccessing> manager;
 @property(nonatomic, weak) NSView *sender;
@@ -803,9 +1012,22 @@ NSMenu *MMNativePropertyMenu(id<PROAPIAccessing> m, NSView *sender,
   MMPropertyMenuSetStateHandler(menu, ^{
     NSMenu *activeMenu=weakMenu;
     if (!activeMenu) return;
-    for (NSMenuItem *item in activeMenu.itemArray)
+    for (NSMenuItem *item in activeMenu.itemArray) {
       if ([item.target isKindOfClass:MMNativeLinkMenuTarget.class]) [(MMNativeLinkMenuTarget *)item.target refreshItem:item];
+      if ([item.target isKindOfClass:MMMatchMenuTarget.class]) [(MMMatchMenuTarget *)item.target refreshItem:item];
+    }
   });
+  MMMatchMenuTarget *match = [MMMatchMenuTarget new];
+  match.manager = m;
+  match.sender = sender;
+  match.parameter = parameter;
+  NSMenuItem *matchItem = [[NSMenuItem alloc] initWithTitle:@"Match In/Out"
+                                                    action:@selector(toggle:)
+                                             keyEquivalent:@""];
+  matchItem.target = match;
+  matchItem.representedObject = match;
+  matchItem.enabled = NO;
+  [menu addItem:matchItem];
   [menu addItem:NSMenuItem.separatorItem];
   NSMenuItem *header = [NSMenuItem sectionHeaderWithTitle:@"LINK WITH"];
   [menu addItem:header];
@@ -815,17 +1037,12 @@ NSMenu *MMNativePropertyMenu(id<PROAPIAccessing> m, NSView *sender,
     return menu;
   [action startAction:sender];
   @try {
+    // Reading the toggle and the cached keys needs the action scope, like the
+    // link items below.
+    [match refreshItem:matchItem];
     CMTime now = [action currentTime];
     NSDictionary *source = MMTarget(MMEntries(m, parameter), now);
     NSArray *members = MMMembers(m, MMLink(source[@"pose"]));
-    NSDictionary *names = @{
-      @(MMCustomControls) : @"Position",
-      @(MMScaleControls) : @"Scale",
-      @(MMRotationControls) : @"Rotation",
-      @(MMOpacityControls) : @"Opacity",
-      @(MMBlurControls) : @"Blur",
-      @(MMAnchorControls) : @"Anchor"
-    };
     for (NSNumber *p in MMProperties())
       if (p.unsignedIntValue != parameter) {
         BOOL linked = NO;
@@ -844,7 +1061,7 @@ NSMenu *MMNativePropertyMenu(id<PROAPIAccessing> m, NSView *sender,
             !MMEntries(m, p.unsignedIntValue).firstObject[@"nativeTime"];
         target.time = now;
         target.linked = linked;
-        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:names[p]
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:MMPropertyDisplayName(p.unsignedIntValue)
                                                       action:@selector(toggle:)
                                                keyEquivalent:@""];
         item.target = target;

@@ -16,6 +16,8 @@ Property values are immutable, securely coded custom parameter objects. The host
 
 Incoming duration/easing belong to the destination keyframe. Added Motion belongs to the preceding keyframe. Linking synchronizes native keyframe times and incoming settings while preserving independently editable values and motion settings.
 
+Match In/Out is lane-wide, so each property keeps it in one hidden toggle rather than repeating it in every keyframed pose. Endpoints are then resolved positionally on each read and no insertion, deletion or move has to migrate stored state. A timing or value edit walks a small graph of edges: link members share timing and motion settings, and a matched property pairs the incoming transitions of the second and last keys and the values of the first and last. Each edge carries only the settings it owns, so values mirror across a match but never across a link. The walk ends in one write, one undo group and one cache publish. Key structure changes queue the property during the native callback and re-pair it on the deferred commit path, because evaluating the pairing needs host reads that do not belong in a callback.
+
 Native APIs do not supply persistent identities for individual keyframes. Association uses unchanged times, values, and relative order to match old and new snapshots. When identical values move, the result can be ambiguous. Tests cover crossing keyframes and moving multiple selections.
 
 The plugin implements `KKDataBlob` with the same Objective-C class name and `data` archive key so saved timing records still decode. Some hidden parameters are also kept for compatibility with saved effects.

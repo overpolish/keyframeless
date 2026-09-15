@@ -1,4 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "MMMatchEndpoints.h"
+#import "MMNativeLinks.h"
 #import "MMDefaults.h"
 #import "MMCombinedPose.h"
 #import "Constants.h"
@@ -323,7 +325,9 @@ BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *
               positionY:component == MMPositionY ? value : old.positionY
                   scale:component == MMScale ? value : old.scale authored:YES easing:creating ? (MTEasing)[MMReadDefault(@"easing")[@"value"] integerValue] : old.easing addedMotion:old.addedMotion];
   pose=[pose poseByReplacingTiming:creating ? MMTimingWithCreationDefaults(old.timing) : old.timing];
-  if (!pose || ![set setCustomParameterValue:pose toParameter:MMCustomControls atTime:target]) return NO;
+  if (!pose) return NO;
+  if (MMMirrorsValueEdit(manager,MMCustomControls,target)) return MMWriteNativeLinkedPose(manager,MMCustomControls,target,pose);
+  if (![set setCustomParameterValue:pose toParameter:MMCustomControls atTime:target]) return NO;
   if (cache) {
     NSArray *entries = [cache snapshotEntries];
     if (entries.count && !entries[0][@"nativeTime"]) [cache publishConstantPose:pose];
