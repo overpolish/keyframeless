@@ -37,12 +37,39 @@ static inline float lineAlpha(float distToLine, float halfWidth) {
   float aa = fwidth(distToLine);
   return smoothstep(halfWidth + aa, halfWidth - aa, distToLine);
 }
+static inline float roundedRectDistance(float2 p, float halfExtent, float cornerRadius) {
+  float2 d = abs(p) - halfExtent + cornerRadius;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - cornerRadius;
+}
+
+// The anchor square: a rounded square whose outline is inset from the edge,
+// over a drop shadow below it, so the pivot handle reads against both the image
+// and the controls underneath. `local` runs screen-up, so the shadow's shape is
+// the square translated the other way. Its colour is the style's, not geometry.
+static inline float4 squareColor(MMOSCRasterizerData in) {
+  float halfExtent = in.shape.x, cornerRadius = in.shape.y;
+  float outline = in.shape.z, shadowRadius = in.shape.w;
+  const float4 shadowColor = float4(0.0, 0.0, 0.0, 0.5);
+  float shadowDistance = roundedRectDistance(in.local + float2(0.0, in.shade), halfExtent, cornerRadius);
+  float shadowAlpha = shadowColor.a * (1.0 - smoothstep(-shadowRadius, 0.0, shadowDistance));
+  float distance = roundedRectDistance(in.local, halfExtent, cornerRadius);
+  float shapeAlpha = edgeAlpha(-distance);
+  if (shapeAlpha < 0.001 && shadowAlpha < 0.001) discard_fragment();
+  float4 color = float4(shadowColor.rgb * shadowAlpha, shadowAlpha);
+  if (shapeAlpha < 0.001) return color;
+  float outlineFactor = 1.0 - edgeAlpha(-(distance + outline));
+  float4 premultStroke = float4(in.stroke.rgb * in.stroke.a, in.stroke.a);
+  float4 shape = mix(in.fill, premultStroke, outlineFactor);
+  shape.a = shapeAlpha * mix(in.fill.a, in.stroke.a, outlineFactor);
+  return color * (1.0 - shape.a) + shape;
+}
 
 // Legacy point glyph: fill, an outline centred on the edge, and a faint
 // top-light gradient inset by the outline width. The pill is the same glyph
 // stretched along its edge.
 fragment float4 MMOSCFragmentShader(MMOSCRasterizerData in [[stage_in]]) {
   if (in.kind < 0.5) return in.fill;
+  if (in.kind > 2.5) return squareColor(in);
   float halfLength = in.shape.x, radius = in.shape.y, outline = in.shape.z;
   float2 p = in.local;
   float2 nearest = float2(clamp(p.x, -halfLength, halfLength), 0.0);

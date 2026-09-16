@@ -1018,11 +1018,13 @@ NSMenu *MMNativePropertyMenu(id<PROAPIAccessing> m, NSView *sender,
       if ([item.target isKindOfClass:MMMatchMenuTarget.class]) [(MMMatchMenuTarget *)item.target refreshItem:item];
     }
   });
-  // Position owns the box outline, Scale the handles and Rotation the rings;
-  // other properties have no on-screen control of their own.
-  if (parameter == MMCustomControls || parameter == MMScaleControls || parameter == MMRotationControls) {
-    UInt32 toggle = parameter == MMScaleControls    ? MMShowScaleOSC
+  // Position owns the box outline, Scale the handles, Rotation the rings and
+  // Anchor the pivot square; other properties have no on-screen control.
+  if (parameter == MMCustomControls || parameter == MMScaleControls ||
+      parameter == MMRotationControls || parameter == MMAnchorControls) {
+    UInt32 toggle = parameter == MMScaleControls      ? MMShowScaleOSC
                     : parameter == MMRotationControls ? MMShowRotationOSC
+                    : parameter == MMAnchorControls   ? MMShowAnchorOSC
                                                       : MMShowPositionOSC;
     [menu addItem:MMOSCVisibilityMenuItem(m, sender, toggle, @"On-Screen Control")];
     [menu addItem:NSMenuItem.separatorItem];

@@ -1,15 +1,18 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #pragma once
 #include <simd/simd.h>
-// One vertex layout serves the border (flat colour) and the handle glyphs
+// One vertex layout serves the border (flat colour), the handle glyphs
 // (capsule signed distance in glyph-local pixels; a point is a zero-length
-// pill). Positions are Metal-centred surface pixels.
+// pill) and the anchor square (rounded-rect signed distance in the same frame).
+// Positions are Metal-centred surface pixels.
 typedef struct {
   vector_float2 position;
   vector_float2 local;    // glyph-frame offset in pixels, x along the pill
-  float shade;            // screen-up offset in pixels for the inner gradient
-  float kind;             // 0 = flat colour, 1 = glyph, 2 = border line capsule
-  vector_float4 shape;    // halfLength, outerRadius, outlineWidth, unused
+  float shade;            // screen-up offset in pixels for the inner gradient,
+                          // or the square's downward shadow offset
+  float kind;             // 0 = flat colour, 1 = glyph, 2 = border line capsule, 3 = anchor square
+  vector_float4 shape;    // pill: halfLength, outerRadius, outlineWidth, unused
+                          // square: halfExtent, cornerRadius, outlineWidth, shadowRadius
   vector_float4 fill;     // premultiplied
   vector_float4 stroke;   // straight alpha, matching the legacy glyph style
 } MMOSCVertex;

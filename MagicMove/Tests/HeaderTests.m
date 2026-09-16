@@ -118,12 +118,12 @@ int main(void) { @autoreleasepool {
   host.plugin=plugin; assert([plugin addParametersWithError:NULL]);
   MMInspectorHeader *view=[[MMInspectorHeader alloc] initWithManager:host];
   NSMenu *menu=[view settingsMenu];
-  assert(menu.numberOfItems==6);
+  assert(menu.numberOfItems==7);
   assert([menu.itemArray[0].title isEqual:@"Explicit Keyframe Editing"]);
   assert([menu.itemArray[0].subtitle isEqual:@"Prevents automatic keyframe creation when changing values."]);
   assert(menu.itemArray[1].isSeparatorItem && menu.itemArray[2].isSectionHeader);
   assert([menu.itemArray[3].title isEqual:@"Position Box"] && [menu.itemArray[4].title isEqual:@"Scale Handles"] &&
-         [menu.itemArray[5].title isEqual:@"Rotation Rings"]);
+         [menu.itemArray[5].title isEqual:@"Rotation Rings"] && [menu.itemArray[6].title isEqual:@"Anchor Point"]);
   // Visibility starts from the stored preference, so compare against the host.
   BOOL showScale=NO;
   assert(MMReadBoolSetting(host,view,MMShowScaleOSC,&showScale));

@@ -1,9 +1,8 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #pragma once
-#import "MMOSCCursor.h"
-#import "MMOSCShaderTypes.h"
 #import "MMPropertyLane.h"
-#import "MagicMoveOSC.h"
+#import "MMOSCShaderTypes.h"
+#import "MagicMoveOSC_Private.h"
 
 // Ring drag state, captured at press so a tick stays consistent even if the
 // pose moves under it. Euler angles are radians in X, Y, Z order; `last`
@@ -17,10 +16,6 @@ typedef struct {
 } MMRingDrag;
 
 @interface MagicMoveOSC ()
-// Host access and cursor arbitration, shared with the rotation category.
-- (CGPoint)canvasFromObject:(CGPoint)object;
-- (BOOL)visible:(UInt32)parameter cached:(BOOL *)cached atTime:(CMTime)time;
-- (void)applyCursorKind:(MMOSCCursorKind)kind;
 @property(nonatomic) BOOL showRings;
 @property(nonatomic) NSInteger hoveredRing;
 @property(nonatomic) MMRingDrag ringDrag;

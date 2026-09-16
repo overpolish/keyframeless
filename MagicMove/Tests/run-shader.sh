@@ -15,6 +15,10 @@ binary="$tmp/ShaderTests"
 "$metal" -c -I "$root/MagicMove/MagicMove/Plugin/Render" -I "$root/RenderSupport/Sources/RenderSupport/include" \
   "$root/MagicMove/MagicMove/Plugin/Render/MagicMove.metal" -o "$air"
 xcrun metallib "$air" -o "$library"
+# The on-screen control shaders have no render test, so compile them here to
+# catch a broken glyph or gizmo before the plugin build does.
+"$metal" -c -I "$root/MagicMove/MagicMove/Plugin/Render" \
+  "$root/MagicMove/MagicMove/Plugin/Render/OSC.metal" -o "$tmp/OSC.air"
 xcrun clang -fobjc-arc -fmodules -I "$root/MagicMove/MagicMove/Plugin/Render" \
   -I "$root/RenderSupport/Sources/RenderSupport/include" -framework Foundation -framework Metal \
   "$root/MagicMove/Tests/ShaderTests.m" -o "$binary"

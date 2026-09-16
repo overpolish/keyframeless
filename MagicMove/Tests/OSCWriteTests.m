@@ -3,6 +3,7 @@
 #import "MagicMoveOSC.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
+#import "MMAnchorPose.h"
 #import "MMRotationPose.h"
 #import <math.h>
 
@@ -325,6 +326,59 @@ static void rotationRings(void) {
   assert(Hit(osc, onX.x, onX.y) == OSCBoxPartPosition);
 }
 
+// The square sits on the pivot, which with no offset or anchor is the canvas
+// centre. Its own drag moves the anchor in full-resolution pixels, so the pivot
+// follows the pointer one to one.
+static MMAnchorPose *Anchor(OSCHost *host) { return host.blobs[@(MMAnchorControls)]; }
+
+static void anchorSquare(void) {
+  OSCHost *host = Host();
+  // The edge-on X and Y rings lie across the pivot at rest, so keep the gizmo
+  // off while probing the square's own region; precedence is checked below.
+  host.editors[@(MMShowRotationOSC)] = @NO;
+  MagicMoveOSC *osc = [[MagicMoveOSC alloc] initWithAPIManager:host];
+  // Off by default: the pivot falls through to the position drag, and a press
+  // there moves the image instead of the anchor.
+  assert(Hit(osc, 960, 540) == OSCBoxPartPosition);
+  host.editors[@(MMShowAnchorOSC)] = @YES;
+  NSInteger part = Hit(osc, 960, 540);
+  assert(part == OSCBoxPartAnchor);
+  // Grabbing off-centre still moves by the pointer's own delta.
+  CGPoint press = CGPointMake(960 + OSCAnchorHitRadius - 1, 540);
+  part = Hit(osc, press.x, press.y);
+  assert(part == OSCBoxPartAnchor);
+  NSUInteger writes = host.blobWrites;
+  assert(Down(osc, press.x, press.y, part) && osc.dragging && host.undoGroupsStarted == 0);
+  assert(host.blobWrites == writes && !Anchor(host));
+  assert(Drag(osc, press.x + 120, press.y + 45, part, 0));
+  // One write carries both axes; canvas Y is up in this host, as is the anchor.
+  assert(host.blobWrites == writes + 1);
+  assert(fabs(Anchor(host).x - 120) < 1e-9 && fabs(Anchor(host).y - 45) < 1e-9);
+  // Ticks measure from the press, and nothing else moves.
+  assert(Drag(osc, press.x - 20, press.y, part, 0));
+  assert(fabs(Anchor(host).x + 20) < 1e-9 && fabs(Anchor(host).y) < 1e-9);
+  MMCombinedPose *combined = host.blobs[@(MMCustomControls)];
+  assert(combined.positionX == 0 && combined.positionY == 0 && !host.blobs[@(MMScaleControls)]);
+  assert(host.undoGroupsStarted == 2 && host.undoGroupsEnded == 2);
+  assert(Up(osc, press.x, press.y, part) && !osc.dragging && host.undoDepth == 0);
+  // The square rides the pivot, so it is now where the anchor moved it.
+  assert(Hit(osc, 960, 540) == OSCBoxPartPosition);
+  assert(Hit(osc, 940, 540) == OSCBoxPartAnchor);
+  // It wins where the rings cross the pivot, and they stay grabbable elsewhere.
+  host.editors[@(MMShowRotationOSC)] = @YES;
+  assert(Hit(osc, 940, 540) == OSCBoxPartAnchor);
+  CGPoint onRing = CGPointMake(940 + OSCRingRadius * cos(M_PI / 4), 540 + OSCRingRadius * sin(M_PI / 4));
+  assert(Hit(osc, onRing.x, onRing.y) == OSCBoxPartRingBase + OSCRingAxisZ);
+  // A pivot on a corner handle still belongs to the square: it is the smaller
+  // target and draws over the handles.
+  host.blobs[@(MMAnchorControls)] = [[MMAnchorPose alloc] initWithX:960 y:540 authored:YES
+                                                            easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+  assert(Hit(osc, 1920, 1080) == OSCBoxPartAnchor);
+  // Hiding it again leaves no invisible grab region.
+  host.editors[@(MMShowAnchorOSC)] = @NO;
+  assert(Hit(osc, 1920, 1080) == OSCBoxPartHandleBase + 2);
+}
+
 int main(void) {
   @autoreleasepool {
     geometryFromHost();
@@ -335,8 +389,9 @@ int main(void) {
     missingHost();
     hiddenControls();
     rotationRings();
+    anchorSquare();
   }
   puts("OSC writes: host geometry, move anywhere, one write per tick, handle scaling, explicit targeting, "
-       "cache sharing, hidden controls, rotation rings and missing host passed");
+       "cache sharing, hidden controls, rotation rings, anchor square and missing host passed");
   return 0;
 }

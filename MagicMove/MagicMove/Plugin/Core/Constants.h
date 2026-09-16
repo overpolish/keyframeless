@@ -10,8 +10,8 @@ enum { MMTransitionDuration = 1102, MMPositionX = 1300, MMDurationData = 1301, M
        MMScale = 1400, MMScaleDuration = 1401, MMScaleDurationData = 1402, MMScaleAvailableTime = 1403, MMScaleLink = 1404, MMScaleMatch = 1405, MMScaleLegacyMatchOut = 1406, MMScaleEasing = 1407, MMScaleAddedMotion = 1408, MMLinkProperties = 1500, MMCustomControls = 1600, MMCombinedCacheToken = 1601, MMCombinedEasing = 1602, MMExplicitCreation = 1603, MMCombinedAddedMotion = 1604, MMMotionBlur = 1700, MMMotionBlurSamples = 1701, MMMotionBlurShutterAngle = 1702, MMScaleControls = 1800, MMScaleCacheToken = 1801, MMScaleProportional = 1802, MMScaleX = 1803, MMScaleY = 1804, MMOpacityControls = 2000, MMOpacityCacheToken = 2001, MMRotationControls = 2100, MMRotationCacheToken = 2101, MMHostRefreshToken = 2200, MMBlurControls = 2300, MMBlurCacheToken = 2301, MMAnchorControls = 2400, MMAnchorCacheToken = 2401, MMHeaderControls = 2500,
        MMPositionMatchEnds = 2600, MMScaleMatchEnds = 2601, MMRotationMatchEnds = 2602, MMOpacityMatchEnds = 2603, MMBlurMatchEnds = 2604, MMAnchorMatchEnds = 2605,
        // On-screen control visibility: Position owns the box outline, Scale the
-       // handles, Rotation the three rings.
-       MMShowPositionOSC = 1703, MMShowScaleOSC = 1704, MMShowRotationOSC = 1705 };
+       // handles, Rotation the three rings and Anchor the pivot square.
+       MMShowPositionOSC = 1703, MMShowScaleOSC = 1704, MMShowRotationOSC = 1705, MMShowAnchorOSC = 1706 };
 _Static_assert(MMTransitionDuration >= 1 && MMExplicitCreation <= 9999,
                "FxPlug parameter IDs must be between 1 and 9999");
 

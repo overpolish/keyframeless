@@ -339,6 +339,22 @@ static void testResetMenus(void) {
   assert(destination.timing.duration == 1.2 && destination.timing.available);
   [window close];
 }
+// Visibility preferences are per element: the transform controls ship visible
+// and the anchor square hidden, because the pivot only matters while it moves.
+static void testOSCVisibilityDefaults(void) {
+  assert(MMReadOSCVisibilityDefault(MMShowPositionOSC));
+  assert(MMReadOSCVisibilityDefault(MMShowScaleOSC));
+  assert(MMReadOSCVisibilityDefault(MMShowRotationOSC));
+  assert(!MMReadOSCVisibilityDefault(MMShowAnchorOSC));
+  assert(MMIsOSCVisibilityParameter(MMShowAnchorOSC));
+  assert(!MMIsOSCVisibilityParameter(MMExplicitCreation));
+  // A toggle is the default for the next effect, and only for its own element.
+  assert(MMSaveOSCVisibilityDefault(MMShowAnchorOSC, YES));
+  assert(MMReadOSCVisibilityDefault(MMShowAnchorOSC));
+  assert(MMReadOSCVisibilityDefault(MMShowRotationOSC));
+  assert(MMSaveOSCVisibilityDefault(MMShowAnchorOSC, NO));
+  assert(!MMReadOSCVisibilityDefault(MMShowAnchorOSC));
+}
 int main(void) {
   @autoreleasepool {
     [NSApplication sharedApplication];
@@ -347,6 +363,7 @@ int main(void) {
     testMotionHistoryAndMenus();
     testNativeCreation();
     testResetMenus();
+    testOSCVisibilityDefaults();
     puts("DefaultsTests passed");
   }
   return 0;

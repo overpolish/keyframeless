@@ -28,13 +28,6 @@ static simd_float4 MMRingColor(NSColor *color) {
 
 @implementation MagicMoveOSC (Rotation)
 
-// The gizmo centres on the render's pivot, not the image centre: rotation turns
-// about the position offset plus the anchor, so the rings belong there.
-- (CGPoint)ringCentreForPose:(OSCBoxPose)pose imageSize:(CGSize)imageSize {
-  CGPoint pivot = OSCBoxPivotPixels(pose, imageSize);
-  return [self canvasFromObject:OSCBoxObjectFromPixel(pivot, imageSize)];
-}
-
 - (BOOL)ringsVisibleAtTime:(CMTime)time {
   BOOL cached = self.showRings;
   BOOL visible = [self visible:MMShowRotationOSC cached:&cached atTime:time];
@@ -49,7 +42,8 @@ static simd_float4 MMRingColor(NSColor *color) {
   OSCRotationMatrix3 matrix = MMRingMatrix(pose);
   NSArray<NSColor *> *colors = MMInspectorColors(MMRotationControls);
   if (colors.count < OSCRingCount) return NO;
-  NSInteger dragged = activePart >= OSCBoxPartRingBase ? activePart - OSCBoxPartRingBase : -1;
+  NSInteger dragged = activePart >= OSCBoxPartRingBase && activePart < OSCBoxPartAnchor
+                          ? activePart - OSCBoxPartRingBase : -1;
   *params = (MMOSCRingParams){
       .outlineColor = {0, 0, 0, 0.75f},
       .radius = (float)OSCRingRadius,
@@ -68,7 +62,7 @@ static simd_float4 MMRingColor(NSColor *color) {
   }
   // A quad big enough for the outermost ring pixels plus the anti-aliased edge.
   float half = (float)(OSCRingRadius + OSCRingHalfWidth + OSCRingOutlineWidth + 2);
-  CGPoint centre = [self ringCentreForPose:pose imageSize:imageSize];
+  CGPoint centre = [self pivotCanvasForPose:pose imageSize:imageSize];
   simd_float2 metalCentre = {(float)centre.x - (float)surface.width / 2,
                              (float)surface.height / 2 - (float)centre.y};
   // `local` runs Y up like the ring geometry, which is Metal's Y flipped.
@@ -88,7 +82,7 @@ static simd_float4 MMRingColor(NSColor *color) {
   *cursor = MMOSCCursorArrow;
   if (![self ringsVisibleAtTime:time]) return -1;
   OSCRotationMatrix3 matrix = MMRingMatrix(pose);
-  CGPoint centre = [self ringCentreForPose:pose imageSize:imageSize];
+  CGPoint centre = [self pivotCanvasForPose:pose imageSize:imageSize];
   CGPoint local = CGPointMake(x - centre.x, y - centre.y);
   NSInteger best = -1;
   double bestDistance = INFINITY, bestAngle = 0;
@@ -120,7 +114,7 @@ static simd_float4 MMRingColor(NSColor *color) {
   NSInteger axis = part - OSCBoxPartRingBase;
   if (axis < 0 || axis >= OSCRingCount) return NO;
   OSCRotationMatrix3 matrix = MMRingMatrix(pose);
-  CGPoint centre = [self ringCentreForPose:pose imageSize:imageSize];
+  CGPoint centre = [self pivotCanvasForPose:pose imageSize:imageSize];
   OSCRingHit hit = OSCRingClosestAngle(matrix, (int)axis, OSCRingRadius,
                                        CGPointMake(x - centre.x, y - centre.y), OSCRingHitSamples);
   MMRingDrag drag = {.axis = axis, .pressCanvas = CGPointMake(x, y)};

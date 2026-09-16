@@ -327,6 +327,7 @@ static NSString *MMOSCVisibilityUndoName(UInt32 parameter) {
   switch(parameter) {
     case MMShowScaleOSC: return @"Toggle Scale On-Screen Control";
     case MMShowRotationOSC: return @"Toggle Rotation On-Screen Control";
+    case MMShowAnchorOSC: return @"Toggle Anchor On-Screen Control";
     default: return @"Toggle Position On-Screen Control";
   }
 }

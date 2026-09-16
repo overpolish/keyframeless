@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MagicMoveOSC.h"
+#import "MagicMoveOSC+Anchor.h"
 #import "MagicMoveOSC+Rotation.h"
 #import "Constants.h"
 #import "Plugin.h"
@@ -36,10 +37,10 @@ static double MMOSCEffectStart(id<PROAPIAccessing> manager) {
 
 static const float MMOSCBorderHalfWidth = 1.0f;
 static const float MMOSCHandleOutline = 1.25f;
-static const float MMOSCActiveHandleGrowth = 1.5f;
 
 // The undo entry a drag of this part writes, as the host displays it.
 static NSString *MMOSCUndoName(NSInteger part) {
+  if (part == OSCBoxPartAnchor) return @"Move Anchor";
   if (part >= OSCBoxPartRingBase) return @"Rotate";
   return part == OSCBoxPartPosition ? @"Move" : @"Scale";
 }
@@ -66,9 +67,11 @@ static NSString *MMOSCUndoName(NSInteger part) {
     _cursorKind = _dragCursorKind = MMOSCCursorArrow;
     self.hoveredRing = -1;
     self.ringDrag = (MMRingDrag){.axis = -1};
-    // Registered defaults are on; a read on the first draw replaces these.
+    // Registered defaults for the transform controls are on and the anchor
+    // square's is off; a read on the first draw replaces these.
     _showBorder = _showHandles = YES;
     self.showRings = YES;
+    self.showAnchor = NO;
   }
   return self;
 }
@@ -116,6 +119,12 @@ static NSString *MMOSCUndoName(NSInteger part) {
 }
 - (CGPoint)pixelsFromCanvasX:(double)x y:(double)y imageSize:(CGSize)size {
   return OSCBoxPixelFromObject([self objectFromCanvas:CGPointMake(x, y)], size);
+}
+// The pivot the rotation rings and the anchor square both sit on: rotation and
+// scale turn about the position offset plus the anchor, not the image centre.
+- (CGPoint)pivotCanvasForPose:(OSCBoxPose)pose imageSize:(CGSize)imageSize {
+  CGPoint pivot = OSCBoxPivotPixels(pose, imageSize);
+  return [self canvasFromObject:OSCBoxObjectFromPixel(pivot, imageSize)];
 }
 
 // Visibility is a saved per-effect toggle, so hover and exit callbacks that
@@ -272,8 +281,7 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
   CGPoint corners[4];
   BOOL hasBox = [self canvasCornersForPose:pose imageSize:imageSize corners:corners];
   NSMutableData *vertices = [NSMutableData data];
-  // Handles share the border colour; the fill is a touch lighter so the ring still reads.
-  const simd_float4 border = {0.9f, 0.9f, 0.9f, 0.9f}, fill = {1, 1, 1, 1}, stroke = {0.82f, 0.82f, 0.82f, 1};
+  const simd_float4 border = {0.9f, 0.9f, 0.9f, 0.9f};
   BOOL showBorder = hasBox && [self visible:MMShowPositionOSC cached:&_showBorder atTime:time];
   BOOL showHandles = hasBox && [self visible:MMShowScaleOSC cached:&_showHandles atTime:time];
   simd_float2 metal[4];
@@ -287,9 +295,14 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
     CGPoint centre = OSCBoxHandlePoint(corners, i), axis = OSCBoxHandleAxis(corners, i);
     simd_float2 metalCentre = {(float)centre.x - surfaceWidth / 2, surfaceHeight / 2 - (float)centre.y};
     simd_float2 metalAxis = i < 4 ? (simd_float2){1, 0} : (simd_float2){(float)axis.x, -(float)axis.y};
-    float radius = OSCBoxHandleRadius + (i == active ? MMOSCActiveHandleGrowth : 0);
-    MMOSCAppendGlyph(vertices, metalCentre, metalAxis, i < 4 ? 0 : OSCBoxPillHalfLength, radius, MMOSCHandleOutline, fill, stroke);
+    float radius = OSCBoxHandleRadius + (i == active ? MMOSCActiveGlyphGrowth : 0);
+    MMOSCAppendGlyph(vertices, metalCentre, metalAxis, i < 4 ? 0 : OSCBoxPillHalfLength, radius, MMOSCHandleOutline,
+                     MMOSCGlyphFill, MMOSCGlyphStroke);
   }
+  // Last in the buffer, so the pivot square sits over the border and handles;
+  // it needs no box, because the pivot exists even edge-on.
+  [self appendAnchorSquare:vertices pose:pose imageSize:imageSize
+                   surface:CGSizeMake(surfaceWidth, surfaceHeight) activePart:activePart atTime:time];
   MMOSCVertex ringQuad[6];
   MMOSCRingParams ringParams = {0};
   BOOL showRings = [self ringQuad:ringQuad params:&ringParams pose:pose imageSize:imageSize
@@ -356,11 +369,13 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
   _cursorKind = kind;
 }
 
-// Precedence: scale handles, then the rotation rings, then the position drag
-// that covers the rest of the canvas. A hidden element is not hit at all.
+// Precedence: the anchor square, then the scale handles, then the rotation
+// rings, then the position drag that covers the rest of the canvas. A hidden
+// element is not hit at all.
 - (void)hitTestOSCAtMousePositionX:(double)x mousePositionY:(double)y activePart:(NSInteger *)activePart atTime:(CMTime)time {
   _hoveredHandle = -1;
   self.hoveredRing = -1;
+  self.hoveredAnchor = NO;
   CGSize size = [self imageSize];
   OSCBoxPose pose;
   if (size.width <= 0 || size.height <= 0 || ![self boxPoseAtTime:time pose:&pose]) {
@@ -370,20 +385,28 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
   }
   CGPoint corners[4];
   BOOL hasBox = [self canvasCornersForPose:pose imageSize:size corners:corners];
-  NSInteger part = hasBox ? OSCBoxHitTest(corners, CGPointMake(x, y), OSCBoxHandleHitRadius,
-                                          [self visible:MMShowScaleOSC cached:&_showHandles atTime:time])
-                          : OSCBoxPartNone;
   MMOSCCursorKind kind = MMOSCCursorArrow;
-  if (part >= OSCBoxPartHandleBase) {
-    _hoveredHandle = part - OSCBoxPartHandleBase;
-    kind = MMResizeCursorKindForBoxHandle(_hoveredHandle);
+  NSInteger part = OSCBoxPartNone;
+  // The square sits on the pivot, which the position drag also covers, so it
+  // wins first: it is the smallest target of the three.
+  if ([self anchorAtX:x y:y pose:pose imageSize:size atTime:time]) {
+    self.hoveredAnchor = YES;
+    part = OSCBoxPartAnchor;
   } else {
-    MMOSCCursorKind ringKind = MMOSCCursorArrow;
-    NSInteger ring = [self ringAtX:x y:y pose:pose imageSize:size cursor:&ringKind atTime:time];
-    if (ring >= 0) {
-      self.hoveredRing = ring;
-      part = OSCBoxPartRingBase + ring;
-      kind = ringKind;
+    part = hasBox ? OSCBoxHitTest(corners, CGPointMake(x, y), OSCBoxHandleHitRadius,
+                                  [self visible:MMShowScaleOSC cached:&_showHandles atTime:time])
+                  : OSCBoxPartNone;
+    if (part >= OSCBoxPartHandleBase) {
+      _hoveredHandle = part - OSCBoxPartHandleBase;
+      kind = MMResizeCursorKindForBoxHandle(_hoveredHandle);
+    } else {
+      MMOSCCursorKind ringKind = MMOSCCursorArrow;
+      NSInteger ring = [self ringAtX:x y:y pose:pose imageSize:size cursor:&ringKind atTime:time];
+      if (ring >= 0) {
+        self.hoveredRing = ring;
+        part = OSCBoxPartRingBase + ring;
+        kind = ringKind;
+      }
     }
   }
   // A drag keeps the cursor it started with, even when the pointer outruns the
@@ -407,12 +430,14 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
   _dragCursorKind = _cursorKind;
   _pressImageSize = size;
   _pressPixels = [self pixelsFromCanvasX:x y:y imageSize:size];
-  BOOL ring = activePart >= OSCBoxPartRingBase;
+  BOOL ring = activePart >= OSCBoxPartRingBase && activePart < OSCBoxPartAnchor;
   if (ring && ![self beginRingDragAtX:x y:y part:activePart pose:_pressPose imageSize:size atTime:time]) {
     [self finishDrag];
     return;
   }
-  if (!ring) {
+  if (activePart == OSCBoxPartAnchor) {
+    [self beginAnchorDragAtTime:time];
+  } else if (!ring) {
     _combinedCache = MMCombinedEditingCache(self.apiManager, time);
     _scaleCache = MMScaleEditingCache(self.apiManager, time);
   }
@@ -440,7 +465,11 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
   BOOL grouped = [undo startUndoGroup:MMOSCUndoName(_dragPart)];
   BOOL wrote = NO;
   @try {
-    if (_dragPart >= OSCBoxPartRingBase) {
+    if (_dragPart == OSCBoxPartAnchor) {
+      wrote = [self dragAnchorFromPose:_pressPose
+                              byPixels:CGPointMake(current.x - _pressPixels.x, current.y - _pressPixels.y)
+                                atTime:time];
+    } else if (_dragPart >= OSCBoxPartRingBase) {
       wrote = [self dragRingAtX:x y:y modifiers:modifiers atTime:time];
     } else if (_dragPart == OSCBoxPartPosition) {
       OSCBoxPose pose = OSCBoxPoseMovedBy(_pressPose, CGPointMake(current.x - _pressPixels.x, current.y - _pressPixels.y), _pressImageSize);
@@ -479,14 +508,16 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
   _combinedCache = nil;
   _scaleCache = nil;
   [self clearRingDrag];
+  [self clearAnchorDrag];
 }
 
 - (void)mouseExitedAtPositionX:(double)x positionY:(double)y modifiers:(FxModifierKeys)modifiers
                    forceUpdate:(BOOL *)forceUpdate atTime:(CMTime)time {
   [self applyCursorKind:MMOSCCursorArrow];
-  if (_hoveredHandle < 0 && self.hoveredRing < 0) return;
+  if (_hoveredHandle < 0 && self.hoveredRing < 0 && !self.hoveredAnchor) return;
   _hoveredHandle = -1;
   self.hoveredRing = -1;
+  self.hoveredAnchor = NO;
   *forceUpdate = YES;
 }
 - (void)mouseEnteredAtPositionX:(double)x positionY:(double)y modifiers:(FxModifierKeys)modifiers

@@ -28,21 +28,24 @@ static NSString *MMOSCVisibilityKey(UInt32 parameter) {
   switch (parameter) {
   case MMShowScaleOSC: return @"osc.scale";
   case MMShowRotationOSC: return @"osc.rotation";
+  case MMShowAnchorOSC: return @"osc.anchor";
   default: return @"osc.position";
   }
 }
 static BOOL MMIsOSCVisibilityKey(NSString *key) { return [key hasPrefix:@"osc."]; }
 BOOL MMIsOSCVisibilityParameter(UInt32 parameter) {
   return parameter == MMShowPositionOSC || parameter == MMShowScaleOSC ||
-         parameter == MMShowRotationOSC;
+         parameter == MMShowRotationOSC || parameter == MMShowAnchorOSC;
 }
 static NSDictionary *MMFactory(NSString *key) {
   if ([key isEqual:@"duration"])
     return @{@"value" : @1.2};
   if ([key isEqual:@"easing"])
     return @{@"value" : @(MTEasingSmooth)};
+  // The transform controls start visible; the anchor square does not, because
+  // the pivot only matters while it is being moved.
   if (MMIsOSCVisibilityKey(key))
-    return @{@"value" : @YES};
+    return @{@"value" : @(![key isEqual:@"osc.anchor"])};
   return @{@"amount" : @1, @"speed" : @1};
 }
 static BOOL MMValidDefault(NSString *key, NSDictionary *v) {
