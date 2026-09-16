@@ -8,7 +8,7 @@
 #import "MMResetParameter.h"
 #import "MMNativeLinks.h"
 
-@interface MMPropertyRowBinding : NSObject
+@interface MMPropertyRowBinding : NSObject <MMInspectorRefreshable>
 @property(nonatomic, weak) ICInspectorRow *row;
 @property(nonatomic, weak) ICSliderView *slider;
 - (instancetype)initWithRow:(ICInspectorRow *)row slider:(ICSliderView *)slider plugin:(MagicMovePlugin *)plugin lane:(MMPropertyLane *)lane label:(NSString *)label;
@@ -19,7 +19,6 @@
 @property(nonatomic, strong) id<PROAPIAccessing> manager;
 @property(nonatomic, strong) MMPropertyLane *lane;
 @property(nonatomic, readonly) MMPropertyPoseCache *cache;
-@property(nonatomic, strong) NSTimer *timer;
 @property(nonatomic, strong) id selectionObserver;
 @property(nonatomic, strong) id<FxUndoAPI> scrubUndo;
 @property(nonatomic, copy) NSString *undoName;
@@ -47,7 +46,8 @@
 // rebuilt row costs no host traffic here.
 - (MMPropertyPoseCache *)cache { return [self.plugin sharedCacheForLane:self.lane]; }
 - (void)attach {
-  [self.timer invalidate]; self.timer=nil;
+  MMInspectorClock *clock=self.plugin.inspectorClock;
+  [clock removeView:self];
   if(self.selectionObserver) [NSNotificationCenter.defaultCenter removeObserver:self.selectionObserver]; self.selectionObserver=nil;
   [[MMShortcutCapture sharedCapture] detachView:self.row];
   if(!self.row.window) return;
@@ -62,43 +62,43 @@
     }); return YES;
   }];
   [self refreshValues];
-  self.timer=[NSTimer timerWithTimeInterval:0.1 repeats:YES block:^(NSTimer *timer) {
-    MMPropertyRowBinding *row=weakSelf; if(!row) { [timer invalidate]; return; } [row refreshValues];
-  }];
-  [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
+  [clock addView:self];
 }
+// Standalone refresh for direct callers; the clock uses the action-scoped body.
 - (void)refreshValues {
+  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)]; if(!action) return;
+  [action startAction:self.row];
+  @try { [self refreshInspectorValuesInAction:action]; }
+  @finally { [action endAction:self.row]; }
+}
+- (void)refreshInspectorValuesInAction:(id<FxCustomParameterActionAPI_v4>)action {
   if(!self.row.window || self.row.hiddenOrHasHiddenAncestor || self.row.interacting) return;
   self.row.enabled=NO;
   self.slider.enabled=NO;
-  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)]; if(!action) return;
-  [action startAction:self.row];
-  @try {
-    CMTime time=[action currentTime]; BOOL explicit=NO;
-    self.row.keyposeLinkColor=MMNativePropertyLinkColor(self.manager,self.lane.parameterID,time);
-    self.row.keyposeLinked=self.row.keyposeLinkColor!=nil;
-    id<FxParameterRetrievalAPI_v6> get=[self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    if(![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time]) return;
-    NSArray *entries=[self.cache snapshotEntries];
-    if(explicit) {
-      if(!entries.count) return;
-      if(entries[0][@"nativeTime"]) {
-        NSDictionary *destination=entries.lastObject;
-        for(NSDictionary *entry in entries) if(CMTimeGetSeconds(time)<=[entry[@"time"] doubleValue]+1e-6) { destination=entry; break; }
-        [destination[@"nativeTime"] getValue:&time];
-      }
+  CMTime time=[action currentTime]; BOOL explicit=NO;
+  self.row.keyposeLinkColor=MMNativePropertyLinkColor(self.manager,self.lane.parameterID,time);
+  self.row.keyposeLinked=self.row.keyposeLinkColor!=nil;
+  id<FxParameterRetrievalAPI_v6> get=[self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if(![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time]) return;
+  NSArray *entries=[self.cache snapshotEntries];
+  if(explicit) {
+    if(!entries.count) return;
+    if(entries[0][@"nativeTime"]) {
+      NSDictionary *destination=entries.lastObject;
+      for(NSDictionary *entry in entries) if(CMTimeGetSeconds(time)<=[entry[@"time"] doubleValue]+1e-6) { destination=entry; break; }
+      [destination[@"nativeTime"] getValue:&time];
     }
-    id<MMPropertyPose> pose=[self.lane sampleEntries:entries time:time]; if(!pose) return;
-    NSArray<NSNumber *> *values=pose.values;
-    if(values.count!=self.row.fields.count) return;
-    self.row.enabled=YES;
-    for(NSUInteger i=0;i<values.count;i++) {
-      ICValueTextField *field=self.row.fields[i];
-      if(!field.objectValue || field.doubleValue!=values[i].doubleValue) { field.doubleValue=values[i].doubleValue; }
-    }
-    self.slider.enabled=YES;
-    if(self.slider && self.slider.doubleValue!=pose.value) self.slider.doubleValue=pose.value;
-  } @finally { [action endAction:self.row]; }
+  }
+  id<MMPropertyPose> pose=[self.lane sampleEntries:entries time:time]; if(!pose) return;
+  NSArray<NSNumber *> *values=pose.values;
+  if(values.count!=self.row.fields.count) return;
+  self.row.enabled=YES;
+  for(NSUInteger i=0;i<values.count;i++) {
+    ICValueTextField *field=self.row.fields[i];
+    if(!field.objectValue || field.doubleValue!=values[i].doubleValue) { field.doubleValue=values[i].doubleValue; }
+  }
+  self.slider.enabled=YES;
+  if(self.slider && self.slider.doubleValue!=pose.value) self.slider.doubleValue=pose.value;
 }
 - (void)updateSelection {
   self.row.selected=self.plugin && self.plugin.activeInspectorParameterID==self.lane.parameterID;
@@ -138,7 +138,7 @@
   [[MMShortcutCapture sharedCapture] activateView:self.row];
 }
 - (void)dealloc {
-  [self.timer invalidate];
+  // Weak clock registration drops itself; the observer and shortcut do not.
   if(self.selectionObserver) [NSNotificationCenter.defaultCenter removeObserver:self.selectionObserver];
   [[MMShortcutCapture sharedCapture] detachView:self.row];
 }

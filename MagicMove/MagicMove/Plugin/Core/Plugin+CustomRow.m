@@ -23,9 +23,8 @@
 
 
 // Native keyframe controls are supplied by the host.
-@interface MMCustomRow : ICInspectorRow
+@interface MMCustomRow : ICInspectorRow <MMInspectorRefreshable>
 @property(nonatomic, strong) id<PROAPIAccessing> manager;
-@property(nonatomic, strong) NSTimer *refreshTimer;
 @property(nonatomic, strong) id selectionObserver;
 @property(nonatomic, readonly) MMCombinedPoseCache *poseCache;
 @property(nonatomic, readonly) MMScalePoseCache *scaleCache;
@@ -82,7 +81,7 @@
 - (MMScalePoseCache *)scaleCache { return [self.owner sharedScaleCache]; }
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
-  [self.refreshTimer invalidate]; self.refreshTimer = nil;
+  [self.owner.inspectorClock removeView:self];
   if(self.selectionObserver) [NSNotificationCenter.defaultCenter removeObserver:self.selectionObserver];
   self.selectionObserver=nil;
   [[MMShortcutCapture sharedCapture] detachView:self];
@@ -107,12 +106,7 @@
     return YES;
   }];
   [self refreshValues];
-  self.refreshTimer = [NSTimer timerWithTimeInterval:0.1 repeats:YES block:^(NSTimer *timer) {
-    MMCustomRow *view = weakSelf;
-    if (!view) { [timer invalidate]; return; }
-    [view refreshValues];
-  }];
-  [[NSRunLoop mainRunLoop] addTimer:self.refreshTimer forMode:NSRunLoopCommonModes];
+  [self.owner.inspectorClock addView:self];
 }
 - (void)updateSelection {
   UInt32 active=self.owner.activeInspectorParameterID ?: MMCustomControls;
@@ -168,57 +162,60 @@
   [super drawRect:dirtyRect];
 }
 - (void)dealloc {
+  // Weak clock registration drops itself; the observer and shortcut do not.
   if(_selectionObserver) [NSNotificationCenter.defaultCenter removeObserver:_selectionObserver];
-  [_refreshTimer invalidate];
   [[MMShortcutCapture sharedCapture] detachView:self];
 }
+// Standalone refresh for direct callers; the clock uses the action-scoped body.
 - (void)refreshValues {
+  id<FxCustomParameterActionAPI_v4> action = [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!action) return;
+  [action startAction:self];
+  @try { [self refreshInspectorValuesInAction:action]; }
+  @finally { [action endAction:self]; }
+}
+- (void)refreshInspectorValuesInAction:(id<FxCustomParameterActionAPI_v4>)action {
   // Cached sampling is read-only and may run while the host playhead is dragged.
   // Native linked-key writes still retain their separate mouse-up guard.
   if (!self.window || self.hiddenOrHasHiddenAncestor) return;
   if (self.interacting) return;
   // Preserve the last display while unavailable, but never allow stale edits.
   self.enabled = NO;
-  id<FxCustomParameterActionAPI_v4> action = [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!action) return;
-  [action startAction:self];
-  @try {
-    CGSize size = self.scaleRow ? CGSizeMake(100,100) : (self.imageSizeProvider ? self.imageSizeProvider() : CGSizeZero);
-    if (!isfinite(size.width) || !isfinite(size.height) || size.width <= 0 || size.height <= 0) return;
-    self.pixelSize = NSSizeFromCGSize(size);
-    CMTime time = [action currentTime];
-    self.keyposeLinkColor=MMNativePropertyLinkColor(self.manager,self.scaleRow ? MMScaleControls:MMCustomControls,time);
-    self.keyposeLinked=self.keyposeLinkColor!=nil;
-    id pose = self.scaleRow ? [self.scaleCache sampleAtTime:time] : [self.poseCache sampleAtTime:time];
-    id<FxParameterRetrievalAPI_v6> get = [self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    BOOL explicit = NO;
-    if (![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time]) return;
-    if (self.scaleRow) {
-      BOOL linked = YES;
-      self.linkButton.enabled = [get getBoolValue:&linked fromParameter:MMScaleProportional atTime:time];
-      self.linkButton.state = linked ? NSControlStateValueOn : NSControlStateValueOff;
-      self.linkButton.contentTintColor = linked ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.inactiveControlColor;
+  CGSize size = self.scaleRow ? CGSizeMake(100,100) : (self.imageSizeProvider ? self.imageSizeProvider() : CGSizeZero);
+  if (!isfinite(size.width) || !isfinite(size.height) || size.width <= 0 || size.height <= 0) return;
+  self.pixelSize = NSSizeFromCGSize(size);
+  CMTime time = [action currentTime];
+  self.keyposeLinkColor=MMNativePropertyLinkColor(self.manager,self.scaleRow ? MMScaleControls:MMCustomControls,time);
+  self.keyposeLinked=self.keyposeLinkColor!=nil;
+  id pose = self.scaleRow ? [self.scaleCache sampleAtTime:time] : [self.poseCache sampleAtTime:time];
+  id<FxParameterRetrievalAPI_v6> get = [self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  BOOL explicit = NO;
+  if (![get getBoolValue:&explicit fromParameter:MMExplicitCreation atTime:time]) return;
+  if (self.scaleRow) {
+    BOOL linked = YES;
+    self.linkButton.enabled = [get getBoolValue:&linked fromParameter:MMScaleProportional atTime:time];
+    self.linkButton.state = linked ? NSControlStateValueOn : NSControlStateValueOff;
+    self.linkButton.contentTintColor = linked ? ICInspectorTokens.accentMatchingHost : ICInspectorTokens.inactiveControlColor;
+  }
+  if (explicit) {
+    CMTime target;
+    if (self.scaleRow)
+      pose = [self.scaleCache valueTargetAtTime:time targetTime:&target] ? [self.scaleCache sampleAtTime:target] : nil;
+    else pose = [self.poseCache valueTargetAtTime:time targetTime:&target] ? [self.poseCache sampleAtTime:target] : nil;
+  }
+  self.enabled = pose != nil;
+  if (!pose) return;
+  for (NSTextField *field in self.fields) {
+    double dimension = field.tag == MMPositionX ? self.pixelSize.width : self.pixelSize.height;
+    double value = self.scaleRow ? (field.tag == MMScaleX ? [(MMScalePose *)pose x] : [(MMScalePose *)pose y])
+        : (field.tag == MMPositionX ? [(MMCombinedPose *)pose positionX] : [(MMCombinedPose *)pose positionY]) * dimension / 100.0;
+    NSNumberFormatter *formatter = (NSNumberFormatter *)field.formatter;
+    formatter.minimum = self.scaleRow ? @0 : @(-2 * dimension);
+    formatter.maximum = self.scaleRow ? @400 : @(2 * dimension);
+    if (!field.objectValue || field.doubleValue != value) {
+      field.doubleValue = value;
     }
-    if (explicit) {
-      CMTime target;
-      if (self.scaleRow)
-        pose = [self.scaleCache valueTargetAtTime:time targetTime:&target] ? [self.scaleCache sampleAtTime:target] : nil;
-      else pose = [self.poseCache valueTargetAtTime:time targetTime:&target] ? [self.poseCache sampleAtTime:target] : nil;
-    }
-    self.enabled = pose != nil;
-    if (!pose) return;
-    for (NSTextField *field in self.fields) {
-      double dimension = field.tag == MMPositionX ? self.pixelSize.width : self.pixelSize.height;
-      double value = self.scaleRow ? (field.tag == MMScaleX ? [(MMScalePose *)pose x] : [(MMScalePose *)pose y])
-          : (field.tag == MMPositionX ? [(MMCombinedPose *)pose positionX] : [(MMCombinedPose *)pose positionY]) * dimension / 100.0;
-      NSNumberFormatter *formatter = (NSNumberFormatter *)field.formatter;
-      formatter.minimum = self.scaleRow ? @0 : @(-2 * dimension);
-      formatter.maximum = self.scaleRow ? @400 : @(2 * dimension);
-      if (!field.objectValue || field.doubleValue != value) {
-        field.doubleValue = value;
-      }
-    }
-  } @finally { [action endAction:self]; }
+  }
 }
 - (void)toggleProportional:(NSButton *)button {
   [self.window makeFirstResponder:nil];

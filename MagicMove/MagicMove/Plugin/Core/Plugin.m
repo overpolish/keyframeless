@@ -25,6 +25,7 @@
 @property(nonatomic, strong) MMScalePoseCache *scaleViewCache;
 @property(nonatomic, strong) NSDictionary<NSNumber *, MMPropertyPoseCache *> *laneViewCaches;
 @property(nonatomic) BOOL viewCachesPublished;
+@property(nonatomic, strong) MMInspectorClock *sharedInspectorClock;
 @end
 
 NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentationChanged";
@@ -153,7 +154,9 @@ NSSet<Class> *MMClassesForCustomParameter(UInt32 parameterID) {
 
       }
     }];
-    [[NSRunLoop mainRunLoop] addTimer:plugin.durationTimer forMode:NSRunLoopCommonModes];
+    // Default mode only: this tick opens a host action, which the menu paths
+    // deliberately keep out of AppKit tracking loops.
+    [[NSRunLoop mainRunLoop] addTimer:plugin.durationTimer forMode:NSDefaultRunLoopMode];
   });
 }
 
@@ -610,6 +613,14 @@ NSSet<Class> *MMClassesForCustomParameter(UInt32 parameterID) {
 - (MMPropertyPoseCache *)sharedCacheForLane:(MMPropertyLane *)lane {
   [self publishViewCaches];
   return self.laneViewCaches[@(lane.parameterID)];
+}
+@end
+
+@implementation MagicMovePlugin (InspectorRefresh)
+- (MMInspectorClock *)inspectorClock {
+  if (!self.sharedInspectorClock)
+    self.sharedInspectorClock = [[MMInspectorClock alloc] initWithManager:self.apiManager];
+  return self.sharedInspectorClock;
 }
 @end
 #pragma clang diagnostic pop

@@ -5,7 +5,7 @@
 #import "MMInspectorColors.h"
 #import "MMResetParameter.h"
 #import "MMTimingEditorModel.h"
-#import "Plugin.h"
+#import "Plugin_Private.h"
 @import InspectorControls;
 
 // Menu-item images use NSPopUpButton's native image support. Curve semantics
@@ -229,10 +229,9 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
     [menu selectItemAtIndex:index];
 }
 
-@interface MMTimingEditor ()
+@interface MMTimingEditor () <MMInspectorRefreshable>
 @property(weak) MagicMovePlugin *plugin;
 @property(strong) id<PROAPIAccessing> manager;
-@property(strong) NSTimer *timer;
 @property(strong) ICPopUpButton *easingMenu;
 @property(strong) ICPopUpButton *motionMenu;
 @property(strong) NSButton *available;
@@ -406,29 +405,15 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
 }
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
-  [self.timer invalidate];
-  self.timer = nil;
+  MMInspectorClock *clock = self.plugin.inspectorClock;
+  [clock removeView:self];
   if (!self.window) {
     [self publishGraphParameters:[NSSet set]];
     [self endScrub];
     return;
   }
   [self refresh];
-  __weak MMTimingEditor *weakSelf = self;
-  self.timer = [NSTimer timerWithTimeInterval:0.1
-                                      repeats:YES
-                                        block:^(NSTimer *timer) {
-                                          MMTimingEditor *view = weakSelf;
-                                          if (!view) {
-                                            [timer invalidate];
-                                            return;
-                                          }
-                                          [view refresh];
-                                        }];
-  [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
-}
-- (void)dealloc {
-  [_timer invalidate];
+  [clock addView:self];
 }
 - (void)setEditorsEnabled:(BOOL)enabled {
   MMEnable(self.available, enabled);
@@ -503,33 +488,32 @@ static void MMSelect(NSPopUpButton *menu, NSInteger index) {
     self.graph.progress=fraction;
   } @finally { [action endAction:self]; }
 }
+// Standalone refresh for direct callers; the clock uses the action-scoped body.
 - (void)refresh {
-  if (!self.window || self.hiddenOrHasHiddenAncestor || self.writingSetting)
-    return;
-  // Native selection is provisional until its action finishes. Host snapshots
-  // remain authoritative outside that interaction, including undo and scrubbing.
-  BOOL editing = self.durationRow.interacting || self.motionRow.interacting ||
-      self.easingMenu.interacting || self.motionMenu.interacting;
   id<FxCustomParameterActionAPI_v4> action =
       [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action) {
     [self setEditorsEnabled:NO];
     return;
   }
+  [action startAction:self];
+  @try { [self refreshInspectorValuesInAction:action]; }
+  @finally { [action endAction:self]; }
+}
+- (void)refreshInspectorValuesInAction:(id<FxCustomParameterActionAPI_v4>)action {
+  if (!self.window || self.hiddenOrHasHiddenAncestor || self.writingSetting)
+    return;
+  // Native selection is provisional until its action finishes. Host snapshots
+  // remain authoritative outside that interaction, including undo and scrubbing.
+  BOOL editing = self.durationRow.interacting || self.motionRow.interacting ||
+      self.easingMenu.interacting || self.motionMenu.interacting;
   UInt32 parameter =
       (editing || self.graph.scrubbing) ? self.displayedParameter
               : (self.plugin.activeInspectorParameterID ?: MMCustomControls);
-  CMTime now;
-  MMInspectorGap *gap;
-  NSArray<MMInspectorGap *> *graphGaps;
-  [action startAction:self];
-  @try {
-    now = [action currentTime];
-    gap = MMReadInspectorGap(self.manager, parameter, now);
-    graphGaps=self.graph.scrubbing ? self.plottedGaps : MMReadInspectorGraphGaps(self.manager,parameter,now);
-  } @finally {
-    [action endAction:self];
-  }
+  CMTime now = [action currentTime];
+  MMInspectorGap *gap = MMReadInspectorGap(self.manager, parameter, now);
+  NSArray<MMInspectorGap *> *graphGaps =
+      self.graph.scrubbing ? self.plottedGaps : MMReadInspectorGraphGaps(self.manager,parameter,now);
   // The host action covers only reads. Publish controls/playhead before curve
   // work.
   self.displayedParameter = parameter;

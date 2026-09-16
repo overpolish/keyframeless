@@ -7,6 +7,8 @@
 #import "MMPropertyRow.h"
 #import "MMInspectorColors.h"
 #import "MMTimingEditor.h"
+#import "MMInspectorClock.h"
+#import "Plugin_Private.h"
 @import InspectorControls;
 
 @interface ICValueTextField (StyleTest)
@@ -156,6 +158,27 @@ int main(int argc, const char *argv[]) {
   [window.contentView addSubview:rebuiltPosition];
   [rebuiltPosition refreshValues]; displayed(rebuiltPosition,480,-540);
   [rebuiltPosition removeFromSuperview];
+
+  // The shared clock refreshes every attached view from one host action; each
+  // view opening its own is what made selection expensive.
+  host.imageSize=NSMakeSize(1920,1080);
+  publish(host,25,-50);
+  MMCustomRow *clockPosition=(MMCustomRow *)[rowPlugin createViewForParameterID:MMCustomControls];
+  clockPosition.imageSizeProvider = ^CGSize { return NSSizeToCGSize(host.imageSize); };
+  MMScalarRow *clockOpacity=(MMScalarRow *)[rowPlugin createViewForParameterID:MMOpacityControls];
+  [window.contentView addSubview:clockPosition];
+  [window.contentView addSubview:clockOpacity];
+  clockPosition.fields[0].doubleValue=0;
+  starts=host.starts;
+  [rowPlugin.inspectorClock refreshNow];
+  assert(host.starts==starts+1);
+  displayed(clockPosition,480,-540);
+  // Views leaving their window stop being refreshed.
+  [clockPosition removeFromSuperview];
+  [clockOpacity removeFromSuperview];
+  starts=host.starts;
+  [rowPlugin.inspectorClock refreshNow];
+  assert(host.starts==starts);
 
   // A newly recreated row must not inherit the old row's values or defaults.
   RowHost *other=[RowHost new];

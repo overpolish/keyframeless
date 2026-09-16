@@ -11,6 +11,7 @@
 #import "MMCombinedPose.h"
 #import "MMPropertyLane.h"
 #import "MMScalePose.h"
+#import "MMInspectorClock.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -56,6 +57,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable MMCombinedPoseCache *)sharedCombinedCache;
 - (nullable MMScalePoseCache *)sharedScaleCache;
 - (nullable MMPropertyPoseCache *)sharedCacheForLane:(MMPropertyLane *)lane;
+@end
+
+@interface MagicMovePlugin (InspectorRefresh)
+// Lazily created; one shared 10Hz refresh clock for this instance's views.
+- (MMInspectorClock *)inspectorClock;
 @end
 
 NS_ASSUME_NONNULL_END
