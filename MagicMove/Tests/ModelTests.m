@@ -485,6 +485,9 @@ static void testDuplicatedEffectsStayIndependent(void) {
 @implementation TileBoundsDouble
 - (FxMatrix44 *)inversePixelTransform { return [FxMatrix44 new]; }
 @end
+static BOOL MMRectEqual(FxRect a, FxRect b) {
+  return a.left == b.left && a.right == b.right && a.top == b.top && a.bottom == b.bottom;
+}
 static void testRenderInputAndTileContracts(void) {
   Fixture *f = [Fixture new];
   TileBoundsDouble *tile = [TileBoundsDouble new];
@@ -520,41 +523,49 @@ static void testRenderInputAndTileContracts(void) {
                                      error:&error] &&
          error);
   error = nil;
-  // Position carries the image outside its own frame, and the output has to
-  // grow with it or the host's transform receives clipped pixels. Growth is
-  // capped at one frame per side.
+  // The rect is sized by the pose but must stay centred on the frame. A rect
+  // whose centre shifted with the moved content moved the buffer the same way
+  // and the host's placement cancelled the translation: Position changed
+  // nothing on screen. Growth is symmetric, capped at one frame per side, and
+  // absent entirely when the pose keeps content inside the frame.
   TileBoundsDouble *frame = [TileBoundsDouble new];
   frame.imagePixelBounds = (FxRect){.left = 0, .right = 1920, .top = 1080, .bottom = 0};
-  MMTransform moved = {0};
-  moved.scale = 1; moved.scaleY = 1; moved.offset = (vector_float2){0.5f, 0};
+  MMTransform pose = {0};
+  pose.scale = pose.scaleY = 1;
   FxRect grown = {0};
-  assert([f.plugin destinationImageRect:&grown
-                           sourceImages:@[ (id)frame ]
-                       destinationImage:(id)frame
-                            pluginState:[NSData dataWithBytes:&moved length:sizeof(moved)]
-                                 atTime:TestTime(0)
-                                  error:&error]);
-  assert(!error && grown.left == 0 && grown.right == 2880 && grown.top == 1080 &&
-         grown.bottom == 0);
-  moved.offset = (vector_float2){2.0f, 0};
-  assert([f.plugin destinationImageRect:&grown
-                           sourceImages:@[ (id)frame ]
-                       destinationImage:(id)frame
-                            pluginState:[NSData dataWithBytes:&moved length:sizeof(moved)]
-                                 atTime:TestTime(0)
-                                  error:&error]);
-  assert(!error && grown.left == 0 && grown.right == 3840);
-  // A shrinking transform never shrinks the output below the frame.
-  moved.offset = (vector_float2){0, 0};
-  moved.scale = moved.scaleY = 0.5f;
-  assert([f.plugin destinationImageRect:&grown
-                           sourceImages:@[ (id)frame ]
-                       destinationImage:(id)frame
-                            pluginState:[NSData dataWithBytes:&moved length:sizeof(moved)]
-                                 atTime:TestTime(0)
-                                  error:&error]);
-  assert(!error && grown.left == 0 && grown.right == 1920 && grown.top == 1080 &&
-         grown.bottom == 0);
+  FxRect (^rectFor)(MMTransform) = ^FxRect(MMTransform state) {
+    FxRect out = {0};
+    NSError *rectError = nil;
+    assert([f.plugin destinationImageRect:&out
+                             sourceImages:@[ (id)frame ]
+                         destinationImage:(id)frame
+                              pluginState:[NSData dataWithBytes:&state length:sizeof(state)]
+                                   atTime:TestTime(0)
+                                    error:&rectError]);
+    assert(!rectError);
+    return out;
+  };
+  // Nothing leaves the frame: no allocation beyond it.
+  grown = rectFor(pose);
+  assert(grown.left == 0 && grown.right == 1920 && grown.top == 1080 && grown.bottom == 0);
+  pose.scale = pose.scaleY = 0.5f;
+  grown = rectFor(pose);
+  assert(grown.left == 0 && grown.right == 1920 && grown.top == 1080 && grown.bottom == 0);
+  // Half a frame right grows both sides by half a frame, and only in X.
+  pose.scale = pose.scaleY = 1;
+  pose.offset = (vector_float2){0.5f, 0};
+  grown = rectFor(pose);
+  assert(grown.left == -960 && grown.right == 2880 && grown.top == 1080 && grown.bottom == 0);
+  // Moving the other way costs the same: the centre never moves.
+  pose.offset = (vector_float2){-0.5f, 0};
+  assert(MMRectEqual(rectFor(pose), grown));
+  // Y grows independently, and past the cap the margin stops at one frame.
+  pose.offset = (vector_float2){0, 0.25f};
+  grown = rectFor(pose);
+  assert(grown.left == 0 && grown.right == 1920 && grown.top == 1350 && grown.bottom == -270);
+  pose.offset = (vector_float2){4.0f, 0};
+  grown = rectFor(pose);
+  assert(grown.left == -1920 && grown.right == 3840 && grown.top == 1080 && grown.bottom == 0);
   error = nil;
   assert(![f.plugin destinationImageRect:&grown
                             sourceImages:@[]

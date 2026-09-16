@@ -108,6 +108,13 @@ static int MMBlurIntegerSetting(id<FxParameterRetrievalAPI_v6> api, UInt32 param
       else if (lane.valueID == MMScale) { states[sample].scale = value/100; states[sample].scaleY = value/100; }
     }
   }
+  // The timing lanes carry Position X and Scale only, so the inactive path has
+  // no Y at all and the render held still while the on-screen control moved.
+  // Y lives in the combined pose in both states, which is also what the
+  // control draws from, so read it there whenever the lanes are driving.
+  if (!combinedActive)
+    for (NSUInteger sample=0; sample<times.count; ++sample)
+      states[sample].offset.y = combined[sample].positionY/100;
   BOOL scaleActive = NO;
   NSArray<MMScalePose *> *scales = MMReadScalePoseSamples(self.apiManager, times, &scaleActive, error);
   if (!scales) return NO;
@@ -229,15 +236,16 @@ static NSUInteger MMSampleCount(NSData *pluginState) {
     return 1;
   return (NSUInteger)blur.sampleCount;
 }
-// One frame of margin per side. The host applies its own transform to whatever
-// the plugin returns, so anything cut here reads as the effect ignoring a
-// native transform; the cap is what keeps a 4K allocation affordable, and only
-// the extreme ends of the Position range still clip.
+// The most margin a side can take, in frames. Content moved past it clips, and
+// the cap bounds the allocation given that the filter also needs the whole
+// buffer: one frame per side is nine times the frame area.
 static const double MMDestinationMarginFrames = 1.0;
-// The transformed source quad, in source-frame fractions offset from the frame
-// centre, y measured downward to match the shader's coordinates.
-static void MMTransformExtent(MMTransform state,double aspect,
-                              double *minX,double *maxX,double *minY,double *maxY) {
+// Half-extents of the transformed source quad, in frame fractions from the
+// frame centre, y measured downward to match the shader's coordinates. Only
+// the magnitude is used: the output rect stays centred on the frame, so it can
+// be sized by the pose without ever moving with it.
+static void MMTransformHalfExtent(MMTransform state,double aspect,
+                                  double *halfX,double *halfY) {
   if(!(state.scale>0) || !(state.scaleY>0) || !isfinite(aspect) || aspect<=0) return;
   double cx=cos(state.rotationX), sx=sin(state.rotationX);
   double cy=cos(state.rotationY), sy=sin(state.rotationY);
@@ -250,8 +258,7 @@ static void MMTransformExtent(MMTransform state,double aspect,
     double x=(a*localX+b*localY)/aspect+state.offset.x+state.anchor.x;
     double y=(c*localX+d*localY)+state.offset.y+state.anchor.y;
     if(!isfinite(x) || !isfinite(y)) continue;
-    *minX=fmin(*minX,x); *maxX=fmax(*maxX,x);
-    *minY=fmin(*minY,y); *maxY=fmax(*maxY,y);
+    *halfX=fmax(*halfX,fabs(x)); *halfY=fmax(*halfY,fabs(y));
   }
 }
 // The source region a destination point reads, in frame fractions offset from
@@ -286,14 +293,19 @@ static BOOL MMSourceExtent(MMTransform state,double aspect,double x,double y,
   FxRect frame = source.imagePixelBounds;
   *destinationImageRect = frame;
   double frameWidth = frame.right-frame.left, frameHeight = frame.top-frame.bottom;
-  NSUInteger samples = MMSampleCount(pluginState);
-  if (frameWidth <= 0 || frameHeight <= 0 || !samples) return YES;
+  if (frameWidth <= 0 || frameHeight <= 0) return YES;
+  // Sized by the pose, but always centred on the frame. The rect's centre must
+  // not move: the host places the output by its own rule rather than by the
+  // rect's absolute position, so a rect that shifted with the content moved
+  // the buffer the same way and cancelled the translation, leaving Position
+  // with no effect on screen while the on-screen control tracked it. Growing
+  // symmetrically keeps the buffer still and costs nothing at the poses that
+  // never leave the frame, which is most of them.
   CGSize canonical = MMImageReferenceSize(source);
   double aspect = canonical.width > 0 && canonical.height > 0 ? canonical.width/canonical.height
                                                               : frameWidth/frameHeight;
-  // The frame itself always stays covered, so the untransformed extent is the
-  // starting point and a shrinking transform never shrinks the output.
-  double minX = -0.5, maxX = 0.5, minY = -0.5, maxY = 0.5, blur = 0;
+  double halfX = 0.5, halfY = 0.5, blur = 0;
+  NSUInteger samples = MMSampleCount(pluginState);
   for (NSUInteger i = 0; i < samples; ++i) {
     MMTransform state;
     [pluginState getBytes:&state range:NSMakeRange(i*sizeof(state),sizeof(state))];
@@ -302,19 +314,19 @@ static BOOL MMSourceExtent(MMTransform state,double aspect,double x,double y,
                                      state.anchor.y/(float)canonical.height};
     else
       state.anchor = (vector_float2){0,0};
-    MMTransformExtent(state,aspect,&minX,&maxX,&minY,&maxY);
+    MMTransformHalfExtent(state,aspect,&halfX,&halfY);
     if (isfinite(state.blurPixels)) blur = fmax(blur,state.blurPixels);
   }
   // The Gaussian reaches about three sigma past the transformed edge.
-  double blurX = canonical.width > 0 ? 3*blur/canonical.width : 0;
-  double blurY = canonical.height > 0 ? 3*blur/canonical.height : 0;
-  const double margin = MMDestinationMarginFrames;
-  minX = fmax(-0.5-margin, minX-blurX); maxX = fmin(0.5+margin, maxX+blurX);
-  minY = fmax(-0.5-margin, minY-blurY); maxY = fmin(0.5+margin, maxY+blurY);
-  destinationImageRect->left = (int)floor(frame.left+(0.5+minX)*frameWidth);
-  destinationImageRect->right = (int)ceil(frame.left+(0.5+maxX)*frameWidth);
-  destinationImageRect->top = (int)ceil(frame.top-(0.5+minY)*frameHeight);
-  destinationImageRect->bottom = (int)floor(frame.top-(0.5+maxY)*frameHeight);
+  if (canonical.width > 0) halfX += 3*blur/canonical.width;
+  if (canonical.height > 0) halfY += 3*blur/canonical.height;
+  const double limit = 0.5+MMDestinationMarginFrames;
+  double marginX = (fmin(limit,halfX)-0.5)*frameWidth;
+  double marginY = (fmin(limit,halfY)-0.5)*frameHeight;
+  destinationImageRect->left = (int)floor(frame.left-marginX);
+  destinationImageRect->right = (int)ceil(frame.right+marginX);
+  destinationImageRect->top = (int)ceil(frame.top+marginY);
+  destinationImageRect->bottom = (int)floor(frame.bottom-marginY);
   return YES;
 }
 - (void)publishInspectorGeometry:(FxImageTile *)image {

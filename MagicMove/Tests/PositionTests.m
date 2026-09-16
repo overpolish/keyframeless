@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MockHost.h"
 #import "MMCombinedPose.h"
+#import "MagicMoveOSC.h"
 #import "Constants.h"
 #import "ShaderTypes.h"
 @import RenderSupport;
@@ -54,6 +55,48 @@ static void Key(PositionHost *host, double time, MMCombinedPose *pose) {
   [[host lane:MMCustomControls] addObject:[@{ @"time": @(time), @"value": pose,
     @"key": [NSValue valueWithBytes:&key objCType:@encode(FxKeyframe)] } mutableCopy]];
   [host sort:MMCustomControls];
+}
+
+// The timing lanes carry Position X and Scale only, so an inactive combined
+// pose used to leave the render with no Y at all: the image held still while
+// the on-screen control tracked the authored value. Both consumers must read
+// the same pose with the same sense, which is what this checks. It deliberately
+// avoids the host's pixel row order: the OSC bound and the render offset are
+// each compared in their own space, and only their direction is asserted.
+static void testInactivePoseCarriesYToBothConsumers(void) {
+  const double authoredY = 20, authoredX = 15;
+  for (int sign = 1; sign >= -1; sign -= 2) {
+    MockHost *host = [MockHost new];
+    MagicMovePlugin *plugin = [[MagicMovePlugin alloc] initWithAPIManager:host];
+    host.plugin = plugin;
+    NSError *error = nil;
+    assert([plugin addParametersWithError:&error]);
+    // X reaches the render through the lane parameter, which the host keeps in
+    // sync; Y has no lane and must come from the pose.
+    host.staticValues[@(MMPositionX)] = @(sign*authoredX);
+    // authored:NO is the state that takes the per-lane path.
+    host.blobs[@(MMCustomControls)] =
+        [[MMCombinedPose alloc] initWithPositionX:sign*authoredX positionY:sign*authoredY
+                                            scale:100 authored:NO];
+    NSData *state = nil;
+    assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
+    MMTransform transform;
+    [state getBytes:&transform length:sizeof(transform)];
+    // The render must carry the authored Y, in frame fractions.
+    assert(fabs(transform.offset.y - sign*authoredY/100) < 1e-6);
+    assert(fabs(transform.offset.x - sign*authoredX/100) < 1e-6);
+
+    // The control places its box from the same pose. Compare directions: the
+    // OSC box centre leaves the frame centre the same way the render offset
+    // leaves zero, on both axes.
+    OSCBoxPose pose = {sign*authoredX, sign*authoredY, 100, 100, 0, 0, 0, 0, 0};
+    CGPoint corners[4];
+    assert(OSCBoxCorners(pose, CGSizeMake(1920, 1080), corners));
+    double centreX = 0, centreY = 0;
+    for (int i = 0; i < 4; ++i) { centreX += corners[i].x/4; centreY += corners[i].y/4; }
+    assert((centreX - 0.5) * transform.offset.x > 0);
+    assert((centreY - 0.5) * transform.offset.y > 0);
+  }
 }
 
 int main(void) {
@@ -113,6 +156,7 @@ int main(void) {
       sawY |= fabs(sampleState.offset.y) > 1e-9;
     }
     assert(sawY);
-    puts("Position Y: legacy default, secure roundtrip, three-component sampling, edit preservation and render offset passed");
+    testInactivePoseCarriesYToBothConsumers();
+    puts("Position Y: legacy default, secure roundtrip, three-component sampling, edit preservation, inactive-pose wiring and render offset passed");
   }
 }
