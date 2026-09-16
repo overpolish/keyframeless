@@ -152,7 +152,7 @@ static void rowsAndRenderState(void) {
   h.blobs[@(MMAnchorControls)]=pose(MMAnchorLane(),@[@120,@(-60)],nil);
   NSData *data=nil; assert([plugin pluginState:&data atTime:TestTime(2) quality:kFxQuality_HIGH error:nil]);
   MMTransform t; [data getBytes:&t length:sizeof(t)];
-  assert(t.blurPixels==15 && t.anchorPixels.x==120 && t.anchorPixels.y==-60);
+  assert(t.blurPixels==15 && t.anchor.x==120 && t.anchor.y==-60);
   h.failReadParameter=MMBlurControls;
   assert(![plugin pluginState:&data atTime:TestTime(2) quality:kFxQuality_HIGH error:nil]);
   h.failReadParameter=MMAnchorControls;

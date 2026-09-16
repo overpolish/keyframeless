@@ -519,6 +519,49 @@ static void testRenderInputAndTileContracts(void) {
                                     atTime:TestTime(0)
                                      error:&error] &&
          error);
+  error = nil;
+  // Position carries the image outside its own frame, and the output has to
+  // grow with it or the host's transform receives clipped pixels. Growth is
+  // capped at one frame per side.
+  TileBoundsDouble *frame = [TileBoundsDouble new];
+  frame.imagePixelBounds = (FxRect){.left = 0, .right = 1920, .top = 1080, .bottom = 0};
+  MMTransform moved = {0};
+  moved.scale = 1; moved.scaleY = 1; moved.offset = (vector_float2){0.5f, 0};
+  FxRect grown = {0};
+  assert([f.plugin destinationImageRect:&grown
+                           sourceImages:@[ (id)frame ]
+                       destinationImage:(id)frame
+                            pluginState:[NSData dataWithBytes:&moved length:sizeof(moved)]
+                                 atTime:TestTime(0)
+                                  error:&error]);
+  assert(!error && grown.left == 0 && grown.right == 2880 && grown.top == 1080 &&
+         grown.bottom == 0);
+  moved.offset = (vector_float2){2.0f, 0};
+  assert([f.plugin destinationImageRect:&grown
+                           sourceImages:@[ (id)frame ]
+                       destinationImage:(id)frame
+                            pluginState:[NSData dataWithBytes:&moved length:sizeof(moved)]
+                                 atTime:TestTime(0)
+                                  error:&error]);
+  assert(!error && grown.left == 0 && grown.right == 3840);
+  // A shrinking transform never shrinks the output below the frame.
+  moved.offset = (vector_float2){0, 0};
+  moved.scale = moved.scaleY = 0.5f;
+  assert([f.plugin destinationImageRect:&grown
+                           sourceImages:@[ (id)frame ]
+                       destinationImage:(id)frame
+                            pluginState:[NSData dataWithBytes:&moved length:sizeof(moved)]
+                                 atTime:TestTime(0)
+                                  error:&error]);
+  assert(!error && grown.left == 0 && grown.right == 1920 && grown.top == 1080 &&
+         grown.bottom == 0);
+  error = nil;
+  assert(![f.plugin destinationImageRect:&grown
+                            sourceImages:@[]
+                        destinationImage:(id)frame
+                             pluginState:nil
+                                  atTime:TestTime(0)
+                                   error:&error] && error);
 }
 static void testPoseTimingMotionMetadata(void) {
   MMPoseTiming *base = [[MMPoseTiming alloc] initWithDuration:2

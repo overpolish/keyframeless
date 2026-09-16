@@ -47,6 +47,28 @@ static id<MTLTexture> makeHorizontalRamp(id<MTLDevice> device, NSUInteger width,
   return texture;
 }
 
+// The columns [originX, originX + width) of a `full`-wide horizontal ramp: the
+// partial tile a host hands over when the plugin asked for the whole image.
+static id<MTLTexture> makeRampTile(id<MTLDevice> device, NSUInteger full, NSUInteger originX,
+                                   NSUInteger width, NSUInteger height) {
+  MTLTextureDescriptor *descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                                                                           width:width height:height mipmapped:NO];
+  descriptor.usage = MTLTextureUsageShaderRead;
+  id<MTLTexture> texture = [device newTextureWithDescriptor:descriptor];
+  uint8_t *pixels = calloc(width * height * 4, sizeof(uint8_t));
+  for (NSUInteger y = 0; y < height; ++y) for (NSUInteger x = 0; x < width; ++x) {
+    float red = (float)(originX + x) / (float)(full - 1);
+    pixels[(y * width + x) * 4 + 0] = (uint8_t)lrintf(red * 0.5f * 255);
+    pixels[(y * width + x) * 4 + 1] = (uint8_t)lrintf(red * 0.25f * 255);
+    pixels[(y * width + x) * 4 + 2] = (uint8_t)lrintf(red * 0.125f * 255);
+    pixels[(y * width + x) * 4 + 3] = 128;
+  }
+  [texture replaceRegion:MTLRegionMake2D(0, 0, width, height) mipmapLevel:0
+               withBytes:pixels bytesPerRow:width * 4 * sizeof(uint8_t)];
+  free(pixels);
+  return texture;
+}
+
 static id<MTLRenderPipelineState> makePipeline(id<MTLDevice> device, id<MTLLibrary> library) {
   MTLRenderPipelineDescriptor *descriptor = [MTLRenderPipelineDescriptor new];
   descriptor.vertexFunction = [library newFunctionWithName:@"vertexShader"];
@@ -90,8 +112,13 @@ static void render(id<MTLDevice> device, id<MTLCommandQueue> queue,
        fromRegion:MTLRegionMake2D(0, 0, width, height) mipmapLevel:0];
 }
 
+// A source texture covering the whole frame, rendered into a destination that
+// is exactly the frame: identity tiling and identity extent.
 static MMTransform transform(float x, float y, float scale, float rotation, float aspect) {
-  MMTransform result = {{x, y}, scale, rotation, aspect, scale, 1}; return result;
+  MMTransform result = {{x, y}, scale, rotation, aspect, scale, 1};
+  result.sourceSize = (vector_float2){1, 1};
+  result.frameScale = (vector_float2){1, 1};
+  return result;
 }
 
 
@@ -149,18 +176,48 @@ int main(int argc, const char **argv) {
       vector_float4 expected = {red, red * 0.5f, red * 0.25f, 128.0f / 255.0f};
       checkPixel(&pixels[(2 * 8 + x) * 4], expected, 0.02f);
     } // identity, premultiplied horizontal ramp, and non-square dimensions
-    // Anchor is authored in source pixels and must preserve non-square identity
+    // Anchor is a fraction of the frame and must preserve non-square identity
     // when it is centred at the default pivot.
     MMTransform anchored = transform(0, 0, 0.5f, 0, 2);
-    anchored.anchorPixels = (vector_float2){0, 0};
+    anchored.anchor = (vector_float2){0, 0};
     render(device, queue, pipeline, ramp, anchored, pixels, 8, 4);
     assert(pixels[(2 * 8 + 4) * 4 + 3] > 0.1f);
     // Moving the pivot changes which source point lands at the destination
     // centre. This catches accidental aspect scaling of the anchor itself.
-    anchored.anchorPixels = (vector_float2){2, 0};
+    anchored.anchor = (vector_float2){2.0f / 8.0f, 0};
     render(device, queue, pipeline, ramp, anchored, pixels, 8, 4);
     float pivotRed = pixels[(2 * 8 + 4) * 4];
     assert(pivotRed > 0.05f && pivotRed < 0.25f);
+    // A partial source tile must land where it belongs in the frame instead of
+    // being stretched across it. Host parent scaling is what makes FCP grant
+    // less than the plugin requested, and an asymmetric crop then showed up as
+    // a per-axis stretch.
+    id<MTLTexture> cropX = makeRampTile(device, 8, 2, 4, 4);
+    MMTransform tiled = transform(0, 0, 1, 0, 1);
+    tiled.sourceOrigin = (vector_float2){2.0f / 8.0f, 0};
+    tiled.sourceSize = (vector_float2){4.0f / 8.0f, 1};
+    render(device, queue, pipeline, cropX, tiled, pixels, 8, 4);
+    for (NSUInteger x = 2; x < 6; ++x) {
+      float red = (float)x / 7.0f * 0.5f;
+      vector_float4 expected = {red, red * 0.5f, red * 0.25f, 128.0f / 255.0f};
+      checkPixel(&pixels[(2 * 8 + x) * 4], expected, 0.02f);
+    }
+    for (NSUInteger x = 0; x < 8; ++x)
+      if (x < 2 || x >= 6) assert(pixels[(2 * 8 + x) * 4 + 3] == 0);
+    // The reported failure was vertical: a tile covering the middle rows must
+    // keep the frame's full width and its own height, not fill the frame.
+    id<MTLTexture> cropY = makeHorizontalRamp(device, 8, 2);
+    MMTransform tiledY = transform(0, 0, 1, 0, 1);
+    tiledY.sourceOrigin = (vector_float2){0, 1.0f / 4.0f};
+    tiledY.sourceSize = (vector_float2){1, 2.0f / 4.0f};
+    render(device, queue, pipeline, cropY, tiledY, pixels, 8, 4);
+    for (NSUInteger x = 0; x < 8; ++x) {
+      float red = (float)x / 7.0f * 0.5f;
+      vector_float4 expected = {red, red * 0.5f, red * 0.25f, 128.0f / 255.0f};
+      checkPixel(&pixels[(1 * 8 + x) * 4], expected, 0.02f);
+      checkPixel(&pixels[(2 * 8 + x) * 4], expected, 0.02f);
+      assert(pixels[(0 * 8 + x) * 4 + 3] == 0 && pixels[(3 * 8 + x) * 4 + 3] == 0);
+    }
     render(device, queue, pipeline, ramp, transform(1.0f / 8.0f, 0, 1, 0, 1), pixels, 8, 4);
     assert(pixels[(2 * 8) * 4 + 3] == 0); // exact positive one-pixel translation
     checkPixel(&pixels[(2 * 8 + 4) * 4], (vector_float4){4.0f / 7.0f * 0.5f, 4.0f / 7.0f * 0.25f,
@@ -190,6 +247,22 @@ int main(int argc, const char **argv) {
     id<MTLTexture> one = makeTexture(device, 1, 1, color);
     render(device, queue, pipeline, one, transform(0, 0, 0.001f, 0, 1), pixels, 1, 1);
     checkPixel(pixels, color, 0.01f);
+
+    // A moved image must survive past the frame edge into the grown output, so
+    // the host's own transform still has it. Frame is 8 wide, the destination
+    // spans half a frame either side of it, and Position is half a frame: the
+    // ramp lands in the right half and nothing spills into the left.
+    float wide[16 * 4 * 4];
+    MMTransform moved = transform(0.5f, 0, 1, 0, 1);
+    moved.frameOrigin = (vector_float2){-0.5f, 0};
+    moved.frameScale = (vector_float2){2, 1};
+    render(device, queue, pipeline, ramp, moved, wide, 16, 4);
+    for (NSUInteger i = 8; i < 16; ++i) {
+      float red = (float)(i - 8) / 7.0f * 0.5f;
+      vector_float4 expected = {red, red * 0.5f, red * 0.25f, 128.0f / 255.0f};
+      checkPixel(&wide[(2 * 16 + i) * 4], expected, 0.02f);
+    }
+    for (NSUInteger i = 0; i < 8; ++i) assert(wide[(2 * 16 + i) * 4 + 3] == 0);
 
     // Orthographic X rotation foreshortens the vertical plane while retaining
     // its center; Y rotation does the equivalent horizontally.

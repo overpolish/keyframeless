@@ -72,10 +72,22 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
 
 - (BOOL)properties:(NSDictionary *_Nonnull *)properties
              error:(NSError *_Nullable *)error {
+  // Position, Scale and rotation redistribute pixels: an output pixel can come
+  // from anywhere in the input, and the output reaches past the input frame.
+  // ChangesOutputSize makes the host call -destinationImageRect: and size its
+  // output from that rect. NeedsFullBuffer is also required, despite its
+  // documented performance cost: the host tiles this render in full-width
+  // horizontal bands and stops issuing bands before it covers the grown
+  // output, so moved content is clipped along a band edge. That clipping can
+  // only appear vertically, because the bands are never split horizontally.
+  // Answering -sourceTileRect: per tile does not change which bands the host
+  // enumerates, so the whole buffer is the only correct declaration.
   *properties = @{
     kFxPropertyKey_MayRemapTime : @NO,
     kFxPropertyKey_PixelTransformSupport : @(kFxPixelTransform_ScaleTranslate),
-    kFxPropertyKey_VariesWhenParamsAreStatic : @YES
+    kFxPropertyKey_VariesWhenParamsAreStatic : @YES,
+    kFxPropertyKey_NeedsFullBuffer : @YES,
+    kFxPropertyKey_ChangesOutputSize : @YES
   };
 
   return YES;
@@ -95,18 +107,6 @@ NSSet<Class> *MMClassesForCustomParameter(UInt32 parameterID) {
 }
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
   return MMClassesForCustomParameter(parameterID);
-}
-
-- (BOOL)destinationImageRect:(FxRect *)rect sourceImages:(NSArray<FxImageTile *> *)sources
-           destinationImage:(FxImageTile *)destination pluginState:(NSData *)state
-                     atTime:(CMTime)time error:(NSError **)error {
-  if (!rect || sources.count == 0) {
-    if (error) *error = [NSError errorWithDomain:FxPlugErrorDomain code:1
-        userInfo:@{NSLocalizedDescriptionKey:@"Missing source image bounds."}];
-    return NO;
-  }
-  *rect = sources.firstObject.imagePixelBounds;
-  return YES;
 }
 
 - (void)pluginInstanceAddedToDocument {

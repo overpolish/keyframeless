@@ -36,12 +36,13 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                constant MMTransform &transform [[buffer(0)]],
                                texture2d<half> colorTexture [[texture(0)]]) {
     if (transform.scale <= 0 || transform.scaleY <= 0) return float4(0);
-    float2 imageSize = float2(colorTexture.get_width(), colorTexture.get_height());
-    float2 p = in.textureCoordinate - 0.5 - transform.offset;
-    // Normalize the pixel anchor around the source centre so the pivot
-    // stays in the same place at different render resolutions.
-    float2 anchor = transform.anchorPixels / imageSize;
-    p -= anchor;
+    // The destination image is larger than the frame whenever the transform
+    // carries content outside it, so convert to frame coordinates first.
+    float2 frame = transform.frameOrigin + in.textureCoordinate * transform.frameScale;
+    float2 p = frame - 0.5 - transform.offset;
+    // The pivot is a fraction of the full frame, so it lands in the same place
+    // at any render resolution and under any tiling the host chooses.
+    p -= transform.anchor;
     // Orthographic projection of the source plane after local-axis scaling
     // and Euler rotation Rz * Ry * Rx. The inverse 2x2 projection maps the
     // destination sample back into the source texture.
@@ -59,8 +60,13 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     p.x *= transform.aspect;
     float2 source = float2((d*p.x-b*p.y)/determinant,
                            (-c*p.x+a*p.y)/determinant);
-    source += anchor;
+    source += transform.anchor;
+    // Everything above is full-frame space. The delivered source tile may
+    // cover only part of that frame, so map into the texture's own space; a
+    // sample the host did not hand over falls outside it and reads as empty,
+    // exactly like a sample outside the image.
+    float2 uv = (source + 0.5 - transform.sourceOrigin) / transform.sourceSize;
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear,
                                      address::clamp_to_zero);
-    return float4(colorTexture.sample(textureSampler, source + 0.5)) * clamp(transform.opacity, 0.0f, 1.0f);
+    return float4(colorTexture.sample(textureSampler, uv)) * clamp(transform.opacity, 0.0f, 1.0f);
 }
