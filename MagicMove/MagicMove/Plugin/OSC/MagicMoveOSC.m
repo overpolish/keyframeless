@@ -14,8 +14,15 @@
 @import OSCControls;
 @import RenderSupport;
 
-// Diagnostic logging until the host contract is confirmed in FCP.
-#define MMOSCLog(fmt, ...) NSLog(@"MMOSC " fmt, ##__VA_ARGS__)
+// Per-tick diagnostics sit in the draw and hit-test paths, so they stay off
+// unless MM_OSC_LOG is set.
+static BOOL MMOSCLogEnabled(void) {
+  static BOOL enabled;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ enabled = getenv("MM_OSC_LOG") != NULL; });
+  return enabled;
+}
+#define MMOSCLog(fmt, ...) do { if (MMOSCLogEnabled()) NSLog(@"MMOSC " fmt, ##__VA_ARGS__); } while (0)
 // Numeric only: FCP redacts string arguments as <private> in the unified log.
 static double MMOSCEffectStart(id<PROAPIAccessing> manager) {
   id<FxTimingAPI_v4> timing = [manager apiForProtocol:@protocol(FxTimingAPI_v4)];
@@ -42,6 +49,7 @@ static const float MMOSCActiveHandleGrowth = 1.5f;
   MMCombinedPoseCache *_combinedCache;
   MMScalePoseCache *_scaleCache;
   BOOL _showBorder, _showHandles;
+  BOOL _tracedFirstDraw;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {

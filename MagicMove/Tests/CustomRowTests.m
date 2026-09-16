@@ -30,7 +30,6 @@ static void hostAccent(NSColor *color) {
 @property(nonatomic, readonly) NSArray<NSTextField *> *axisLabels;
 @property(nonatomic, readonly) NSArray<NSTextField *> *unitLabels;
 @property(nonatomic, copy) CGSize (^imageSizeProvider)(void);
-- (instancetype)initWithManager:(id<PROAPIAccessing>)manager;
 - (void)refreshValues;
 - (void)commitValue:(NSTextField *)field;
 @property(nonatomic, readonly) NSButton *linkButton;
@@ -91,7 +90,9 @@ int main(int argc, const char *argv[]) {
       styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:YES];
   window.releasedWhenClosed=NO; // Never order the test window on screen.
   RowHost *host=[RowHost new];
-  MMCustomRow *row=[[MMCustomRow alloc] initWithManager:host];
+  // Rows are created by the plugin, which owns the view caches.
+  MagicMovePlugin *rowPlugin=[[MagicMovePlugin alloc] initWithAPIManager:host]; host.plugin=rowPlugin;
+  MMCustomRow *row=(MMCustomRow *)[rowPlugin createViewForParameterID:MMCustomControls];
   row.imageSizeProvider = ^CGSize { return NSSizeToCGSize(host.imageSize); };
   for (NSTextField *field in row.fields) assert(!field.enabled && !field.stringValue.length);
   [window.contentView addSubview:row];
@@ -133,9 +134,33 @@ int main(int argc, const char *argv[]) {
   assert(!row.fields[0].enabled && !row.fields[1].enabled);
   [row removeFromSuperview];
 
+  // Rebuilding rows must not re-announce cache tokens: Motion rebuilds every
+  // row several times per selection and each write is a host round trip.
+  NSString *combinedToken=nil, *scaleToken=nil;
+  assert([host getStringParameterValue:&combinedToken fromParameter:MMCombinedCacheToken] && combinedToken.length);
+  assert([host getStringParameterValue:&scaleToken fromParameter:MMScaleCacheToken] && scaleToken.length);
+  NSUInteger starts=host.starts;
+  for (NSNumber *identifier in @[@(MMCustomControls),@(MMScaleControls),@(MMOpacityControls),@(MMRotationControls)]) {
+    NSView *rebuilt=[rowPlugin createViewForParameterID:identifier.unsignedIntValue];
+    assert(rebuilt);
+  }
+  assert(host.starts==starts);
+  NSString *token=nil;
+  assert([host getStringParameterValue:&token fromParameter:MMCombinedCacheToken] && [token isEqual:combinedToken]);
+  assert([host getStringParameterValue:&token fromParameter:MMScaleCacheToken] && [token isEqual:scaleToken]);
+  // The rebuilt rows still read the live cache.
+  MMCustomRow *rebuiltPosition=(MMCustomRow *)[rowPlugin createViewForParameterID:MMCustomControls];
+  rebuiltPosition.imageSizeProvider = ^CGSize { return NSSizeToCGSize(host.imageSize); };
+  host.imageSize=NSMakeSize(1920,1080);
+  publish(host,25,-50);
+  [window.contentView addSubview:rebuiltPosition];
+  [rebuiltPosition refreshValues]; displayed(rebuiltPosition,480,-540);
+  [rebuiltPosition removeFromSuperview];
+
   // A newly recreated row must not inherit the old row's values or defaults.
   RowHost *other=[RowHost new];
-  MMCustomRow *replacement=[[MMCustomRow alloc] initWithManager:other];
+  MagicMovePlugin *otherPlugin=[[MagicMovePlugin alloc] initWithAPIManager:other]; other.plugin=otherPlugin;
+  MMCustomRow *replacement=(MMCustomRow *)[otherPlugin createViewForParameterID:MMCustomControls];
   replacement.imageSizeProvider = ^CGSize { return NSSizeToCGSize(other.imageSize); };
   for (NSTextField *field in replacement.fields) assert(!field.enabled && !field.stringValue.length);
   publish(other,0,175); // Cache ready before attachment; no timer turn required.

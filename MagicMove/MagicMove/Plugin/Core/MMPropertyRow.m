@@ -18,7 +18,7 @@
 @property(nonatomic, weak) MagicMovePlugin *plugin;
 @property(nonatomic, strong) id<PROAPIAccessing> manager;
 @property(nonatomic, strong) MMPropertyLane *lane;
-@property(nonatomic, strong) MMPropertyPoseCache *cache;
+@property(nonatomic, readonly) MMPropertyPoseCache *cache;
 @property(nonatomic, strong) NSTimer *timer;
 @property(nonatomic, strong) id selectionObserver;
 @property(nonatomic, strong) id<FxUndoAPI> scrubUndo;
@@ -27,7 +27,7 @@
 @implementation MMPropertyRowBinding
 - (instancetype)initWithRow:(ICInspectorRow *)row slider:(ICSliderView *)slider plugin:(MagicMovePlugin *)plugin lane:(MMPropertyLane *)lane label:(NSString *)label {
   if((self=[super init])) {
-    _row=row; _slider=slider; _plugin=plugin; _manager=plugin.apiManager; _lane=lane; _cache=[lane createCache];
+    _row=row; _slider=slider; _plugin=plugin; _manager=plugin.apiManager; _lane=lane;
     _undoName=[@"Change " stringByAppendingString:label];
     row.componentColors=MMInspectorColors(lane.parameterID);
     slider.minValue=lane.minimum; slider.maxValue=lane.maximum; slider.enabled=NO;
@@ -40,15 +40,12 @@
     row.titleMenuProvider=^NSMenu *{ MMPropertyRowBinding *binding=weakSelf; return binding ? MMNativePropertyMenu(binding.manager,binding.row,binding.lane.parameterID):nil; };
     row.onValueCommit=^(ICValueTextField *field) { [weakSelf writeField:field]; };
     row.onScrubBegin=^{ [weakSelf beginScrub]; }; row.onScrubEnd=^{ [weakSelf endScrub]; };
-    id<FxCustomParameterActionAPI_v4> action=[_manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if(action) {
-      [action startAction:row];
-      @try { id<FxParameterSettingAPI_v5> set=[_manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)]; [set setStringParameterValue:_cache.token toParameter:lane.cacheTokenID]; }
-      @finally { [action endAction:row]; }
-    }
   }
   return self;
 }
+// The plugin owns one cache per lane and publishes its token once, so a
+// rebuilt row costs no host traffic here.
+- (MMPropertyPoseCache *)cache { return [self.plugin sharedCacheForLane:self.lane]; }
 - (void)attach {
   [self.timer invalidate]; self.timer=nil;
   if(self.selectionObserver) [NSNotificationCenter.defaultCenter removeObserver:self.selectionObserver]; self.selectionObserver=nil;

@@ -27,22 +27,18 @@
 @property(nonatomic, strong) id<PROAPIAccessing> manager;
 @property(nonatomic, strong) NSTimer *refreshTimer;
 @property(nonatomic, strong) id selectionObserver;
-@property(nonatomic, strong) MMCombinedPoseCache *poseCache;
-@property(nonatomic, strong) MMScalePoseCache *scaleCache;
+@property(nonatomic, readonly) MMCombinedPoseCache *poseCache;
+@property(nonatomic, readonly) MMScalePoseCache *scaleCache;
 @property(nonatomic) BOOL scaleRow;
 @property(nonatomic, weak) MagicMovePlugin *owner;
 @property(nonatomic) NSSize pixelSize;
 @property(nonatomic, copy) CGSize (^imageSizeProvider)(void);
 @property(nonatomic, strong) id<FxUndoAPI> scrubUndo;
-- (instancetype)initWithManager:(id<PROAPIAccessing>)manager;
-- (instancetype)initWithManager:(id<PROAPIAccessing>)manager scale:(BOOL)scale;
+- (instancetype)initWithPlugin:(MagicMovePlugin *)plugin scale:(BOOL)scale;
 @end
 
 @implementation MMCustomRow
-- (instancetype)initWithManager:(id<PROAPIAccessing>)manager {
-  return [self initWithManager:manager scale:NO];
-}
-- (instancetype)initWithManager:(id<PROAPIAccessing>)manager scale:(BOOL)scale {
+- (instancetype)initWithPlugin:(MagicMovePlugin *)plugin scale:(BOOL)scale {
   NSArray *components=@[
     [[ICInspectorComponent alloc] initWithIdentifier:scale ? MMScaleX : MMPositionX
         label:@"X" suffix:scale ? @"%" : @"px" fractionDigits:scale ? 1 : 0],
@@ -51,7 +47,7 @@
   ];
   self=[super initWithLabel:scale ? @"Scale" : @"Position" components:components showsLink:scale];
   if (!self) return nil;
-  _manager=manager; _scaleRow=scale;
+  _manager=plugin.apiManager; _owner=plugin; _scaleRow=scale;
   self.componentColors=MMInspectorColors(scale ? MMScaleControls:MMCustomControls);
 
 #if DEBUG && MM_INSPECTOR_DEBUG_PAINT
@@ -74,21 +70,16 @@
   self.onScrubEnd=^{ [weakSelf endScrub]; };
   self.onLinkToggle=^(NSButton *button) { [weakSelf toggleProportional:button]; };
   if (scale) {
-    _scaleCache=MMCreateScalePoseCache();
     self.linkButton.toolTip=@"Link X and Y (preserve proportions)";
     self.linkButton.accessibilityLabel=@"Proportional Scale";
-  } else _poseCache=MMCreateCombinedPoseCache();
-  id<FxCustomParameterActionAPI_v4> action = [manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (action) {
-    [action startAction:self];
-    @try {
-      id<FxParameterSettingAPI_v5> set = [manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [set setStringParameterValue:scale ? _scaleCache.token : _poseCache.token
-                      toParameter:scale ? MMScaleCacheToken : MMCombinedCacheToken];
-    } @finally { [action endAction:self]; }
   }
   return self;
 }
+// The plugin owns both caches and publishes their tokens once per instance.
+// A row outliving its plugin reads nil and stays disabled, like a row whose
+// snapshot is unavailable.
+- (MMCombinedPoseCache *)poseCache { return [self.owner sharedCombinedCache]; }
+- (MMScalePoseCache *)scaleCache { return [self.owner sharedScaleCache]; }
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   [self.refreshTimer invalidate]; self.refreshTimer = nil;
@@ -301,6 +292,8 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation MagicMovePlugin (CustomRow)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  // Rows read the instance's caches, so their tokens must be live first.
+  [self publishViewCaches];
   if (parameterID == MMHeaderControls) return [[MMInspectorHeader alloc] initWithManager:self.apiManager];
   if (parameterID == MMRotationControls) {
     NSMutableArray *components=[NSMutableArray array];
@@ -320,8 +313,7 @@
   }
   if (parameterID == MMTimingControls) return [[MMTimingEditor alloc] initWithPlugin:self];
   if (parameterID == MMCustomControls || parameterID == MMScaleControls) {
-    MMCustomRow *row = [[MMCustomRow alloc] initWithManager:self.apiManager scale:parameterID == MMScaleControls];
-    row.owner=self;
+    MMCustomRow *row = [[MMCustomRow alloc] initWithPlugin:self scale:parameterID == MMScaleControls];
     __weak MagicMovePlugin *plugin = self;
     row.imageSizeProvider = ^CGSize { return plugin.inspectorImageSize; };
     return row;

@@ -175,6 +175,9 @@ static BOOL MMTextEditorIsFocused(void) {
       return [s.router handleKeyCode:event.keyCode modifiers:event.modifierFlags repeat:event.isARepeat] ? nil : event;
     }];
   }
+  // The tap stays installed once created: Motion rebuilds inspector rows
+  // several times per selection, and CGEventTapCreate is a window-server round
+  // trip that cost ~10ms every time the last row unregistered.
   if (!_tap) {
     _tap=CGEventTapCreate(kCGSessionEventTap,kCGHeadInsertEventTap,kCGEventTapOptionDefault,
                           CGEventMaskBit(kCGEventKeyDown),MMCaptureEvent,(__bridge void *)self);
@@ -187,7 +190,9 @@ static BOOL MMTextEditorIsFocused(void) {
 }
 - (void)detachView:(NSView *)view {
   [self.router unregisterOwner:view]; [self.views removeObject:view];
-  if (!self.views.allObjects.count && !self.menuHistory.active) [self stop];
+  // The tap and monitor stay installed: Motion rebuilds inspector rows several
+  // times per selection, and CGEventTapCreate is a window-server round trip
+  // that cost ~10ms every time the last row unregistered.
 }
 - (void)activateView:(NSView *)view { [self.router activateOwner:view]; }
 - (void)beginMenuHistory:(id)owner action:(BOOL (^)(BOOL))action {

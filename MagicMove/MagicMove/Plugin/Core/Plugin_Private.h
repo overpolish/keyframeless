@@ -8,6 +8,9 @@
 #import "Plugin.h"
 #import "MMRenderHost.h"
 #import "MMParameterData.h"
+#import "MMCombinedPose.h"
+#import "MMPropertyLane.h"
+#import "MMScalePose.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -40,6 +43,19 @@ NS_ASSUME_NONNULL_BEGIN
                  data:(NSMutableData *)data atTime:(CMTime)time error:(NSError **)error;
 - (BOOL)applyLinkedEdit:(MMLinkEdit *)edit error:(NSError **)error;
 - (void)invalidateTimingLane:(MMTimingLane *)lane;
+@end
+
+// Inspector view caches. One set per plugin instance, published once: the
+// token identifies the cache, not the row, so rebuilding a row must not repeat
+// the host write. Motion rebuilds every row several times per selection and
+// holds more than one generation at a time, so a per-row write cost tens of
+// milliseconds each time.
+@interface MagicMovePlugin (ViewCaches)
+// Idempotent; a no-op until the host exposes its setting API.
+- (void)publishViewCaches;
+- (nullable MMCombinedPoseCache *)sharedCombinedCache;
+- (nullable MMScalePoseCache *)sharedScaleCache;
+- (nullable MMPropertyPoseCache *)sharedCacheForLane:(MMPropertyLane *)lane;
 @end
 
 NS_ASSUME_NONNULL_END

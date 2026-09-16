@@ -30,6 +30,8 @@ Every host write needs a custom-parameter action, with a matching end call. Rela
 
 Inspector views read cached snapshots rather than enumerating native keyframes on every refresh. Publish a complete snapshot atomically; generation checks prevent an older read from overwriting a newer edit. A failed read marks the snapshot unavailable. Successful panel writes update the local cache directly: enumerating native keys during the write action can stall the host.
 
+Each plugin instance owns one view cache per property and publishes their tokens in a single host action, from `pluginInstanceAddedToDocument` or the first view build. Rows read those caches; they never create or publish their own. The host rebuilds every inspector row several times per selection and keeps more than one generation alive, so a per-row token write cost a host round trip each time. Instances created before the host exposes a setting API publish on the next cache access.
+
 Menu actions use the hidden custom scratch parameter to request host refresh. This asks the host to repaint without moving the mouse. The plugin handles this write and its undo group.
 
 The graph reuses sampled curves until values, gap, selection, or image geometry change. Playhead updates do not rebuild curves. Row highlights and hit testing leave the native keyframe-control gutter available to the host.

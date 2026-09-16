@@ -18,6 +18,15 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
+
+// Instance-owned inspector view caches; see the ViewCaches category.
+@interface MagicMovePlugin ()
+@property(nonatomic, strong) MMCombinedPoseCache *combinedViewCache;
+@property(nonatomic, strong) MMScalePoseCache *scaleViewCache;
+@property(nonatomic, strong) NSDictionary<NSNumber *, MMPropertyPoseCache *> *laneViewCaches;
+@property(nonatomic) BOOL viewCachesPublished;
+@end
+
 NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentationChanged";
 
 @implementation MMTimingLane
@@ -100,7 +109,7 @@ NSSet<Class> *MMClassesForCustomParameter(UInt32 parameterID) {
 }
 
 - (void)pluginInstanceAddedToDocument {
-
+  [self publishViewCaches];
   // Parameter creation also happens for detached library/drag instances.
   // A timer action there makes Motion request timing for a nonexistent input.
   // FxPlug guarantees host API readiness only after document attachment.
@@ -557,5 +566,50 @@ NSSet<Class> *MMClassesForCustomParameter(UInt32 parameterID) {
 
 }
 
+@end
+
+// One set of view caches per plugin instance, published in a single host
+// action. Rows read them, so a rebuilt row costs no host traffic.
+@implementation MagicMovePlugin (ViewCaches)
+- (void)publishViewCaches {
+  if (self.viewCachesPublished) return;
+  id<FxCustomParameterActionAPI_v4> action =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  id<FxParameterSettingAPI_v5> set =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  // Detached library and drag instances reach here before the host exposes a
+  // usable action or setting API; the next accessor retries.
+  if (![(id<NSObject>)action conformsToProtocol:@protocol(FxCustomParameterActionAPI_v4)] ||
+      ![(id<NSObject>)set conformsToProtocol:@protocol(FxParameterSettingAPI_v5)])
+    return;
+  if (!self.combinedViewCache) self.combinedViewCache = MMCreateCombinedPoseCache();
+  if (!self.scaleViewCache) self.scaleViewCache = MMCreateScalePoseCache();
+  if (!self.laneViewCaches) {
+    NSMutableDictionary<NSNumber *, MMPropertyPoseCache *> *caches = [NSMutableDictionary dictionary];
+    for (MMPropertyLane *lane in MMPropertyLanes()) caches[@(lane.parameterID)] = [lane createCache];
+    self.laneViewCaches = caches;
+  }
+  [action startAction:self];
+  @try {
+    [set setStringParameterValue:self.combinedViewCache.token toParameter:MMCombinedCacheToken];
+    [set setStringParameterValue:self.scaleViewCache.token toParameter:MMScaleCacheToken];
+    for (MMPropertyLane *lane in MMPropertyLanes())
+      [set setStringParameterValue:self.laneViewCaches[@(lane.parameterID)].token
+                       toParameter:lane.cacheTokenID];
+  } @finally { [action endAction:self]; }
+  self.viewCachesPublished = YES;
+}
+- (MMCombinedPoseCache *)sharedCombinedCache {
+  [self publishViewCaches];
+  return self.combinedViewCache;
+}
+- (MMScalePoseCache *)sharedScaleCache {
+  [self publishViewCaches];
+  return self.scaleViewCache;
+}
+- (MMPropertyPoseCache *)sharedCacheForLane:(MMPropertyLane *)lane {
+  [self publishViewCaches];
+  return self.laneViewCaches[@(lane.parameterID)];
+}
 @end
 #pragma clang diagnostic pop
