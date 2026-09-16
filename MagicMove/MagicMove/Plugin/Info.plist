@@ -73,6 +73,28 @@
 			<key>version</key>
 			<string>1.0</string>
 		</dict>
+		<dict>
+			<key>className</key>
+			<string>MagicMoveOSC</string>
+			<key>displayName</key>
+			<string>Magic Move OSC</string>
+			<key>group</key>
+			<string>EF0195DD-310A-4CFE-AB7B-2981D5A47D84</string>
+			<key>infoString</key>
+			<string>Magic Move On-Screen Control</string>
+			<key>protocolNames</key>
+			<array>
+				<string>FxOnScreenControl</string>
+			</array>
+			<key>supportedPlugins</key>
+			<array>
+				<string>649EBCB6-B879-4D33-984E-1784D41D31E0</string>
+			</array>
+			<key>uuid</key>
+			<string>3188E2F8-7588-4F27-B259-9857331FFBB1</string>
+			<key>version</key>
+			<string>1.0</string>
+		</dict>
 	</array>
 	<key>XPCService</key>
 	<dict>

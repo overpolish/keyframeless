@@ -10,6 +10,7 @@ esac
 "$root/PluginPreferences/Tests/run.sh"
 "$root/InspectorControls/Tests/run.sh"
 "$root/MotionTiming/Tests/run.sh"
+"$root/OSCControls/Tests/run.sh"
 if [ "$gpu" = yes ]; then
   "$root/RenderSupport/Tests/run.sh"
 else

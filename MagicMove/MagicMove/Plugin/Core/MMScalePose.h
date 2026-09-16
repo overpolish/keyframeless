@@ -46,7 +46,13 @@ NSArray<MMScalePose *> *MMReadScalePoseSamples(id<PROAPIAccessing> manager,
                                                BOOL *active, NSError **error);
 BOOL MMWriteScaleComponent(id<PROAPIAccessing> manager, MMScalePoseCache *cache,
                            UInt32 component, double value, CMTime time);
+// Writes both axes (percentages) in ONE host write, without the proportional
+// coupling; the caller has already resolved the pair (viewer box handles).
+BOOL MMWriteScaleValues(id<PROAPIAccessing> manager, MMScalePoseCache *cache,
+                        double x, double y, CMTime time);
 
 MMScalePoseCache *MMScaleCacheForManager(id<PROAPIAccessing> manager);
+// Registered cache, or a private one filled from the host for viewer edits.
+MMScalePoseCache *MMScaleEditingCache(id<PROAPIAccessing> manager, CMTime time);
 
 MMScalePose *MMSampleScaleSnapshot(NSArray<NSDictionary *> *entries, CMTime time);

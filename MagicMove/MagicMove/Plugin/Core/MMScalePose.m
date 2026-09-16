@@ -380,6 +380,14 @@ void MMRefreshScalePoseCache(id<PROAPIAccessing> m, CMTime t) {
       c.entries = e;
   }
 }
+MMScalePoseCache *MMScaleEditingCache(id<PROAPIAccessing> m, CMTime t) {
+  MMScalePoseCache *c = MMScaleCacheForManager(m);
+  if (c)
+    return c;
+  c = [MMScalePoseCache new];
+  [c publishEntries:MMScaleEntries(m, t, nil)];
+  return c;
+}
 MMScalePose *MMReadScaleValue(id<PROAPIAccessing> m, CMTime t) {
   return MMScaleValue([m apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)],
                       t, NULL);
@@ -401,7 +409,8 @@ NSArray *MMReadScalePoseSamples(id<PROAPIAccessing> m,
     generation = c.generation;
   }
   NSArray *e = MMScaleEntries(m, t, error);
-  if (c) {
+  // Keep the last good snapshot when a callback cannot read keyframes.
+  if (c && e) {
     @synchronized(c) {
       if (c.generation == generation)
         c.entries = e;
@@ -426,10 +435,11 @@ MMScalePose *MMReadScalePose(id<PROAPIAccessing> m, CMTime t, BOOL *a,
              m, @[ [NSValue valueWithBytes:&t objCType:@encode(CMTime)] ], a, e)
       .firstObject;
 }
-BOOL MMWriteScaleComponent(id<PROAPIAccessing> m, MMScalePoseCache *c,
-                           UInt32 component, double value, CMTime t) {
-  if ((component != MMScaleX && component != MMScaleY) || !isfinite(value))
-    return NO;
+// Shared tail of every scale write: explicit targeting, clamping, creation
+// defaults, native links, and the cache publish. `value` is applied by the
+// caller-provided block on top of the pose being edited.
+static BOOL MMWriteScalePoseWith(id<PROAPIAccessing> m, MMScalePoseCache *c, CMTime t, BOOL allowMissing,
+                                 BOOL (^resolve)(id<FxParameterRetrievalAPI_v6> g, MMScalePose *old, double *x, double *y)) {
   id<FxParameterRetrievalAPI_v6> g =
       [m apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> s =
@@ -440,37 +450,17 @@ BOOL MMWriteScaleComponent(id<PROAPIAccessing> m, MMScalePoseCache *c,
   CMTime target = t;
   if (explicit && (!c || ![c valueTargetAtTime:t targetTime:&target]))
     return NO;
-  MMScalePose *latest = MMScaleValue(g, target, NULL);
+  // Absolute writes (viewer handles) may seed an effect whose Scale lane was
+  // never authored; the box already showed the combined scale they replace.
+  BOOL missing = NO;
+  MMScalePose *latest = MMScaleValue(g, target, allowMissing ? &missing : NULL);
   MMScalePose *old =
       explicit ? latest : [c poseForEditingAtTime:t latest:latest];
   if (!old)
     return NO;
-  double x = component == MMScaleX ? value : old.x,
-         y = component == MMScaleY ? value : old.y;
-  BOOL proportional = YES;
-  if (![g getBoolValue:&proportional
-          fromParameter:MMScaleProportional
-                 atTime:t])
+  double x = old.x, y = old.y;
+  if (!resolve(g, old, &x, &y))
     return NO;
-  if (proportional) {
-    if (component == MMScaleX) {
-      y = old.x == 0 ? old.y + (value - old.x) : old.y * (value / old.x);
-    } else {
-      x = old.y == 0 ? old.x + (value - old.y) : old.x * (value / old.y);
-    }
-    double factor = 1;
-    if (x > 400)
-      factor = fmin(factor, 400 / x);
-    if (y > 400)
-      factor = fmin(factor, 400 / y);
-    if (x < 0 || y < 0) {
-      x = 0;
-      y = 0;
-    } else if (factor < 1) {
-      x *= factor;
-      y *= factor;
-    }
-  }
   x = fmax(0, fmin(400, x));
   y = fmax(0, fmin(400, y));
   BOOL creating=!explicit && MMIsNewKeyTime([c snapshotEntries],target);
@@ -490,6 +480,53 @@ BOOL MMWriteScaleComponent(id<PROAPIAccessing> m, MMScalePoseCache *c,
   if (ok && c)
     [c publishPose:p atTime:target];
   return ok;
+}
+
+BOOL MMWriteScaleValues(id<PROAPIAccessing> m, MMScalePoseCache *c, double x, double y, CMTime t) {
+  if (!isfinite(x) || !isfinite(y))
+    return NO;
+  return MMWriteScalePoseWith(m, c, t, YES, ^BOOL(id<FxParameterRetrievalAPI_v6> g, MMScalePose *old, double *outX, double *outY) {
+    *outX = x;
+    *outY = y;
+    return YES;
+  });
+}
+
+BOOL MMWriteScaleComponent(id<PROAPIAccessing> m, MMScalePoseCache *c,
+                           UInt32 component, double value, CMTime t) {
+  if ((component != MMScaleX && component != MMScaleY) || !isfinite(value))
+    return NO;
+  return MMWriteScalePoseWith(m, c, t, NO, ^BOOL(id<FxParameterRetrievalAPI_v6> g, MMScalePose *old, double *outX, double *outY) {
+    double x = component == MMScaleX ? value : old.x,
+           y = component == MMScaleY ? value : old.y;
+    BOOL proportional = YES;
+    if (![g getBoolValue:&proportional
+            fromParameter:MMScaleProportional
+                   atTime:t])
+      return NO;
+    if (proportional) {
+      if (component == MMScaleX) {
+        y = old.x == 0 ? old.y + (value - old.x) : old.y * (value / old.x);
+      } else {
+        x = old.y == 0 ? old.x + (value - old.y) : old.x * (value / old.y);
+      }
+      double factor = 1;
+      if (x > 400)
+        factor = fmin(factor, 400 / x);
+      if (y > 400)
+        factor = fmin(factor, 400 / y);
+      if (x < 0 || y < 0) {
+        x = 0;
+        y = 0;
+      } else if (factor < 1) {
+        x *= factor;
+        y *= factor;
+      }
+    }
+    *outX = x;
+    *outY = y;
+    return YES;
+  });
 }
 
 MMScalePose *MMSampleScaleSnapshot(NSArray<NSDictionary *> *entries, CMTime time) { BOOL active=NO; return MMScaleSample(entries,time,&active,nil); }

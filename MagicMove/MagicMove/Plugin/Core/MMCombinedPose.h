@@ -51,6 +51,10 @@ BOOL MMCombinedIncomingEasing(id<PROAPIAccessing> manager, CMTime time, int *eas
 
 BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *cache,
                               UInt32 component, double value, CMTime time);
+// Writes every non-nil component (percentages) in ONE host write. Viewer drags
+// use this so a position change never lands with only one axis saved.
+BOOL MMWriteCombinedValues(id<PROAPIAccessing> manager, MMCombinedPoseCache *cache,
+                           NSNumber *positionX, NSNumber *positionY, NSNumber *scale, CMTime time);
 
 BOOL MMCombinedOutgoingMotion(id<PROAPIAccessing> manager, CMTime time, int *motion, CMTime *targetTime);
 
@@ -59,5 +63,7 @@ NSArray<MMCombinedPose *> *MMReadCombinedPoseSamples(id<PROAPIAccessing> manager
     NSArray<NSValue *> *times, BOOL *active, NSError **error);
 
 MMCombinedPoseCache *MMCombinedCacheForManager(id<PROAPIAccessing> manager);
+// Registered cache, or a private one filled from the host for viewer edits.
+MMCombinedPoseCache *MMCombinedEditingCache(id<PROAPIAccessing> manager, CMTime time);
 
 MMCombinedPose *MMSampleCombinedSnapshot(NSArray<NSDictionary *> *entries, CMTime time);

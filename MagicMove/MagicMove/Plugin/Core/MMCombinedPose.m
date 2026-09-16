@@ -262,6 +262,16 @@ void MMRefreshCombinedPoseCache(id<PROAPIAccessing> manager, CMTime time) {
   // only if this refresh completes with failure and is still current.
   MMPublishCache(cache, MMReadCombinedEntries(manager, time, nil), generation);
 }
+// The inspector row owns the registered cache. A viewer drag without a row
+// (row not built yet, or a saved token from another process) edits through a
+// private cache filled by one host read, so the write path stays identical.
+MMCombinedPoseCache *MMCombinedEditingCache(id<PROAPIAccessing> manager, CMTime time) {
+  MMCombinedPoseCache *cache = MMCombinedCacheForManager(manager);
+  if (cache) return cache;
+  cache = [MMCombinedPoseCache new];
+  [cache publishEntries:MMReadCombinedEntries(manager, time, nil)];
+  return cache;
+}
 MMCombinedPose *MMReadCombinedValue(id<PROAPIAccessing> manager, CMTime time) {
   id<FxParameterRetrievalAPI_v6> get = [manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   return MMCombinedValue(get, time);
@@ -275,7 +285,9 @@ NSArray<MMCombinedPose *> *MMReadCombinedPoseSamples(id<PROAPIAccessing> manager
   NSUInteger generation = 0;
   @synchronized (cache) { generation = cache.generation; }
   NSArray *entries = MMReadCombinedEntries(manager, time, error);
-  MMPublishCache(cache, entries, generation);
+  // A failed read (an on-screen control callback without the keyframe API)
+  // must not wipe the inspector's last good snapshot.
+  if (entries) MMPublishCache(cache, entries, generation);
   NSMutableArray *samples = [NSMutableArray arrayWithCapacity:times.count];
   for (NSValue *wrapped in times) {
     [wrapped getValue:&time];
@@ -307,9 +319,14 @@ BOOL MMCombinedIncomingEasing(id<PROAPIAccessing> manager, CMTime time, int *eas
   return NO;
 }
 
-BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *cache,
-                              UInt32 component, double value, CMTime time) {
-  if ((component != MMPositionX && component != MMPositionY && component != MMScale) || !isfinite(value)) return NO;
+// One host write carries every edited component. Sequential per-component
+// writes could leave a viewer drag half-saved when the second write read a
+// stale value; the on-screen box always writes X and Y together.
+BOOL MMWriteCombinedValues(id<PROAPIAccessing> manager, MMCombinedPoseCache *cache,
+                           NSNumber *positionX, NSNumber *positionY, NSNumber *scale, CMTime time) {
+  if (!positionX && !positionY && !scale) return NO;
+  for (NSNumber *value in @[positionX ?: @0, positionY ?: @0, scale ?: @0])
+    if (!isfinite(value.doubleValue)) return NO;
   id<FxParameterRetrievalAPI_v6> get = [manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> set = [manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   BOOL explicit = NO;
@@ -321,9 +338,9 @@ BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *
   if (!old) return NO;
   BOOL creating=!explicit && MMIsNewKeyTime([cache snapshotEntries],target);
   MMCombinedPose *pose = [[MMCombinedPose alloc]
-      initWithPositionX:component == MMPositionX ? value : old.positionX
-              positionY:component == MMPositionY ? value : old.positionY
-                  scale:component == MMScale ? value : old.scale authored:YES easing:creating ? (MTEasing)[MMReadDefault(@"easing")[@"value"] integerValue] : old.easing addedMotion:old.addedMotion];
+      initWithPositionX:positionX ? positionX.doubleValue : old.positionX
+              positionY:positionY ? positionY.doubleValue : old.positionY
+                  scale:scale ? scale.doubleValue : old.scale authored:YES easing:creating ? (MTEasing)[MMReadDefault(@"easing")[@"value"] integerValue] : old.easing addedMotion:old.addedMotion];
   pose=[pose poseByReplacingTiming:creating ? MMTimingWithCreationDefaults(old.timing) : old.timing];
   if (!pose) return NO;
   if (MMMirrorsValueEdit(manager,MMCustomControls,target)) return MMWriteNativeLinkedPose(manager,MMCustomControls,target,pose);
@@ -334,6 +351,14 @@ BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *
     else [cache publishPose:pose atTime:target inSnapshot:entries];
   }
   return YES;
+}
+
+BOOL MMWriteCombinedComponent(id<PROAPIAccessing> manager, MMCombinedPoseCache *cache,
+                              UInt32 component, double value, CMTime time) {
+  if (component != MMPositionX && component != MMPositionY && component != MMScale) return NO;
+  return MMWriteCombinedValues(manager, cache, component == MMPositionX ? @(value) : nil,
+                               component == MMPositionY ? @(value) : nil,
+                               component == MMScale ? @(value) : nil, time);
 }
 
 BOOL MMCombinedOutgoingMotion(id<PROAPIAccessing> manager, CMTime time, int *motion, CMTime *targetTime) {

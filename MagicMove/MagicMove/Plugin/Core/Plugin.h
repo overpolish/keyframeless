@@ -46,6 +46,7 @@ FOUNDATION_EXPORT NSNotificationName const MMInspectorPresentationChanged;
 @end
 
 @class MMLinkEdit;
+FOUNDATION_EXPORT NSSet<Class> *MMClassesForCustomParameter(UInt32 parameterID);
 
 @interface MagicMovePlugin : NSObject <FxTileableEffect, FxCustomParameterViewHost_v2>
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;

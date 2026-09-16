@@ -71,7 +71,9 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
   return YES;
 }
 
-- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+// Shared with the on-screen control: the host decodes secure-coded custom
+// values through whichever object it is calling back, so both must agree.
+NSSet<Class> *MMClassesForCustomParameter(UInt32 parameterID) {
   if (parameterID == MMHostRefreshToken) return [NSSet setWithObject:NSString.class];
   if (parameterID == MMTimingControls || parameterID == MMHeaderControls) return [NSSet setWithObject:NSNumber.class];
   MMPropertyLane *lane=MMPropertyLaneForParameter(parameterID);
@@ -80,6 +82,9 @@ NSNotificationName const MMInspectorPresentationChanged = @"MMInspectorPresentat
   if (parameterID == MMCustomControls) return [NSSet setWithObjects:MMCombinedPose.class, NSNumber.class, nil];
   if (parameterID == MMDurationData || parameterID == MMScaleDurationData) return [NSSet setWithObject:KKDataBlob.class];
   return [NSSet set];
+}
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  return MMClassesForCustomParameter(parameterID);
 }
 
 - (BOOL)destinationImageRect:(FxRect *)rect sourceImages:(NSArray<FxImageTile *> *)sources
