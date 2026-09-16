@@ -12,6 +12,10 @@ CGPoint OSCBoxObjectFromPixel(CGPoint pixel, CGSize imageSize) {
 static CGPoint OSCBoxOffsetPixels(OSCBoxPose pose, CGSize imageSize) {
   return CGPointMake(pose.positionX / 100 * imageSize.width, pose.positionY / 100 * imageSize.height);
 }
+CGPoint OSCBoxPivotPixels(OSCBoxPose pose, CGSize imageSize) {
+  CGPoint offset = OSCBoxOffsetPixels(pose, imageSize);
+  return CGPointMake(offset.x + pose.anchorX, offset.y + pose.anchorY);
+}
 // Rotation-only orthographic projection of the image plane (Rz·Ry·Rx, no
 // scale), matching the render shader so the OSC stays glued to the image at any
 // X/Y/Z rotation. Row-major 2x2 {m0 m1 / m2 m3}. `det` receives the planar

@@ -285,7 +285,7 @@ BOOL MMToggleBoolSetting(id<PROAPIAccessing> manager, NSView *sender, UInt32 par
     BOOL grouped=[undo startUndoGroup:undoName];
     @try {
       if(![set setBoolValue:!value toParameter:parameter atTime:time]) return NO;
-      if(parameter==MMShowPositionOSC || parameter==MMShowScaleOSC) MMSaveOSCVisibilityDefault(parameter,!value);
+      if(MMIsOSCVisibilityParameter(parameter)) MMSaveOSCVisibilityDefault(parameter,!value);
       return [set setCustomParameterValue:NSUUID.UUID.UUIDString toParameter:MMHostRefreshToken atTime:time];
     } @finally { if(grouped) [undo endUndoGroup]; }
   } @finally { [action endAction:sender]; }
@@ -323,10 +323,17 @@ BOOL MMToggleBoolSetting(id<PROAPIAccessing> manager, NSView *sender, UInt32 par
 void MMRefreshSettingMenuItem(NSMenuItem *item) {
   if([item.target isKindOfClass:MMSettingMenuTarget.class]) [(MMSettingMenuTarget *)item.target refreshItem:item];
 }
+static NSString *MMOSCVisibilityUndoName(UInt32 parameter) {
+  switch(parameter) {
+    case MMShowScaleOSC: return @"Toggle Scale On-Screen Control";
+    case MMShowRotationOSC: return @"Toggle Rotation On-Screen Control";
+    default: return @"Toggle Position On-Screen Control";
+  }
+}
 NSMenuItem *MMOSCVisibilityMenuItem(id<PROAPIAccessing> manager, NSView *sender, UInt32 parameter, NSString *title) {
   MMSettingMenuTarget *target=[MMSettingMenuTarget new];
   target.manager=manager; target.sender=sender; target.parameter=parameter;
-  target.undoName=parameter==MMShowScaleOSC ? @"Toggle Scale On-Screen Control":@"Toggle Position On-Screen Control";
+  target.undoName=MMOSCVisibilityUndoName(parameter);
   NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:title action:@selector(toggle:) keyEquivalent:@""];
   item.target=target; item.representedObject=target;
   // State is unknown until a host action is open, so the caller refreshes.

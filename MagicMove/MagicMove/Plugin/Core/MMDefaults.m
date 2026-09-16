@@ -25,10 +25,16 @@ static BOOL MMNumber(id value, double min, double max) {
          [value doubleValue] <= max;
 }
 static NSString *MMOSCVisibilityKey(UInt32 parameter) {
-  return parameter == MMShowScaleOSC ? @"osc.scale" : @"osc.position";
+  switch (parameter) {
+  case MMShowScaleOSC: return @"osc.scale";
+  case MMShowRotationOSC: return @"osc.rotation";
+  default: return @"osc.position";
+  }
 }
-static BOOL MMIsOSCVisibilityKey(NSString *key) {
-  return [key isEqual:@"osc.position"] || [key isEqual:@"osc.scale"];
+static BOOL MMIsOSCVisibilityKey(NSString *key) { return [key hasPrefix:@"osc."]; }
+BOOL MMIsOSCVisibilityParameter(UInt32 parameter) {
+  return parameter == MMShowPositionOSC || parameter == MMShowScaleOSC ||
+         parameter == MMShowRotationOSC;
 }
 static NSDictionary *MMFactory(NSString *key) {
   if ([key isEqual:@"duration"])

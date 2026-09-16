@@ -14,3 +14,22 @@ typedef struct {
   vector_float4 stroke;   // straight alpha, matching the legacy glyph style
 } MMOSCVertex;
 enum { MMOSCVertexIndexVertices = 0, MMOSCVertexIndexViewportSize = 1 };
+
+// Rotation gizmo: three great circles sampled as polylines in the fragment
+// shader. Distances are canvas pixels in the quad's own frame, which the
+// vertex `local` carries with Y up, matching OSCRotationGeometry's screen
+// frame: ring point = radius * (cos t * ringU + sin t * ringV), and its z is
+// the depth that dims the hemisphere facing away.
+typedef struct {
+  vector_float3 ringU[3];
+  vector_float3 ringV[3];
+  vector_float4 ringColor[3];
+  vector_float4 outlineColor;
+  float radius;
+  float ringHalfWidth;
+  float outlineWidth;
+  float backDim;     // alpha multiplier for the far hemisphere
+  float activeBoost; // mix toward white for the grabbed or hovered ring
+  int activeRing;    // -1 for none
+} MMOSCRingParams;
+enum { MMOSCFragmentIndexRingParams = 0 };

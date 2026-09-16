@@ -11,6 +11,10 @@
 @property(nonatomic) NSUInteger generation;
 - (void)publishValuePose:(id<MMPropertyPose>)pose atTime:(CMTime)time;
 @end
+@interface MMPropertyLane ()
+- (BOOL)writeReplacements:(NSArray *)replacements manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit;
+- (NSArray *)readEntries:(id<PROAPIAccessing>)manager time:(CMTime)time error:(NSError **)error;
+@end
 @implementation MMPropertyPoseCache
 - (void)publishEntries:(NSArray<NSDictionary *> *)entries {
   @synchronized(self) { self.generation++; self.entries=[entries copy]; }
@@ -168,7 +172,21 @@ static void MMPropertyError(NSError **error) {
   return [self writeComponent:0 value:value manager:manager cache:cache time:time explicit:explicit];
 }
 - (BOOL)writeComponent:(NSUInteger)component value:(double)value manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit {
-  if(component>=self.componentCount || !isfinite(value)||!CMTIME_IS_NUMERIC(time)) return NO;
+  if(component>=self.componentCount) return NO;
+  NSMutableArray *replacements=[NSMutableArray arrayWithCapacity:self.componentCount];
+  for(NSUInteger i=0;i<self.componentCount;i++) [replacements addObject:i==component ? (id)@(value):(id)NSNull.null];
+  return [self writeReplacements:replacements manager:manager cache:cache time:time explicit:explicit];
+}
+- (BOOL)writeValues:(NSArray<NSNumber *> *)values manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit {
+  if(values.count!=self.componentCount) return NO;
+  return [self writeReplacements:values manager:manager cache:cache time:time explicit:explicit];
+}
+// One host write per call: `replacements` carries a value per component, or
+// NSNull where the existing one stays.
+- (BOOL)writeReplacements:(NSArray *)replacements manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit {
+  if(!CMTIME_IS_NUMERIC(time)) return NO;
+  for(id replacement in replacements)
+    if(replacement!=NSNull.null && !isfinite([replacement doubleValue])) return NO;
   NSArray *entries=[cache snapshotEntries]; if(!entries.count) return NO;
   CMTime target=time;
   if(explicit) {
@@ -186,7 +204,12 @@ static void MMPropertyError(NSError **error) {
   id<MMPropertyPose> source=(!explicit && !exact && self.componentCount>1) ? [self sampleEntries:entries time:time] : old;
   if(!source) return NO;
   NSMutableArray *values=[source.values mutableCopy];
-  values[component]=@(self.boundsValues ? fmax(self.minimum,fmin(self.maximum,value)) : value);
+  for(NSUInteger i=0;i<self.componentCount;i++) {
+    id replacement=replacements[i];
+    if(replacement==NSNull.null) continue;
+    double value=[replacement doubleValue];
+    values[i]=@(self.boundsValues ? fmax(self.minimum,fmin(self.maximum,value)) : value);
+  }
   MMPoseTiming *timing=(!explicit && !exact) ? [source.timing timingByReplacingLinkID:@""]:source.timing;
   BOOL creating=!explicit && MMIsNewKeyTime(entries,target);
   if (creating) timing=MMTimingWithCreationDefaults(timing);
@@ -207,4 +230,11 @@ NSArray<MMPropertyLane *> *MMPropertyLanes(void) {
 MMPropertyLane *MMPropertyLaneForParameter(UInt32 parameterID) {
   for(MMPropertyLane *lane in MMPropertyLanes()) if(lane.parameterID==parameterID) return lane;
   return nil;
+}
+MMPropertyPoseCache *MMPropertyEditingCache(MMPropertyLane *lane, id<PROAPIAccessing> manager, CMTime time) {
+  MMPropertyPoseCache *cache=[lane cacheForManager:manager];
+  if(cache) return cache;
+  cache=[MMPropertyPoseCache new];
+  [cache publishEntries:[lane readEntries:manager time:time error:nil]];
+  return cache;
 }

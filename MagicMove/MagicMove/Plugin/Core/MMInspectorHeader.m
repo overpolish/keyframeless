@@ -196,6 +196,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
   [menu addItem:[NSMenuItem sectionHeaderWithTitle:@"ON-SCREEN CONTROLS"]];
   [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowPositionOSC,@"Position Box")];
   [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowScaleOSC,@"Scale Handles")];
+  [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowRotationOSC,@"Rotation Rings")];
   MMRefreshSettingMenuItems(menu,self.manager,self);
   return menu;
 }

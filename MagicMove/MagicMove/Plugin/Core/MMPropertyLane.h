@@ -40,9 +40,16 @@
 - (id<MMPropertyPose>)sampleEntries:(NSArray<NSDictionary *> *)entries time:(CMTime)time;
 - (NSArray<id<MMPropertyPose>> *)readSamples:(id<PROAPIAccessing>)manager times:(NSArray<NSValue *> *)times error:(NSError **)error;
 - (BOOL)writeComponent:(NSUInteger)component value:(double)value manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit;
+// Replaces every component in one host write, for editors that drive the whole
+// pose at once, such as the viewer's rotation rings.
+- (BOOL)writeValues:(NSArray<NSNumber *> *)values manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit;
 - (BOOL)writeValue:(double)value manager:(id<PROAPIAccessing>)manager cache:(MMPropertyPoseCache *)cache time:(CMTime)time explicit:(BOOL)explicit;
 @end
 
 // Shared registry for properties using this adapter (Position/Scale retain their saved payloads).
 NSArray<MMPropertyLane *> *MMPropertyLanes(void);
 MMPropertyLane *MMPropertyLaneForParameter(UInt32 parameterID);
+// The cache an editor should write through: the inspector's registered one
+// when a view is attached, otherwise a private snapshot so viewer edits still
+// target the right key.
+MMPropertyPoseCache *MMPropertyEditingCache(MMPropertyLane *lane, id<PROAPIAccessing> manager, CMTime time);

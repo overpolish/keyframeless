@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MagicMoveOSC.h"
+#import "MagicMoveOSC+Rotation.h"
 #import "Constants.h"
 #import "Plugin.h"
 #import "MMAnchorPose.h"
@@ -37,15 +38,21 @@ static const float MMOSCBorderHalfWidth = 1.0f;
 static const float MMOSCHandleOutline = 1.25f;
 static const float MMOSCActiveHandleGrowth = 1.5f;
 
+// The undo entry a drag of this part writes, as the host displays it.
+static NSString *MMOSCUndoName(NSInteger part) {
+  if (part >= OSCBoxPartRingBase) return @"Rotate";
+  return part == OSCBoxPartPosition ? @"Move" : @"Scale";
+}
+
 @implementation MagicMoveOSC {
   NSInteger _dragPart;
   BOOL _hasLastPose;
   OSCBoxPose _lastPose;
-  NSInteger _cursorHandle; // handle whose cursor is showing, -1 for the arrow
+  MMOSCCursorKind _cursorKind;     // what the host is showing right now
+  MMOSCCursorKind _dragCursorKind; // held for the length of a drag
   OSCBoxPose _pressPose;
   CGPoint _pressPixels;
   CGSize _pressImageSize;
-  BOOL _undoGrouped;
   MMCombinedPoseCache *_combinedCache;
   MMScalePoseCache *_scaleCache;
   BOOL _showBorder, _showHandles;
@@ -56,9 +63,12 @@ static const float MMOSCActiveHandleGrowth = 1.5f;
   if ((self = [super init])) {
     _apiManager = apiManager;
     _hoveredHandle = -1;
-    _cursorHandle = -1;
+    _cursorKind = _dragCursorKind = MMOSCCursorArrow;
+    self.hoveredRing = -1;
+    self.ringDrag = (MMRingDrag){.axis = -1};
     // Registered defaults are on; a read on the first draw replaces these.
     _showBorder = _showHandles = YES;
+    self.showRings = YES;
   }
   return self;
 }
@@ -179,14 +189,20 @@ static const float MMOSCActiveHandleGrowth = 1.5f;
   return YES;
 }
 
+// Canvas corners for a pose already read this tick. NO when the plane is
+// edge-on, where the render draws nothing and no box part is reachable; the
+// rotation rings stay usable there, since the pivot and pose still exist.
+- (BOOL)canvasCornersForPose:(OSCBoxPose)pose imageSize:(CGSize)imageSize corners:(CGPoint[4])corners {
+  CGPoint object[4];
+  if (imageSize.width <= 0 || imageSize.height <= 0 || !OSCBoxCorners(pose, imageSize, object)) return NO;
+  for (NSInteger i = 0; i < 4; ++i) corners[i] = [self canvasFromObject:object[i]];
+  return YES;
+}
 - (BOOL)canvasCornersAtTime:(CMTime)time corners:(CGPoint[4])corners {
   CGSize size = [self imageSize];
   OSCBoxPose pose;
   if (size.width <= 0 || size.height <= 0 || ![self boxPoseAtTime:time pose:&pose]) return NO;
-  CGPoint object[4];
-  if (!OSCBoxCorners(pose, size, object)) return NO;
-  for (NSInteger i = 0; i < 4; ++i) corners[i] = [self canvasFromObject:object[i]];
-  return YES;
+  return [self canvasCornersForPose:pose imageSize:size corners:corners];
 }
 - (BOOL)canvasHandlesAtTime:(CMTime)time handles:(CGPoint[OSCBoxHandleCount])handles {
   CGPoint corners[4];
@@ -244,25 +260,29 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
 
 - (void)drawOSCWithWidth:(NSInteger)width height:(NSInteger)height activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage atTime:(CMTime)time {
-  CGPoint corners[4];
   MMOSCLog(@"draw width=%ld height=%ld activePart=%ld surface=%lux%lu format=%u", (long)width, (long)height, (long)activePart,
            (unsigned long)destinationImage.ioSurface.width, (unsigned long)destinationImage.ioSurface.height,
            (unsigned)destinationImage.ioSurface.pixelFormat);
-  if (!destinationImage.ioSurface || ![self canvasCornersAtTime:time corners:corners]) { MMOSCLog(@"draw: no surface or corners"); return; }
+  CGSize imageSize = [self imageSize];
+  OSCBoxPose pose;
+  if (!destinationImage.ioSurface || ![self boxPoseAtTime:time pose:&pose]) { MMOSCLog(@"draw: no surface or pose"); return; }
   // Canvas space is laid out on the surface, not on the host's reported size.
   float surfaceWidth = (float)destinationImage.ioSurface.width;
   float surfaceHeight = (float)destinationImage.ioSurface.height;
-  simd_float2 metal[4];
-  for (NSInteger i = 0; i < 4; ++i)
-    metal[i] = (simd_float2){(float)corners[i].x - surfaceWidth / 2, surfaceHeight / 2 - (float)corners[i].y};
+  CGPoint corners[4];
+  BOOL hasBox = [self canvasCornersForPose:pose imageSize:imageSize corners:corners];
   NSMutableData *vertices = [NSMutableData data];
   // Handles share the border colour; the fill is a touch lighter so the ring still reads.
   const simd_float4 border = {0.9f, 0.9f, 0.9f, 0.9f}, fill = {1, 1, 1, 1}, stroke = {0.82f, 0.82f, 0.82f, 1};
-  BOOL showBorder = [self visible:MMShowPositionOSC cached:&_showBorder atTime:time];
-  BOOL showHandles = [self visible:MMShowScaleOSC cached:&_showHandles atTime:time];
+  BOOL showBorder = hasBox && [self visible:MMShowPositionOSC cached:&_showBorder atTime:time];
+  BOOL showHandles = hasBox && [self visible:MMShowScaleOSC cached:&_showHandles atTime:time];
+  simd_float2 metal[4];
+  for (NSInteger i = 0; hasBox && i < 4; ++i)
+    metal[i] = (simd_float2){(float)corners[i].x - surfaceWidth / 2, surfaceHeight / 2 - (float)corners[i].y};
   for (NSInteger i = 0; showBorder && i < 4; ++i)
     MMOSCAppendLine(vertices, metal[i], metal[(i + 1) % 4], MMOSCBorderHalfWidth, border);
-  NSInteger active = activePart >= OSCBoxPartHandleBase ? activePart - OSCBoxPartHandleBase : _hoveredHandle;
+  NSInteger active = activePart >= OSCBoxPartHandleBase && activePart < OSCBoxPartRingBase
+                         ? activePart - OSCBoxPartHandleBase : _hoveredHandle;
   for (NSInteger i = 0; showHandles && i < OSCBoxHandleCount; ++i) {
     CGPoint centre = OSCBoxHandlePoint(corners, i), axis = OSCBoxHandleAxis(corners, i);
     simd_float2 metalCentre = {(float)centre.x - surfaceWidth / 2, surfaceHeight / 2 - (float)centre.y};
@@ -270,9 +290,18 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
     float radius = OSCBoxHandleRadius + (i == active ? MMOSCActiveHandleGrowth : 0);
     MMOSCAppendGlyph(vertices, metalCentre, metalAxis, i < 4 ? 0 : OSCBoxPillHalfLength, radius, MMOSCHandleOutline, fill, stroke);
   }
+  MMOSCVertex ringQuad[6];
+  MMOSCRingParams ringParams = {0};
+  BOOL showRings = [self ringQuad:ringQuad params:&ringParams pose:pose imageSize:imageSize
+                          surface:CGSizeMake(surfaceWidth, surfaceHeight) activePart:activePart atTime:time];
   id<MTLDevice> device = RSRenderDevice(destinationImage.deviceRegistryID);
-  id<MTLRenderPipelineState> pipeline = RSRenderPipeline(device, [NSBundle bundleForClass:MagicMoveOSC.class],
-                                                         MMOSCPixelFormat(destinationImage), @"MMOSCVertexShader", @"MMOSCFragmentShader");
+  NSBundle *bundle = [NSBundle bundleForClass:MagicMoveOSC.class];
+  MTLPixelFormat format = MMOSCPixelFormat(destinationImage);
+  id<MTLRenderPipelineState> pipeline = RSRenderPipeline(device, bundle, format, @"MMOSCVertexShader", @"MMOSCFragmentShader");
+  // The rings need their own fragment stage, so they are a second pipeline in
+  // the same encoder, drawn first: the scale handles stay on top of them.
+  id<MTLRenderPipelineState> ringPipeline = showRings
+      ? RSRenderPipeline(device, bundle, format, @"MMOSCVertexShader", @"MMOSCRingFragment") : nil;
   id<MTLCommandQueue> queue = pipeline ? RSRenderCheckoutQueue(device) : nil;
   if (!queue) { MMOSCLog(@"draw: device=%@ pipeline=%@ queue=nil", device, pipeline); return; }
   @try {
@@ -288,11 +317,18 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
     id<MTLRenderCommandEncoder> encoder = [buffer renderCommandEncoderWithDescriptor:pass];
     if (!encoder) return;
     [encoder setViewport:(MTLViewport){0, 0, surfaceWidth, surfaceHeight, -1, 1}];
-    [encoder setRenderPipelineState:pipeline];
     simd_uint2 viewport = {(uint)surfaceWidth, (uint)surfaceHeight};
-    // With both elements hidden the clear alone is the draw: an empty vertex
+    if (ringPipeline) {
+      [encoder setRenderPipelineState:ringPipeline];
+      [encoder setVertexBytes:ringQuad length:sizeof(ringQuad) atIndex:MMOSCVertexIndexVertices];
+      [encoder setVertexBytes:&viewport length:sizeof(viewport) atIndex:MMOSCVertexIndexViewportSize];
+      [encoder setFragmentBytes:&ringParams length:sizeof(ringParams) atIndex:MMOSCFragmentIndexRingParams];
+      [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+    }
+    // With every element hidden the clear alone is the draw: an empty vertex
     // buffer is nil and a zero-count draw is invalid.
     if (vertices.length) {
+      [encoder setRenderPipelineState:pipeline];
       id<MTLBuffer> vertexBuffer = [device newBufferWithBytes:vertices.bytes length:vertices.length options:MTLResourceStorageModeShared];
       [encoder setVertexBuffer:vertexBuffer offset:0 atIndex:MMOSCVertexIndexVertices];
       [encoder setVertexBytes:&viewport length:sizeof(viewport) atIndex:MMOSCVertexIndexViewportSize];
@@ -301,8 +337,8 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
     [encoder endEncoding];
     [buffer commit];
     [buffer waitUntilCompleted];
-    MMOSCLog(@"draw: %lu vertices status=%ld error=%@ texture=%lux%lu", (unsigned long)(vertices.length / sizeof(MMOSCVertex)),
-             (long)buffer.status, buffer.error, (unsigned long)texture.width, (unsigned long)texture.height);
+    MMOSCLog(@"draw: %lu vertices rings=%d status=%ld error=%@ texture=%lux%lu", (unsigned long)(vertices.length / sizeof(MMOSCVertex)),
+             ringPipeline != nil, (long)buffer.status, buffer.error, (unsigned long)texture.width, (unsigned long)texture.height);
   } @finally {
     RSRenderReturnQueue(queue);
   }
@@ -310,26 +346,49 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
 
 #pragma mark - Hit testing
 
-// Show FCP's resize cursor over a handle and restore the arrow off it. Only
-// the transitions call the host so hover ticks stay cheap.
-- (void)applyCursorForHandle:(NSInteger)handle {
-  if (handle == _cursorHandle) return;
+// Show FCP's own cursor art over a part and restore the arrow off it. Only the
+// transitions call the host, so hover ticks stay cheap.
+- (void)applyCursorKind:(MMOSCCursorKind)kind {
+  if (kind == _cursorKind) return;
   id<FxOnScreenControlAPI_v4> osc = [self oscAPI];
   if (!osc) return;
-  NSCursor *cursor = handle >= 0 ? MMResizeCursorForBoxHandle(handle) : nil;
-  [osc setCursor:cursor ?: [NSCursor arrowCursor]];
-  _cursorHandle = cursor ? handle : -1;
+  [osc setCursor:MMCursorOfKind(kind)];
+  _cursorKind = kind;
 }
 
+// Precedence: scale handles, then the rotation rings, then the position drag
+// that covers the rest of the canvas. A hidden element is not hit at all.
 - (void)hitTestOSCAtMousePositionX:(double)x mousePositionY:(double)y activePart:(NSInteger *)activePart atTime:(CMTime)time {
-  CGPoint corners[4];
   _hoveredHandle = -1;
-  if (![self canvasCornersAtTime:time corners:corners]) { *activePart = OSCBoxPartNone; [self applyCursorForHandle:-1]; return; }
-  NSInteger part = OSCBoxHitTest(corners, CGPointMake(x, y), OSCBoxHandleHitRadius,
-                                 [self visible:MMShowScaleOSC cached:&_showHandles atTime:time]);
-  if (part >= OSCBoxPartHandleBase) _hoveredHandle = part - OSCBoxPartHandleBase;
-  // A drag keeps its handle's cursor even when the pointer outruns the glyph.
-  [self applyCursorForHandle:_dragging && _dragPart >= OSCBoxPartHandleBase ? _dragPart - OSCBoxPartHandleBase : _hoveredHandle];
+  self.hoveredRing = -1;
+  CGSize size = [self imageSize];
+  OSCBoxPose pose;
+  if (size.width <= 0 || size.height <= 0 || ![self boxPoseAtTime:time pose:&pose]) {
+    *activePart = OSCBoxPartNone;
+    [self applyCursorKind:MMOSCCursorArrow];
+    return;
+  }
+  CGPoint corners[4];
+  BOOL hasBox = [self canvasCornersForPose:pose imageSize:size corners:corners];
+  NSInteger part = hasBox ? OSCBoxHitTest(corners, CGPointMake(x, y), OSCBoxHandleHitRadius,
+                                          [self visible:MMShowScaleOSC cached:&_showHandles atTime:time])
+                          : OSCBoxPartNone;
+  MMOSCCursorKind kind = MMOSCCursorArrow;
+  if (part >= OSCBoxPartHandleBase) {
+    _hoveredHandle = part - OSCBoxPartHandleBase;
+    kind = MMResizeCursorKindForBoxHandle(_hoveredHandle);
+  } else {
+    MMOSCCursorKind ringKind = MMOSCCursorArrow;
+    NSInteger ring = [self ringAtX:x y:y pose:pose imageSize:size cursor:&ringKind atTime:time];
+    if (ring >= 0) {
+      self.hoveredRing = ring;
+      part = OSCBoxPartRingBase + ring;
+      kind = ringKind;
+    }
+  }
+  // A drag keeps the cursor it started with, even when the pointer outruns the
+  // glyph or ring it grabbed.
+  [self applyCursorKind:_dragging ? _dragCursorKind : kind];
   *activePart = part;
   MMOSCLog(@"hitTest (%.1f,%.1f) -> part %ld", x, y, (long)part);
 }
@@ -345,14 +404,18 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
     return;
   }
   _dragPart = activePart;
+  _dragCursorKind = _cursorKind;
   _pressImageSize = size;
   _pressPixels = [self pixelsFromCanvasX:x y:y imageSize:size];
-  _combinedCache = MMCombinedEditingCache(self.apiManager, time);
-  _scaleCache = MMScaleEditingCache(self.apiManager, time);
-  // The host's API objects are per-callback proxies: never keep one across
-  // callbacks (Motion crashed closing the group through a stale proxy).
-  id<FxUndoAPI> undo = [self.apiManager apiForProtocol:@protocol(FxUndoAPI)];
-  _undoGrouped = [undo startUndoGroup:activePart == OSCBoxPartPosition ? @"Move" : @"Scale"];
+  BOOL ring = activePart >= OSCBoxPartRingBase;
+  if (ring && ![self beginRingDragAtX:x y:y part:activePart pose:_pressPose imageSize:size atTime:time]) {
+    [self finishDrag];
+    return;
+  }
+  if (!ring) {
+    _combinedCache = MMCombinedEditingCache(self.apiManager, time);
+    _scaleCache = MMScaleEditingCache(self.apiManager, time);
+  }
   _dragging = YES;
   *forceUpdate = YES;
   CGPoint object = [self objectFromCanvas:CGPointMake(x, y)];
@@ -361,28 +424,44 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
            MMCombinedCacheForManager(self.apiManager) != nil, CMTimeGetSeconds(time), MMOSCEffectStart(self.apiManager));
 }
 
+// Each tick opens and closes its own undo group, inside one callback. FxPlug
+// scopes the group to the calling thread: startUndoGroup pushes a live-thread
+// scope keyed on pthread_self and endUndoGroup pops it. OSC callbacks arrive
+// on a concurrent dispatch queue, so a group spanning mouseDown to mouseUp
+// pops a scope on a thread that never pushed one, and the host faults reading
+// that thread's empty scope stack.
 - (void)mouseDraggedAtPositionX:(double)x positionY:(double)y activePart:(NSInteger)activePart
                       modifiers:(FxModifierKeys)modifiers forceUpdate:(BOOL *)forceUpdate atTime:(CMTime)time {
   if (!_dragging) return;
   CGPoint current = [self pixelsFromCanvasX:x y:y imageSize:_pressImageSize];
+  // The host's API objects are per-callback proxies: never keep one across
+  // callbacks (Motion crashed closing the group through a stale proxy).
+  id<FxUndoAPI> undo = [self.apiManager apiForProtocol:@protocol(FxUndoAPI)];
+  BOOL grouped = [undo startUndoGroup:MMOSCUndoName(_dragPart)];
   BOOL wrote = NO;
-  if (_dragPart == OSCBoxPartPosition) {
-    OSCBoxPose pose = OSCBoxPoseMovedBy(_pressPose, CGPointMake(current.x - _pressPixels.x, current.y - _pressPixels.y), _pressImageSize);
-    wrote = MMWriteCombinedValues(self.apiManager, _combinedCache, @(MAX(-200, MIN(200, pose.positionX))),
-                                  @(MAX(-200, MIN(200, pose.positionY))), nil, time);
-  } else {
-    // Match the native Transform controls, independent of the inspector's
-    // link toggle: corners keep the aspect and Shift frees it; edges scale
-    // one axis and Shift makes them proportional.
-    NSInteger handle = _dragPart - OSCBoxPartHandleBase;
-    BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
-    BOOL proportional = handle < 4 ? !shift : shift;
-    OSCBoxPose pose = OSCBoxPoseScaledByHandle(_pressPose, handle, _pressPixels, current,
-                                             _pressImageSize, proportional);
-    wrote = MMWriteScaleValues(self.apiManager, _scaleCache, pose.scaleX, pose.scaleY, time);
+  @try {
+    if (_dragPart >= OSCBoxPartRingBase) {
+      wrote = [self dragRingAtX:x y:y modifiers:modifiers atTime:time];
+    } else if (_dragPart == OSCBoxPartPosition) {
+      OSCBoxPose pose = OSCBoxPoseMovedBy(_pressPose, CGPointMake(current.x - _pressPixels.x, current.y - _pressPixels.y), _pressImageSize);
+      wrote = MMWriteCombinedValues(self.apiManager, _combinedCache, @(MAX(-200, MIN(200, pose.positionX))),
+                                    @(MAX(-200, MIN(200, pose.positionY))), nil, time);
+    } else {
+      // Match the native Transform controls, independent of the inspector's
+      // link toggle: corners keep the aspect and Shift frees it; edges scale
+      // one axis and Shift makes them proportional.
+      NSInteger handle = _dragPart - OSCBoxPartHandleBase;
+      BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
+      BOOL proportional = handle < 4 ? !shift : shift;
+      OSCBoxPose pose = OSCBoxPoseScaledByHandle(_pressPose, handle, _pressPixels, current,
+                                               _pressImageSize, proportional);
+      wrote = MMWriteScaleValues(self.apiManager, _scaleCache, pose.scaleX, pose.scaleY, time);
+    }
+  } @finally {
+    if (grouped) [undo endUndoGroup];
   }
-  MMOSCLog(@"mouseDragged canvas=(%.1f,%.1f) pixels=(%.1f,%.1f) delta=(%.1f,%.1f) wrote=%d t=%.4f start=%.4f", x, y, current.x, current.y,
-           current.x - _pressPixels.x, current.y - _pressPixels.y, wrote, CMTimeGetSeconds(time), MMOSCEffectStart(self.apiManager));
+  MMOSCLog(@"mouseDragged canvas=(%.1f,%.1f) pixels=(%.1f,%.1f) delta=(%.1f,%.1f) wrote=%d grouped=%d t=%.4f start=%.4f", x, y, current.x, current.y,
+           current.x - _pressPixels.x, current.y - _pressPixels.y, wrote, grouped, CMTimeGetSeconds(time), MMOSCEffectStart(self.apiManager));
   if (wrote) *forceUpdate = YES;
 }
 
@@ -395,19 +474,19 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
 }
 
 - (void)finishDrag {
-  if (_undoGrouped) [[self.apiManager apiForProtocol:@protocol(FxUndoAPI)] endUndoGroup];
-  _undoGrouped = NO;
   _dragging = NO;
   _dragPart = OSCBoxPartNone;
   _combinedCache = nil;
   _scaleCache = nil;
+  [self clearRingDrag];
 }
 
 - (void)mouseExitedAtPositionX:(double)x positionY:(double)y modifiers:(FxModifierKeys)modifiers
                    forceUpdate:(BOOL *)forceUpdate atTime:(CMTime)time {
-  [self applyCursorForHandle:-1];
-  if (_hoveredHandle < 0) return;
+  [self applyCursorKind:MMOSCCursorArrow];
+  if (_hoveredHandle < 0 && self.hoveredRing < 0) return;
   _hoveredHandle = -1;
+  self.hoveredRing = -1;
   *forceUpdate = YES;
 }
 - (void)mouseEnteredAtPositionX:(double)x positionY:(double)y modifiers:(FxModifierKeys)modifiers

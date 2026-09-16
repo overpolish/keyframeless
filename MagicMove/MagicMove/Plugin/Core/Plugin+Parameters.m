@@ -56,6 +56,9 @@
   ok = ok && [api addToggleButtonWithName:@"Show Scale On-Screen Control" parameterID:MMShowScaleOSC
                            defaultValue:MMReadOSCVisibilityDefault(MMShowScaleOSC)
                          parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
+  ok = ok && [api addToggleButtonWithName:@"Show Rotation On-Screen Control" parameterID:MMShowRotationOSC
+                           defaultValue:MMReadOSCVisibilityDefault(MMShowRotationOSC)
+                         parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   // Match In/Out is lane-wide, so each property keeps one saved toggle rather
   // than repeating the setting in every keyframed pose.
   for (NSNumber *property in MMProperties())

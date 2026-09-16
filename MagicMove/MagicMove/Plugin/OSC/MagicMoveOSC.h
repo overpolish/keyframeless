@@ -6,7 +6,9 @@
 // Viewer control: the transformed image's outline with eight scale handles.
 // Dragging anywhere else in the viewer moves the image, so an image whose
 // handles left the viewer can still be dragged back (like Transform in FCP).
-// Every drag tick is ONE host write per lane, grouped into one undo entry.
+// Every drag tick is ONE host write per lane, inside an undo group that opens
+// and closes in that same callback: the host scopes a group to the calling
+// thread, and OSC callbacks do not share one.
 @interface MagicMoveOSC : NSObject <FxOnScreenControl_v4>
 @property(nonatomic, weak, readonly) id<PROAPIAccessing> apiManager;
 @property(nonatomic, readonly) NSInteger hoveredHandle;

@@ -117,6 +117,7 @@
 				"Plugin/Core/Plugin+Parameters.m",
 				Plugin/Info.plist,
 				Plugin/OSC/MagicMoveOSC.m,
+				"Plugin/OSC/MagicMoveOSC+Rotation.m",
 				Plugin/OSC/MMOSCCursor.m,
 				Plugin/Render/MagicMove.metal,
 				Plugin/Render/MMRenderHost.m,

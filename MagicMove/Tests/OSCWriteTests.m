@@ -3,6 +3,7 @@
 #import "MagicMoveOSC.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
+#import "MMRotationPose.h"
 #import <math.h>
 
 // Canvas is the 1920x1080 frame at 1:1, object space is 0..1 with Y up.
@@ -37,7 +38,10 @@ static OSCHost *Host(void) {
   host.editors[@(MMScaleProportional)] = @NO;
   host.editors[@(MMShowPositionOSC)] = @YES;
   host.editors[@(MMShowScaleOSC)] = @YES;
+  host.editors[@(MMShowRotationOSC)] = @YES;
   host.blobs[@(MMCustomControls)] = Combined(0, 0, 100);
+  host.blobs[@(MMRotationControls)] = [[MMRotationPose alloc] initWithX:0 y:0 z:0 authored:YES
+                                                                easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
   return host;
 }
 static NSInteger Hit(MagicMoveOSC *osc, double x, double y) {
@@ -90,7 +94,10 @@ static void moveAnywhere(void) {
   NSInteger part = Hit(osc, 100, 100);
   assert(part == OSCBoxPartPosition);
   NSUInteger writes = host.blobWrites;
-  assert(Down(osc, 100, 100, part) && osc.dragging && host.undoGroupsStarted == 1);
+  // Each tick carries its own undo group, opened and closed in that callback:
+  // the host scopes a group to the calling thread, and the press and release
+  // callbacks are not guaranteed the same one.
+  assert(Down(osc, 100, 100, part) && osc.dragging && host.undoGroupsStarted == 0);
   assert(host.blobWrites == writes);
   assert(Drag(osc, 292, 208, part, 0));
   // One write carries both axes.
@@ -102,9 +109,9 @@ static void moveAnywhere(void) {
   assert(Drag(osc, 484, 100, part, 0));
   pose = host.blobs[@(MMCustomControls)];
   assert(fabs(pose.positionX - 20) < 1e-9 && fabs(pose.positionY - 0) < 1e-9);
-  assert(host.blobWrites == writes + 2 && host.undoGroupsEnded == 0);
+  assert(host.blobWrites == writes + 2 && host.undoGroupsStarted == 2 && host.undoGroupsEnded == 2);
   assert(Up(osc, 484, 100, part) && !osc.dragging);
-  assert(host.undoGroupsStarted == 1 && host.undoGroupsEnded == 1 && host.undoDepth == 0);
+  assert(host.undoGroupsStarted == 2 && host.undoGroupsEnded == 2 && host.undoDepth == 0);
   // Dragging without a press writes nothing.
   assert(!Drag(osc, 600, 600, part, 0) && host.blobWrites == writes + 2);
   // Position is bounded like the inspector fields.
@@ -128,7 +135,7 @@ static void scaleHandles(void) {
   assert(host.cursorSets == cursorSets + 2 && osc.hoveredHandle == -1);
   part = Hit(osc, 1918, 1082);
   NSUInteger writes = host.blobWrites;
-  assert(Down(osc, 1918, 1082, part) && host.undoGroupsStarted == 1);
+  assert(Down(osc, 1918, 1082, part) && host.undoGroupsStarted == 0);
   // Corners keep the aspect by default like the native controls, whatever
   // the inspector's link toggle says: an off-diagonal drag stays uniform.
   assert(Drag(osc, 2110, 1082, part, 0));
@@ -144,7 +151,7 @@ static void scaleHandles(void) {
   // The combined lane is untouched by a scale drag.
   MMCombinedPose *combined = host.blobs[@(MMCustomControls)];
   assert(combined.positionX == 0 && combined.scale == 100);
-  assert(Up(osc, 2110, 1082, part) && host.undoGroupsEnded == 1);
+  assert(Up(osc, 2110, 1082, part) && host.undoGroupsEnded == 2);
   // Edges scale one axis by default; Shift makes them proportional.
   host.editors[@(MMScaleProportional)] = @YES;
   host.blobs[@(MMScaleControls)] = [[MMScalePose alloc] initWithX:100 y:100 authored:YES];
@@ -157,7 +164,9 @@ static void scaleHandles(void) {
   scale = host.blobs[@(MMScaleControls)];
   assert(fabs(scale.x - 140) < 1e-9 && fabs(scale.y - 140) < 1e-9);
   Up(osc, 2304, 540, part);
-  assert(host.undoGroupsStarted == 2 && host.undoGroupsEnded == 2);
+  // Two ticks for the corner drag, two for the edge drag; a press or release
+  // opens nothing on its own.
+  assert(host.undoGroupsStarted == 4 && host.undoGroupsEnded == 4 && host.undoDepth == 0);
 }
 
 static void explicitTargeting(void) {
@@ -172,7 +181,7 @@ static void explicitTargeting(void) {
   MMCombinedPose *pose = host.blobs[@(MMCustomControls)];
   assert(fabs(pose.positionX - 10) < 1e-9 && pose.positionY == 0);
   Up(osc, 492, 300, part);
-  assert(host.undoGroupsStarted == 1 && host.undoGroupsEnded == 1);
+  assert(host.undoGroupsStarted == 1 && host.undoGroupsEnded == 1 && host.undoDepth == 0);
 }
 
 static void registeredCache(void) {
@@ -233,6 +242,89 @@ static void hiddenControls(void) {
   assert(Hit(osc, 1918, 1082) == OSCBoxPartHandleBase + 2);
 }
 
+// The gizmo sits on the pivot: with no offset or anchor that is the canvas
+// centre, where the unrotated Z ring is a circle of OSCRingRadius and the X and
+// Y rings are edge-on segments through it. A point at 45 degrees is on the Z
+// ring alone, and dragging along its tangent turns Z by arc length / radius.
+static CGPoint RingPoint(double degrees, double offset) {
+  double angle = degrees * M_PI / 180;
+  return CGPointMake(960 + (OSCRingRadius + offset) * cos(angle), 540 + (OSCRingRadius + offset) * sin(angle));
+}
+static CGPoint RingDragTo(double pressDegrees, double turnDegrees) {
+  double angle = pressDegrees * M_PI / 180, arc = turnDegrees * M_PI / 180 * OSCRingRadius;
+  CGPoint press = RingPoint(pressDegrees, 0);
+  return CGPointMake(press.x - arc * sin(angle), press.y + arc * cos(angle));
+}
+static MMRotationPose *Rotation(OSCHost *host) { return host.blobs[@(MMRotationControls)]; }
+
+static void rotationRings(void) {
+  OSCHost *host = Host();
+  MagicMoveOSC *osc = [[MagicMoveOSC alloc] initWithAPIManager:host];
+  NSUInteger cursorSets = host.cursorSets;
+  CGPoint press = RingPoint(45, 0);
+  NSInteger part = Hit(osc, press.x, press.y);
+  assert(part == OSCBoxPartRingBase + OSCRingAxisZ);
+  // Hovering a ring shows its cursor once, and leaving restores the arrow.
+  assert(host.cursorSets == cursorSets + 1);
+  // Inside the sphere but clear of all three rings, including the edge-on X
+  // and Y segments that lie across the pivot at rest.
+  CGPoint inside = RingPoint(45, -50);
+  assert(Hit(osc, inside.x, inside.y) == OSCBoxPartPosition && host.cursorSets == cursorSets + 2);
+  part = Hit(osc, press.x, press.y);
+  NSUInteger writes = host.blobWrites;
+  assert(Down(osc, press.x, press.y, part) && osc.dragging && host.undoGroupsStarted == 0);
+  assert(host.blobWrites == writes);
+  CGPoint to = RingDragTo(45, 30);
+  assert(Drag(osc, to.x, to.y, part, 0));
+  // One write carries all three axes, and only the grabbed one changes.
+  assert(host.blobWrites == writes + 1);
+  assert(fabs(Rotation(host).z - 30) < 1e-6 && fabs(Rotation(host).x) < 1e-9 && fabs(Rotation(host).y) < 1e-9);
+  // Ticks measure from the press, so the pose follows the pointer exactly.
+  to = RingDragTo(45, -75);
+  assert(Drag(osc, to.x, to.y, part, 0) && fabs(Rotation(host).z + 75) < 1e-6);
+  // Cmd snaps to whole 15 degree marks.
+  to = RingDragTo(45, 22);
+  assert(Drag(osc, to.x, to.y, part, kFxModifierKey_COMMAND));
+  assert(fabs(Rotation(host).z - 15) < 1e-6);
+  // Nothing else moved, and the drag is one undo step.
+  MMCombinedPose *combined = host.blobs[@(MMCustomControls)];
+  assert(combined.positionX == 0 && combined.positionY == 0 && !host.blobs[@(MMScaleControls)]);
+  assert(host.undoGroupsStarted == 3 && host.undoGroupsEnded == 3);
+  assert(Up(osc, to.x, to.y, part) && !osc.dragging);
+  assert(host.undoGroupsStarted == 3 && host.undoGroupsEnded == 3 && host.undoDepth == 0);
+  // The rings turn with the pose: at Z = 15 degrees the X ring's edge-on
+  // segment has swung off vertical. Probe it half way out, clear of the point
+  // where it meets the Z circle, and its own drag must write X alone.
+  double tilt = 15 * M_PI / 180, along = OSCRingRadius / 2;
+  CGPoint onX = CGPointMake(960 - along * sin(tilt), 540 + along * cos(tilt));
+  part = Hit(osc, onX.x, onX.y);
+  assert(part == OSCBoxPartRingBase + OSCRingAxisX);
+  assert(Down(osc, onX.x, onX.y, part));
+  assert(Drag(osc, onX.x + 20, onX.y - 20, part, 0));
+  assert(fabs(Rotation(host).x) > 1 && fabs(Rotation(host).z - 15) < 1e-6 && fabs(Rotation(host).y) < 1e-9);
+  Up(osc, onX.x, onX.y, part);
+  // Snapping is to the marks themselves, not to steps away from the press: a
+  // ring grabbed at 7 degrees snaps to 15, not to 22.
+  host.blobs[@(MMRotationControls)] = [[MMRotationPose alloc] initWithX:0 y:0 z:7 authored:YES
+                                                                easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+  part = Hit(osc, press.x, press.y);
+  assert(part == OSCBoxPartRingBase + OSCRingAxisZ);
+  assert(Down(osc, press.x, press.y, part));
+  to = RingDragTo(45, 10);
+  assert(Drag(osc, to.x, to.y, part, kFxModifierKey_COMMAND));
+  assert(fabs(Rotation(host).z - 15) < 1e-6);
+  // Pulling back the other way lands on the mark below, not on 7 minus 15.
+  to = RingDragTo(45, -4);
+  assert(Drag(osc, to.x, to.y, part, kFxModifierKey_COMMAND));
+  assert(fabs(Rotation(host).z) < 1e-6);
+  Up(osc, to.x, to.y, part);
+  // Hiding the rings leaves no invisible grab region, and the pointer falls
+  // through to the position drag.
+  host.editors[@(MMShowRotationOSC)] = @NO;
+  assert(Hit(osc, press.x, press.y) == OSCBoxPartPosition);
+  assert(Hit(osc, onX.x, onX.y) == OSCBoxPartPosition);
+}
+
 int main(void) {
   @autoreleasepool {
     geometryFromHost();
@@ -242,7 +334,9 @@ int main(void) {
     registeredCache();
     missingHost();
     hiddenControls();
+    rotationRings();
   }
-  puts("OSC writes: host geometry, move anywhere, one write per tick, handle scaling, explicit targeting, cache sharing, hidden controls and missing host passed");
+  puts("OSC writes: host geometry, move anywhere, one write per tick, handle scaling, explicit targeting, "
+       "cache sharing, hidden controls, rotation rings and missing host passed");
   return 0;
 }

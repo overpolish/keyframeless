@@ -2,6 +2,7 @@
 #import "MMOSCCursor.h"
 #import "MagicMoveOSC.h"
 #import <AppKit/AppKit.h>
+#import <math.h>
 
 // Hotspots are FCP's own (LunaKit SRCursor.plist, top-left origin): the resize
 // arrows aim at (15,14), MoveCurve at (16,16). The glyph sits up-left of the
@@ -39,25 +40,71 @@ static NSCursor *MMResizeCursor(NSString *asset, NSPoint hotSpot, NSString *priv
   return MMBundledCursor(asset, hotSpot) ?: MMPrivateCursor(privateName) ?: fallback;
 }
 
-NSCursor *MMResizeCursorForBoxHandle(NSInteger handleIndex) {
-  switch (handleIndex) {
-  case 0: // bottom-left and top-right share the "/" diagonal
-  case 2:
-    return MMResizeCursor(@"ResizeTopRightCursor", NSMakePoint(15, 14), @"_windowResizeNorthEastSouthWestCursor",
-                          [NSCursor resizeLeftRightCursor]);
-  case 1: // bottom-right and top-left share the "\" diagonal
-  case 3:
-    return MMResizeCursor(@"ResizeTopLeftCursor", NSMakePoint(15, 14), @"_windowResizeNorthWestSouthEastCursor",
-                          [NSCursor resizeUpDownCursor]);
-  case 4:
-  case 6:
-    return MMResizeCursor(@"MoveCurve", NSMakePoint(16, 16), @"_windowResizeNorthSouthCursor",
-                          [NSCursor resizeUpDownCursor]);
-  case 5:
-  case 7:
+NSCursor *MMCursorOfKind(MMOSCCursorKind kind) {
+  switch (kind) {
+  case MMOSCCursorResizeHorizontal:
     return MMResizeCursor(@"ResizeLeftRightCursor", NSMakePoint(15, 14), @"_windowResizeEastWestCursor",
                           [NSCursor resizeLeftRightCursor]);
-  default:
-    return nil;
+  case MMOSCCursorResizeVertical:
+    return MMResizeCursor(@"MoveCurve", NSMakePoint(16, 16), @"_windowResizeNorthSouthCursor",
+                          [NSCursor resizeUpDownCursor]);
+  case MMOSCCursorResizeDiagonalNESW:
+    return MMResizeCursor(@"ResizeTopRightCursor", NSMakePoint(15, 14), @"_windowResizeNorthEastSouthWestCursor",
+                          [NSCursor resizeLeftRightCursor]);
+  case MMOSCCursorResizeDiagonalNWSE:
+    return MMResizeCursor(@"ResizeTopLeftCursor", NSMakePoint(15, 14), @"_windowResizeNorthWestSouthEastCursor",
+                          [NSCursor resizeUpDownCursor]);
+  // The four rotate renditions are not keyed in SRCursor.plist, so the hotspot
+  // is the measured centre of the curved arrow.
+  case MMOSCCursorRotateTopRight:
+    return MMBundledCursor(@"RotateTopRightCursor", NSMakePoint(14, 16)) ?: [NSCursor arrowCursor];
+  case MMOSCCursorRotateTopLeft:
+    return MMBundledCursor(@"RotateTopLeftCursor", NSMakePoint(17, 16)) ?: [NSCursor arrowCursor];
+  case MMOSCCursorRotateBottomLeft:
+    return MMBundledCursor(@"RotateBottomLeftCursor", NSMakePoint(17, 13)) ?: [NSCursor arrowCursor];
+  case MMOSCCursorRotateBottomRight:
+    return MMBundledCursor(@"RotateBottomRightCursor", NSMakePoint(14, 13)) ?: [NSCursor arrowCursor];
+  case MMOSCCursorArrow:
+    break;
   }
+  return [NSCursor arrowCursor];
+}
+
+MMOSCCursorKind MMResizeCursorKindForBoxHandle(NSInteger handleIndex) {
+  switch (handleIndex) {
+  case 0: // bottom-left and top-right share the "/" diagonal
+  case 2: return MMOSCCursorResizeDiagonalNESW;
+  case 1: // bottom-right and top-left share the "\" diagonal
+  case 3: return MMOSCCursorResizeDiagonalNWSE;
+  case 4:
+  case 6: return MMOSCCursorResizeVertical;
+  case 5:
+  case 7: return MMOSCCursorResizeHorizontal;
+  default: return MMOSCCursorArrow;
+  }
+}
+
+static double MMCursorDegrees(double radians) {
+  double degrees = fmod(radians * 180 / M_PI, 360);
+  return degrees < 0 ? degrees + 360 : degrees;
+}
+
+MMOSCCursorKind MMResizeCursorKindForAngle(double radians) {
+  switch (((int)round(MMCursorDegrees(radians) / 45)) % 8) {
+  case 1: // NE
+  case 5: return MMOSCCursorResizeDiagonalNESW;
+  case 2: // N
+  case 6: return MMOSCCursorResizeVertical;
+  case 3: // NW
+  case 7: return MMOSCCursorResizeDiagonalNWSE;
+  default: return MMOSCCursorResizeHorizontal; // E and W
+  }
+}
+
+MMOSCCursorKind MMRotateCursorKindForAngle(double radians) {
+  double degrees = MMCursorDegrees(radians);
+  if (degrees < 90) return MMOSCCursorRotateTopRight;
+  if (degrees < 180) return MMOSCCursorRotateTopLeft;
+  if (degrees < 270) return MMOSCCursorRotateBottomLeft;
+  return MMOSCCursorRotateBottomRight;
 }

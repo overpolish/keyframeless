@@ -25,6 +25,10 @@ enum { OSCBoxPartNone = 0, OSCBoxPartPosition = 1, OSCBoxPartHandleBase = 2 };
 // image centre, Y up. It matches the render shader's pivot and offset math.
 CGPoint OSCBoxPixelFromObject(CGPoint object, CGSize imageSize);
 CGPoint OSCBoxObjectFromPixel(CGPoint pixel, CGSize imageSize);
+// The point every rotation and scale turns about: the position offset plus the
+// anchor, in pixel space. It is the render's own pivot (MagicMove.metal
+// subtracts offset then anchor before projecting).
+CGPoint OSCBoxPivotPixels(OSCBoxPose pose, CGSize imageSize);
 
 // Object-space (0..1, Y up) corners: bottom-left, bottom-right, top-right,
 // top-left of the transformed image. Returns false when the plane is edge-on,
