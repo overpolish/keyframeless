@@ -1,6 +1,15 @@
 /* SPDX-FileCopyrightText: 2026 overpolish
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "RenderSupport.h"
+#import <CoreVideo/CoreVideo.h>
+
+MTLPixelFormat RSRenderPixelFormat(OSType ioSurfacePixelFormat) {
+  switch (ioSurfacePixelFormat) {
+  case kCVPixelFormatType_128RGBAFloat: return MTLPixelFormatRGBA32Float;
+  case kCVPixelFormatType_32BGRA: return MTLPixelFormatBGRA8Unorm;
+  default: return MTLPixelFormatRGBA16Float;
+  }
+}
 
 id<MTLDevice> RSRenderDevice(uint64_t registryID) {
   static NSArray<id<MTLDevice>> *devices;

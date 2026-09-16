@@ -149,11 +149,49 @@ static void TestGPU(NSBundle *bundle) {
   puts("RenderSupport GPU: device routing, bounded queues, pipeline cache, "
        "averaging, buffer sharing, abort recovery and texture reuse passed");
 }
+// The glyph/line routing has a distinct signature per kind: a glyph composites
+// its stroke into an outline ring, a line is solid fill. Distinct channel
+// colours make each path unambiguous, so a swapped kind branch (glyph solid,
+// line outlined) fails these assertions.
+static void TestOSCDrawing(NSBundle *bundle) {
+  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+  assert(device);
+  MTLTextureDescriptor *descriptor = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA32Float
+                                   width:32
+                                  height:32
+                               mipmapped:NO];
+  descriptor.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
+  descriptor.storageMode = MTLStorageModeShared;
+  id<MTLTexture> texture = [device newTextureWithDescriptor:descriptor];
+  NSMutableData *vertices = [NSMutableData data];
+  // A point glyph: red fill, green stroke. The ring must read green, which the
+  // solid-fill branch never produces.
+  RSOSCAppendGlyph(vertices, (simd_float2){0, 0}, (simd_float2){1, 0}, 0, 4, 1.25,
+                   (simd_float4){1, 0, 0, 1}, (simd_float4){0, 1, 0, 1});
+  // A line whose interior must be pure fill: no stroke, no gradient tint.
+  RSOSCAppendLine(vertices, (simd_float2){-8, 8}, (simd_float2){8, 8}, 2, (simd_float4){0, 0, 1, 1});
+  assert(RSOSCDraw(device, texture, MTLPixelFormatRGBA32Float, bundle, vertices, NULL, NULL,
+                   @"OSCDrawingTests"));
+  float p[4];
+  [texture getBytes:p bytesPerRow:sizeof(p) fromRegion:MTLRegionMake2D(16, 16, 1, 1) mipmapLevel:0];
+  assert(p[0] > 0.8f && p[1] < 0.3f); // glyph centre: red fill
+  [texture getBytes:p bytesPerRow:sizeof(p) fromRegion:MTLRegionMake2D(20, 16, 1, 1) mipmapLevel:0];
+  assert(p[1] > 0.5f && p[0] < 0.5f); // glyph ring: green stroke
+  [texture getBytes:p bytesPerRow:sizeof(p) fromRegion:MTLRegionMake2D(16, 8, 1, 1) mipmapLevel:0];
+  assert(p[2] > 0.9f && p[0] < 0.1f && p[1] < 0.1f); // line interior: blue fill
+  [texture getBytes:p bytesPerRow:sizeof(p) fromRegion:MTLRegionMake2D(0, 0, 1, 1) mipmapLevel:0];
+  assert(p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 0); // far corner stays clear
+  puts("RenderSupport OSC: glyph stroke, line solid and clear pass passed");
+}
 int main(int argc, const char **argv) {
   @autoreleasepool {
     TestTimes();
-    if (argc == 2)
-      TestGPU([NSBundle bundleWithPath:@(argv[1])]);
+    if (argc == 2) {
+      NSBundle *bundle = [NSBundle bundleWithPath:@(argv[1])];
+      TestGPU(bundle);
+      TestOSCDrawing(bundle);
+    }
   }
   puts("RenderSupport: subframe timing, clamping and missing resources passed");
 }

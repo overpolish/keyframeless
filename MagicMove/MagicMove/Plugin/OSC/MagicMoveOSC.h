@@ -1,21 +1,10 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #pragma once
-#import <FxPlug/FxPlugSDK.h>
-@import OSCControls;
+@import OSCViewer;
 
-// Viewer control: the transformed image's outline with eight scale handles.
-// Dragging anywhere else in the viewer moves the image, so an image whose
-// handles left the viewer can still be dragged back (like Transform in FCP).
-// Every drag tick is ONE host write per lane, inside an undo group that opens
-// and closes in that same callback: the host scopes a group to the calling
-// thread, and OSC callbacks do not share one.
-@interface MagicMoveOSC : NSObject <FxOnScreenControl_v4>
-@property(nonatomic, weak, readonly) id<PROAPIAccessing> apiManager;
-@property(nonatomic, readonly) NSInteger hoveredHandle;
-@property(nonatomic, readonly) BOOL dragging;
-- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
-// Rendered footprint at `time`; NO when the host cannot supply the parameters.
-- (BOOL)boxPoseAtTime:(CMTime)time pose:(OSCBoxPose *)pose;
-- (CGSize)imageSize;
-- (BOOL)canvasHandlesAtTime:(CMTime)time handles:(CGPoint[OSCBoxHandleCount])handles;
+// Magic Move's on-screen control: the box outline, scale handles, rotation
+// rings and anchor square over the transformed image. It supplies the pose
+// read, visibility parameters and lane writes; the control behaviour itself
+// lives in OSCViewerControl.
+@interface MagicMoveOSC : OSCViewerControl
 @end

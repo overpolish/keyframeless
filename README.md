@@ -8,7 +8,9 @@ Motion graphics plugins for Final Cut Pro and Motion, with native keyframes and 
 - [MotionTiming](MotionTiming/README.md): keyframe timing and Added Motion.
 - [InspectorControls](InspectorControls/README.md): reusable AppKit inspector controls.
 - [PluginPreferences](PluginPreferences/README.md): saved defaults for plugin settings.
-- [RenderSupport](RenderSupport/README.md): Metal rendering, spatial blur, and motion blur.
+- [RenderSupport](RenderSupport/README.md): Metal rendering, spatial blur, motion blur, and on-screen-control drawing.
+- [OSCControls](OSCControls/README.md): pure geometry for viewer on-screen controls.
+- [OSCViewer](OSCViewer/README.md): the FxPlug side of viewer on-screen controls and FCP cursor art.
 
 ## Build and test
 

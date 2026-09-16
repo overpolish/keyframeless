@@ -11,12 +11,18 @@ root, derived, sdk = map(Path, sys.argv[1:])
 products = derived / 'Build/Products/Debug'
 base = ['-fmodules', '-isysroot', str(sdk), '-F'+str(products), '-F/Library/Developer/Frameworks']
 blocks = []
-for component, path in [('MagicMove', 'MagicMove/MagicMove'), ('MotionTiming', 'MotionTiming/Sources'), ('OSCControls', 'OSCControls/Sources'), ('InspectorControls', 'InspectorControls/Sources'), ('RenderSupport', 'RenderSupport/Sources'), ('PluginPreferences', 'PluginPreferences/Sources')]:
+for component, path in [('MagicMove', 'MagicMove/MagicMove'), ('MotionTiming', 'MotionTiming/Sources'), ('OSCControls', 'OSCControls/Sources'), ('OSCViewer', 'OSCViewer/Sources'), ('InspectorControls', 'InspectorControls/Sources'), ('RenderSupport', 'RenderSupport/Sources'), ('PluginPreferences', 'PluginPreferences/Sources')]:
     flags = list(base)
     if component not in ('MotionTiming', 'OSCControls'): flags += ['-fobjc-arc']
     flags += ['-I'+str(p) for p in sorted({h.parent for h in (root/path).rglob('*.h')})]
     if component == 'MagicMove':
-        for module in ['MotionTiming', 'OSCControls', 'InspectorControls', 'RenderSupport', 'PluginPreferences']:
+        for module in ['MotionTiming', 'OSCControls', 'OSCViewer', 'InspectorControls', 'RenderSupport', 'PluginPreferences']:
+            flags += ['-I'+str(root/module/'Sources'/module/'include')]
+            modulemap = derived/'Build/Intermediates.noindex/GeneratedModuleMaps'/(module+'.modulemap')
+            if modulemap.exists(): flags += ['-fmodule-map-file='+str(modulemap)]
+    if component == 'OSCViewer':
+        flags += ['-F/Library/Developer/SDKs/FxPlug.sdk/Library/Frameworks']
+        for module in ['OSCControls', 'RenderSupport']:
             flags += ['-I'+str(root/module/'Sources'/module/'include')]
             modulemap = derived/'Build/Intermediates.noindex/GeneratedModuleMaps'/(module+'.modulemap')
             if modulemap.exists(): flags += ['-fmodule-map-file='+str(modulemap)]

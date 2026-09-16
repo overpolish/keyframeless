@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #include "OSCBoxGeometry.h"
+#include "OSCAnchorGeometry.h"
 #include <assert.h>
 #include <math.h>
 
@@ -118,11 +119,25 @@ static void scales(void) {
   assert(pose.scaleX == 100 && pose.scaleY == 100);
 }
 
+// One contiguous part range, classified into its four behaviours regardless of
+// which header owns the boundary.
+static void partKinds(void) {
+  assert(OSCBoxPartKind(OSCBoxPartNone) == OSCBoxPartKindPosition);
+  assert(OSCBoxPartKind(OSCBoxPartPosition) == OSCBoxPartKindPosition);
+  assert(OSCBoxPartKind(OSCBoxPartHandleBase) == OSCBoxPartKindHandle);
+  assert(OSCBoxPartKind(OSCBoxPartHandleBase + OSCBoxHandleCount - 1) == OSCBoxPartKindHandle);
+  assert(OSCBoxPartKind(OSCBoxPartRingBase) == OSCBoxPartKindRing);
+  assert(OSCBoxPartKind(OSCBoxPartRingBase + OSCRingCount - 1) == OSCBoxPartKindRing);
+  assert(OSCBoxPartKind(OSCBoxPartAnchor) == OSCBoxPartKindAnchor);
+  assert(OSCBoxPartKind(OSCBoxPartAnchor + 1) == OSCBoxPartKindAnchor);
+}
+
 int main(void) {
   corners();
   hits();
   moves();
   scales();
+  partKinds();
   puts("OSC geometry: corners, handles, anywhere hit test, moves, handle scaling, rotation, anchor and clamping passed");
   return 0;
 }

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #pragma once
+#import "RSOSCDrawing.h"
 #import "RenderSupportTypes.h"
 
 #import <CoreMedia/CoreMedia.h>
@@ -35,3 +36,6 @@ FOUNDATION_EXPORT void RSRenderReturnQueue(id<MTLCommandQueue> queue);
 FOUNDATION_EXPORT id<MTLRenderPipelineState>
 RSRenderPipeline(id<MTLDevice> device, NSBundle *bundle, MTLPixelFormat format,
                  NSString *vertex, NSString *fragment);
+// The Metal format for an IOSurface pixel format the host hands over: float
+// tiles keep their precision, 8-bit BGRA stays BGRA, anything else is half.
+FOUNDATION_EXPORT MTLPixelFormat RSRenderPixelFormat(OSType ioSurfacePixelFormat);

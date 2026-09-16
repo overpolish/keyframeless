@@ -8,21 +8,9 @@
 - (id<MTLRenderPipelineState>)renderPipelineForImage:(FxImageTile *)image
                                               vertex:(NSString *)vertex
                                             fragment:(NSString *)fragment {
-  MTLPixelFormat format;
-  switch (image.ioSurface.pixelFormat) {
-  case kCVPixelFormatType_128RGBAFloat:
-    format = MTLPixelFormatRGBA32Float;
-    break;
-  case kCVPixelFormatType_32BGRA:
-    format = MTLPixelFormatBGRA8Unorm;
-    break;
-  default:
-    format = MTLPixelFormatRGBA16Float;
-    break;
-  }
   return RSRenderPipeline(RSRenderDevice(image.deviceRegistryID),
                           [NSBundle bundleForClass:MagicMovePlugin.class],
-                          format, vertex, fragment);
+                          RSRenderPixelFormat(image.ioSurface.pixelFormat), vertex, fragment);
 }
 
 - (BOOL)encodeFullScreenQuadIntoTexture:(id<MTLTexture>)texture

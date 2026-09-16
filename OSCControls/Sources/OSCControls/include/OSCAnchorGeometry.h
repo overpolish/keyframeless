@@ -10,6 +10,22 @@
 // the whole control.
 enum { OSCBoxPartAnchor = OSCBoxPartRingBase + OSCRingCount };
 
+// The four behaviours a part number selects, so a control can dispatch on the
+// kind instead of the numeric ranges that box, ring and anchor split between
+// three headers.
+enum {
+  OSCBoxPartKindPosition = 0,
+  OSCBoxPartKindHandle = 1,
+  OSCBoxPartKindRing = 2,
+  OSCBoxPartKindAnchor = 3,
+};
+static inline int OSCBoxPartKind(long part) {
+  if (part >= OSCBoxPartAnchor) return OSCBoxPartKindAnchor;
+  if (part >= OSCBoxPartRingBase) return OSCBoxPartKindRing;
+  if (part >= OSCBoxPartHandleBase) return OSCBoxPartKindHandle;
+  return OSCBoxPartKindPosition;
+}
+
 // Glyph metrics in canvas pixels. A rounded square the size of the round scale
 // handles, with its outline inset from the edge and a drop shadow below it, so
 // the pivot reads over both the image and the other controls.
