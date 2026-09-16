@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MMDefaults.h"
 #import <math.h>
+#import "Constants.h"
 PPDefaultStore *MMDefaultStore(void) {
   static PPDefaultStore *store;
   static dispatch_once_t once;
@@ -23,11 +24,19 @@ static BOOL MMNumber(id value, double min, double max) {
          isfinite([value doubleValue]) && [value doubleValue] >= min &&
          [value doubleValue] <= max;
 }
+static NSString *MMOSCVisibilityKey(UInt32 parameter) {
+  return parameter == MMShowScaleOSC ? @"osc.scale" : @"osc.position";
+}
+static BOOL MMIsOSCVisibilityKey(NSString *key) {
+  return [key isEqual:@"osc.position"] || [key isEqual:@"osc.scale"];
+}
 static NSDictionary *MMFactory(NSString *key) {
   if ([key isEqual:@"duration"])
     return @{@"value" : @1.2};
   if ([key isEqual:@"easing"])
     return @{@"value" : @(MTEasingSmooth)};
+  if (MMIsOSCVisibilityKey(key))
+    return @{@"value" : @YES};
   return @{@"amount" : @1, @"speed" : @1};
 }
 static BOOL MMValidDefault(NSString *key, NSDictionary *v) {
@@ -36,6 +45,8 @@ static BOOL MMValidDefault(NSString *key, NSDictionary *v) {
   if ([key isEqual:@"easing"])
     return v.count == 1 && MMNumber(v[@"value"], 0, 3) &&
            floor([v[@"value"] doubleValue]) == [v[@"value"] doubleValue];
+  if (MMIsOSCVisibilityKey(key))
+    return v.count == 1 && [v[@"value"] isKindOfClass:NSNumber.class];
   if (![@[ @"motion.1", @"motion.2", @"motion.3" ] containsObject:key])
     return NO;
   return v.count == 2 && MMNumber(v[@"amount"], 0, 3) &&
@@ -54,6 +65,12 @@ BOOL MMSaveDefault(NSString *key, NSDictionary *v) {
                            validate:^BOOL(NSDictionary *x) {
                              return MMValidDefault(key, x);
                            }];
+}
+BOOL MMReadOSCVisibilityDefault(UInt32 parameter) {
+  return [MMReadDefault(MMOSCVisibilityKey(parameter))[@"value"] boolValue];
+}
+BOOL MMSaveOSCVisibilityDefault(UInt32 parameter, BOOL visible) {
+  return MMSaveDefault(MMOSCVisibilityKey(parameter), @{@"value" : @(visible)});
 }
 MMPoseTiming *MMTimingWithCreationDefaults(MMPoseTiming *timing) {
   return [[[MMPoseTiming alloc]

@@ -74,14 +74,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
   return hit;
 }
 - (BOOL)readSetting:(UInt32)parameter value:(BOOL *)value {
-  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if(!action) return NO;
-  [action startAction:self];
-  @try {
-    id<FxParameterRetrievalAPI_v6> get=[self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    CMTime time=[action currentTime];
-    return CMTIME_IS_NUMERIC(time) && [get getBoolValue:value fromParameter:parameter atTime:time];
-  } @finally { [action endAction:self]; }
+  return MMReadBoolSetting(self.manager,self,parameter,value);
 }
 - (void)refreshSettings {
   BOOL blur=NO;
@@ -91,21 +84,8 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
 }
 - (BOOL)toggleSetting:(UInt32)parameter {
   if(parameter!=MMExplicitCreation && parameter!=MMMotionBlur) return NO;
-  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if(!action) return NO;
-  [action startAction:self];
-  @try {
-    id<FxParameterRetrievalAPI_v6> get=[self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> set=[self.manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    CMTime time=[action currentTime]; BOOL value=NO;
-    if(!set || !CMTIME_IS_NUMERIC(time) || ![get getBoolValue:&value fromParameter:parameter atTime:time]) return NO;
-    id<FxUndoAPI> undo=[self.manager apiForProtocol:@protocol(FxUndoAPI)];
-    BOOL grouped=[undo startUndoGroup:parameter==MMMotionBlur ? @"Toggle Motion Blur":@"Toggle Explicit Keyframe Editing"];
-    @try {
-      if(![set setBoolValue:!value toParameter:parameter atTime:time]) return NO;
-      return [set setCustomParameterValue:NSUUID.UUID.UUIDString toParameter:MMHostRefreshToken atTime:time];
-    } @finally { if(grouped) [undo endUndoGroup]; }
-  } @finally { [action endAction:self]; }
+  return MMToggleBoolSetting(self.manager,self,parameter,
+      parameter==MMMotionBlur ? @"Toggle Motion Blur":@"Toggle Explicit Keyframe Editing");
 }
 - (void)toggleBlur:(id)sender {
   [[self shortcutCapture] activateView:self];
@@ -196,6 +176,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
     id<FxParameterRetrievalAPI_v6> get=[header.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     CMTime time=[action currentTime];
     for(NSMenuItem *item in current.itemArray) {
+      MMRefreshSettingMenuItem(item);
       if(item.tag!=MMMotionBlur && item.tag!=MMExplicitCreation) continue;
       BOOL value=NO;
       item.enabled=[get getBoolValue:&value fromParameter:(UInt32)item.tag atTime:time];
@@ -211,6 +192,11 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
   NSMenuItem *item=[self itemForSetting:MMExplicitCreation title:@"Explicit Keyframe Editing"];
   item.subtitle=@"Prevents automatic keyframe creation when changing values.";
   [menu addItem:item];
+  [menu addItem:NSMenuItem.separatorItem];
+  [menu addItem:[NSMenuItem sectionHeaderWithTitle:@"ON-SCREEN CONTROLS"]];
+  [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowPositionOSC,@"Position Box")];
+  [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowScaleOSC,@"Scale Handles")];
+  MMRefreshSettingMenuItems(menu,self.manager,self);
   return menu;
 }
 - (NSMenu *)motionBlurMenu {

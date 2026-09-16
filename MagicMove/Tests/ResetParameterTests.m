@@ -126,8 +126,11 @@ int main(void) { @autoreleasepool {
     MagicMovePlugin *plugin=[[MagicMovePlugin alloc] initWithAPIManager:rowHost]; rowHost.plugin=plugin;
     ICInspectorRow *row=(ICInspectorRow *)[plugin createViewForParameterID:p];
     assert(row.titleMenuProvider); NSMenu *menu=row.titleMenuProvider();
-    assert(menu.numberOfItems==9 && [menu.itemArray[0].title isEqualToString:@"Reset Parameter"]);
-    assert([menu.itemArray[1].title isEqualToString:@"Match In/Out"]);
+    // Position and Scale carry their on-screen control toggle and a separator.
+    BOOL hasOSC=p==MMCustomControls || p==MMScaleControls;
+    assert(menu.numberOfItems==(hasOSC ? 11:9) && [menu.itemArray[0].title isEqualToString:@"Reset Parameter"]);
+    if(hasOSC) assert([menu.itemArray[1].title isEqualToString:@"On-Screen Control"] && menu.itemArray[2].isSeparatorItem);
+    assert([menu.itemArray[hasOSC ? 3:1].title isEqualToString:@"Match In/Out"]);
     NSMenuItem *item=menu.itemArray[0];
     seed(rowHost,p);
     refreshSnapshots(rowHost);

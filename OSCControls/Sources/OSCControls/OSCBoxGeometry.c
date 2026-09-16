@@ -75,10 +75,11 @@ CGPoint OSCBoxHandleAxis(const CGPoint corners[4], long index) {
   return length > 0 ? CGPointMake((b.x - a.x) / length, (b.y - a.y) / length) : CGPointZero;
 }
 
-long OSCBoxHitTest(const CGPoint corners[4], CGPoint point, double radius) {
+long OSCBoxHitTest(const CGPoint corners[4], CGPoint point, double radius,
+                   bool handlesEnabled) {
   long best = -1;
   double bestDistance = INFINITY;
-  for (long i = 0; i < OSCBoxHandleCount; ++i) {
+  for (long i = 0; handlesEnabled && i < OSCBoxHandleCount; ++i) {
     CGPoint centre = OSCBoxHandlePoint(corners, i), axis = OSCBoxHandleAxis(corners, i);
     double dx = point.x - centre.x, dy = point.y - centre.y;
     double along = fmax(-OSCBoxPillHalfLength, fmin(OSCBoxPillHalfLength, dx * axis.x + dy * axis.y));

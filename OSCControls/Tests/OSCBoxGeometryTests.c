@@ -45,18 +45,22 @@ static void hits(void) {
   for (long i = 0; i < 4; ++i) { c[i].x *= 1000; c[i].y *= 1000; }
   assert(Near(OSCBoxHandleAxis(c, 4), 1, 0) && Near(OSCBoxHandleAxis(c, 5), 0, 1) &&
          Near(OSCBoxHandleAxis(c, 6), -1, 0) && Near(OSCBoxHandleAxis(c, 7), 0, -1) && Near(OSCBoxHandleAxis(c, 0), 0, 0));
-  assert(OSCBoxHitTest(c, CGPointMake(1002, 998), 10) == OSCBoxPartHandleBase + 2);
-  assert(OSCBoxHitTest(c, CGPointMake(500, -6), 10) == OSCBoxPartHandleBase + 4);
+  assert(OSCBoxHitTest(c, CGPointMake(1002, 998), 10, true) == OSCBoxPartHandleBase + 2);
+  assert(OSCBoxHitTest(c, CGPointMake(500, -6), 10, true) == OSCBoxPartHandleBase + 4);
   // Pills extend along their edge, so a point past the midpoint still hits.
-  assert(OSCBoxHitTest(c, CGPointMake(500 + OSCBoxPillHalfLength + 4, 0), 10) == OSCBoxPartHandleBase + 4);
-  assert(OSCBoxHitTest(c, CGPointMake(500 + OSCBoxPillHalfLength + 12, 0), 10) == OSCBoxPartPosition);
-  assert(OSCBoxHitTest(c, CGPointMake(1000, 500 - OSCBoxPillHalfLength - 4), 10) == OSCBoxPartHandleBase + 5);
+  assert(OSCBoxHitTest(c, CGPointMake(500 + OSCBoxPillHalfLength + 4, 0), 10, true) == OSCBoxPartHandleBase + 4);
+  assert(OSCBoxHitTest(c, CGPointMake(500 + OSCBoxPillHalfLength + 12, 0), 10, true) == OSCBoxPartPosition);
+  assert(OSCBoxHitTest(c, CGPointMake(1000, 500 - OSCBoxPillHalfLength - 4), 10, true) == OSCBoxPartHandleBase + 5);
   // A corner beats the edge midpoints that share its coordinate.
-  assert(OSCBoxHitTest(c, CGPointMake(3, 3), 10) == OSCBoxPartHandleBase + 0);
+  assert(OSCBoxHitTest(c, CGPointMake(3, 3), 10, true) == OSCBoxPartHandleBase + 0);
   // Anywhere else, including far outside the image, moves the image.
-  assert(OSCBoxHitTest(c, CGPointMake(500, 500), 10) == OSCBoxPartPosition);
-  assert(OSCBoxHitTest(c, CGPointMake(-9000, 40000), 10) == OSCBoxPartPosition);
-  assert(OSCBoxHitTest(c, CGPointMake(1000, 1011), 10) == OSCBoxPartPosition);
+  assert(OSCBoxHitTest(c, CGPointMake(500, 500), 10, true) == OSCBoxPartPosition);
+  assert(OSCBoxHitTest(c, CGPointMake(-9000, 40000), 10, true) == OSCBoxPartPosition);
+  assert(OSCBoxHitTest(c, CGPointMake(1000, 1011), 10, true) == OSCBoxPartPosition);
+  // Hidden handles leave no invisible resize region; the image still moves.
+  assert(OSCBoxHitTest(c, CGPointMake(1002, 998), 10, false) == OSCBoxPartPosition);
+  assert(OSCBoxHitTest(c, CGPointMake(500, -6), 10, false) == OSCBoxPartPosition);
+  assert(OSCBoxHitTest(c, CGPointMake(500, 500), 10, false) == OSCBoxPartPosition);
 }
 
 static void moves(void) {

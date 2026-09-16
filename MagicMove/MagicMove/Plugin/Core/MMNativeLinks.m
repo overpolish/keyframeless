@@ -1013,10 +1013,19 @@ NSMenu *MMNativePropertyMenu(id<PROAPIAccessing> m, NSView *sender,
     NSMenu *activeMenu=weakMenu;
     if (!activeMenu) return;
     for (NSMenuItem *item in activeMenu.itemArray) {
+      MMRefreshSettingMenuItem(item);
       if ([item.target isKindOfClass:MMNativeLinkMenuTarget.class]) [(MMNativeLinkMenuTarget *)item.target refreshItem:item];
       if ([item.target isKindOfClass:MMMatchMenuTarget.class]) [(MMMatchMenuTarget *)item.target refreshItem:item];
     }
   });
+  // Position owns the box outline and Scale the handles; other properties have
+  // no on-screen control of their own.
+  if (parameter == MMCustomControls || parameter == MMScaleControls) {
+    [menu addItem:MMOSCVisibilityMenuItem(m, sender,
+                                          parameter == MMScaleControls ? MMShowScaleOSC : MMShowPositionOSC,
+                                          @"On-Screen Control")];
+    [menu addItem:NSMenuItem.separatorItem];
+  }
   MMMatchMenuTarget *match = [MMMatchMenuTarget new];
   match.manager = m;
   match.sender = sender;
@@ -1037,8 +1046,9 @@ NSMenu *MMNativePropertyMenu(id<PROAPIAccessing> m, NSView *sender,
     return menu;
   [action startAction:sender];
   @try {
-    // Reading the toggle and the cached keys needs the action scope, like the
+    // Reading the toggles and the cached keys needs the action scope, like the
     // link items below.
+    for (NSMenuItem *item in menu.itemArray) MMRefreshSettingMenuItem(item);
     [match refreshItem:matchItem];
     CMTime now = [action currentTime];
     NSDictionary *source = MMTarget(MMEntries(m, parameter), now);

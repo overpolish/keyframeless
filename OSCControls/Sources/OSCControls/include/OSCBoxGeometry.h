@@ -36,8 +36,12 @@ CGPoint OSCBoxHandlePoint(const CGPoint corners[4], long index);
 CGPoint OSCBoxHandleAxis(const CGPoint corners[4], long index);
 // Nearest handle within `radius` of its glyph wins (pills measure to their
 // segment); anywhere else is the position part, so the image can be dragged
-// even when the box lies outside the viewer.
-long OSCBoxHitTest(const CGPoint corners[4], CGPoint point, double radius);
+// even when the box lies outside the viewer. `handlesEnabled` false skips the
+// handles entirely: hidden scale handles must not keep an invisible resize
+// region, while a hidden border still drags, since the whole canvas moves the
+// image and that action is the same everywhere.
+long OSCBoxHitTest(const CGPoint corners[4], CGPoint point, double radius,
+                   bool handlesEnabled);
 
 OSCBoxPose OSCBoxPoseMovedBy(OSCBoxPose press, CGPoint deltaPixels, CGSize imageSize);
 // Scales about the anchor so the grabbed handle follows the pointer. Corners

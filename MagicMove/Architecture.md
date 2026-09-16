@@ -42,6 +42,12 @@ Motion blur samples at 90 kHz, reuses textures, and limits concurrent renders. A
 
 The shared accumulation shader is compiled into the plugin's own default Metal library. RenderSupport has no FxPlug types: image tiles, frame times from the host, and source-frame selection remain in the plugin.
 
+## On-screen controls
+
+`MagicMoveOSC` draws the box outline and the eight scale handles from `OSCControls` geometry. Two hidden saved toggles control visibility: `MMShowPositionOSC` owns the outline and `MMShowScaleOSC` owns the handles. Hiding the handles also removes them from `OSCBoxHitTest`, so no invisible resize region remains; hiding the outline is visual only, because the position drag covers the whole canvas and behaves the same everywhere. With both hidden the draw is just the surface clear.
+
+The toggles appear as checkmarked items in the logo header settings menu and in the Position and Scale row menus. Both surfaces share `MMToggleBoolSetting`, which writes inside an undo group followed by the refresh-token write, and records the new value as the creation preference so a new effect starts from whatever was toggled last. Menu items read their state inside a host action, since `MMSettingMenuTarget` cannot read parameters outside one.
+
 ## Verification
 
 Run the [automated tests](Tests/README.md). They use the production code with simulated host APIs and real Metal textures. Event handling, undo grouping, visual layout, and export also need to be checked in Motion/FCP.

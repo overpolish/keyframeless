@@ -48,6 +48,14 @@
                                     kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_DONT_SAVE)];
   ok = ok && [api addToggleButtonWithName:@"Explicit Keypose Creation" parameterID:MMExplicitCreation
                            defaultValue:NO parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
+  // Saved per effect so one clip can hide its handles, but the registered
+  // default is the last toggled value, which is how a new effect inherits it.
+  ok = ok && [api addToggleButtonWithName:@"Show Position On-Screen Control" parameterID:MMShowPositionOSC
+                           defaultValue:MMReadOSCVisibilityDefault(MMShowPositionOSC)
+                         parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
+  ok = ok && [api addToggleButtonWithName:@"Show Scale On-Screen Control" parameterID:MMShowScaleOSC
+                           defaultValue:MMReadOSCVisibilityDefault(MMShowScaleOSC)
+                         parameterFlags:(kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_HIDDEN)];
   // Match In/Out is lane-wide, so each property keeps one saved toggle rather
   // than repeating the setting in every keyframed pose.
   for (NSNumber *property in MMProperties())

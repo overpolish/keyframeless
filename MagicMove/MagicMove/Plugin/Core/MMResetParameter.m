@@ -3,6 +3,7 @@
 @import InspectorControls;
 #import "MMShortcut.h"
 #import "Constants.h"
+#import "MMDefaults.h"
 #import "MMCombinedPose.h"
 #import "MMScalePose.h"
 #import "MMScalarPose.h"
@@ -259,4 +260,84 @@ NSMenu *MMResetParameterMenu(id<PROAPIAccessing> manager, NSView *sender, UInt32
   NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:@"Reset Parameter" action:@selector(resetParameter:) keyEquivalent:@""];
   item.target=target; item.representedObject=target;
   [menu addItem:item]; return menu;
+}
+
+BOOL MMReadBoolSetting(id<PROAPIAccessing> manager, NSView *sender, UInt32 parameter, BOOL *value) {
+  id<FxCustomParameterActionAPI_v4> action=[manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if(!action) return NO;
+  [action startAction:sender];
+  @try {
+    id<FxParameterRetrievalAPI_v6> get=[manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    CMTime time=[action currentTime];
+    return CMTIME_IS_NUMERIC(time) && [get getBoolValue:value fromParameter:parameter atTime:time];
+  } @finally { [action endAction:sender]; }
+}
+BOOL MMToggleBoolSetting(id<PROAPIAccessing> manager, NSView *sender, UInt32 parameter, NSString *undoName) {
+  id<FxCustomParameterActionAPI_v4> action=[manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if(!action) return NO;
+  [action startAction:sender];
+  @try {
+    id<FxParameterRetrievalAPI_v6> get=[manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> set=[manager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    CMTime time=[action currentTime]; BOOL value=NO;
+    if(!set || !CMTIME_IS_NUMERIC(time) || ![get getBoolValue:&value fromParameter:parameter atTime:time]) return NO;
+    id<FxUndoAPI> undo=[manager apiForProtocol:@protocol(FxUndoAPI)];
+    BOOL grouped=[undo startUndoGroup:undoName];
+    @try {
+      if(![set setBoolValue:!value toParameter:parameter atTime:time]) return NO;
+      if(parameter==MMShowPositionOSC || parameter==MMShowScaleOSC) MMSaveOSCVisibilityDefault(parameter,!value);
+      return [set setCustomParameterValue:NSUUID.UUID.UUIDString toParameter:MMHostRefreshToken atTime:time];
+    } @finally { if(grouped) [undo endUndoGroup]; }
+  } @finally { [action endAction:sender]; }
+}
+
+@interface MMSettingMenuTarget : NSObject
+@property(nonatomic, strong) id<PROAPIAccessing> manager;
+@property(nonatomic, weak) NSView *sender;
+@property(nonatomic) UInt32 parameter;
+@property(nonatomic, copy) NSString *undoName;
+@end
+@implementation MMSettingMenuTarget
+- (void)toggle:(NSMenuItem *)item {
+  NSMenu *menu=item.menu;
+  while(menu.supermenu) menu=menu.supermenu;
+  MMPropertyMenuActionScheduled(menu);
+  // Same reason as the reset item: leave menu tracking before a host action.
+  CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
+    NSView *view=self.sender;
+    if(!view) return;
+    BOOL ok=MMToggleBoolSetting(self.manager,view,self.parameter,self.undoName);
+    MMPropertyMenuActionFinished(menu,ok);
+    if(!ok) NSBeep();
+  });
+  CFRunLoopWakeUp(CFRunLoopGetMain());
+}
+- (void)refreshItem:(NSMenuItem *)item {
+  id<FxParameterRetrievalAPI_v6> get=[self.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  BOOL value=NO;
+  item.enabled=get && action && [get getBoolValue:&value fromParameter:self.parameter atTime:[action currentTime]];
+  if(item.enabled) item.state=value ? NSControlStateValueOn:NSControlStateValueOff;
+}
+@end
+void MMRefreshSettingMenuItem(NSMenuItem *item) {
+  if([item.target isKindOfClass:MMSettingMenuTarget.class]) [(MMSettingMenuTarget *)item.target refreshItem:item];
+}
+NSMenuItem *MMOSCVisibilityMenuItem(id<PROAPIAccessing> manager, NSView *sender, UInt32 parameter, NSString *title) {
+  MMSettingMenuTarget *target=[MMSettingMenuTarget new];
+  target.manager=manager; target.sender=sender; target.parameter=parameter;
+  target.undoName=parameter==MMShowScaleOSC ? @"Toggle Scale On-Screen Control":@"Toggle Position On-Screen Control";
+  NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:title action:@selector(toggle:) keyEquivalent:@""];
+  item.target=target; item.representedObject=target;
+  // State is unknown until a host action is open, so the caller refreshes.
+  item.enabled=NO;
+  return item;
+}
+void MMRefreshSettingMenuItems(NSMenu *menu, id<PROAPIAccessing> manager, NSView *sender) {
+  id<FxCustomParameterActionAPI_v4> action=[manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if(!action) return;
+  [action startAction:sender];
+  @try {
+    for(NSMenuItem *item in menu.itemArray) MMRefreshSettingMenuItem(item);
+  } @finally { [action endAction:sender]; }
 }

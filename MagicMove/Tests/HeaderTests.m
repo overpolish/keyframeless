@@ -3,6 +3,7 @@
 #import "MockHost.h"
 #import "MMShortcut.h"
 #import "MMResetParameter.h"
+#import "MMDefaults.h"
 @interface MMInspectorHeader (Testing)
 - (MMShortcutCapture *)shortcutCapture;
 - (BOOL)toggleSetting:(UInt32)parameter;
@@ -117,9 +118,27 @@ int main(void) { @autoreleasepool {
   host.plugin=plugin; assert([plugin addParametersWithError:NULL]);
   MMInspectorHeader *view=[[MMInspectorHeader alloc] initWithManager:host];
   NSMenu *menu=[view settingsMenu];
-  assert(menu.numberOfItems==1);
+  assert(menu.numberOfItems==5);
   assert([menu.itemArray[0].title isEqual:@"Explicit Keyframe Editing"]);
   assert([menu.itemArray[0].subtitle isEqual:@"Prevents automatic keyframe creation when changing values."]);
+  assert(menu.itemArray[1].isSeparatorItem && menu.itemArray[2].isSectionHeader);
+  assert([menu.itemArray[3].title isEqual:@"Position Box"] && [menu.itemArray[4].title isEqual:@"Scale Handles"]);
+  // Visibility starts from the stored preference, so compare against the host.
+  BOOL showScale=NO;
+  assert(MMReadBoolSetting(host,view,MMShowScaleOSC,&showScale));
+  assert(menu.itemArray[4].state==(showScale ? NSControlStateValueOn:NSControlStateValueOff));
+  assert(MMReadOSCVisibilityDefault(MMShowScaleOSC)==showScale);
+  // Menu actions leave tracking first, like every other host write here.
+  NSUInteger visibilityWrites=host.hostWrites;
+  [menu performActionForItemAtIndex:4];
+  assert(host.hostWrites==visibilityWrites);
+  CFRunLoopRunInMode(kCFRunLoopDefaultMode,0.01,false);
+  assert([host.editors[@(MMShowScaleOSC)] boolValue]==!showScale);
+  // The toggle is the default for the next effect; no separate preference UI.
+  assert(MMReadOSCVisibilityDefault(MMShowScaleOSC)==!showScale);
+  assert([view settingsMenu].itemArray[4].state==(!showScale ? NSControlStateValueOn:NSControlStateValueOff));
+  assert([host.blobs[@(MMHostRefreshToken)] length]>0);
+  assert(MMSaveOSCVisibilityDefault(MMShowScaleOSC,showScale));
   NSEvent *rightClick=[NSEvent mouseEventWithType:NSEventTypeRightMouseDown location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:0 context:nil eventNumber:1 clickCount:1 pressure:1];
   NSMenu *blurMenu=[view.accessoryButtons.firstObject menuForEvent:rightClick];
   assert(blurMenu.numberOfItems==4);

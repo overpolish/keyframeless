@@ -41,6 +41,7 @@ static const float MMOSCActiveHandleGrowth = 1.5f;
   BOOL _undoGrouped;
   MMCombinedPoseCache *_combinedCache;
   MMScalePoseCache *_scaleCache;
+  BOOL _showBorder, _showHandles;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -48,6 +49,8 @@ static const float MMOSCActiveHandleGrowth = 1.5f;
     _apiManager = apiManager;
     _hoveredHandle = -1;
     _cursorHandle = -1;
+    // Registered defaults are on; a read on the first draw replaces these.
+    _showBorder = _showHandles = YES;
   }
   return self;
 }
@@ -95,6 +98,16 @@ static const float MMOSCActiveHandleGrowth = 1.5f;
 }
 - (CGPoint)pixelsFromCanvasX:(double)x y:(double)y imageSize:(CGSize)size {
   return OSCBoxPixelFromObject([self objectFromCanvas:CGPointMake(x, y)], size);
+}
+
+// Visibility is a saved per-effect toggle, so hover and exit callbacks that
+// arrive without the retrieval API keep the last known value rather than
+// flashing the elements back on.
+- (BOOL)visible:(UInt32)parameter cached:(BOOL *)cached atTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> get = [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  BOOL value = NO;
+  if (get && CMTIME_IS_NUMERIC(time) && [get getBoolValue:&value fromParameter:parameter atTime:time]) *cached = value;
+  return *cached;
 }
 
 #pragma mark - Parameters
@@ -237,10 +250,12 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
   NSMutableData *vertices = [NSMutableData data];
   // Handles share the border colour; the fill is a touch lighter so the ring still reads.
   const simd_float4 border = {0.9f, 0.9f, 0.9f, 0.9f}, fill = {1, 1, 1, 1}, stroke = {0.82f, 0.82f, 0.82f, 1};
-  for (NSInteger i = 0; i < 4; ++i)
+  BOOL showBorder = [self visible:MMShowPositionOSC cached:&_showBorder atTime:time];
+  BOOL showHandles = [self visible:MMShowScaleOSC cached:&_showHandles atTime:time];
+  for (NSInteger i = 0; showBorder && i < 4; ++i)
     MMOSCAppendLine(vertices, metal[i], metal[(i + 1) % 4], MMOSCBorderHalfWidth, border);
   NSInteger active = activePart >= OSCBoxPartHandleBase ? activePart - OSCBoxPartHandleBase : _hoveredHandle;
-  for (NSInteger i = 0; i < OSCBoxHandleCount; ++i) {
+  for (NSInteger i = 0; showHandles && i < OSCBoxHandleCount; ++i) {
     CGPoint centre = OSCBoxHandlePoint(corners, i), axis = OSCBoxHandleAxis(corners, i);
     simd_float2 metalCentre = {(float)centre.x - surfaceWidth / 2, surfaceHeight / 2 - (float)centre.y};
     simd_float2 metalAxis = i < 4 ? (simd_float2){1, 0} : (simd_float2){(float)axis.x, -(float)axis.y};
@@ -267,10 +282,14 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
     [encoder setViewport:(MTLViewport){0, 0, surfaceWidth, surfaceHeight, -1, 1}];
     [encoder setRenderPipelineState:pipeline];
     simd_uint2 viewport = {(uint)surfaceWidth, (uint)surfaceHeight};
-    id<MTLBuffer> vertexBuffer = [device newBufferWithBytes:vertices.bytes length:vertices.length options:MTLResourceStorageModeShared];
-    [encoder setVertexBuffer:vertexBuffer offset:0 atIndex:MMOSCVertexIndexVertices];
-    [encoder setVertexBytes:&viewport length:sizeof(viewport) atIndex:MMOSCVertexIndexViewportSize];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vertices.length / sizeof(MMOSCVertex)];
+    // With both elements hidden the clear alone is the draw: an empty vertex
+    // buffer is nil and a zero-count draw is invalid.
+    if (vertices.length) {
+      id<MTLBuffer> vertexBuffer = [device newBufferWithBytes:vertices.bytes length:vertices.length options:MTLResourceStorageModeShared];
+      [encoder setVertexBuffer:vertexBuffer offset:0 atIndex:MMOSCVertexIndexVertices];
+      [encoder setVertexBytes:&viewport length:sizeof(viewport) atIndex:MMOSCVertexIndexViewportSize];
+      [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vertices.length / sizeof(MMOSCVertex)];
+    }
     [encoder endEncoding];
     [buffer commit];
     [buffer waitUntilCompleted];
@@ -298,7 +317,8 @@ static MTLPixelFormat MMOSCPixelFormat(FxImageTile *image) {
   CGPoint corners[4];
   _hoveredHandle = -1;
   if (![self canvasCornersAtTime:time corners:corners]) { *activePart = OSCBoxPartNone; [self applyCursorForHandle:-1]; return; }
-  NSInteger part = OSCBoxHitTest(corners, CGPointMake(x, y), OSCBoxHandleHitRadius);
+  NSInteger part = OSCBoxHitTest(corners, CGPointMake(x, y), OSCBoxHandleHitRadius,
+                                 [self visible:MMShowScaleOSC cached:&_showHandles atTime:time]);
   if (part >= OSCBoxPartHandleBase) _hoveredHandle = part - OSCBoxPartHandleBase;
   // A drag keeps its handle's cursor even when the pointer outruns the glyph.
   [self applyCursorForHandle:_dragging && _dragPart >= OSCBoxPartHandleBase ? _dragPart - OSCBoxPartHandleBase : _hoveredHandle];

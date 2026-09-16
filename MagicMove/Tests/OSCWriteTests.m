@@ -35,6 +35,8 @@ static OSCHost *Host(void) {
   OSCHost *host = [OSCHost new];
   host.editors[@(MMExplicitCreation)] = @NO;
   host.editors[@(MMScaleProportional)] = @NO;
+  host.editors[@(MMShowPositionOSC)] = @YES;
+  host.editors[@(MMShowScaleOSC)] = @YES;
   host.blobs[@(MMCustomControls)] = Combined(0, 0, 100);
   return host;
 }
@@ -200,6 +202,37 @@ static void missingHost(void) {
   assert(!force && !handled);
 }
 
+// Hidden handles must not keep an invisible resize region, while hiding the
+// box outline is purely visual: the image still drags from anywhere.
+static void hiddenControls(void) {
+  OSCHost *host = Host();
+  MagicMoveOSC *osc = [[MagicMoveOSC alloc] initWithAPIManager:host];
+  NSUInteger cursorSets = host.cursorSets;
+  host.editors[@(MMShowScaleOSC)] = @NO;
+  NSInteger part = Hit(osc, 1918, 1082);
+  assert(part == OSCBoxPartPosition && osc.hoveredHandle == -1);
+  assert(host.cursorSets == cursorSets);
+  NSUInteger writes = host.blobWrites;
+  assert(Down(osc, 1918, 1082, part) && Drag(osc, 1918 - 192, 1082, part, 0));
+  MMCombinedPose *pose = host.blobs[@(MMCustomControls)];
+  assert(host.blobWrites == writes + 1 && fabs(pose.positionX + 10) < 1e-9);
+  assert(!host.blobs[@(MMScaleControls)]);
+  Up(osc, 1918 - 192, 1082, part);
+  host.editors[@(MMShowPositionOSC)] = @NO;
+  assert(Hit(osc, 500, 500) == OSCBoxPartPosition);
+  assert(Down(osc, 500, 500, OSCBoxPartPosition));
+  Up(osc, 500, 500, OSCBoxPartPosition);
+  // A callback without the retrieval API keeps the last known visibility.
+  host.failReadParameter = MMShowScaleOSC;
+  assert(Hit(osc, 1918, 1082) == OSCBoxPartPosition);
+  host.editors[@(MMShowScaleOSC)] = @YES;
+  assert(Hit(osc, 1918, 1082) == OSCBoxPartPosition);
+  host.failReadParameter = 0;
+  // The drag above moved the box, so put it back before locating a handle.
+  host.blobs[@(MMCustomControls)] = Combined(0, 0, 100);
+  assert(Hit(osc, 1918, 1082) == OSCBoxPartHandleBase + 2);
+}
+
 int main(void) {
   @autoreleasepool {
     geometryFromHost();
@@ -208,7 +241,8 @@ int main(void) {
     explicitTargeting();
     registeredCache();
     missingHost();
+    hiddenControls();
   }
-  puts("OSC writes: host geometry, move anywhere, one write per tick, handle scaling, explicit targeting, cache sharing and missing host passed");
+  puts("OSC writes: host geometry, move anywhere, one write per tick, handle scaling, explicit targeting, cache sharing, hidden controls and missing host passed");
   return 0;
 }
