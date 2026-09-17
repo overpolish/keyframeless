@@ -15,6 +15,15 @@ MM_DERIVED_DATA="$PWD/DerivedData/Verification" scripts/test-magicmove.sh
 scripts/test-magicmove.sh --cpu-only
 ```
 
+`DerivedData/Keyframeless` is the build the host is meant to run. PlugInKit keeps one registration per plug-in identifier, and every build of the wrapper application carries the same one, so a copy left in another build directory can hold the registration even after this one is rebuilt: Motion then keeps running the old binary while the tests compile the working tree. The suite reports that mismatch before it runs. Delete stale `MagicMove.app` copies rather than leaving them to win a later registration, and point the host at a build deliberately with:
+
+```sh
+pluginkit -a "$PWD/DerivedData/Keyframeless/Build/Products/Debug/MagicMove.app/Contents/PlugIns/MagicMove XPC Service.pluginkit"
+pluginkit -m -v -i com.keyframeless.MagicMoveNext.PlugIn
+```
+
+The host loads the registered copy when it next spawns the service, so relaunch it after repointing.
+
 The suite compiles current plugin and shared-package sources with AddressSanitizer and UndefinedBehaviorSanitizer. Only Apple's FxPlug runtime is reused: the plugin suites take it from the built app, and the package suites from its installed location, so `PluginHost/Tests/run.sh` and `PoseLanes/Tests/run.sh` need no build at all. Tests do not register an effect, modify a host document, or load archived frameworks. Temporary test artifacts are cleaned up.
 
 ## Suites
