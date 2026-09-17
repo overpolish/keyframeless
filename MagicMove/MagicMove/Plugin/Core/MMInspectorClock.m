@@ -53,11 +53,16 @@ static const NSTimeInterval MMInspectorRefreshInterval = 0.1;
       [self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (![(id<NSObject>)action conformsToProtocol:@protocol(FxCustomParameterActionAPI_v4)]) return;
   NSArray<id<MMInspectorRefreshable>> *views = self.views.allObjects;
+  // No views, no action: the timer is stopped in that state anyway, so the
+  // per-tick work rides the same registration the views do.
   if (!views.count) return;
+  void (^tick)(id<FxCustomParameterActionAPI_v4>) = self.onTick;
   [action startAction:self];
   @try {
     for (id<MMInspectorRefreshable> view in views)
       [view refreshInspectorValuesInAction:action];
+    // Last, so a write here cannot disturb the reads above.
+    if (tick) tick(action);
   } @finally { [action endAction:self]; }
 }
 @end

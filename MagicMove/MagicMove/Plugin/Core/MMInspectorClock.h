@@ -25,6 +25,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithManager:(id<PROAPIAccessing>)manager;
 - (void)addView:(id<MMInspectorRefreshable>)view;
 - (void)removeView:(id<MMInspectorRefreshable>)view;
+/// Work that runs once per tick inside the same action, after the views. The
+/// views must not write parameters; this block may, and it is where the
+/// playhead nudge writes from. Set by the plugin, not by a view. It runs only
+/// while views are registered, since that is when the timer runs.
+@property(nonatomic, copy, nullable) void (^onTick)(id<FxCustomParameterActionAPI_v4> action);
 /// Refresh every registered view now, in one action. Used on attachment so a
 /// freshly shown row does not wait for the next tick.
 - (void)refreshNow;

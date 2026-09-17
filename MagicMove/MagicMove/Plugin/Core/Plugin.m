@@ -25,6 +25,7 @@
 @property(nonatomic, strong) MMScalePoseCache *scaleViewCache;
 @property(nonatomic, strong) NSDictionary<NSNumber *, MMPropertyPoseCache *> *laneViewCaches;
 @property(nonatomic) BOOL viewCachesPublished;
+@property(nonatomic, strong) MMOSCPlayheadNudge *playheadNudge;
 @property(nonatomic, strong) MMInspectorClock *sharedInspectorClock;
 @end
 
@@ -618,8 +619,17 @@ NSSet<Class> *MMClassesForCustomParameter(UInt32 parameterID) {
 
 @implementation MagicMovePlugin (InspectorRefresh)
 - (MMInspectorClock *)inspectorClock {
-  if (!self.sharedInspectorClock)
+  if (!self.sharedInspectorClock) {
     self.sharedInspectorClock = [[MMInspectorClock alloc] initWithManager:self.apiManager];
+    // The viewer's controls hide themselves while the playhead moves and
+    // cannot ask for the redraw that brings them back; this tick is where that
+    // redraw is requested. It rides the clock the inspector already runs.
+    self.playheadNudge = [[MMOSCPlayheadNudge alloc] initWithManager:self.apiManager];
+    MMOSCPlayheadNudge *nudge = self.playheadNudge;
+    self.sharedInspectorClock.onTick = ^(id<FxCustomParameterActionAPI_v4> action) {
+      [nudge tickInAction:action];
+    };
+  }
   return self.sharedInspectorClock;
 }
 @end

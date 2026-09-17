@@ -12,6 +12,7 @@
 #import "MMPropertyLane.h"
 #import "MMScalePose.h"
 #import "MMInspectorClock.h"
+#import "MMOSCPlayheadNudge.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

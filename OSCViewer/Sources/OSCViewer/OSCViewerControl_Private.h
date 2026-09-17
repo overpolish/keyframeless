@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #pragma once
+#import "OSCPlayheadMotion.h"
 #import "OSCViewerControl.h"
 
 // Glyph style shared by the scale handles and the anchor square: they read as
@@ -40,4 +41,10 @@ static const float OSCViewerHandleOutline = 1.25f;
 @property(nonatomic) CGSize pressImageSize;
 @property(nonatomic) OSCViewerRingDrag ringDrag;
 @property(nonatomic) BOOL showBorder, showHandles, showRings, showAnchor;
+// Playhead motion across draw ticks: while it is moving the elements are not
+// drawn, since the viewer is playing back or being scrubbed.
+@property(nonatomic) OSCPlayheadMotion playheadMotion;
+// Whether the last draw tick suppressed the elements. Pointer callbacks force a
+// redraw only when it did, so hover ticks cost what they always did.
+@property(nonatomic) BOOL playheadSuppressed;
 @end

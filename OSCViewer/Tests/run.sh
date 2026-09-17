@@ -16,3 +16,9 @@ bundle="$test_tmp/OSCViewer_OSCViewer.bundle/Contents/Resources"
 mkdir -p "$bundle"
 cp "$sources"/Resources/*.png "$bundle/"
 "$test_tmp/OSCCursorTests" --packaged
+
+xcrun clang -fobjc-arc -fmodules -Wall -Wextra -Werror -fsanitize=address,undefined \
+  -I "$sources/include" -framework Foundation \
+  "$sources/OSCPlayheadMotion.c" "$root/OSCViewer/Tests/OSCPlayheadMotionTests.m" \
+  -o "$test_tmp/OSCPlayheadMotionTests"
+"$test_tmp/OSCPlayheadMotionTests"

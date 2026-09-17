@@ -101,6 +101,7 @@
 				Plugin/Core/MMInspectorHeader.m,
 				Plugin/Core/MMMatchEndpoints.m,
 				Plugin/Core/MMNativeLinks.m,
+				Plugin/Core/MMOSCPlayheadNudge.m,
 				Plugin/Core/MMParameterData.m,
 				Plugin/Core/MMPoseTiming.m,
 				Plugin/Core/MMPropertyLane.m,

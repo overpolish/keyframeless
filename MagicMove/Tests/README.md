@@ -68,6 +68,8 @@ For changes involving host integration, also check these in Motion/FCP:
 6. Verify native keyframe buttons remain clickable at different inspector widths, especially for percentage and three-axis fields.
 7. Compare motion blur, spatial blur, scale/rotation, and anchor behavior during playback and export, including reduced-resolution previews.
 8. Exercise the published effect in FCP as well as Motion when changing parameter registration or custom views.
+9. Check the on-screen controls while the playhead moves: they hide during playback and while scrubbing, and come back on their own shortly after the playhead stops, with no mouse movement and no key press. Also check the immediate paths: pointer movement inside the viewer, entering the viewer, a key release, and a drag. A stopped viewer must never be left without controls. Confirm one undo entry named "Show On-Screen Controls" per stop, and none while the playhead sits still or when every control is switched off.
+10. The control's pointer and drag paths can log to the unified log when `/tmp/keyframeless-osc-log` exists; it is re-checked every couple of seconds, so a running host picks it up. An environment variable cannot arm it: the host spawns the control as a launchd XPC service that inherits nothing from the shell or the application. Measured in Motion, a nudge reaches the redraw in 15 to 31ms, so any perceptible wait is the settle window rather than the repaint.
 
 Include the application versions, checks you ran, and results in the pull request.
 
