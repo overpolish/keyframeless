@@ -108,6 +108,7 @@
 				Plugin/Render/MagicMove.metal,
 				Plugin/Render/OSC.metal,
 				"Plugin/Render/Plugin+Render.m",
+				"Plugin/Render/Plugin+RenderGeometry.m",
 				Plugin/Render/RenderSupport.metal,
 				"Wrapper Application/Info.plist",
 			);
