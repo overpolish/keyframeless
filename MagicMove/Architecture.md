@@ -1,18 +1,25 @@
 # MagicMove architecture
 
-MagicMove handles FxPlug callbacks, parameters, saved values, undo, inspector views, and image tiles. It links three local static packages:
+MagicMove defines its parameters, its lane table, its render and its on-screen controls, and registers everything the shared packages read back from it. The reusable host and keyframe machinery lives in the packages it links:
 
-| Package           | Responsibility                                         | External frameworks                                   |
-| ----------------- | ------------------------------------------------------ | ----------------------------------------------------- |
-| MotionTiming      | Deterministic timing and Added Motion evaluation       | None                                                  |
-| InspectorControls | Reusable inspector layout and interaction              | AppKit, CoreGraphics                                  |
-| RenderSupport     | Metal resources, spatial blur, and sample accumulation | Foundation, CoreMedia, Metal, MetalPerformanceShaders |
+| Package           | Responsibility                                          | External frameworks                                   |
+| ----------------- | ------------------------------------------------------- | ----------------------------------------------------- |
+| PluginHost        | Effect lifecycle, host actions, clock, settings, menus, shortcuts, render-host adapter | AppKit, CoreMedia, Metal |
+| PoseLanes         | Pose model, lanes and caches, native edits, links, match, defaults, timing editor, rows | AppKit, CoreMedia |
+| MotionTiming      | Deterministic timing and Added Motion evaluation        | None                                                  |
+| InspectorControls | Reusable inspector layout and interaction               | AppKit, CoreGraphics                                  |
+| PluginPreferences | Preference storage and validation hooks                 | Foundation                                            |
+| OSCControls       | On-screen control geometry                              | None                                                  |
+| OSCViewer         | Viewer control lifecycle, drawing, input and cursors    | AppKit                                                |
+| RenderSupport     | Metal resources, spatial blur, and sample accumulation  | Foundation, CoreMedia, Metal, MetalPerformanceShaders |
+
+`MagicMovePlugin` subclasses `KFEffect` and declares the FxPlug protocols itself. What stays in the plugin is its parameter identifiers (`Constants.h`), its lane definitions and their registration (`MMLanes.m`), its preference store and validation (`MMDefaults.m`), its inspector header, its motion-blur shortcut, its render and its on-screen control. `MMLanes.m` registers the lane table at load, along with the host-refresh parameter, the explicit-creation toggle, the shortcut binding, the row shortcut action, the defaults adapter and the preference writer for the visibility toggles, so neither package carries a Magic Move identifier.
 
 The application embeds Apple's FxPlug and PluginManager frameworks.
 
 ## Keyframes and persistence
 
-Property values are immutable, securely coded custom parameter objects. The host owns their keyframe times. Timing metadata travels with each value through `MMPoseTiming`; `MMPropertyLane` and the property adapters handle reads, edits, rendering, and reset.
+Property values are immutable, securely coded `KFPose` objects from `PoseLanes`. The host owns their keyframe times. Timing metadata travels with each value through `KFPoseTiming`; `KFPropertyLane` handles reads, edits, sampling, rendering, and reset for every property.
 
 Incoming duration/easing belong to the destination keyframe. Added Motion belongs to the preceding keyframe. Linking synchronizes native keyframe times and incoming settings while preserving independently editable values and motion settings.
 
@@ -20,11 +27,11 @@ Match In/Out is lane-wide, so each property keeps it in one hidden toggle rather
 
 Native APIs do not supply persistent identities for individual keyframes. Association uses unchanged times, values, and relative order to match old and new snapshots. When identical values move, the result can be ambiguous. Tests cover crossing keyframes and moving multiple selections.
 
-The plugin implements `KKDataBlob` with the same Objective-C class name and `data` archive key so saved timing records still decode. Some hidden parameters are also kept for compatibility with saved effects.
+Every property is one `KFPropertyLane` over one `KFPose`: a component-value array plus its timing. The lane owns the parameter and cache-token IDs, the Match In/Out toggle, the display name, the component colours and labels, the unit and precision its row shows, the value range, the on-screen control toggle it owns and, for Scale, the toggle that couples its axes. `MMLanes.m` defines the six lanes and their order; everything else resolves a lane from a parameter ID, so adding a property is a lane definition and an ID rather than a new pose class or new branches.
 
 ## Host actions and cached state
 
-Create parameters without starting host-action polling. Start the refresh timer only after `pluginInstanceAddedToDocument`, because detached library and drag instances do not have ready timing APIs. The plugin holds its API manager weakly and invalidates its timer when released.
+Create parameters without starting host-action polling. Start the native-link commit timer only after `pluginInstanceAddedToDocument`, because detached library and drag instances do not have ready timing APIs. The plugin holds its API manager weakly and invalidates its timer when released.
 
 Every host write needs a custom-parameter action, with a matching end call. Related writes share an undo group. Native linked-key drags defer partner writes until release to avoid interrupting the host's drag operation. Callback handling accounts for reentrant notifications, delayed echoes, undo restoration, and failed writes.
 
@@ -32,11 +39,13 @@ Inspector views read cached snapshots rather than enumerating native keyframes o
 
 Each plugin instance owns one view cache per property and publishes their tokens in a single host action, from `pluginInstanceAddedToDocument` or the first view build. Rows read those caches; they never create or publish their own. The host rebuilds every inspector row several times per selection and keeps more than one generation alive, so a per-row token write cost a host round trip each time. Instances created before the host exposes a setting API publish on the next cache access.
 
-Inspector views poll because the host has no playhead-movement callback. `MMInspectorClock` owns one 10Hz timer per plugin instance and refreshes every registered view from a single host action, instead of each view running its own timer and action. Registrations are weak and the timer only runs while views are registered. Both the clock and the deferred-edit timer run in the default run loop mode: a host action opened inside an AppKit tracking loop is what the menu paths deliberately avoid. Values therefore hold still while a menu or tracking loop is up. Each view keeps a standalone refresh method for direct callers, which opens its own action and delegates to the same action-scoped body.
+Inspector views poll because the host has no playhead-movement callback. `KFInspectorClock` owns one 10Hz timer per plugin instance and refreshes every registered view from a single host action, instead of each view running its own timer and action. Registrations are weak and the timer only runs while views are registered. Both the clock and the deferred-edit timer run in the default run loop mode: a host action opened inside an AppKit tracking loop is what the menu paths deliberately avoid. Values therefore hold still while a menu or tracking loop is up. Each view keeps a standalone refresh method for direct callers, which opens its own action and delegates to the same action-scoped body.
 
 Menu actions use the hidden custom scratch parameter to request host refresh. This asks the host to repaint without moving the mouse. The plugin handles this write and its undo group.
 
 The graph reuses sampled curves until values, gap, selection, or image geometry change. Playhead updates do not rebuild curves. Row highlights and hit testing leave the native keyframe-control gutter available to the host.
+
+Two row classes serve every property: `KFScalarRow` for a single component with a slider and `KFVectorRow` for two or three fields. `KFPropertyRow` binds either to its lane, and the lane supplies the behaviour that used to be per-property code: percent-of-image lanes display and accept pixels scaled by the published image size, and a lane with a coupling toggle shows the proportional link button and writes both axes in one host write, scaling the pair rather than clamping one axis when either would leave the range.
 
 ## Rendering
 
@@ -62,11 +71,11 @@ The anchor square is the pivot handle on that same point, hidden by default beca
 
 The controls also hide while the playhead moves, whether it is playing back or being scrubbed, which `OSCViewerControl` infers from the time each draw tick carries: the host tells a control nothing about transport state. That is display only, and the saved toggles, the hit precedence and an in-progress drag are unaffected.
 
-Getting them back needs the plugin, because a control cannot invalidate itself and the host issues no draw tick once the playhead parks. `MMOSCPlayheadNudge` watches the playhead on the inspector clock and, once it settles, writes a nonce to `MMHostRefreshToken` exactly as the inspector's own settings do: the host re-renders, `drawOSC` runs again, and the control's own inference now sees a parked playhead. One write per stop, skipped entirely when every control is switched off, and wrapped in a named undo group because no parameter flag exempts the write from the undo stack. The control still resets its inference on pointer and key callbacks, which recover it immediately without waiting for the nudge.
+Getting them back needs the plugin, because a control cannot invalidate itself and the host issues no draw tick once the playhead parks. `PluginHost`'s `KFOSCPlayheadNudge` watches the playhead on the inspector clock and, once it settles, writes a nonce to `MMHostRefreshToken` exactly as the inspector's own settings do: the host re-renders, `drawOSC` runs again, and the control's own inference now sees a parked playhead. One write per stop, skipped entirely when every control is switched off, and wrapped in a named undo group because no parameter flag exempts the write from the undo stack. The control still resets its inference on pointer and key callbacks, which recover it immediately without waiting for the nudge.
 
 Every viewer drag opens and closes its undo group inside the tick that writes. A group cannot span callbacks: the host scopes it to the calling thread, where `startUndoGroup` pushes a live-thread scope keyed on the pthread and `endUndoGroup` pops it, while OSC callbacks arrive on a concurrent dispatch queue. Holding a group from the press to the release therefore pops a scope on a thread that never pushed one, and the host faults reading that thread's empty scope stack.
 
-The toggles appear as checkmarked items in the logo header settings menu and in the Position, Scale, Rotation and Anchor row menus. All surfaces share `MMToggleBoolSetting`, which writes inside an undo group followed by the refresh-token write, and records the new value as the creation preference so a new effect starts from whatever was toggled last. Menu items read their state inside a host action, since `MMSettingMenuTarget` cannot read parameters outside one.
+The toggles appear as checkmarked items in the logo header settings menu and in the Position, Scale, Rotation and Anchor row menus. All surfaces share `PluginHost`'s `KFToggleBoolSetting`, which writes inside an undo group followed by the refresh-token write, and records the new value as the creation preference so a new effect starts from whatever was toggled last. Menu items read their state inside a host action, since `KFSettingMenuTarget` cannot read parameters outside one.
 
 ## Verification
 
@@ -74,6 +83,6 @@ Run the [automated tests](Tests/README.md). They use the production code with si
 
 ## User defaults
 
-`MMDefaults` defines duration, easing, and per-type Added Motion preferences using `PluginPreferences`. Pose decoding and rendering never read preferences. Automatic value edits apply defaults when they create a keyframe; native insertions use the existing deferred host-edit path. The insertion tracker rejects moves and remembers observed key states so undo restoration does not apply current preferences. A queued insertion is discarded if the key changes before the write.
+`MMDefaults` defines the duration, easing and per-type Added Motion preferences using `PluginPreferences`, and registers itself with `PoseLanes` as the defaults adapter: the plugin owns the suite name, the factory values and the validation, while the package decides when a new key receives them. Pose decoding and rendering never read preferences. Automatic value edits apply defaults when they create a keyframe; native insertions use the existing deferred host-edit path. The insertion tracker rejects moves and remembers observed key states so undo restoration does not apply current preferences. A queued insertion is discarded if the key changes before the write.
 
-`MMPoseTiming` archives Amount / Speed history by Added Motion type. Missing history is valid for existing documents. Changing a type records its current values and restores the chosen type's history, falling back to preferences only on its first use.
+`KFPoseTiming` archives Amount / Speed history by Added Motion type. Missing history is valid for existing documents. Changing a type records its current values and restores the chosen type's history, falling back to preferences only on its first use.

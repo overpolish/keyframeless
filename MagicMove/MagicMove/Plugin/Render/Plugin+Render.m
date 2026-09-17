@@ -2,13 +2,8 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
-#import "MMDestinations.h"
-#import "MMCombinedPose.h"
-#import "MMScalePose.h"
-#import "MMScalarPose.h"
-#import "MMRotationPose.h"
-#import "MMAnchorPose.h"
-#import "MMRenderHost.h"
+#import "MMLanes.h"
+#import "KFRenderHost.h"
 @import MotionTiming;
 #import <math.h>
 
@@ -68,65 +63,23 @@ static int MMBlurIntegerSetting(id<FxParameterRetrievalAPI_v6> api, UInt32 param
     states[sample].scale = 1;
     states[sample].scaleY = 1;
   }
-  BOOL combinedActive = NO;
-  NSArray<MMCombinedPose *> *combined = MMReadCombinedPoseSamples(self.apiManager, times, &combinedActive, error);
-  if (!combined) return NO;
-  if (combinedActive) {
-    for (NSUInteger sample=0; sample<times.count; ++sample) {
-      states[sample].offset.x = combined[sample].positionX/100;
-      states[sample].offset.y = combined[sample].positionY/100;
-      states[sample].scale = combined[sample].scale/100;
-      states[sample].scaleY = combined[sample].scale/100;
-    }
-  } else for (MMTimingLane *lane in self.timingLanes) {
-    NSUInteger generation = lane.durationGeneration;
-    NSData *pending = lane.pendingDestinations;
-    NSData *data = pending ? MMReadDestinationsFromPrevious(self.apiManager, lane.valueID, pending, error)
-                           : MMReadDestinations(self.apiManager, lane.valueID, lane.dataID, error);
-    if (!data) return NO;
-    [lane publishDurationSnapshot:data generation:generation];
-    const MTDurationRecord *records = data.bytes;
-    NSUInteger count = data.length/sizeof(*records);
-    NSMutableData *storage = [NSMutableData dataWithLength:count*sizeof(MTDestination)];
-    MTDestination *destinations = storage.mutableBytes;
-    const double motionMin = lane.valueID == MMScale ? 0 : -200;
-    const double motionMax = lane.valueID == MMScale ? 400 : 200;
-    for (NSUInteger i=0; i<count; ++i)
-      destinations[i] = (MTDestination){records[i].time-records[0].time,
-        (records[i].useAvailableTime && i > 0 ? records[i].time-records[i-1].time : records[i].duration),
-        &records[i].value, records[i].easing, records[i].addedMotion, &motionMin, &motionMax, 1};
-    double constant = 0;
-    if (!count && ![api getFloatValue:&constant fromParameter:lane.valueID atTime:renderTime])
-      return MMError(error, @"Magic Move could not read a motion value");
-    for (NSUInteger sample=0; sample<times.count; ++sample) {
-      CMTime time; [times[sample] getValue:&time];
-      double value = constant;
-      if (count && !MTSample(destinations, count, 1, CMTimeGetSeconds(time)-records[0].time, &value))
-        return MMError(error, @"Invalid motion destinations");
-      if (!isfinite(value)) return MMError(error, @"Invalid motion value");
-      if (lane.valueID == MMPositionX) states[sample].offset.x = value/100;
-      else if (lane.valueID == MMScale) { states[sample].scale = value/100; states[sample].scaleY = value/100; }
-    }
+  NSArray<id<KFPropertyPose>> *positions=[MMPositionLane() readSamples:self.apiManager times:times error:error];
+  if(!positions) return NO;
+  NSArray<id<KFPropertyPose>> *scales=[MMScaleLane() readSamples:self.apiManager times:times error:error];
+  if(!scales) return NO;
+  for (NSUInteger sample=0; sample<times.count; ++sample) {
+    NSArray<NSNumber *> *offset=positions[sample].values;
+    states[sample].offset.x = offset[0].doubleValue/100;
+    states[sample].offset.y = offset[1].doubleValue/100;
+    NSArray<NSNumber *> *scale=scales[sample].values;
+    states[sample].scale = scale[0].doubleValue/100;
+    states[sample].scaleY = scale[1].doubleValue/100;
   }
-  // The timing lanes carry Position X and Scale only, so the inactive path has
-  // no Y at all and the render held still while the on-screen control moved.
-  // Y lives in the combined pose in both states, which is also what the
-  // control draws from, so read it there whenever the lanes are driving.
-  if (!combinedActive)
-    for (NSUInteger sample=0; sample<times.count; ++sample)
-      states[sample].offset.y = combined[sample].positionY/100;
-  BOOL scaleActive = NO;
-  NSArray<MMScalePose *> *scales = MMReadScalePoseSamples(self.apiManager, times, &scaleActive, error);
-  if (!scales) return NO;
-  if (scaleActive) for (NSUInteger sample=0; sample<times.count; ++sample) {
-    states[sample].scale = scales[sample].x/100;
-    states[sample].scaleY = scales[sample].y/100;
-  }
-  NSArray<MMScalarPose *> *opacities=[MMOpacityLane() readSamples:self.apiManager times:times error:error];
+  NSArray<id<KFPropertyPose>> *opacities=[MMOpacityLane() readSamples:self.apiManager times:times error:error];
   if(!opacities) return NO;
   for(NSUInteger sample=0;sample<times.count;sample++)
     states[sample].opacity=fmax(0,fmin(1,opacities[sample].value/100));
-  NSArray<id<MMPropertyPose>> *rotations=[MMRotationLane() readSamples:self.apiManager times:times error:error];
+  NSArray<id<KFPropertyPose>> *rotations=[MMRotationLane() readSamples:self.apiManager times:times error:error];
   if(!rotations) return NO;
   for(NSUInteger sample=0;sample<times.count;sample++) {
     NSArray<NSNumber *> *angles=rotations[sample].values;
@@ -135,9 +88,9 @@ static int MMBlurIntegerSetting(id<FxParameterRetrievalAPI_v6> api, UInt32 param
     states[sample].rotationY=fmod(angles[1].doubleValue,360)*M_PI/180;
     states[sample].rotation=fmod(angles[2].doubleValue,360)*M_PI/180;
   }
-  NSArray<MMScalarPose *> *blurs = [MMBlurLane() readSamples:self.apiManager times:times error:error];
+  NSArray<id<KFPropertyPose>> *blurs = [MMBlurLane() readSamples:self.apiManager times:times error:error];
   if (!blurs) return NO;
-  NSArray<id<MMPropertyPose>> *anchors = [MMAnchorLane() readSamples:self.apiManager times:times error:error];
+  NSArray<id<KFPropertyPose>> *anchors = [MMAnchorLane() readSamples:self.apiManager times:times error:error];
   if (!anchors) return NO;
   for (NSUInteger sample=0; sample<times.count; ++sample) {
     NSArray<NSNumber *> *values = anchors[sample].values;

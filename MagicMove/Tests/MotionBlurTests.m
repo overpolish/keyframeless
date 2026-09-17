@@ -1,8 +1,44 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "Constants.h"
 #import "MockHost.h"
+#import "Plugin_Private.h"
 #import "ShaderTypes.h"
+#import "MMLanes.h"
 @import RenderSupport;
 #import <math.h>
+
+// Keyed custom values, as the host serves them for the Position lane.
+@interface BlurHost : MockHost @end
+@implementation BlurHost
+- (BOOL)getCustomParameterValue:(NSObject<NSSecureCoding,NSCopying> **)value
+                  fromParameter:(UInt32)p atTime:(CMTime)t {
+  if (p != MMPositionControls || ![self lane:p].count)
+    return [super getCustomParameterValue:value fromParameter:p atTime:t];
+  if (self.failReadParameter == p) return NO;
+  NSArray *keys = [self lane:p];
+  *value = keys.firstObject[@"value"];
+  for (NSDictionary *key in keys) {
+    if ([key[@"time"] doubleValue] > CMTimeGetSeconds(t)) break;
+    *value = key[@"value"];
+  }
+  return YES;
+}
+@end
+
+static id<KFPropertyPose> Pose(double x, MTEasing easing, MTAddedMotion motion, BOOL available) {
+  id<KFPropertyPose> pose=[MMPositionLane().defaultPose poseByReplacingValues:@[@(x),@0] authored:YES
+      easing:easing addedMotion:motion
+      timing:[[KFPoseTiming alloc] initWithDuration:1.2 available:available amount:1 speed:1]];
+  return pose;
+}
+
+static void Key(MockHost *host, double time, id<KFPropertyPose> pose) {
+  FxKeyframe key;
+  FxInitKeyframe(key, kFxKeyframe_CurrentVersion);
+  key.time = TestTime(time);
+  [[host lane:MMPositionControls] addObject:[@{@"time":@(time), @"value":pose,
+      @"key":[NSValue valueWithBytes:&key objCType:@encode(FxKeyframe)]} mutableCopy]];
+}
 
 static NSUInteger BlurStateOffset(NSData *state) {
   return state.length - sizeof(RSRenderBlurState);
@@ -30,17 +66,17 @@ static BOOL IsFiniteTransform(MMTransform transform) {
 
 int main(void) {
   @autoreleasepool {
-    MockHost *host = [MockHost new];
+    BlurHost *host = [BlurHost new];
+    // An unavailable host setting must read as a failure, not as zero.
+    host.strictReadParameters =
+        [NSSet setWithObjects:@(MMMotionBlurSamples), @(MMMotionBlurShutterAngle), nil];
     MagicMovePlugin *plugin = [[MagicMovePlugin alloc] initWithAPIManager:host];
     host.plugin = plugin;
     assert([plugin addParametersWithError:nil]);
 
-    TestAdd(host, MMPositionX, 0, 0);
-    TestAdd(host, MMPositionX, 4, 100);
-    TestAdd(host, MMPositionX, 8, 0);
-    TestAdd(host, MMScale, 0, 100);
-    TestAdd(host, MMScale, 4, 150);
-    TestAdd(host, MMScale, 8, 100);
+    Key(host, 0, Pose(0, MTEasingSmooth, MTAddedMotionNone, NO));
+    Key(host, 4, Pose(100, MTEasingSmooth, MTAddedMotionNone, NO));
+    Key(host, 8, Pose(0, MTEasingSmooth, MTAddedMotionNone, NO));
 
     // The ordinary payload stays compact when blur is disabled.
     NSData *state = nil;
@@ -50,7 +86,9 @@ int main(void) {
     assert(!error && state.length == sizeof(MMTransform));
     assert(IsFiniteTransform(TransformAt(state, 0)));
     NSUInteger snapshotReads=host.nativeKeyReads-unblurredReadsBefore;
-    assert(snapshotReads <= 14); // Includes one count read each for Scale, Opacity and Rotation.
+    // Three keyframe reads for the combined lane plus one count read for each
+    // of the six pose parameters.
+    assert(snapshotReads == 9);
 
     // Blur uses the fixed primitive defaults and appends the shared state after
     // the complete set of transform samples.
@@ -69,16 +107,12 @@ int main(void) {
     assert(IsFiniteTransform(current) && IsFiniteTransform(earlier));
     assert(fabs(current.offset.x - earlier.offset.x) > 1e-5);
 
-    // Duration, easing, available-time timing, and outgoing added motion are
-    // evaluated for each shutter sample rather than only at the playhead.
-    host.editors[@(MMTransitionDuration)] = @1.2;
-    TestChange(host, MMTransitionDuration, 4);
-    host.editors[@(MMPositionEasing)] = @(MTEasingEaseOut);
-    TestChange(host, MMPositionEasing, 4);
-    host.editors[@(MMPositionAvailableTime)] = @YES;
-    TestChange(host, MMPositionAvailableTime, 4);
-    host.editors[@(MMPositionAddedMotion)] = @(MTAddedMotionWave);
-    TestChange(host, MMPositionAddedMotion, 0);
+    // Easing, available-time timing, and outgoing added motion travel with the
+    // poses and are evaluated for each shutter sample, not only the playhead.
+    [host lane:MMPositionControls][0][@"value"] =
+        Pose(0, MTEasingSmooth, MTAddedMotionWave, NO);
+    [host lane:MMPositionControls][1][@"value"] =
+        Pose(100, MTEasingEaseOut, MTAddedMotionNone, YES);
     error = nil;
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
     assert(!error && state.length == MMMotionBlurDefaultSamples * sizeof(MMTransform) + sizeof(blur));
@@ -140,8 +174,8 @@ int main(void) {
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);
     assert(BlurStateFrom(state).sampleCount==2);
 
-    // Missing settings in effects saved before these parameters existed use
-    // the original primitive defaults.
+    // A setting the host cannot serve falls back to the registered default
+    // rather than rendering with zero samples.
     [host.editors removeObjectForKey:@(MMMotionBlurSamples)];
     [host.editors removeObjectForKey:@(MMMotionBlurShutterAngle)];
     assert([plugin pluginState:&state atTime:TestTime(3.5) quality:0 error:&error]);

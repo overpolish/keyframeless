@@ -12,6 +12,8 @@ esac
 "$root/MotionTiming/Tests/run.sh"
 "$root/OSCControls/Tests/run.sh"
 "$root/OSCViewer/Tests/run.sh"
+"$root/PluginHost/Tests/run.sh"
+"$root/PoseLanes/Tests/run.sh"
 if [ "$gpu" = yes ]; then
   "$root/RenderSupport/Tests/run.sh"
 else

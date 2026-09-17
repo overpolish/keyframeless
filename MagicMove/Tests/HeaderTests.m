@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MMInspectorHeader.h"
+#import "Constants.h"
 #import "MockHost.h"
+#import "Plugin_Private.h"
 #import "MMShortcut.h"
-#import "MMResetParameter.h"
 #import "MMDefaults.h"
 @interface MMInspectorHeader (Testing)
-- (MMShortcutCapture *)shortcutCapture;
+- (KFShortcutCapture *)shortcutCapture;
 - (BOOL)toggleSetting:(UInt32)parameter;
 - (BOOL)writeBlurSetting:(UInt32)parameter value:(NSInteger)value;
 @end
@@ -32,11 +33,11 @@
 @end
 // Test the production header lifecycle against the real router without installing
 // a system-wide event tap or requiring host input permissions.
-@interface HeaderTestCapture : MMShortcutCapture
-@property(nonatomic,strong) MMShortcutRouter *testRouter;
+@interface HeaderTestCapture : KFShortcutCapture
+@property(nonatomic,strong) KFShortcutRouter *testRouter;
 @end
 @implementation HeaderTestCapture
-- (instancetype)init { if((self=[super init])) _testRouter=[MMShortcutRouter new]; return self; }
+- (instancetype)init { if((self=[super init])) _testRouter=[KFShortcutRouter new]; return self; }
 - (void)attachView:(NSView *)view effect:(id)effect action:(BOOL (^)(void))action {
   __weak NSView *weakView=view;
   [self.testRouter registerOwner:view effect:effect eligible:^BOOL {
@@ -50,7 +51,7 @@
 @property(nonatomic,strong) HeaderTestCapture *testCapture;
 @end
 @implementation RoutingHeader
-- (MMShortcutCapture *)shortcutCapture { return self.testCapture; }
+- (KFShortcutCapture *)shortcutCapture { return self.testCapture; }
 @end
 @interface HeaderTestWindow : NSWindow
 @end
@@ -126,7 +127,7 @@ int main(void) { @autoreleasepool {
          [menu.itemArray[5].title isEqual:@"Rotation Rings"] && [menu.itemArray[6].title isEqual:@"Anchor Point"]);
   // Visibility starts from the stored preference, so compare against the host.
   BOOL showScale=NO;
-  assert(MMReadBoolSetting(host,view,MMShowScaleOSC,&showScale));
+  assert(KFReadBoolSetting(host,view,MMShowScaleOSC,&showScale));
   assert(menu.itemArray[4].state==(showScale ? NSControlStateValueOn:NSControlStateValueOff));
   assert(MMReadOSCVisibilityDefault(MMShowScaleOSC)==showScale);
   // Menu actions leave tracking first, like every other host write here.
@@ -157,7 +158,7 @@ int main(void) { @autoreleasepool {
   assert(MMToggleMotionBlur(host,view));
   DrainHeaderActions();
   assert(blur.state==NSControlStateValueOff);
-  MMPropertyMenuActionScheduled(blurMenu);
+  KFPropertyMenuActionScheduled(blurMenu);
   [blurMenu.delegate menuDidClose:blurMenu];
   NSUInteger groups=host.undoGroupsStarted;
   assert([view toggleSetting:MMMotionBlur]);
@@ -196,7 +197,7 @@ int main(void) { @autoreleasepool {
   assert(![view writeBlurSetting:MMMotionBlurSamples value:1]);
   assert(![view writeBlurSetting:MMMotionBlurSamples value:129]);
   assert(![view writeBlurSetting:MMMotionBlurShutterAngle value:361]);
-  assert(![view writeBlurSetting:MMPositionX value:10]);
+  assert(![view writeBlurSetting:MMMotionBlur value:10]);
   host.failWrite=YES;
   assert(![view writeBlurSetting:MMMotionBlurSamples value:64]);
   assert([host.editors[@(MMMotionBlurSamples)] intValue]==32);
@@ -208,6 +209,6 @@ int main(void) { @autoreleasepool {
   [view refreshSettings]; assert(!view.accessoryButtons.firstObject.enabled);
   assert(![view toggleSetting:MMMotionBlur]);
   assert(host.starts==host.ends && host.undoDepth==0);
-  assert(![view toggleSetting:MMPositionX]);
+  assert(![view toggleSetting:MMMotionBlurSamples]);
   NSLog(@"HeaderTests passed");
 } return 0; }

@@ -1,11 +1,47 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "Constants.h"
 #import "MockHost.h"
+#import "Plugin_Private.h"
 #import "ShaderTypes.h"
-#import "MMScalarPose.h"
-#import "MMAnchorPose.h"
+#import "MMLanes.h"
 #import <IOSurface/IOSurface.h>
 #import <CoreVideo/CoreVideo.h>
 #import <math.h>
+
+// Keyed custom values, as the host serves them for the combined pose.
+@interface BlurHost : MockHost @end
+@implementation BlurHost
+- (BOOL)getCustomParameterValue:(NSObject<NSSecureCoding,NSCopying> **)value
+                  fromParameter:(UInt32)p atTime:(CMTime)t {
+  if (p != MMPositionControls || ![self lane:p].count)
+    return [super getCustomParameterValue:value fromParameter:p atTime:t];
+  NSArray *keys = [self lane:p];
+  *value = keys.firstObject[@"value"];
+  for (NSDictionary *key in keys) {
+    if ([key[@"time"] doubleValue] > CMTimeGetSeconds(t)) break;
+    *value = key[@"value"];
+  }
+  return YES;
+}
+@end
+
+// The transition lasts one shutter sample, so the trail spans the frame.
+static id<KFPropertyPose> LanePose(KFPropertyLane *lane, NSArray<NSNumber *> *values, MTEasing easing) {
+  return [lane.defaultPose poseByReplacingValues:values authored:YES easing:easing
+      addedMotion:MTAddedMotionNone
+      timing:[[KFPoseTiming alloc] initWithDuration:1.0/60 available:NO amount:1 speed:1]];
+}
+static id<KFPropertyPose> Pose(double x, MTEasing easing) {
+  return LanePose(MMPositionLane(), @[@(x), @0], easing);
+}
+
+static void Key(MockHost *host, double time, id<KFPropertyPose> pose) {
+  FxKeyframe key;
+  FxInitKeyframe(key, kFxKeyframe_CurrentVersion);
+  key.time = TestTime(time);
+  [[host lane:MMPositionControls] addObject:[@{@"time":@(time), @"value":pose,
+      @"key":[NSValue valueWithBytes:&key objCType:@encode(FxKeyframe)]} mutableCopy]];
+}
 
 // Only the host image wrapper is replaced; production render and the shared
 // texture pool, command buffer, sample passes and accumulation all run on Metal.
@@ -65,7 +101,10 @@ int main(int argc, const char **argv) {
     desc.vertexFunction = [library newFunctionWithName:@"vertexShader"];
     desc.fragmentFunction = [library newFunctionWithName:@"fragmentShader"];
     desc.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA32Float;
-    MockHost *host = [MockHost new];
+    BlurHost *host = [BlurHost new];
+    // An unavailable host setting must read as a failure, not as zero.
+    host.strictReadParameters =
+        [NSSet setWithObjects:@(MMMotionBlurSamples), @(MMMotionBlurShutterAngle), nil];
     BlurPlugin *plugin = [[BlurPlugin alloc] initWithAPIManager:host]; host.plugin = plugin;
     plugin.testPipeline = [device newRenderPipelineStateWithDescriptor:desc error:&error];
     desc.vertexFunction=[library newFunctionWithName:@"RSRenderBlurVertex"];
@@ -81,9 +120,8 @@ int main(int argc, const char **argv) {
     [source.texture replaceRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0 withBytes:input bytesPerRow:64*16];
     // A trail from x=0 to x=16 pixels over the default shutter.
     host.frameDuration = TestTime(1.0/30);
-    TestAdd(host,MMPositionX,0,0); TestAdd(host,MMPositionX,1,25);
-    host.editors[@(MMTransitionDuration)] = @(1.0/60); TestChange(host,MMTransitionDuration,1);
-    host.editors[@(MMPositionEasing)] = @(MTEasingLinear); TestChange(host,MMPositionEasing,1);
+    Key(host, 0, Pose(0, MTEasingSmooth));
+    Key(host, 1, Pose(25, MTEasingLinear));
     host.editors[@(MMMotionBlur)] = @YES;
     NSData *state;
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
@@ -111,17 +149,14 @@ int main(int argc, const char **argv) {
     // The production render path also applies the property Blur lane. With a
     // zero radius it must remain sharp; a positive pixel radius spreads the
     // source alpha into neighbouring pixels.
-    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:0 authored:NO
-        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
-    host.blobs[@(MMAnchorControls)] = [[MMAnchorPose alloc] initWithX:0 y:0 authored:NO
-        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.blobs[@(MMBlurControls)] = LanePose(MMBlurLane(), @[@0], MTEasingSmooth);
+    host.blobs[@(MMAnchorControls)] = LanePose(MMAnchorLane(), @[@0, @0], MTEasingSmooth);
     host.editors[@(MMMotionBlur)] = @NO;
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
     assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
     [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
     assert(output[(16*64+39)*4+3] == 0 && fabsf(output[(16*64+45)*4+3]-.5f)<1e-6);
-    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:3 authored:YES
-        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.blobs[@(MMBlurControls)] = LanePose(MMBlurLane(), @[@3], MTEasingSmooth);
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
     assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
     [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
@@ -129,11 +164,9 @@ int main(int argc, const char **argv) {
 
     // Anchor is evaluated by the same production shader. Moving it and
     // scaling the source changes the rendered centroid around that pivot.
-    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:0 authored:NO
-        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
-    host.blobs[@(MMAnchorControls)] = [[MMAnchorPose alloc] initWithX:12 y:0 authored:YES
-        easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
-    TestAdd(host, MMScale, 0, 50);
+    host.blobs[@(MMBlurControls)] = LanePose(MMBlurLane(), @[@0], MTEasingSmooth);
+    host.blobs[@(MMAnchorControls)] = LanePose(MMAnchorLane(), @[@12, @0], MTEasingSmooth);
+    host.blobs[@(MMScaleControls)] = LanePose(MMScaleLane(), @[@50, @50], MTEasingSmooth);
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
     assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
     [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
@@ -143,15 +176,15 @@ int main(int argc, const char **argv) {
     // Full-resolution pixel values and inverse preview scaling cancel out:
     // doubling the authored dimensions/values on a half-size source must keep
     // the exact same rendered pixels (including the anchor and Gaussian).
-    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:3 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.blobs[@(MMBlurControls)] = LanePose(MMBlurLane(), @[@3], MTEasingSmooth);
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
     assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
     float reference[64*32*4];
     [dest.texture getBytes:reference bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
     Matrix44Data doubled={{2,0,0,0},{0,2,0,0},{0,0,1,0},{0,0,0,1}};
     source.referenceTransform=[[FxMatrix44 alloc] initWithMatrix44Data:doubled];
-    host.blobs[@(MMAnchorControls)] = [[MMAnchorPose alloc] initWithX:24 y:0 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
-    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:6 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.blobs[@(MMAnchorControls)] = LanePose(MMAnchorLane(), @[@24, @0], MTEasingSmooth);
+    host.blobs[@(MMBlurControls)] = LanePose(MMBlurLane(), @[@6], MTEasingSmooth);
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);
     assert([plugin renderDestinationImage:dest sourceImages:@[source] pluginState:state atTime:TestTime(1) error:&error]);
     [dest.texture getBytes:output bytesPerRow:64*16 fromRegion:MTLRegionMake2D(0,0,64,32) mipmapLevel:0];
@@ -160,7 +193,7 @@ int main(int argc, const char **argv) {
 
     // Spatial blur remains compatible with temporal motion blur and keeps the
     // shared 16-sample command-buffer path.
-    host.blobs[@(MMBlurControls)] = [[MMScalarPose alloc] initWithValue:3 authored:YES easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+    host.blobs[@(MMBlurControls)] = LanePose(MMBlurLane(), @[@3], MTEasingSmooth);
     host.editors[@(MMMotionBlur)] = @YES;
     plugin.sampleDraws = 0; plugin.firstBuffer = nil;
     assert([plugin pluginState:&state atTime:TestTime(1) quality:0 error:&error]);

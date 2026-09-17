@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "MMInspectorHeader.h"
 #import "Constants.h"
-#import "MMResetParameter.h"
+#import "KFResetParameter.h"
 #import "MMShortcut.h"
+#import "MMLanes.h"
+@import PluginHost;
 
 // A fresh menu reads host state on each right-click, including after undo.
 @interface MMHeaderMenuButton : NSButton
@@ -42,7 +44,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
   }];
   return self;
 }
-- (MMShortcutCapture *)shortcutCapture { return MMShortcutCapture.sharedCapture; }
+- (KFShortcutCapture *)shortcutCapture { return KFShortcutCapture.sharedCapture; }
 - (void)dealloc {
   if(_settingsObserver) [NSNotificationCenter.defaultCenter removeObserver:_settingsObserver];
   [[self shortcutCapture] detachView:self];
@@ -74,7 +76,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
   return hit;
 }
 - (BOOL)readSetting:(UInt32)parameter value:(BOOL *)value {
-  return MMReadBoolSetting(self.manager,self,parameter,value);
+  return KFReadBoolSetting(self.manager,self,parameter,value);
 }
 - (void)refreshSettings {
   BOOL blur=NO;
@@ -84,7 +86,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
 }
 - (BOOL)toggleSetting:(UInt32)parameter {
   if(parameter!=MMExplicitCreation && parameter!=MMMotionBlur) return NO;
-  return MMToggleBoolSetting(self.manager,self,parameter,
+  return KFToggleBoolSetting(self.manager,self,parameter,
       parameter==MMMotionBlur ? @"Toggle Motion Blur":@"Toggle Explicit Keyframe Editing");
 }
 - (void)toggleBlur:(id)sender {
@@ -93,10 +95,10 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
 }
 - (void)toggleMenuSetting:(NSMenuItem *)item {
   NSMenu *menu=item.menu; UInt32 parameter=(UInt32)item.tag;
-  MMPropertyMenuActionScheduled(menu);
+  KFPropertyMenuActionScheduled(menu);
   CFRunLoopPerformBlock(CFRunLoopGetMain(),kCFRunLoopDefaultMode,^{
     BOOL refreshed=[self toggleSetting:parameter];
-    MMPropertyMenuActionFinished(menu,refreshed);
+    KFPropertyMenuActionFinished(menu,refreshed);
     [self refreshSettings];
   });
   CFRunLoopWakeUp(CFRunLoopGetMain());
@@ -127,9 +129,9 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
   while(menu.supermenu) menu=menu.supermenu;
   UInt32 parameter=(UInt32)item.tag;
   NSInteger value=[item.representedObject integerValue];
-  MMPropertyMenuActionScheduled(menu);
+  KFPropertyMenuActionScheduled(menu);
   CFRunLoopPerformBlock(CFRunLoopGetMain(),kCFRunLoopDefaultMode,^{
-    MMPropertyMenuActionFinished(menu,[self writeBlurSetting:parameter value:value]);
+    KFPropertyMenuActionFinished(menu,[self writeBlurSetting:parameter value:value]);
   });
   CFRunLoopWakeUp(CFRunLoopGetMain());
 }
@@ -168,7 +170,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
 - (void)observeSettingsInMenu:(NSMenu *)menu {
   __weak MMInspectorHeader *weakSelf=self;
   __weak NSMenu *weakMenu=menu;
-  MMPropertyMenuSetStateHandler(menu,^{
+  KFPropertyMenuSetStateHandler(menu,^{
     MMInspectorHeader *header=weakSelf; NSMenu *current=weakMenu;
     if(!header || !current) return;
     // The shared menu lifecycle has already entered a host action.
@@ -176,7 +178,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
     id<FxParameterRetrievalAPI_v6> get=[header.manager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     CMTime time=[action currentTime];
     for(NSMenuItem *item in current.itemArray) {
-      MMRefreshSettingMenuItem(item);
+      KFRefreshSettingMenuItem(item);
       if(item.tag!=MMMotionBlur && item.tag!=MMExplicitCreation) continue;
       BOOL value=NO;
       item.enabled=[get getBoolValue:&value fromParameter:(UInt32)item.tag atTime:time];
@@ -186,7 +188,7 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
 }
 - (NSMenu *)settingsMenu {
   [[self shortcutCapture] activateView:self];
-  NSMenu *menu=MMCreatePropertyMenu(self.manager,self);
+  NSMenu *menu=KFCreatePropertyMenu(self.manager,self);
   menu.autoenablesItems=NO;
   [self observeSettingsInMenu:menu];
   NSMenuItem *item=[self itemForSetting:MMExplicitCreation title:@"Explicit Keyframe Editing"];
@@ -194,16 +196,24 @@ NSNotificationName const MMHeaderSettingsChanged=@"MMHeaderSettingsChanged";
   [menu addItem:item];
   [menu addItem:NSMenuItem.separatorItem];
   [menu addItem:[NSMenuItem sectionHeaderWithTitle:@"ON-SCREEN CONTROLS"]];
-  [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowPositionOSC,@"Position Box")];
-  [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowScaleOSC,@"Scale Handles")];
-  [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowRotationOSC,@"Rotation Rings")];
-  [menu addItem:MMOSCVisibilityMenuItem(self.manager,self,MMShowAnchorOSC,@"Anchor Point")];
-  MMRefreshSettingMenuItems(menu,self.manager,self);
+  // Titles name what the viewer draws, which is not the property name: the
+  // box, the handles, the rings and the pivot square.
+  NSDictionary<NSNumber *, NSString *> *titles = @{
+    @(MMShowPositionOSC) : @"Position Box", @(MMShowScaleOSC) : @"Scale Handles",
+    @(MMShowRotationOSC) : @"Rotation Rings", @(MMShowAnchorOSC) : @"Anchor Point"
+  };
+  for(KFPropertyLane *lane in KFPropertyLanes()) {
+    if(!lane.visibilityToggleID) continue;
+    NSString *undoName=[NSString stringWithFormat:@"Toggle %@ On-Screen Control",lane.displayName];
+    [menu addItem:KFSettingMenuItem(self.manager,self,lane.visibilityToggleID,
+                                    titles[@(lane.visibilityToggleID)],undoName)];
+  }
+  KFRefreshSettingMenuItems(menu,self.manager,self);
   return menu;
 }
 - (NSMenu *)motionBlurMenu {
   [[self shortcutCapture] activateView:self];
-  NSMenu *menu=MMCreatePropertyMenu(self.manager,self);
+  NSMenu *menu=KFCreatePropertyMenu(self.manager,self);
   menu.autoenablesItems=NO;
   [self observeSettingsInMenu:menu];
   NSMenuItem *item=[self itemForSetting:MMMotionBlur title:@"Motion Blur"];

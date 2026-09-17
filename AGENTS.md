@@ -1,12 +1,14 @@
 # Architecture
 
 - Keep each plugin and shared package focused on its stated job.
-- Plugin adapters own FxPlug lifecycle, parameter registration, persistence, undo, keyframe ownership, host reads/writes, value conversion, source tile selection, and image geometry.
+- Plugins own their parameter identifiers, lane definitions, render, on-screen controls, and preference storage, and register everything the shared packages read back from them.
+- `PluginHost` owns the FxPlug effect base class, host actions and ticks, the inspector refresh clock, hidden bool settings, the property-menu lifecycle, keyboard shortcut routing, and the render-host adapter. Keep it free of keyframed-property knowledge and plugin parameter identifiers.
+- `PoseLanes` owns the keyframed-property model: the pose class and its timing, lanes and their caches, native keyframe editing, links, Match In/Out, creation defaults, the timing editor, and the inspector rows. It depends on PluginHost and knows a plugin only through the lane table it registers.
 - `MotionTiming` owns deterministic timing and Added Motion evaluation. Keep it independent of plugin UI, Foundation, and host APIs.
 - `InspectorControls` owns reusable AppKit controls, layout, and tokens. Reuse its rows and value fields for inspector UI. Keep it free of FxPlug, plugin parameter IDs, timing, and persistence.
 - `PluginPreferences` owns reusable preference storage and validation hooks. Plugins define defaults and when to apply them; keep document values and host writes out of the package.
 - `RenderSupport` owns reusable Metal resources and rendering operations. Keep it free of FxPlug, plugin parameter IDs, and timing-engine dependencies.
-- Preserve saved-document compatibility when changing parameter identifiers or encoded values. Keep the plugin-owned `KKDataBlob` runtime name and archive keys so existing documents still decode.
+- MagicMove is unreleased and carries no saved-document compatibility requirement: parameter identifiers and encoded values may change. Every value is a keyframed custom parameter.
 
 # Implementation and verification
 

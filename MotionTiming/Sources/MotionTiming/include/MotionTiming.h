@@ -3,10 +3,18 @@
 #define MOTION_TIMING_H
 #include <stdbool.h>
 #include <stddef.h>
-#include "MTDurationRecords.h"
+#include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef enum { MTEasingSmooth = 0, MTEasingLinear, MTEasingEaseIn, MTEasingEaseOut } MTEasing;
+typedef enum {
+    MTAddedMotionNone = 0,
+    MTAddedMotionWave,
+    MTAddedMotionWiggle,
+    MTAddedMotionHandheld
+} MTAddedMotion;
 
 /// All components of a destination share arrival and transition duration.
 /// Times are seconds on the caller's clip-relative clock, never frame indices.

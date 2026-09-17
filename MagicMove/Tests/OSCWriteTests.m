@@ -1,10 +1,8 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#import "Constants.h"
 #import "MockHost.h"
 #import "MagicMoveOSC.h"
-#import "MMCombinedPose.h"
-#import "MMScalePose.h"
-#import "MMAnchorPose.h"
-#import "MMRotationPose.h"
+#import "MMLanes.h"
 #import <math.h>
 
 // Canvas is the 1920x1080 frame at 1:1, object space is 0..1 with Y up.
@@ -30,8 +28,12 @@
 - (void)setCursor:(NSCursor *)cursor { self.cursorSets++; }
 @end
 
-static MMCombinedPose *Combined(double x, double y, double scale) {
-  return [[MMCombinedPose alloc] initWithPositionX:x positionY:y scale:scale authored:YES];
+static id<KFPropertyPose> LanePose(KFPropertyLane *lane, NSArray<NSNumber *> *values) {
+  return [lane.defaultPose poseByReplacingValues:values authored:YES easing:MTEasingSmooth
+                                     addedMotion:MTAddedMotionNone timing:[KFPoseTiming new]];
+}
+static id<KFPropertyPose> Position(double x, double y) {
+  return LanePose(MMPositionLane(), @[@(x), @(y)]);
 }
 static OSCHost *Host(void) {
   OSCHost *host = [OSCHost new];
@@ -40,9 +42,8 @@ static OSCHost *Host(void) {
   host.editors[@(MMShowPositionOSC)] = @YES;
   host.editors[@(MMShowScaleOSC)] = @YES;
   host.editors[@(MMShowRotationOSC)] = @YES;
-  host.blobs[@(MMCustomControls)] = Combined(0, 0, 100);
-  host.blobs[@(MMRotationControls)] = [[MMRotationPose alloc] initWithX:0 y:0 z:0 authored:YES
-                                                                easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+  host.blobs[@(MMPositionControls)] = Position(0, 0);
+  host.blobs[@(MMRotationControls)] = LanePose(MMRotationLane(), @[@0, @0, @0]);
   return host;
 }
 static NSInteger Hit(MagicMoveOSC *osc, double x, double y) {
@@ -68,7 +69,7 @@ static BOOL Up(MagicMoveOSC *osc, double x, double y, NSInteger part) {
 
 static void geometryFromHost(void) {
   OSCHost *host = Host();
-  host.blobs[@(MMCustomControls)] = Combined(10, 20, 100);
+  host.blobs[@(MMPositionControls)] = Position(10, 20);
   MagicMoveOSC *osc = [[MagicMoveOSC alloc] initWithAPIManager:host];
   OSCBoxPose pose;
   assert([osc boxPoseAtTime:TestTime(0) pose:&pose]);
@@ -79,8 +80,8 @@ static void geometryFromHost(void) {
   assert([osc canvasHandlesAtTime:TestTime(0) handles:handles]);
   assert(fabs(handles[0].x - 192) < 1e-6 && fabs(handles[0].y - 216) < 1e-6);
   assert(fabs(handles[2].x - 2112) < 1e-6 && fabs(handles[2].y - 1296) < 1e-6);
-  // The Scale lane overrides the combined scale once it is authored.
-  host.blobs[@(MMScaleControls)] = [[MMScalePose alloc] initWithX:50 y:200 authored:YES];
+  // Each axis of the Scale lane sizes its own side of the box.
+  host.blobs[@(MMScaleControls)] = LanePose(MMScaleLane(), @[@50, @200]);
   assert([osc boxPoseAtTime:TestTime(0) pose:&pose] && pose.scaleX == 50 && pose.scaleY == 200);
   // The top-right handle is far outside the frame, yet the frame itself still hits.
   assert(Hit(osc, 5, 5) == OSCBoxPartPosition);
@@ -103,13 +104,13 @@ static void moveAnywhere(void) {
   assert(Drag(osc, 292, 208, part, 0));
   // One write carries both axes.
   assert(host.blobWrites == writes + 1);
-  MMCombinedPose *pose = host.blobs[@(MMCustomControls)];
-  assert([pose isKindOfClass:MMCombinedPose.class]);
-  assert(fabs(pose.positionX - 10) < 1e-9 && fabs(pose.positionY - 10) < 1e-9 && pose.scale == 100);
+  id<KFPropertyPose> pose = host.blobs[@(MMPositionControls)];
+  assert([pose isKindOfClass:KFPose.class]);
+  assert(fabs(pose.values[0].doubleValue - 10) < 1e-9 && fabs(pose.values[1].doubleValue - 10) < 1e-9);
   // Ticks measure from the press, so a missed tick cannot accumulate error.
   assert(Drag(osc, 484, 100, part, 0));
-  pose = host.blobs[@(MMCustomControls)];
-  assert(fabs(pose.positionX - 20) < 1e-9 && fabs(pose.positionY - 0) < 1e-9);
+  pose = host.blobs[@(MMPositionControls)];
+  assert(fabs(pose.values[0].doubleValue - 20) < 1e-9 && fabs(pose.values[1].doubleValue) < 1e-9);
   assert(host.blobWrites == writes + 2 && host.undoGroupsStarted == 2 && host.undoGroupsEnded == 2);
   assert(Up(osc, 484, 100, part) && !osc.dragging);
   assert(host.undoGroupsStarted == 2 && host.undoGroupsEnded == 2 && host.undoDepth == 0);
@@ -117,8 +118,8 @@ static void moveAnywhere(void) {
   assert(!Drag(osc, 600, 600, part, 0) && host.blobWrites == writes + 2);
   // Position is bounded like the inspector fields.
   assert(Down(osc, 0, 0, part) && Drag(osc, 1920 * 5, 0, part, 0));
-  pose = host.blobs[@(MMCustomControls)];
-  assert(pose.positionX == 200);
+  pose = host.blobs[@(MMPositionControls)];
+  assert(pose.values[0].doubleValue == 200);
   Up(osc, 0, 0, part);
 }
 
@@ -141,29 +142,29 @@ static void scaleHandles(void) {
   // the inspector's link toggle says: an off-diagonal drag stays uniform.
   assert(Drag(osc, 2110, 1082, part, 0));
   assert(host.blobWrites == writes + 1);
-  MMScalePose *scale = host.blobs[@(MMScaleControls)];
-  assert([scale isKindOfClass:MMScalePose.class]);
+  id<KFPropertyPose> scale = host.blobs[@(MMScaleControls)];
+  assert([scale isKindOfClass:KFPose.class]);
   double expected = 100 * (1152.0 * 960 + 540.0 * 540) / (960.0 * 960 + 540.0 * 540);
-  assert(fabs(scale.x - expected) < 1e-6 && fabs(scale.y - expected) < 1e-6);
+  assert(fabs(scale.values[0].doubleValue - expected) < 1e-6 && fabs(scale.values[1].doubleValue - expected) < 1e-6);
   // Shift frees the aspect.
   assert(Drag(osc, 2110, 1082, part, kFxModifierKey_SHIFT));
   scale = host.blobs[@(MMScaleControls)];
-  assert(fabs(scale.x - 120) < 1e-9 && fabs(scale.y - 100) < 1e-9);
+  assert(fabs(scale.values[0].doubleValue - 120) < 1e-9 && fabs(scale.values[1].doubleValue - 100) < 1e-9);
   // The combined lane is untouched by a scale drag.
-  MMCombinedPose *combined = host.blobs[@(MMCustomControls)];
-  assert(combined.positionX == 0 && combined.scale == 100);
+  id<KFPropertyPose> combined = host.blobs[@(MMPositionControls)];
+  assert(combined.values[0].doubleValue == 0);
   assert(Up(osc, 2110, 1082, part) && host.undoGroupsEnded == 2);
   // Edges scale one axis by default; Shift makes them proportional.
   host.editors[@(MMScaleProportional)] = @YES;
-  host.blobs[@(MMScaleControls)] = [[MMScalePose alloc] initWithX:100 y:100 authored:YES];
+  host.blobs[@(MMScaleControls)] = LanePose(MMScaleLane(), @[@100, @100]);
   part = Hit(osc, 1920, 540);
   assert(part == OSCBoxPartHandleBase + 5);
   assert(Down(osc, 1920, 540, part) && Drag(osc, 2112, 540, part, 0));
   scale = host.blobs[@(MMScaleControls)];
-  assert(fabs(scale.x - 120) < 1e-9 && fabs(scale.y - 100) < 1e-9);
+  assert(fabs(scale.values[0].doubleValue - 120) < 1e-9 && fabs(scale.values[1].doubleValue - 100) < 1e-9);
   assert(Drag(osc, 2304, 540, part, kFxModifierKey_SHIFT));
   scale = host.blobs[@(MMScaleControls)];
-  assert(fabs(scale.x - 140) < 1e-9 && fabs(scale.y - 140) < 1e-9);
+  assert(fabs(scale.values[0].doubleValue - 140) < 1e-9 && fabs(scale.values[1].doubleValue - 140) < 1e-9);
   Up(osc, 2304, 540, part);
   // Two ticks for the corner drag, two for the edge drag; a press or release
   // opens nothing on its own.
@@ -179,22 +180,22 @@ static void explicitTargeting(void) {
   assert(Down(osc, 300, 300, part));
   // An unkeyed parameter is a constant, which explicit mode edits like the inspector.
   assert(Drag(osc, 492, 300, part, 0) && host.blobWrites == writes + 1);
-  MMCombinedPose *pose = host.blobs[@(MMCustomControls)];
-  assert(fabs(pose.positionX - 10) < 1e-9 && pose.positionY == 0);
+  id<KFPropertyPose> pose = host.blobs[@(MMPositionControls)];
+  assert(fabs(pose.values[0].doubleValue - 10) < 1e-9 && pose.values[1].doubleValue == 0);
   Up(osc, 492, 300, part);
   assert(host.undoGroupsStarted == 1 && host.undoGroupsEnded == 1 && host.undoDepth == 0);
 }
 
 static void registeredCache(void) {
   OSCHost *host = Host();
-  MMCombinedPoseCache *cache = MMCreateCombinedPoseCache();
-  host.staticValues[@(MMCombinedCacheToken)] = cache.token;
-  MMRefreshCombinedPoseCache(host, TestTime(0));
+  KFPropertyPoseCache *cache = [MMPositionLane() createCache];
+  host.staticValues[@(MMPositionCacheToken)] = cache.token;
+  [MMPositionLane() refreshCacheForManager:host time:TestTime(0)];
   MagicMoveOSC *osc = [[MagicMoveOSC alloc] initWithAPIManager:host];
   NSInteger part = Hit(osc, 10, 10);
   assert(Down(osc, 10, 10, part) && Drag(osc, 202, 10, part, 0));
   // The inspector's cache sees the viewer edit without another host read.
-  assert(fabs([cache sampleAtTime:TestTime(0)].positionX - 10) < 1e-9);
+  assert(fabs([[MMPositionLane() sampleEntries:cache.snapshotEntries time:TestTime(0)] values][0].doubleValue - 10) < 1e-9);
   Up(osc, 202, 10, part);
 }
 
@@ -224,8 +225,8 @@ static void hiddenControls(void) {
   assert(host.cursorSets == cursorSets);
   NSUInteger writes = host.blobWrites;
   assert(Down(osc, 1918, 1082, part) && Drag(osc, 1918 - 192, 1082, part, 0));
-  MMCombinedPose *pose = host.blobs[@(MMCustomControls)];
-  assert(host.blobWrites == writes + 1 && fabs(pose.positionX + 10) < 1e-9);
+  id<KFPropertyPose> pose = host.blobs[@(MMPositionControls)];
+  assert(host.blobWrites == writes + 1 && fabs(pose.values[0].doubleValue + 10) < 1e-9);
   assert(!host.blobs[@(MMScaleControls)]);
   Up(osc, 1918 - 192, 1082, part);
   host.editors[@(MMShowPositionOSC)] = @NO;
@@ -239,7 +240,7 @@ static void hiddenControls(void) {
   assert(Hit(osc, 1918, 1082) == OSCBoxPartPosition);
   host.failReadParameter = 0;
   // The drag above moved the box, so put it back before locating a handle.
-  host.blobs[@(MMCustomControls)] = Combined(0, 0, 100);
+  host.blobs[@(MMPositionControls)] = Position(0, 0);
   assert(Hit(osc, 1918, 1082) == OSCBoxPartHandleBase + 2);
 }
 
@@ -256,7 +257,8 @@ static CGPoint RingDragTo(double pressDegrees, double turnDegrees) {
   CGPoint press = RingPoint(pressDegrees, 0);
   return CGPointMake(press.x - arc * sin(angle), press.y + arc * cos(angle));
 }
-static MMRotationPose *Rotation(OSCHost *host) { return host.blobs[@(MMRotationControls)]; }
+static id<KFPropertyPose> Rotation(OSCHost *host) { return host.blobs[@(MMRotationControls)]; }
+static double RotationAxis(OSCHost *host, NSUInteger axis) { return Rotation(host).values[axis].doubleValue; }
 
 static void rotationRings(void) {
   OSCHost *host = Host();
@@ -279,17 +281,17 @@ static void rotationRings(void) {
   assert(Drag(osc, to.x, to.y, part, 0));
   // One write carries all three axes, and only the grabbed one changes.
   assert(host.blobWrites == writes + 1);
-  assert(fabs(Rotation(host).z - 30) < 1e-6 && fabs(Rotation(host).x) < 1e-9 && fabs(Rotation(host).y) < 1e-9);
+  assert(fabs(RotationAxis(host, 2) - 30) < 1e-6 && fabs(RotationAxis(host, 0)) < 1e-9 && fabs(RotationAxis(host, 1)) < 1e-9);
   // Ticks measure from the press, so the pose follows the pointer exactly.
   to = RingDragTo(45, -75);
-  assert(Drag(osc, to.x, to.y, part, 0) && fabs(Rotation(host).z + 75) < 1e-6);
+  assert(Drag(osc, to.x, to.y, part, 0) && fabs(RotationAxis(host, 2) + 75) < 1e-6);
   // Cmd snaps to whole 15 degree marks.
   to = RingDragTo(45, 22);
   assert(Drag(osc, to.x, to.y, part, kFxModifierKey_COMMAND));
-  assert(fabs(Rotation(host).z - 15) < 1e-6);
+  assert(fabs(RotationAxis(host, 2) - 15) < 1e-6);
   // Nothing else moved, and the drag is one undo step.
-  MMCombinedPose *combined = host.blobs[@(MMCustomControls)];
-  assert(combined.positionX == 0 && combined.positionY == 0 && !host.blobs[@(MMScaleControls)]);
+  id<KFPropertyPose> combined = host.blobs[@(MMPositionControls)];
+  assert(combined.values[0].doubleValue == 0 && combined.values[1].doubleValue == 0 && !host.blobs[@(MMScaleControls)]);
   assert(host.undoGroupsStarted == 3 && host.undoGroupsEnded == 3);
   assert(Up(osc, to.x, to.y, part) && !osc.dragging);
   assert(host.undoGroupsStarted == 3 && host.undoGroupsEnded == 3 && host.undoDepth == 0);
@@ -302,22 +304,21 @@ static void rotationRings(void) {
   assert(part == OSCBoxPartRingBase + OSCRingAxisX);
   assert(Down(osc, onX.x, onX.y, part));
   assert(Drag(osc, onX.x + 20, onX.y - 20, part, 0));
-  assert(fabs(Rotation(host).x) > 1 && fabs(Rotation(host).z - 15) < 1e-6 && fabs(Rotation(host).y) < 1e-9);
+  assert(fabs(RotationAxis(host, 0)) > 1 && fabs(RotationAxis(host, 2) - 15) < 1e-6 && fabs(RotationAxis(host, 1)) < 1e-9);
   Up(osc, onX.x, onX.y, part);
   // Snapping is to the marks themselves, not to steps away from the press: a
   // ring grabbed at 7 degrees snaps to 15, not to 22.
-  host.blobs[@(MMRotationControls)] = [[MMRotationPose alloc] initWithX:0 y:0 z:7 authored:YES
-                                                                easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+  host.blobs[@(MMRotationControls)] = LanePose(MMRotationLane(), @[@0, @0, @7]);
   part = Hit(osc, press.x, press.y);
   assert(part == OSCBoxPartRingBase + OSCRingAxisZ);
   assert(Down(osc, press.x, press.y, part));
   to = RingDragTo(45, 10);
   assert(Drag(osc, to.x, to.y, part, kFxModifierKey_COMMAND));
-  assert(fabs(Rotation(host).z - 15) < 1e-6);
+  assert(fabs(RotationAxis(host, 2) - 15) < 1e-6);
   // Pulling back the other way lands on the mark below, not on 7 minus 15.
   to = RingDragTo(45, -4);
   assert(Drag(osc, to.x, to.y, part, kFxModifierKey_COMMAND));
-  assert(fabs(Rotation(host).z) < 1e-6);
+  assert(fabs(RotationAxis(host, 2)) < 1e-6);
   Up(osc, to.x, to.y, part);
   // Hiding the rings leaves no invisible grab region, and the pointer falls
   // through to the position drag.
@@ -329,7 +330,8 @@ static void rotationRings(void) {
 // The square sits on the pivot, which with no offset or anchor is the canvas
 // centre. Its own drag moves the anchor in full-resolution pixels, so the pivot
 // follows the pointer one to one.
-static MMAnchorPose *Anchor(OSCHost *host) { return host.blobs[@(MMAnchorControls)]; }
+static id<KFPropertyPose> Anchor(OSCHost *host) { return host.blobs[@(MMAnchorControls)]; }
+static double AnchorAxis(OSCHost *host, NSUInteger axis) { return Anchor(host).values[axis].doubleValue; }
 
 static void anchorSquare(void) {
   OSCHost *host = Host();
@@ -353,12 +355,12 @@ static void anchorSquare(void) {
   assert(Drag(osc, press.x + 120, press.y + 45, part, 0));
   // One write carries both axes; canvas Y is up in this host, as is the anchor.
   assert(host.blobWrites == writes + 1);
-  assert(fabs(Anchor(host).x - 120) < 1e-9 && fabs(Anchor(host).y - 45) < 1e-9);
+  assert(fabs(AnchorAxis(host, 0) - 120) < 1e-9 && fabs(AnchorAxis(host, 1) - 45) < 1e-9);
   // Ticks measure from the press, and nothing else moves.
   assert(Drag(osc, press.x - 20, press.y, part, 0));
-  assert(fabs(Anchor(host).x + 20) < 1e-9 && fabs(Anchor(host).y) < 1e-9);
-  MMCombinedPose *combined = host.blobs[@(MMCustomControls)];
-  assert(combined.positionX == 0 && combined.positionY == 0 && !host.blobs[@(MMScaleControls)]);
+  assert(fabs(AnchorAxis(host, 0) + 20) < 1e-9 && fabs(AnchorAxis(host, 1)) < 1e-9);
+  id<KFPropertyPose> combined = host.blobs[@(MMPositionControls)];
+  assert(combined.values[0].doubleValue == 0 && combined.values[1].doubleValue == 0 && !host.blobs[@(MMScaleControls)]);
   assert(host.undoGroupsStarted == 2 && host.undoGroupsEnded == 2);
   assert(Up(osc, press.x, press.y, part) && !osc.dragging && host.undoDepth == 0);
   // The square rides the pivot, so it is now where the anchor moved it.
@@ -371,8 +373,7 @@ static void anchorSquare(void) {
   assert(Hit(osc, onRing.x, onRing.y) == OSCBoxPartRingBase + OSCRingAxisZ);
   // A pivot on a corner handle still belongs to the square: it is the smaller
   // target and draws over the handles.
-  host.blobs[@(MMAnchorControls)] = [[MMAnchorPose alloc] initWithX:960 y:540 authored:YES
-                                                            easing:MTEasingSmooth addedMotion:MTAddedMotionNone];
+  host.blobs[@(MMAnchorControls)] = LanePose(MMAnchorLane(), @[@960, @540]);
   assert(Hit(osc, 1920, 1080) == OSCBoxPartAnchor);
   // Hiding it again leaves no invisible grab region.
   host.editors[@(MMShowAnchorOSC)] = @NO;
