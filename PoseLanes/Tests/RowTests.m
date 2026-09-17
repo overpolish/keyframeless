@@ -230,6 +230,33 @@ int main(int argc, const char *argv[]) {
   publish(geometryHost,50,-50);
   [window.contentView addSubview:geometryRow]; displayed(geometryRow,960,-540);
   [geometryRow removeFromSuperview];
+  // The host renders previews of the same frame at its own scales. Scaling an
+  // 84 pixel preview's bounds back up misses the 1920x1080 frame by 1.3%, so
+  // such a pass must not move a readout measured at full resolution: during
+  // playback these arrive continuously and the displayed pixels drifted with
+  // them while the stored value never changed.
+  RowHost *playbackHost=[RowHost new];
+  KFTestEffect *playbackPlugin=[[KFTestEffect alloc] initWithAPIManager:playbackHost];
+  playbackHost.plugin=playbackPlugin;
+  KFVectorRow *playbackRow=(KFVectorRow *)[playbackPlugin createViewForParameterID:KFTestPosition];
+  publish(playbackHost,25,-50);
+  // A preview pass is all there is to go on at first, so it is used.
+  [playbackPlugin publishInspectorImageSize:CGSizeMake(1945.5,1111.714) measuredFrom:CGSizeMake(84,48)];
+  [window.contentView addSubview:playbackRow];
+  [playbackRow refreshValues]; displayed(playbackRow,486.375,-555.857);
+  // The full-frame pass measures the same frame far more precisely.
+  [playbackPlugin publishInspectorImageSize:CGSizeMake(1920,1080) measuredFrom:CGSizeMake(1920,1080)];
+  [playbackRow refreshValues]; displayed(playbackRow,480,-540);
+  for (NSUInteger i=0;i<3;i++) {
+    [playbackPlugin publishInspectorImageSize:CGSizeMake(1945.5,1111.714) measuredFrom:CGSizeMake(84,48)];
+    [playbackPlugin publishInspectorImageSize:CGSizeMake(1927.486,1080.833) measuredFrom:CGSizeMake(214,120)];
+    [playbackRow refreshValues]; displayed(playbackRow,480,-540);
+  }
+  // A project actually resized lands further out than rounding can explain,
+  // so even a coarse pass reports it.
+  [playbackPlugin publishInspectorImageSize:CGSizeMake(1280,720) measuredFrom:CGSizeMake(84,48)];
+  [playbackRow refreshValues]; displayed(playbackRow,320,-360);
+  [playbackRow removeFromSuperview];
   RowHost *scaleHost=[RowHost new];
   KFTestEffect *scalePlugin=[[KFTestEffect alloc] initWithAPIManager:scaleHost];
   scalePlugin.inspectorImageSize=CGSizeMake(100,100);

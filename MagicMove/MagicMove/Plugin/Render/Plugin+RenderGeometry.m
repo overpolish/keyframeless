@@ -184,8 +184,9 @@ static BOOL MMSourceExtent(MMTransform state,double aspect,double x,double y,
 }
 - (void)publishInspectorGeometry:(FxImageTile *)image {
   if(!image) return;
-  CGSize size=MMImageReferenceSize(image);
-  if(size.width>0 && size.height>0) self.inspectorImageSize=size;
+  FxRect bounds=image.imagePixelBounds;
+  [self publishInspectorImageSize:MMImageReferenceSize(image)
+                     measuredFrom:CGSizeMake(bounds.right-bounds.left,bounds.top-bounds.bottom)];
 }
 
 // Moving, scaling and rotating the source means a destination tile reads a

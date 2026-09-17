@@ -21,8 +21,17 @@ FOUNDATION_EXPORT NSNotificationName const KFInspectorPresentationChanged;
 // change; subclasses answer for their own parameters.
 - (BOOL)parameterChanged:(UInt32)parameterID atTime:(CMTime)time error:(NSError **)error;
 
-// Canonical image dimensions published by image callbacks, read by the inspector.
+// Frame dimensions the inspector converts percent-of-image values to pixels
+// with, measured from the image callbacks.
 @property(atomic) CGSize inspectorImageSize;
+// Measures the frame from one image callback. `deliveredPixels` is the size of
+// the image the host actually handed over, which is the precision of the
+// measurement: the host renders previews and thumbnails of the same frame at
+// its own scales and rounds their bounds to whole pixels, so scaling an 84
+// pixel thumbnail back up places the frame no better than about 2%. A coarse
+// measurement therefore never displaces a finer one, and only a size further
+// out than both measurements' rounding can explain counts as a new frame.
+- (void)publishInspectorImageSize:(CGSize)size measuredFrom:(CGSize)deliveredPixels;
 @property(atomic) UInt32 activeInspectorParameterID;
 @property(atomic, copy) NSSet<NSNumber *> *graphedInspectorParameters;
 

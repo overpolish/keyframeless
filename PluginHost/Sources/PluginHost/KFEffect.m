@@ -7,6 +7,8 @@ NSNotificationName const KFInspectorPresentationChanged = @"KFInspectorPresentat
 @interface KFEffect ()
 @property(nonatomic, strong) KFInspectorClock *sharedInspectorClock;
 @property(nonatomic, strong) KFOSCPlayheadNudge *playheadNudge;
+// Relative precision of the measurement inspectorImageSize currently holds.
+@property(atomic) double inspectorImageSizeTolerance;
 @property(nonatomic, strong) NSTimer *hostTickTimer;
 @end
 
@@ -20,6 +22,30 @@ NSNotificationName const KFInspectorPresentationChanged = @"KFInspectorPresentat
 - (void)pluginInstanceAddedToDocument {}
 
 - (BOOL)parameterChanged:(UInt32)parameterID atTime:(CMTime)time error:(NSError **)error { return YES; }
+
+- (void)publishInspectorImageSize:(CGSize)size measuredFrom:(CGSize)deliveredPixels {
+  if (size.width <= 0 || size.height <= 0 || deliveredPixels.width <= 0 ||
+      deliveredPixels.height <= 0)
+    return;
+  // The host rounds the bounds it hands over to whole pixels, so scaling them
+  // back up can misplace each edge by up to a pixel of the delivered scale.
+  double tolerance = fmax(2.0 / deliveredPixels.width, 2.0 / deliveredPixels.height);
+  @synchronized(self) {
+    CGSize current = self.inspectorImageSize;
+    double held = self.inspectorImageSizeTolerance;
+    if (current.width > 0 && current.height > 0) {
+      double drift = fmax(fabs(size.width - current.width) / current.width,
+                          fabs(size.height - current.height) / current.height);
+      // Agrees with what is held, to the precision either measurement has: a
+      // coarse preview pass then tells us nothing new and must not displace a
+      // full-resolution measurement. Disagreeing by more than that is the
+      // project itself changing size, which any pass may report.
+      if (drift <= tolerance + held && tolerance >= held) return;
+    }
+    self.inspectorImageSizeTolerance = tolerance;
+    self.inspectorImageSize = size;
+  }
+}
 
 - (void)dealloc { [_hostTickTimer invalidate]; }
 
