@@ -7,12 +7,33 @@
 #import <math.h>
 @implementation KFInspectorGap
 @end
+static KFInspectorGap *KFGapForIndex(NSArray *entries, UInt32 parameterID,
+                                     NSUInteger index) {
+  KFInspectorGap *gap = [KFInspectorGap new];
+  gap.parameterID = parameterID;
+  gap.destinationIndex = index;
+  CMTime source, destination;
+  [entries[index - 1][@"nativeTime"] getValue:&source];
+  [entries[index][@"nativeTime"] getValue:&destination];
+  gap.sourceTime = source;
+  gap.destinationTime = destination;
+  gap.sourcePose = entries[index - 1][@"pose"];
+  gap.destinationPose = entries[index][@"pose"];
+  gap.entries = entries;
+  return gap;
+}
+// A lane whose keys the host has not published yet samples as one unkeyed
+// entry, so both reads require a native time on the first entry.
+static NSArray *KFKeyedEntries(id<PROAPIAccessing> manager, UInt32 parameterID) {
+  NSArray *entries=[[KFPropertyLaneForParameter(parameterID) cacheForManager:manager] snapshotEntries];
+  return entries.count >= 2 && entries.firstObject[@"nativeTime"] ? entries : nil;
+}
 KFInspectorGap *KFReadInspectorGap(id<PROAPIAccessing> manager,
                                    UInt32 parameterID, CMTime time) {
   if (!CMTIME_IS_NUMERIC(time))
     return nil;
-  NSArray *entries=[[KFPropertyLaneForParameter(parameterID) cacheForManager:manager] snapshotEntries];
-  if (entries.count < 2 || !entries.firstObject[@"nativeTime"])
+  NSArray *entries = KFKeyedEntries(manager, parameterID);
+  if (!entries)
     return nil;
   double now = CMTimeGetSeconds(time);
   if (now < [entries.firstObject[@"time"] doubleValue] - 1e-6 ||
@@ -21,20 +42,19 @@ KFInspectorGap *KFReadInspectorGap(id<PROAPIAccessing> manager,
   for (NSUInteger i = 1; i < entries.count; i++) {
     if (now > [entries[i][@"time"] doubleValue] + 1e-6)
       continue;
-    KFInspectorGap *gap = [KFInspectorGap new];
-    gap.parameterID = parameterID;
-    gap.destinationIndex = i;
-    CMTime source, destination;
-    [entries[i - 1][@"nativeTime"] getValue:&source];
-    [entries[i][@"nativeTime"] getValue:&destination];
-    gap.sourceTime = source;
-    gap.destinationTime = destination;
-    gap.sourcePose = entries[i - 1][@"pose"];
-    gap.destinationPose = entries[i][@"pose"];
-    gap.entries = entries;
-    return gap;
+    return KFGapForIndex(entries, parameterID, i);
   }
   return nil;
+}
+NSArray<KFInspectorGap *> *KFReadInspectorLaneGaps(id<PROAPIAccessing> manager,
+                                                   UInt32 parameterID) {
+  NSArray *entries = KFKeyedEntries(manager, parameterID);
+  if (!entries)
+    return @[];
+  NSMutableArray *gaps = [NSMutableArray arrayWithCapacity:entries.count - 1];
+  for (NSUInteger i = 1; i < entries.count; i++)
+    [gaps addObject:KFGapForIndex(entries, parameterID, i)];
+  return gaps;
 }
 // Two-component view of a gap, for the graph's paired plot.
 NSArray<NSValue *> *KFInspectorGraphSamples(KFInspectorGap *gap, NSUInteger count) {

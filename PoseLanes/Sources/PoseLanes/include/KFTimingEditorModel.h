@@ -27,6 +27,10 @@ typedef NS_ENUM(NSInteger, KFInspectorSetting) {
 // is no editable gap. These functions only read the disposable inspector cache.
 KFInspectorGap *KFReadInspectorGap(id<PROAPIAccessing> manager,
                                    UInt32 parameterID, CMTime time);
+// Every gap in one lane in order, for the keypose map. Empty when the lane
+// holds fewer than two published keys.
+NSArray<KFInspectorGap *> *KFReadInspectorLaneGaps(id<PROAPIAccessing> manager,
+                                                   UInt32 parameterID);
 NSArray<NSValue *> *KFInspectorGraphSamples(KFInspectorGap *gap,
                                             NSUInteger count);
 // Numeric samples in component order, for graphs with any number of axes.

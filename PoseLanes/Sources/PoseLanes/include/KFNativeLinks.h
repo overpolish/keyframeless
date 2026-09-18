@@ -22,6 +22,10 @@ NSMenu *KFNativePropertyMenu(id<PROAPIAccessing> manager, NSView *sender,
 
 // Stable per-group gutter tint; nil when this property has no linked group.
 NSColor *KFNativePropertyLinkColor(id<PROAPIAccessing> manager, UInt32 parameter, CMTime playhead);
+// The same tint resolved from a link identifier, for callers holding a keypose
+// rather than a playhead. nil when fewer than two keys carry the identifier,
+// so a stale one left on a single key reads as unlinked.
+NSColor *KFLinkGroupColor(id<PROAPIAccessing> manager, NSString *link);
 
 // Seed creation tracking before a native callback replaces the cached snapshot.
 void KFPrimeDefaultKeyTracker(id<PROAPIAccessing> manager, UInt32 parameter);

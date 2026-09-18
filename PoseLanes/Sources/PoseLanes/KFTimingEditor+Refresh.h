@@ -11,6 +11,8 @@
 - (void)setEditorsEnabled:(BOOL)enabled;
 // Moves the host playhead to a fraction of the plotted range.
 - (void)scrubGraphToFraction:(double)fraction;
+// Moves the host playhead onto a keypose the map reported.
+- (void)movePlayheadToKeypose:(CMTime)time;
 // Opens its own action, for callers outside the refresh clock's tick.
 - (void)refresh;
 @end

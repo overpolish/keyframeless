@@ -441,7 +441,7 @@ int main(int argc, const char *argv[]) {
   // The shared panel is independent of native keyframe controls and survives
   // opening before a cache snapshot is available.
   KFTimingEditor *panel=[[KFTimingEditor alloc] initWithEffect:scalePlugin];
-  panel.frame=NSMakeRect(0,0,395,256);
+  panel.frame=NSMakeRect(0,0,395,panel.intrinsicContentSize.height);
   [window.contentView addSubview:panel];
   assert(![[panel valueForKey:@"available"] isEnabled]);
   [panel layoutSubtreeIfNeeded];

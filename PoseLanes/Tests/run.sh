@@ -31,7 +31,7 @@ xcrun clang -std=c17 -Wall -Wextra -Werror -fsanitize=address,undefined \
   -c "$root/MotionTiming/Sources/MotionTiming/MotionTiming.c" -o "$test_tmp/MotionTiming.o"
 xcrun clang -std=c17 -Wall -Wextra -Werror -fsanitize=address,undefined \
   -I "$viewer/include" -c "$viewer/OSCPlayheadMotion.c" -o "$test_tmp/OSCPlayheadMotion.o"
-for suite in ${KF_TEST_SUITES:-PoseTests LaneTests DefaultsTests NativeLinksTests PropertyMatchTests ResetParameterTests RowTests TimingEditorTests}; do
+for suite in ${KF_TEST_SUITES:-PoseTests LaneTests DefaultsTests NativeLinksTests PropertyMatchTests ResetParameterTests RowTests TimingEditorTests KeyposeMapTests}; do
   xcrun clang -fobjc-arc -fmodules -Wall -Wno-protocol -fsanitize=address,undefined \
     -I "$sources/include" -fmodule-map-file="$test_tmp/PoseLanes.modulemap" \
     -I "$host/include" -fmodule-map-file="$test_tmp/PluginHost.modulemap" \
@@ -41,7 +41,7 @@ for suite in ${KF_TEST_SUITES:-PoseTests LaneTests DefaultsTests NativeLinksTest
     -I "$viewer/include" -fmodule-map-file="$test_tmp/OSCViewer.modulemap" \
     -fmodule-map-file="$test_tmp/MotionTiming.modulemap" \
     -fmodule-map-file="$test_tmp/OSCControls.modulemap" \
-    -I "$root/PoseLanes/Tests" -I "$root/PluginHost/Tests" \
+    -I "$sources" -I "$root/PoseLanes/Tests" -I "$root/PluginHost/Tests" \
     -F "$sdk" \
     -framework AppKit -framework Foundation -framework ApplicationServices \
     -framework CoreGraphics -framework CoreMedia -framework Metal \

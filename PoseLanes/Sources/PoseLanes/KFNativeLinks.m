@@ -21,7 +21,9 @@ BOOL KFNativePropertyLinked(id<PROAPIAccessing> m, UInt32 parameter,
   return KFMembers(m, KFLink(e[@"pose"])).count > 1;
 }
 NSColor *KFNativePropertyLinkColor(id<PROAPIAccessing> manager, UInt32 parameter, CMTime playhead) {
-  NSString *link=KFLink(KFTarget(KFEntries(manager,parameter),playhead)[@"pose"]);
+  return KFLinkGroupColor(manager, KFLink(KFTarget(KFEntries(manager,parameter),playhead)[@"pose"]));
+}
+NSColor *KFLinkGroupColor(id<PROAPIAccessing> manager, NSString *link) {
   if (!link.length) return nil;
   NSMutableDictionary<NSString *,NSNumber *> *counts=[NSMutableDictionary new];
   for (NSNumber *p in KFProperties())

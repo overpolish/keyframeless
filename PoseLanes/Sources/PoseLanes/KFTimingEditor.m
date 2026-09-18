@@ -4,6 +4,7 @@
 #import "KFTimingEditor_Private.h"
 #import "KFPropertyLane.h"
 #import "KFViewCaches.h"
+#import "KFNativeLinks.h"
 
 @implementation KFTimingEditor
 - (NSTextField *)label:(NSString *)text {
@@ -45,6 +46,14 @@
   _graph.onScrub=^(double fraction) { [weakEditor scrubGraphToFraction:fraction]; };
   _graph.onScrubEnd=^{ [weakEditor refresh]; };
   [self addSubview:_graph];
+  _map = [KFKeyposeMap new];
+  _map.accessibilityLabel = @"Keypose map";
+  _map.onSelect = ^(CMTime time) { [weakEditor movePlayheadToKeypose:time]; };
+  _map.menuProvider = ^NSMenu *{
+    KFTimingEditor *editor = weakEditor;
+    return editor ? KFNativePropertyMenu(editor.manager, editor, editor.displayedParameter) : nil;
+  };
+  [self addSubview:_map];
   _durationRow = [[ICInspectorRow alloc]
       initWithLabel:@"Duration"
          components:@[ [[ICInspectorComponent alloc]
@@ -128,14 +137,17 @@
   return self;
 }
 - (NSSize)intrinsicContentSize {
-  return NSMakeSize(NSViewNoIntrinsicMetric, 252);
+  return NSMakeSize(NSViewNoIntrinsicMetric, 284);
 }
 - (void)layout {
   [super layout];
   CGFloat width = NSWidth(self.bounds), right = MAX(140, width - 22),
           content = MAX(0, right - 21);
-  self.gapLabel.frame = NSMakeRect(21, 226, content, 18);
-  self.graph.frame = NSMakeRect(21, 124, content, 96);
+  self.gapLabel.frame = NSMakeRect(21, 258, content, 18);
+  self.graph.frame = NSMakeRect(21, 156, content, 96);
+  // Inset from the graph's extent and clear of its edge, so the map cannot read
+  // as that graph's axis.
+  self.map.frame = NSMakeRect(27, 122, MAX(0, content - 12), 30);
   self.durationRow.frame = NSMakeRect(0, 95, width, 24);
   self.easingLabel.frame=NSMakeRect(21,74,140,18);
   [self.durationRow layoutSubtreeIfNeeded];
@@ -151,6 +163,30 @@
   self.motionMenu.frame=NSMakeRect(21+motionLabelWidth+4,31,MAX(0,menuRight-21-motionLabelWidth-4),18);
   self.motionRow.frame = NSMakeRect(0, 5, width, 24);
   self.motionRow.titleLabel.stringValue = @"Amount / Speed";
+}
+// The band the Added Motion controls occupy, from the menu row to the values.
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (self.motionTracking) [self removeTrackingArea:self.motionTracking];
+  self.motionTracking = [[NSTrackingArea alloc]
+      initWithRect:NSMakeRect(0, 0, NSWidth(self.bounds), 49)
+           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:self.motionTracking];
+}
+- (void)mouseEntered:(NSEvent *)event {
+  if (event.trackingArea != self.motionTracking) return;
+  self.motionHovered = YES;
+  self.map.sourceHighlighted = [self motionControlsEngaged];
+}
+- (void)mouseExited:(NSEvent *)event {
+  if (event.trackingArea != self.motionTracking) return;
+  self.motionHovered = NO;
+  self.map.sourceHighlighted = [self motionControlsEngaged];
+}
+- (BOOL)motionControlsEngaged {
+  return self.motionHovered || self.motionRow.interacting || self.motionMenu.interacting;
 }
 - (void)publishGraphParameters:(NSSet<NSNumber *> *)parameters {
   if (!self.plugin) return;

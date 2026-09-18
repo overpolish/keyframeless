@@ -2,6 +2,8 @@
 #import "KFTimingEditor+Refresh.h"
 #import "KFTimingEditor_Private.h"
 #import "KFPropertyLane.h"
+#import "KFNativeLinks.h"
+#import "KFNativeLinks_Private.h"
 
 static NSString *KFTimingPropertyName(UInt32 parameter) {
   return KFPropertyDisplayName(parameter) ?: KFPropertyLanes().firstObject.displayName;
@@ -110,6 +112,76 @@ static void KFSelect(NSPopUpButton *menu, NSInteger index) {
     self.graph.progress=fraction;
   } @finally { [action endAction:self]; }
 }
+- (void)movePlayheadToKeypose:(CMTime)time {
+  if (!CMTIME_IS_NUMERIC(time)) return;
+  id<FxCustomParameterActionAPI_v4> action=[self.manager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!action) return;
+  [action startAction:self];
+  @try {
+    id<FxCommandAPI_v2> command=[self.manager apiForProtocol:@protocol(FxCommandAPI_v2)];
+    // Key times already use the host clock, and FCP can return NO even when
+    // the seek succeeds.
+    [command movePlayheadToTime:time error:nil];
+  } @finally { [action endAction:self]; }
+  [self refresh];
+}
+// Ordinal position of the playhead across the whole map, so the marker keeps
+// the segment it is really in while travelling at each gap's own rate.
+static double KFMapPlayheadFraction(NSArray<KFInspectorGap *> *gaps, CMTime now) {
+  if (!gaps.count || !CMTIME_IS_NUMERIC(now)) return -1;
+  double time=CMTimeGetSeconds(now);
+  if (time < CMTimeGetSeconds(gaps.firstObject.sourceTime)-1e-6 ||
+      time > CMTimeGetSeconds(gaps.lastObject.destinationTime)+1e-6)
+    return -1;
+  for (NSUInteger i=0;i<gaps.count;i++) {
+    double from=CMTimeGetSeconds(gaps[i].sourceTime), to=CMTimeGetSeconds(gaps[i].destinationTime);
+    if (time > to+1e-6) continue;
+    double within=to-from>1e-6 ? (time-from)/(to-from) : 0;
+    return (i+fmax(0,fmin(1,within)))/gaps.count;
+  }
+  return -1;
+}
+// The map is ordinal: one stop per keypose, equal width per gap, so only the
+// hold/transition split and the timecodes carry real durations.
+- (void)updateMapForParameter:(UInt32)parameter gap:(KFInspectorGap *)gap now:(CMTime)now {
+  NSArray<KFInspectorGap *> *gaps=KFReadInspectorLaneGaps(self.manager,parameter);
+  NSInteger active=gap && gap.parameterID==parameter ? (NSInteger)gap.destinationIndex : -1;
+  NSMutableArray<KFKeyposeStop *> *stops=[NSMutableArray arrayWithCapacity:gaps.count+1];
+  for (NSUInteger i=0;i<=gaps.count;i++) {
+    if (!gaps.count) break;
+    KFInspectorGap *incoming=i ? gaps[i-1] : nil;
+    KFKeyposeStop *stop=[KFKeyposeStop new];
+    stop.time=incoming ? incoming.destinationTime : gaps.firstObject.sourceTime;
+    id pose=incoming ? incoming.destinationPose : gaps.firstObject.sourcePose;
+    stop.linkColor=KFLinkGroupColor(self.manager,KFLink(pose));
+    if (incoming) {
+      // A duration is a request the evaluator clamps to the gap, so the drawn
+      // transition clamps the same way without rewriting the pose.
+      double span=CMTimeGetSeconds(CMTimeSubtract(incoming.destinationTime,incoming.sourceTime));
+      KFPoseTiming *timing=[incoming.destinationPose timing];
+      stop.transitionFraction=span>1e-6 ? fmin(1,(timing.available ? span : timing.duration)/span) : 1;
+    }
+    // Only the ends and the active gap are labelled: the labels exist to show
+    // where the ordinal scale compresses, and more of them collide.
+    if (i==0 || i==gaps.count || (active>0 && ((NSInteger)i==active || (NSInteger)i==active-1)))
+      stop.label=[self.gapTimeFormatter stringFromNumber:@(CMTimeGetSeconds(stop.time))];
+    [stops addObject:stop];
+  }
+  // Standing on a keypose makes it a write target in its own right: the first
+  // keypose of a lane resolves to the gap ahead of it, whose duration and
+  // easing belong to the keypose the playhead is not on.
+  NSInteger occupied=-1;
+  for (NSUInteger i=0;i<stops.count;i++)
+    if (CMTIME_IS_NUMERIC(now) && fabs(CMTimeGetSeconds(stops[i].time)-CMTimeGetSeconds(now))<1e-6) {
+      occupied=(NSInteger)i;
+      break;
+    }
+  self.map.stops=stops;
+  self.map.activeIndex=active;
+  self.map.playheadIndex=occupied;
+  self.map.playheadFraction=KFMapPlayheadFraction(gaps,now);
+  self.map.sourceHighlighted=[self motionControlsEngaged];
+}
 // Standalone refresh for direct callers; the clock uses the action-scoped body.
 - (void)refresh {
   id<FxCustomParameterActionAPI_v4> action =
@@ -144,6 +216,7 @@ static void KFSelect(NSPopUpButton *menu, NSInteger index) {
     [colors addObjectsFromArray:KFPropertyLaneForParameter(plotted.parameterID).componentColors];
   self.graph.componentColors=graphGaps.count ? colors : KFPropertyLaneForParameter(parameter).componentColors;
   [self updateControlsForGap:gap editing:editing];
+  [self updateMapForParameter:parameter gap:gap now:now];
   CMTime graphStart=KFInspectorGraphStart(graphGaps);
   CMTime graphEnd=graphGaps.firstObject.destinationTime;
   if (!self.graph.scrubbing) self.graph.progress=graphGaps.count ? CMTimeGetSeconds(CMTimeSubtract(now,graphStart))/CMTimeGetSeconds(CMTimeSubtract(graphEnd,graphStart)) : 0;
