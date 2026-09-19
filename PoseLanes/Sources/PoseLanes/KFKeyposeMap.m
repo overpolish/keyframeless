@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-#import "KFKeyposeMap.h"
+#import "KFKeyposeMap_Private.h"
 @import InspectorControls;
 
 // Host geometry and states, measured from Final Cut's inspector keyframe
@@ -45,16 +45,13 @@ static NSColor *KFKeyposeDimColor(void) { return ICInspectorTokens.disabledTextC
 - (NSUInteger)hash { return (NSUInteger)CMTimeGetSeconds(_time) ^ _label.hash; }
 @end
 
-@interface KFKeyposeMap ()
-@property(nonatomic) NSInteger hoveredIndex;
-@property(nonatomic, strong) NSTrackingArea *tracking;
-@end
-
 @implementation KFKeyposeMap
 - (instancetype)initWithFrame:(NSRect)frame {
   if ((self = [super initWithFrame:frame])) {
     _activeIndex = -1;
     _hoveredIndex = -1;
+    _dragIndex = -1;
+    _pressedIndex = -1;
     _playheadIndex = -1;
     _playheadFraction = -1;
   }
@@ -93,6 +90,26 @@ static NSColor *KFKeyposeDimColor(void) { return ICInspectorTokens.disabledTextC
   _hoveredIndex = hoveredIndex;
   self.needsDisplay = YES;
 }
+- (void)setDragIndex:(NSInteger)dragIndex {
+  if (_dragIndex == dragIndex) return;
+  _dragIndex = dragIndex;
+  self.needsDisplay = YES;
+}
+- (void)setDragPosition:(CGFloat)dragPosition {
+  if (_dragPosition == dragPosition) return;
+  _dragPosition = dragPosition;
+  self.needsDisplay = YES;
+}
+- (void)setDragLabel:(NSString *)dragLabel {
+  if (_dragLabel == dragLabel || [_dragLabel isEqualToString:dragLabel]) return;
+  _dragLabel = [dragLabel copy];
+  self.needsDisplay = YES;
+}
+- (void)endDrag {
+  self.pressedIndex = -1;
+  self.dragIndex = -1;
+  self.dragLabel = nil;
+}
 
 - (CGFloat)centerYForBead {
   return KFKeyposeLabelHeight + (NSHeight(self.bounds) - KFKeyposeLabelHeight) / 2;
@@ -119,39 +136,60 @@ static NSColor *KFKeyposeDimColor(void) { return ICInspectorTokens.disabledTextC
   }
   return best;
 }
+// While a keypose is dragged it leaves its ordinal slot and the rails either
+// side of it reflow, so the corridor it is being retimed in is what moves.
+- (CGFloat)drawnPositionForIndex:(NSInteger)index {
+  return index == self.dragIndex ? self.dragPosition : [self positionForIndex:index];
+}
+- (double)fractionAtX:(CGFloat)x {
+  CGFloat content = MAX(0, NSWidth(self.bounds) - 2 * KFKeyposeInset);
+  if (content <= 0) return 0;
+  return fmax(0, fmin(1, (x - KFKeyposeInset) / content));
+}
+- (BOOL)isScrubPoint:(NSPoint)point {
+  return self.stops.count > 1 && point.y >= KFKeyposeLabelHeight;
+}
+- (CGFloat)draggablePosition:(CGFloat)x forIndex:(NSInteger)index {
+  NSInteger last = (NSInteger)self.stops.count - 1;
+  if (index < 0 || index > last || last < 1) return x;
+  return fmax([self positionForIndex:MAX(0, index - 1)],
+              fmin([self positionForIndex:MIN(last, index + 1)], x));
+}
+static CMTime KFKeyposeLerp(CMTime from, CMTime to, double fraction) {
+  if (fraction <= 0) return from;
+  if (fraction >= 1) return to;
+  return CMTimeAdd(from,
+                   CMTimeMultiplyByFloat64(CMTimeSubtract(to, from), fraction));
+}
+- (CMTime)timeAtPosition:(CGFloat)x forIndex:(NSInteger)index {
+  NSInteger last = (NSInteger)self.stops.count - 1;
+  if (index < 0 || index > last) return kCMTimeInvalid;
+  CGFloat here = [self positionForIndex:index];
+  if (x < here && index > 0) {
+    CGFloat from = [self positionForIndex:index - 1];
+    return KFKeyposeLerp(self.stops[index - 1].time, self.stops[index].time,
+                         here > from ? (x - from) / (here - from) : 1);
+  }
+  if (x > here && index < last) {
+    CGFloat to = [self positionForIndex:index + 1];
+    return KFKeyposeLerp(self.stops[index].time, self.stops[index + 1].time,
+                         to > here ? (x - here) / (to - here) : 0);
+  }
+  return self.stops[index].time;
+}
+// The time any rail position falls on, for the gap it lands in rather than a
+// keypose's corridor. Invalid until the lane has two keyposes to span.
+- (CMTime)timeAtPosition:(CGFloat)x {
+  NSInteger last = (NSInteger)self.stops.count - 1;
+  if (last < 1) return kCMTimeInvalid;
+  double position = [self fractionAtX:x] * last;
+  NSInteger index = (NSInteger)fmin(last - 1, floor(position));
+  return KFKeyposeLerp(self.stops[index].time, self.stops[index + 1].time,
+                       position - (double)index);
+}
 
 - (void)hoverAtPoint:(NSPoint)point {
   self.hoveredIndex = [self indexAtPoint:point];
-}
-- (void)updateTrackingAreas {
-  [super updateTrackingAreas];
-  if (self.tracking) [self removeTrackingArea:self.tracking];
-  self.tracking = [[NSTrackingArea alloc]
-      initWithRect:NSZeroRect
-           options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
-                   NSTrackingActiveAlways | NSTrackingInVisibleRect
-             owner:self
-          userInfo:nil];
-  [self addTrackingArea:self.tracking];
-}
-- (void)mouseEntered:(NSEvent *)event { [self mouseMoved:event]; }
-- (void)mouseMoved:(NSEvent *)event {
-  [self hoverAtPoint:[self convertPoint:event.locationInWindow fromView:nil]];
-}
-- (void)mouseExited:(NSEvent *)event { self.hoveredIndex = -1; }
-- (void)viewDidMoveToWindow {
-  [super viewDidMoveToWindow];
-  if (!self.window) self.hoveredIndex = -1;
-}
-- (void)mouseDown:(NSEvent *)event {
-  NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
-  NSInteger index = [self indexAtPoint:point];
-  [self hoverAtPoint:point];
-  if (index < 0 || !self.onSelect) return;
-  self.onSelect(self.stops[index].time);
-}
-- (NSMenu *)menuForEvent:(NSEvent *)event {
-  return self.menuProvider ? self.menuProvider() : [super menuForEvent:event];
 }
 
 // Amber marks exactly what the panel's controls write: the transition into the
@@ -206,13 +244,13 @@ static NSColor *KFKeyposeDimColor(void) { return ICInspectorTokens.disabledTextC
   [NSGraphicsContext saveGraphicsState];
   NSBezierPath *clip = [NSBezierPath bezierPathWithRect:self.bounds];
   for (NSInteger i = 0; i < count; i++)
-    [clip appendBezierPath:[self diamondAtX:[self positionForIndex:i]
+    [clip appendBezierPath:[self diamondAtX:[self drawnPositionForIndex:i]
                                     centerY:centerY
                                      radius:radius + KFKeyposeStroke / 2 + KFKeyposeClearance]];
   clip.windingRule = NSWindingRuleEvenOdd;
   [clip addClip];
   for (NSInteger i = 1; i < count; i++) {
-    CGFloat from = [self positionForIndex:i - 1], to = [self positionForIndex:i];
+    CGFloat from = [self drawnPositionForIndex:i - 1], to = [self drawnPositionForIndex:i];
     double fraction = fmax(0, fmin(1, self.stops[i].transitionFraction));
     CGFloat split = to - (to - from) * fraction;
     NSColor *hue = self.stops[i].linkColor ?: KFKeyposeActiveColor();
@@ -239,7 +277,7 @@ static NSColor *KFKeyposeDimColor(void) { return ICInspectorTokens.disabledTextC
   [NSGraphicsContext restoreGraphicsState];
 
   for (NSInteger i = 0; i < count; i++) {
-    NSBezierPath *diamond = [self diamondAtX:[self positionForIndex:i]
+    NSBezierPath *diamond = [self diamondAtX:[self drawnPositionForIndex:i]
                                      centerY:centerY
                                       radius:radius];
     diamond.lineWidth = KFKeyposeStroke;
@@ -255,9 +293,10 @@ static NSColor *KFKeyposeDimColor(void) { return ICInspectorTokens.disabledTextC
 
   NSFont *font = KFKeyposeLabelFont();
   for (NSInteger i = 0; i < count; i++) {
-    NSString *label = self.stops[i].label;
+    BOOL dragged = i == self.dragIndex;
+    NSString *label = dragged ? self.dragLabel : self.stops[i].label;
     if (!label.length) continue;
-    BOOL current = i == self.activeIndex || i == self.playheadIndex ||
+    BOOL current = dragged || i == self.activeIndex || i == self.playheadIndex ||
                    (self.activeIndex > 0 && i == self.activeIndex - 1);
     NSDictionary *attributes = @{
       NSFontAttributeName : font,
@@ -266,7 +305,7 @@ static NSColor *KFKeyposeDimColor(void) { return ICInspectorTokens.disabledTextC
     };
     NSSize size = [label sizeWithAttributes:attributes];
     CGFloat x = fmax(0, fmin(NSWidth(self.bounds) - size.width,
-                             [self positionForIndex:i] - size.width / 2));
+                             [self drawnPositionForIndex:i] - size.width / 2));
     [label drawAtPoint:NSMakePoint(round(x), 2) withAttributes:attributes];
   }
 }

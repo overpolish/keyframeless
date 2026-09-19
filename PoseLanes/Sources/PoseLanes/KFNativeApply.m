@@ -113,6 +113,15 @@ BOOL KFApply(id<PROAPIAccessing> m,
         NSArray *old = before[p], *next = after[p];
         UInt32 pid = p.unsignedIntValue;
         [touched addObject:p];
+        // The host journals a parameter for undo when its value is written,
+        // not when a key is removed: undoing a bare removal restores nothing,
+        // as undoing an insertion does drop the key it recorded a write for.
+        // Re-writing each doomed keypose puts the state undo has to come back
+        // to in the caller's group before the key goes.
+        if (structural)
+          for (NSDictionary *e in old)
+            if (e[@"nativeTime"] && !KFAt(next, KFTime(e)))
+              [set setCustomParameterValue:e[@"pose"] toParameter:pid atTime:KFTime(e)];
         for (NSUInteger i = old.count; i > 0; i--)
           if (old[i - 1][@"nativeTime"] && !KFAt(next, KFTime(old[i - 1]))) {
             if ([keys removeKeyframeAtIndex:i - 1 fromParameter:pid andChannel:0]) {
@@ -196,7 +205,13 @@ BOOL KFApply(id<PROAPIAccessing> m,
         }
       }
       if (ok) {
-        KFRequestHostRefresh(m,kCMTimeZero);
+        // The scratch token invalidates the host's cached frame, so it has to
+        // name the frame on screen: invalidating time zero leaves the viewer
+        // showing the pre-edit render until the pointer moves.
+        id<FxCustomParameterActionAPI_v4> action =
+            [m apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+        CMTime now = action ? [action currentTime] : kCMTimeZero;
+        KFRequestHostRefresh(m, CMTIME_IS_NUMERIC(now) ? now : kCMTimeZero);
       }
     } @finally {
       @synchronized(state) {

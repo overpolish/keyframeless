@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #import "KFTimingEditor+Editing.h"
+#import "KFTimingEditor+Keyposes.h"
 #import "KFTimingEditor+Refresh.h"
 #import "KFTimingEditor_Private.h"
 #import "KFPropertyLane.h"
 #import "KFViewCaches.h"
-#import "KFNativeLinks.h"
 
 @implementation KFTimingEditor
 - (NSTextField *)label:(NSString *)text {
@@ -49,9 +49,16 @@
   _map = [KFKeyposeMap new];
   _map.accessibilityLabel = @"Keypose map";
   _map.onSelect = ^(CMTime time) { [weakEditor movePlayheadToKeypose:time]; };
-  _map.menuProvider = ^NSMenu *{
-    KFTimingEditor *editor = weakEditor;
-    return editor ? KFNativePropertyMenu(editor.manager, editor, editor.displayedParameter) : nil;
+  _map.onScrub = ^(double fraction) { [weakEditor scrubMapToFraction:fraction]; };
+  _map.onScrubEnd = ^{ [weakEditor refresh]; };
+  _map.onRetimeDrag = ^NSString *(NSInteger index, CMTime proposed) {
+    return [weakEditor retimeLabelForIndex:index proposed:proposed];
+  };
+  _map.onRetimeCommit = ^(NSInteger index, CMTime proposed) {
+    [weakEditor commitRetimeIndex:index proposed:proposed];
+  };
+  _map.menuProvider = ^NSMenu *(NSInteger index, CMTime time) {
+    return [weakEditor keyposeMenuForIndex:index time:time];
   };
   [self addSubview:_map];
   _durationRow = [[ICInspectorRow alloc]

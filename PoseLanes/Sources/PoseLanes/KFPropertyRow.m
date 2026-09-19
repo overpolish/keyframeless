@@ -76,7 +76,9 @@ void KFSetRowShortcutAction(BOOL (^action)(id<PROAPIAccessing> manager, NSView *
   [action startAction:self.row];
   @try { [self refreshInspectorValuesInAction:action]; }
   @finally { [action endAction:self.row]; }
+  [self.row displayIfNeeded];
 }
+- (NSView *)inspectorRefreshView { return self.row; }
 - (void)refreshInspectorValuesInAction:(id<FxCustomParameterActionAPI_v4>)action {
   if(!self.row.window || self.row.hiddenOrHasHiddenAncestor || self.row.interacting) return;
   self.row.enabled=NO;

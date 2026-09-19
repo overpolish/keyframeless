@@ -25,6 +25,10 @@
 @property(strong) ICInspectorRow *durationRow;
 @property(strong) ICInspectorRow *motionRow;
 @property(strong) id<FxUndoAPI> scrubUndo;
+// The host's frame grid, read once: a retimed keypose lands on a frame, and
+// the drag path would otherwise pay a host read per pointer event.
+@property CMTime frameDuration;
+@property CMTime effectStart;
 @property UInt32 displayedParameter;
 @property BOOL writingSetting;
 @property(copy) NSArray<KFInspectorGap *> *plottedGaps;

@@ -38,7 +38,19 @@
 // controls are in use, since those settings are written to that pose.
 @property(nonatomic) BOOL sourceHighlighted;
 @property(copy) void (^onSelect)(CMTime time);
-@property(copy) NSMenu *(^menuProvider)(void);
+// Ordinal position across the map, for dragging the playhead along the rail
+// the way the graph above scrubs its own gap.
+@property(copy) void (^onScrub)(double fraction);
+@property(copy) void (^onScrubEnd)(void);
+// Live retime of one keypose. The view proposes the time its pointer position
+// falls on between that keypose's neighbours; the editor answers with the
+// label for the time it would really write, or nil to refuse the position and
+// leave the preview where it was.
+@property(copy) NSString *(^onRetimeDrag)(NSInteger index, CMTime proposed);
+@property(copy) void (^onRetimeCommit)(NSInteger index, CMTime proposed);
+// The keypose under the pointer, or -1 over the rail, with the time that
+// position falls on so a menu can act where the pointer is.
+@property(copy) NSMenu *(^menuProvider)(NSInteger index, CMTime time);
 // Keypose under a point in this view's coordinates, or -1 for none.
 - (NSInteger)indexAtPoint:(NSPoint)point;
 // Whether a keypose is drawn filled, meaning it is the pose being edited.

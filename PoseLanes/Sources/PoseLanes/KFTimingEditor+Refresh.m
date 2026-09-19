@@ -193,7 +193,12 @@ static double KFMapPlayheadFraction(NSArray<KFInspectorGap *> *gaps, CMTime now)
   [action startAction:self];
   @try { [self refreshInspectorValuesInAction:action]; }
   @finally { [action endAction:self]; }
+  // An edit made from this panel has to show at once: the host draws the
+  // inspector when something moves, so a dirty view otherwise waits for the
+  // pointer.
+  [self displayIfNeeded];
 }
+- (NSView *)inspectorRefreshView { return self; }
 - (void)refreshInspectorValuesInAction:(id<FxCustomParameterActionAPI_v4>)action {
   if (!self.window || self.hiddenOrHasHiddenAncestor || self.writingSetting)
     return;

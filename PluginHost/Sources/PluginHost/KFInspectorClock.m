@@ -64,5 +64,10 @@ static const NSTimeInterval KFInspectorRefreshInterval = 0.1;
     // Last, so a write here cannot disturb the reads above.
     if (tick) tick(action);
   } @finally { [action endAction:self]; }
+  // Outside the action: drawing reads the caches the refresh just filled and
+  // must not hold a host scope open while AppKit runs plug-in drawing code.
+  for (id<KFInspectorRefreshable> view in views)
+    if ([view respondsToSelector:@selector(inspectorRefreshView)])
+      [[view inspectorRefreshView] displayIfNeeded];
 }
 @end

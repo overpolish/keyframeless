@@ -12,6 +12,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Read host state and update the view. The caller owns the action scope, so
 /// implementations must not open or close one, and must not write parameters.
 - (void)refreshInspectorValuesInAction:(id<FxCustomParameterActionAPI_v4>)action;
+@optional
+/// The view a refresh draws into. The host runs no draw cycle of its own while
+/// nothing moves, so marking a view dirty leaves it showing the state before
+/// the edit until the pointer moves. The clock displays this view after every
+/// refresh, which costs nothing when nothing is dirty.
+- (NSView *)inspectorRefreshView;
 @end
 
 /// One refresh clock per plugin instance. Every registered view is refreshed
