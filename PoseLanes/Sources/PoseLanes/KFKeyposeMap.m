@@ -21,9 +21,7 @@ static NSFont *KFKeyposeLabelFont(void) {
 static NSColor *KFKeyposeHoverColor(void) {
   return [NSColor colorWithSRGBRed:0xB2 / 255.0 green:0xB2 / 255.0 blue:0xB2 / 255.0 alpha:1];
 }
-static NSColor *KFKeyposeActiveColor(void) {
-  return [NSColor colorWithSRGBRed:1 green:0xC3 / 255.0 blue:0 alpha:1];
-}
+static NSColor *KFKeyposeActiveColor(void) { return ICInspectorTokens.brandAmber; }
 static NSColor *KFKeyposeIdleColor(void) {
   return [NSColor colorWithSRGBRed:0x95 / 255.0 green:0x95 / 255.0 blue:0x95 / 255.0 alpha:1];
 }

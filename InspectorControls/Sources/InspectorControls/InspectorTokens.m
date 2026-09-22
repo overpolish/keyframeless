@@ -19,6 +19,10 @@
   // Ported from NSColor+KKColors: Motion and FCP use the same accent.
   return [NSColor colorWithSRGBRed:0x5B/255.0 green:0x5C/255.0 blue:0xE9/255.0 alpha:1];
 }
+// Kept beside the host accent so the two identity colours are read together.
++ (NSColor *)brandAmber {
+  return [NSColor colorWithSRGBRed:1 green:0xC3/255.0 blue:0 alpha:1];
+}
 + (NSColor *)inactiveControlColor { return [self.labelColor colorWithAlphaComponent:0.55]; }
 + (NSColor *)selectionColor { return [self.accentMatchingHost colorWithAlphaComponent:0.3]; }
 + (NSArray<NSColor *> *)curveColors {

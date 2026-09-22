@@ -62,6 +62,10 @@ static inline NSRect ICInspectorGutterIconFrame(NSTextField *label) {
 @property(class, nonatomic, readonly) NSColor *valueColor;
 @property(class, nonatomic, readonly) NSColor *disabledTextColor;
 @property(class, nonatomic, readonly) NSColor *accentMatchingHost;
+// The product's amber. Marks the keypose being edited, and the same value is
+// baked into the application icon and the header logo artwork, which no code
+// path can read back: change those by hand when this changes.
+@property(class, nonatomic, readonly) NSColor *brandAmber;
 @property(class, nonatomic, readonly) NSColor *inactiveControlColor;
 @property(class, nonatomic, readonly) NSColor *selectionColor;
 @property(class, nonatomic, readonly) NSArray<NSColor *> *curveColors;
