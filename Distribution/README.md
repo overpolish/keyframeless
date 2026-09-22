@@ -36,6 +36,8 @@ The build reads that dictionary out of the built application to lay out the payl
 
 The installer's artwork is drawn from `Assets/installer.svg`, rasterized during the build by `sips` at the 1240x840 the source declares, which is the installer window at 2x. It is the mark on a transparent canvas, and the installer honours the alpha, so its own window shows through and one image serves both the light and dark appearances. The package file carries the Keyframeless icon, taken from the icns Xcode builds for the application. That icon lives in the file's resource fork, which is where Finder looks and where Packages.app put it too, so a transfer that drops metadata drops the icon and nothing else.
 
+The distribution also carries an installation check. The retired standalone plugins installed to the same paths under `/Applications/Keyframeless`, so the installer reads the bundle identifier of whatever sits at each plugin's path and refuses to run when it is not ours, naming what to remove first. Installing over an earlier Keyframeless build of the same plugin is an upgrade and passes. The table it compares against is generated from the built applications, so a new plugin is covered as soon as it is in the repository.
+
 ## What is installed
 
 | Path | Contents |

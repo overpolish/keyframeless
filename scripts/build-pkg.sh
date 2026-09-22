@@ -36,6 +36,7 @@ mkdir -p "$work/parts"
 : > "$work/outline.xml"
 : > "$work/choices.xml"
 : > "$work/versions"
+: > "$work/products.js"
 
 # The installer's own artwork, drawn from the vector source. It is the mark on
 # a transparent canvas, so one image serves both appearances and the installer
@@ -115,6 +116,11 @@ $(dirname "$category")|" \
       "$package" "$version" "$plugin"
   } >> "$work/choices.xml"
 
+  # What the installation check compares against: the path this plugin owns and
+  # the identifier that says the bundle there is ours rather than a retired one.
+  printf '    {path: "%s/%s", identifier: "%s", name: "%s"},\n' \
+    "$applications" "$(basename "$app")" "$bundle" "$product" >> "$work/products.js"
+
   # Building the application registered this copy with PlugInKit, which keeps
   # one registration per plug-in identifier: the hosts would run the packaged
   # build instead of the one being developed. Withdraw it again.
@@ -134,6 +140,7 @@ architectures=$(lipo -archs "$app/Contents/MacOS/$executable" | tr ' ' ',')
 sed -e "s|@ARCHITECTURES@|$architectures|g" \
     -e "/@OUTLINE@/r $work/outline.xml" -e "/@OUTLINE@/d" \
     -e "/@CHOICES@/r $work/choices.xml" -e "/@CHOICES@/d" \
+    -e "/@PRODUCTS@/r $work/products.js" -e "/@PRODUCTS@/d" \
     "$root/Distribution/distribution.xml.in" > "$work/distribution.xml"
 
 mkdir -p "$output"

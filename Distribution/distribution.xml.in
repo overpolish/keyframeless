@@ -11,6 +11,33 @@
             <os-version min="15.6"/>
         </allowed-os-versions>
     </volume-check>
+    <installation-check script="installationCheck()"/>
+    <script><![CDATA[
+// The retired standalone plugins installed to the same paths under
+// /Applications/Keyframeless. Overwriting one would take its registration and
+// leave the templates it ships pointing at a bundle that is gone, so refuse
+// the install and say what to remove.
+var products = [
+@PRODUCTS@
+];
+
+function installationCheck() {
+    for (var i = 0; i < products.length; i++) {
+        var product = products[i];
+        var info = product.path + '/Contents/Info.plist';
+        if (!system.files.fileExistsAtPath(info)) continue;
+        var installed = system.files.plistAtPath(info);
+        if (!installed || installed.CFBundleIdentifier === product.identifier) continue;
+        my.result.title = 'Remove the older ' + product.name + ' first';
+        my.result.message = product.path + ' holds a retired version of ' + product.name +
+            ' that this installer would replace. Run "Uninstall Legacy Plugins" in ' +
+            '/Applications/Keyframeless, or drag that application to the Trash, then install again.';
+        my.result.type = 'Fatal';
+        return false;
+    }
+    return true;
+}
+    ]]></script>
     <choices-outline>
 @OUTLINE@
     </choices-outline>
