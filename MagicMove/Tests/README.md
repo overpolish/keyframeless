@@ -48,6 +48,8 @@ KF_TEST_SUITES="LaneTests NativeLinksTests" PoseLanes/Tests/run.sh
 
 Standalone package runners do not require a built plugin. RenderSupport accepts `--cpu-only` to omit GPU checks. The plugin blur test uses the built app's metallib, so rebuild after changing shaders. A skipped GPU stage is not a successful GPU verification.
 
+`scripts/test-magicmove.sh` ends with `scripts/motion-template.py check`, which regenerates the Motion template from the plug-in's registered parameters and fails if the committed document differs. `MagicMove/Tests/ParameterExport.m` is the exporter behind it rather than a test suite, so it stays out of the default list and writes JSON instead of asserting: `MM_TEST_SUITES=ParameterExport MagicMove/Tests/run.sh parameters.json`.
+
 ## Coverage
 
 | Area | Checks |

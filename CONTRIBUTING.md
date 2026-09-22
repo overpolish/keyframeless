@@ -14,6 +14,8 @@ Shared packages should build on their own. Keep plugin-specific code in the plug
 
 Follow the [build instructions](README.md#build-and-test) and run the relevant [test suites](MagicMove/Tests/README.md). Add regression tests when changing behavior. Changes to parameter identifiers or saved values must still allow existing documents to open correctly.
 
+Changing which controls a plugin registers, or their order, changes the Final Cut Pro inspector, so regenerate its Motion template with `scripts/motion-template.py build` and commit the result. The test script fails when the committed template no longer matches the code.
+
 For changes involving Motion/FCP lifecycle, interaction, or rendering, also test in the host application. In the pull request, say what you tested, which application versions you used, and what still needs checking.
 
 Use the repository's conventional commit style, for example `fix(MagicMove): ...` or `feat(InspectorControls): ...`.

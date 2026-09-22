@@ -1,0 +1,12 @@
+{
+  "name": "Magic Move",
+  "kind": "Effects",
+  "category": "Keyframeless",
+  "document": "effect.moef",
+  "skeleton": "effect.moef.in",
+  "plugin": {
+    "infoPlist": "MagicMove/MagicMove/Plugin/Info.plist",
+    "strings": "MagicMove/MagicMove/Plugin/en.lproj/InfoPlist.strings"
+  },
+  "thumbnail": "thumbnail.png"
+}

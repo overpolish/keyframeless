@@ -67,6 +67,26 @@ scripts/test-magicmove.sh
 
 See [architecture](Architecture.md) for how the plugin works and [tests](Tests/README.md) for automated tests and checks to run in Motion/FCP.
 
+## Motion template
+
+Final Cut Pro reaches the effect through a Motion template, which also decides which controls the inspector shows and in what order. `Template/` holds the manifest, the artwork, and the generated `effect.moef`; `scripts/templates/effect.moef.in` holds the document skeleton shared by future plugins.
+
+```sh
+scripts/motion-template.py build      # regenerate Template/effect.moef
+scripts/motion-template.py install    # copy it into ~/Movies/Motion Templates.localized
+scripts/motion-template.py uninstall
+```
+
+The published controls are the ones registered with `kFxParameterFlag_CUSTOM_UI` and without `kFxParameterFlag_HIDDEN`, in the order `addParametersWithError:` registers them. Reordering the FCP inspector means moving a line in `Plugin+Parameters.m` and regenerating, never republishing parameters by hand in Motion. `MagicMove/Tests/ParameterExport.m` reports that registration to the generator.
+
+The generator pins the document to Motion 6.2 (`ozml` 5.14), which is the format FCP 11 reads; a newer Motion writes 5.15 on save and drops that support. It keeps `Publish OSC` on, without which the host never instantiates the on-screen control, and writes no parameter values, so defaults come from `MMDefaults` alone. `scripts/test-magicmove.sh` fails if the committed template no longer matches the registered parameters.
+
+Artwork is one file: `Template/thumbnail.png`, a 16:9 export of at least 640x360, with the working file that produced it kept beside it. `build` renders the 640x360 and 192x108 copies the installed template carries into `Template/Thumbnails/`, which is generated and not committed. A master of the wrong shape is rejected rather than squashed, since `sips` resizes to exact dimensions.
+
+A generated template carries no parameter values and no editor state, which Motion writes but the host does not need. That was verified in Final Cut Pro 12.3 and Motion 6.3 on macOS 26.5.1: the effect appears under Effects > Keyframeless with its thumbnail, the inspector follows the registration order, poses start at their defaults, and the on-screen controls draw.
+
+The template really is what drives both, checked by changing each one on its own in the same hosts. Listing Anchor first in `MMLanes` moved that row to the top of the FCP inspector, and clearing `Publish OSC` in the installed document alone stopped the on-screen controls from drawing while the control class stayed registered and rendering carried on. A published parameter set is bound when the effect is applied, so a template change needs a relaunch and a freshly applied effect to show up.
+
 ## Setting defaults
 
 Right-click Duration or Easing and choose **Set Default** to use the current setting for new keyframes. Duration saves only the time, not Use Available Time. These preferences apply across effect instances; existing keyframes keep their settings.

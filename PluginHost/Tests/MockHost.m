@@ -10,6 +10,7 @@
     _editors = [NSMutableDictionary new];
     _pendingCallbacks = [NSMutableArray new];
     _definitions = [NSMutableDictionary new];
+    _registrationOrder = [NSMutableArray new];
     _flags = [NSMutableDictionary new];
     _staticValues = [NSMutableDictionary new];
     _effectStart = TestTime(0);
@@ -60,6 +61,7 @@
 - (BOOL)addPopupMenuWithName:(NSString *)name parameterID:(UInt32)p defaultValue:(UInt32)value menuEntries:(NSArray *)entries parameterFlags:(FxParameterFlags)flags {
   self.definitions[@(p)] = @{@"name":name, @"kind":@"popup", @"entries":entries};
   self.flags[@(p)] = @(flags); self.editors[@(p)] = @(value);
+  [self.registrationOrder addObject:@(p)];
   return YES;
 }
 - (BOOL)getIntValue:(int *)value fromParameter:(UInt32)p atTime:(CMTime)time {
@@ -83,6 +85,7 @@
 - (BOOL)addStringParameterWithName:(NSString *)name parameterID:(UInt32)p defaultValue:(NSString *)value parameterFlags:(FxParameterFlags)flags {
   self.definitions[@(p)] = @{@"name":name, @"kind":@"string"};
   self.flags[@(p)] = @(flags);
+  [self.registrationOrder addObject:@(p)];
   self.staticValues[@(p)] = value;
   return YES;
 }
@@ -104,6 +107,7 @@
     @"max" : @(hi)
   };
   self.flags[@(p)] = @(flags);
+  [self.registrationOrder addObject:@(p)];
   self.staticValues[@(p)] = @(v);
   self.editors[@(p)] = @(v);
   return YES;
@@ -127,6 +131,7 @@
     @"delta" : @(delta)
   };
   self.flags[@(p)] = @(flags);
+  [self.registrationOrder addObject:@(p)];
   self.editors[@(p)] = @(v);
   return YES;
 }
@@ -138,6 +143,7 @@
   self.definitions[@(p)] =
       @{@"name" : name, @"kind" : @"toggle", @"default" : @(v)};
   self.flags[@(p)] = @(flags);
+  [self.registrationOrder addObject:@(p)];
   self.editors[@(p)] = @(v);
   return YES;
 }
@@ -148,6 +154,7 @@
   assert(!self.definitions[@(p)]);
   self.definitions[@(p)] = @{@"name" : name, @"kind" : @"blob"};
   self.flags[@(p)] = @(flags);
+  [self.registrationOrder addObject:@(p)];
   self.blobs[@(p)] = v;
   return YES;
 }

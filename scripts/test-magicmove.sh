@@ -47,3 +47,7 @@ if [ "$gpu" = yes ]; then
   "$root/MagicMove/Tests/run-shader.sh"
   "$root/MagicMove/Tests/run-blur.sh"
 fi
+# The committed Motion template publishes the plug-in's controls in the order
+# they are registered, so a parameter change that is not regenerated would ship
+# an inspector that no longer matches the code.
+"$root/scripts/motion-template.py" check

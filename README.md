@@ -26,6 +26,13 @@ xcodebuild -workspace Keyframeless.xcworkspace -scheme MagicMove \
 scripts/test-magicmove.sh
 ```
 
+Install the Motion template Final Cut Pro loads the effect through, and remove it again, with:
+
+```sh
+scripts/motion-template.py install
+scripts/motion-template.py uninstall
+```
+
 See the [test guide](MagicMove/Tests/README.md) for individual suites, alternate build directories, and host checks. After building, `scripts/gen-clangd.sh` configures source indexing for the plugin and shared packages.
 
 ## Contributing and licensing

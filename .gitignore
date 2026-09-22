@@ -9,6 +9,9 @@ xcuserdata/
 buildServer.json
 scripts/*.fcpxml
 !scripts/*.template.fcpxml
+# Installed thumbnail sizes, rendered from each plug-in's Template/thumbnail.png
+# by scripts/motion-template.py.
+*/Template/Thumbnails/
 # Per-product installer artifacts (generated transiently by build-and-sign.sh from
 # the combined project + uninstall.template; never committed).
 Legacy/Distribution/*.pkgproj

@@ -22,6 +22,10 @@
 @property BOOL deferCallbacks;
 @property NSMutableArray *pendingCallbacks;
 @property NSMutableDictionary *definitions;
+// Parameter IDs in the order the plugin registered them. The Motion template
+// generator publishes the visible controls in this order, so a suite can pin
+// the inspector layout the host will show.
+@property NSMutableArray<NSNumber *> *registrationOrder;
 @property NSMutableDictionary *flags;
 @property NSMutableDictionary *staticValues;
 @property CMTime effectStart;
