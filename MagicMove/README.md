@@ -2,6 +2,8 @@
 
 A Motion/FCP effect that uses native keyframes for values and arrival times, with incoming transition timing controlled in the inspector.
 
+New to it? The [five minute guide](Guide.md) walks through the inspector and the timing model. This page is the full reference.
+
 ## Inspector
 
 | Property | Components | Display units | Default |

@@ -4,7 +4,7 @@ Motion graphics plugins for Final Cut Pro and Motion, with native keyframes and 
 
 ## Components
 
-- [Magic Move](MagicMove/README.md): animate position, scale, rotation, opacity, blur, and anchor with incoming transition timing and Added Motion.
+- [Magic Move](MagicMove/README.md): animate position, scale, rotation, opacity, blur, and anchor with incoming transition timing and Added Motion. Start with its [five minute guide](MagicMove/Guide.md).
 - [PluginHost](PluginHost/README.md): the FxPlug effect lifecycle, host actions, settings, menus, and shortcuts.
 - [PoseLanes](PoseLanes/README.md): keyframed custom-parameter properties, their editing, and their inspector views.
 - [MotionTiming](MotionTiming/README.md): keyframe timing and Added Motion.
