@@ -19,7 +19,7 @@ if [ ! -d "$runtime/FxPlug.framework" ]; then
   exit 1
 fi
 test_tmp=$(mktemp -d -t magicmove-tests)
-export MM_PREFERENCES_SUITE="co.overpolish.magicmove.tests.$(uuidgen)"
+export MM_PREFERENCES_SUITE="com.keyframeless.magicmove.tests.$(uuidgen)"
 trap 'defaults delete "$MM_PREFERENCES_SUITE" >/dev/null 2>&1 || true; rm -rf "$test_tmp"' EXIT HUP INT TERM
 printf 'module MotionTiming { umbrella header "%s/MotionTiming/Sources/MotionTiming/include/MotionTiming.h" export * }\n' "$root" > "$test_tmp/MotionTiming.modulemap"
 printf 'module InspectorControls { umbrella header "%s/include/InspectorControls.h" export * }\n' "$inspector" > "$test_tmp/InspectorControls.modulemap"

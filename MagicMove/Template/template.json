@@ -4,6 +4,7 @@
   "category": "Keyframeless",
   "document": "effect.moef",
   "skeleton": "effect.moef.in",
+  "appInfoPlist": "MagicMove/MagicMove/Wrapper Application/Info.plist",
   "plugin": {
     "infoPlist": "MagicMove/MagicMove/Plugin/Info.plist",
     "strings": "MagicMove/MagicMove/Plugin/en.lproj/InfoPlist.strings"

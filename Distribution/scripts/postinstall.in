@@ -1,0 +1,28 @@
+#!/bin/sh
+# Generated from Distribution/scripts/postinstall.in by scripts/build-pkg.sh,
+# which fills in the paths this package actually installed.
+#
+# The payload stays root-owned but becomes writable by administrators, which is
+# how /Applications itself already behaves and how a dragged-in application
+# ends up. An administrator can then remove the plug-in again without being
+# asked for a password. Folders shared with other products are adjusted on
+# their own, never recursively, so nothing else is touched.
+set -u
+
+while IFS= read -r path; do
+  [ -e "$path" ] || continue
+  /usr/sbin/chown -R root:admin "$path"
+  /bin/chmod -R g+w "$path"
+done <<'PRODUCT'
+@PRODUCT_PATHS@
+PRODUCT
+
+while IFS= read -r path; do
+  [ -d "$path" ] || continue
+  /usr/sbin/chown root:admin "$path"
+  /bin/chmod g+w "$path"
+done <<'SHARED'
+@SHARED_PATHS@
+SHARED
+
+exit 0

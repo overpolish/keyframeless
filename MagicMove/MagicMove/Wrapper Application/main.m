@@ -5,4 +5,19 @@
 
 #import <Cocoa/Cocoa.h>
 
-int main(int argc, const char *argv[]) { return NSApplicationMain(argc, argv); }
+#import "AppDelegate.h"
+
+// The interface is built in code, so there is no main nib to load and the
+// delegate has to be installed before the run loop starts.
+int main(void) {
+  @autoreleasepool {
+    NSApplication *application = NSApplication.sharedApplication;
+    // NSApplication holds its delegate weakly.
+    static AppDelegate *delegate;
+    delegate = [[AppDelegate alloc] init];
+    application.delegate = delegate;
+    [application setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [application run];
+  }
+  return 0;
+}

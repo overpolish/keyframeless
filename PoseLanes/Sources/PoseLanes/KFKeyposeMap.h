@@ -28,9 +28,9 @@
 // sits outside the keyed range. Its incoming transition is the editable extent.
 @property(nonatomic) NSInteger activeIndex;
 // The keypose the playhead is sitting exactly on, or -1. Standing on a keypose
-// makes it a write target — its value in explicit mode, and its Added Motion
-// when it is the active gap's source — even when the gap being edited arrives
-// somewhere else, which is what the first keypose of a lane always does.
+// makes it a write target, taking its value in explicit mode and its Added
+// Motion when it is the active gap's source, even when the gap being edited
+// arrives somewhere else, which is what the first keypose of a lane always does.
 @property(nonatomic) NSInteger playheadIndex;
 // Playhead position across the whole map, 0-1; negative hides the marker.
 @property(nonatomic) double playheadFraction;

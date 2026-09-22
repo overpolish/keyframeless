@@ -29,9 +29,11 @@ scripts/test-magicmove.sh
 Install the Motion template Final Cut Pro loads the effect through, and remove it again, with:
 
 ```sh
-scripts/motion-template.py install
-scripts/motion-template.py uninstall
+scripts/motion-template.py install    # this account, no privileges needed
+scripts/motion-template.py uninstall  # removes both the per-account and the system-wide copy
 ```
+
+`scripts/build-pkg.sh` builds the installer releases ship as: one Keyframeless package with a choice per plugin. Each installed plugin application is also its own uninstaller. See [distribution](Distribution/README.md).
 
 See the [test guide](MagicMove/Tests/README.md) for individual suites, alternate build directories, and host checks. After building, `scripts/gen-clangd.sh` configures source indexing for the plugin and shared packages.
 

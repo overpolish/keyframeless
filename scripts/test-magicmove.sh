@@ -14,7 +14,7 @@ esac
 # one is rebuilt, so host checks can silently exercise an old binary. Report
 # that here rather than leaving it to be noticed in the host.
 derived="${MM_DERIVED_DATA:-$root/DerivedData/Keyframeless}"
-registered=$(pluginkit -m -v -i com.keyframeless.MagicMoveNext.PlugIn 2>/dev/null |
+registered=$(pluginkit -m -v -i com.keyframeless.MagicMove.PlugIn 2>/dev/null |
   sed -n 's/.*	\(\/.*\.pluginkit\).*/\1/p' | head -1)
 case "$registered" in
   "") echo "Note: no MagicMove plug-in is registered; Motion and FCP will not see it." >&2 ;;
@@ -43,6 +43,7 @@ else
   "$root/RenderSupport/Tests/run.sh" --cpu-only
 fi
 "$root/MagicMove/Tests/run.sh"
+"$root/MagicMove/Tests/run-uninstall.sh"
 if [ "$gpu" = yes ]; then
   "$root/MagicMove/Tests/run-shader.sh"
   "$root/MagicMove/Tests/run-blur.sh"

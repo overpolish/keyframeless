@@ -19,7 +19,7 @@ scripts/test-magicmove.sh --cpu-only
 
 ```sh
 pluginkit -a "$PWD/DerivedData/Keyframeless/Build/Products/Debug/MagicMove.app/Contents/PlugIns/MagicMove XPC Service.pluginkit"
-pluginkit -m -v -i com.keyframeless.MagicMoveNext.PlugIn
+pluginkit -m -v -i com.keyframeless.MagicMove.PlugIn
 ```
 
 The host loads the registered copy when it next spawns the service, so relaunch it after repointing.
@@ -38,6 +38,7 @@ The suite compiles current plugin and shared-package sources with AddressSanitiz
 | `MagicMove/Tests/run.sh` | Plugin wiring with `PluginHost/Tests/MockHost.m` and other simulated host APIs |
 | `MagicMove/Tests/run-shader.sh` | Freshly compiled transform shader and pixel comparisons |
 | `MagicMove/Tests/run-blur.sh` | Production render adapter, motion/spatial blur, anchor, and preview scaling |
+| `MagicMove/Tests/run-uninstall.sh` | What the wrapper application finds installed, what it removes itself, and what it needs an administrator for |
 
 Select plugin suites with `MM_TEST_SUITES`, and package suites with `KF_TEST_SUITES`:
 

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
 #pragma once
 #import <Foundation/Foundation.h>
-static NSString *const kPluginID = @"com.keyframeless.MagicMoveNext";
+static NSString *const kPluginID = @"com.keyframeless.MagicMove";
 // Every keyframed property is one custom parameter holding an MMPose. Its
 // transient cache token carries the inspector snapshot identity, and its
 // Match In/Out toggle is lane-wide rather than part of the pose payload. The

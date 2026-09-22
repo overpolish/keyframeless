@@ -20,14 +20,25 @@
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>KFInstall</key>
+	<dict>
+		<key>ApplicationDirectory</key>
+		<string>/Applications/Keyframeless</string>
+		<key>Description</key>
+		<string>Animate position, scale, rotation, opacity, blur and anchor with native keyframes. Each keyframe carries its own transition timing, and Added Motion layers wave, wiggle or handheld movement on top.</string>
+		<key>PreferencesSuite</key>
+		<string>com.keyframeless.magicmove.preferences</string>
+		<key>ProductName</key>
+		<string>Magic Move</string>
+		<key>TemplateRelativePath</key>
+		<string>Effects.localized/Keyframeless/Magic Move</string>
+	</dict>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.video</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
-	<key>NSMainNibFile</key>
-	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

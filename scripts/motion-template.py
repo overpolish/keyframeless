@@ -10,7 +10,7 @@ per-plug-in manifest in `<Plugin>/Template/template.json`.
 Usage:
   scripts/motion-template.py build     [plugin ...]
   scripts/motion-template.py check     [plugin ...]
-  scripts/motion-template.py install   [plugin ...]
+  scripts/motion-template.py install   [--system] [plugin ...]
   scripts/motion-template.py uninstall [plugin ...]
 """
 
@@ -28,7 +28,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SKELETONS = ROOT / "scripts" / "templates"
-INSTALL_ROOT = Path.home() / "Movies" / "Motion Templates.localized"
+# Both locations are read by Final Cut Pro and Motion. Released builds are
+# installed for every account by the package; the per-user folder is where
+# Motion saves its own templates and is the one a developer can write without
+# privileges.
+USER_INSTALL_ROOT = Path.home() / "Movies" / "Motion Templates.localized"
+SYSTEM_INSTALL_ROOT = Path("/Library/Application Support/Final Cut Pro/Templates.localized")
 
 # Motion writes the filter's scene id into both the filter node and every
 # publish target. Any value works as long as the two agree, so the generator
@@ -210,14 +215,47 @@ def validate(manifest, directory, document, parameters):
                 f"{master.relative_to(ROOT)} must be at least "
                 f"{'x'.join(str(v) for v in THUMBNAIL_SIZES['large'])}, is {width}x{height}"
             )
+    # The installed plugin carries the same path in its Info.plist: the package
+    # stages the template from this manifest, and the uninstaller reads the
+    # application's copy back. They have to agree.
+    declared = plistlib.loads((ROOT / manifest["appInfoPlist"]).read_bytes())
+    installed = declared.get("KFInstall", {}).get("TemplateRelativePath")
+    if installed != str(template_relative(manifest)):
+        problems.append(
+            f"{manifest['appInfoPlist']} installs {installed!r}, "
+            f"manifest says {str(template_relative(manifest))!r}"
+        )
     for path in [directory / manifest["document"], directory, *directory.rglob("*")]:
         if not str(path.relative_to(ROOT)).isascii():
             problems.append(f"non-ASCII repository path {path.relative_to(ROOT)}")
     return problems
 
 
-def installed_directory(manifest):
-    return INSTALL_ROOT / f"{manifest['kind']}.localized" / manifest["category"] / manifest["name"]
+def template_relative(manifest):
+    return Path(f"{manifest['kind']}.localized") / manifest["category"] / manifest["name"]
+
+
+def installed_directory(manifest, root):
+    return root / template_relative(manifest)
+
+
+def writable(path):
+    """Whether `path` could be created or replaced, testing its nearest existing parent."""
+    probe = path
+    while not probe.exists():
+        probe = probe.parent
+    return os.access(probe, os.W_OK)
+
+
+def copy_template(manifest, directory, destination):
+    document = directory / manifest["document"]
+    if not document.exists():
+        raise Failure(f"{document.relative_to(ROOT)} is missing; build it first")
+    shutil.rmtree(destination, ignore_errors=True)
+    destination.mkdir(parents=True)
+    shutil.copyfile(document, destination / f"{manifest['name']}.moef")
+    for key, path in derive_thumbnails(manifest, directory).items():
+        shutil.copyfile(path, destination / f"{key}.png")
 
 
 def build(paths, check):
@@ -252,49 +290,83 @@ def build(paths, check):
     return 1 if failed else 0
 
 
-def install(paths):
+def install(paths, root, other=None):
     for manifest_path in paths:
-        directory = manifest_path.parent
         manifest = json.loads(manifest_path.read_text())
-        document = directory / manifest["document"]
-        if not document.exists():
-            raise Failure(f"{document.relative_to(ROOT)} is missing; build it first")
-        destination = installed_directory(manifest)
-        shutil.rmtree(destination, ignore_errors=True)
-        destination.mkdir(parents=True)
-        shutil.copyfile(document, destination / f"{manifest['name']}.moef")
-        for key, path in derive_thumbnails(manifest, directory).items():
-            shutil.copyfile(path, destination / f"{key}.png")
+        destination = installed_directory(manifest, root)
+        if not writable(destination):
+            raise Failure(f"{destination} needs root; re-run with sudo")
+        copy_template(manifest, manifest_path.parent, destination)
         print(f"installed {destination}")
+        # One template per location, and the hosts read both: a leftover copy
+        # in the other one shows up as a second identical effect.
+        duplicate = other and installed_directory(manifest, other)
+        if duplicate and duplicate.exists():
+            print(f"warning: {duplicate} is also installed", file=sys.stderr)
+    return 0
+
+
+def stage(paths, root):
+    """Lay out the templates the way an installer payload carries them."""
+    for manifest_path in paths:
+        manifest = json.loads(manifest_path.read_text())
+        destination = installed_directory(manifest, root)
+        copy_template(manifest, manifest_path.parent, destination)
+        print(f"staged {destination}")
     return 0
 
 
 def uninstall(paths):
+    """Remove both copies, so neither location keeps a template the other replaced."""
+    blocked = []
     for manifest_path in paths:
         manifest = json.loads(manifest_path.read_text())
-        destination = installed_directory(manifest)
-        if destination.exists():
+        found = False
+        for root in (SYSTEM_INSTALL_ROOT, USER_INSTALL_ROOT):
+            destination = installed_directory(manifest, root)
+            if not destination.exists():
+                continue
+            found = True
+            # A copy installed by the package is owned by root. Remove the rest
+            # rather than stopping, and report what is left at the end.
+            if not writable(destination):
+                blocked.append(destination)
+                continue
             shutil.rmtree(destination)
             print(f"removed {destination}")
-        else:
-            print(f"not installed: {destination}")
-        category = destination.parent
-        if category.exists() and not any(category.iterdir()):
-            category.rmdir()
-    return 0
+            category = destination.parent
+            if not any(category.iterdir()):
+                category.rmdir()
+        if not found and not blocked:
+            print(f"not installed: {manifest['name']}")
+    for destination in blocked:
+        print(f"error: {destination} needs root; re-run with sudo", file=sys.stderr)
+    return 1 if blocked else 0
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("build", "check", "install", "uninstall"))
+    parser.add_argument("action", choices=("build", "check", "install", "stage", "uninstall"))
     parser.add_argument("plugins", nargs="*", help="plug-in directory names; default is all")
+    parser.add_argument(
+        "--system",
+        action="store_true",
+        help="install for every account, where the installer package puts it",
+    )
+    parser.add_argument("--into", type=Path, help="destination root for stage")
     arguments = parser.parse_args()
     try:
         paths = manifests(arguments.plugins)
         if arguments.action in ("build", "check"):
             return build(paths, arguments.action == "check")
+        if arguments.action == "stage":
+            if not arguments.into:
+                raise Failure("stage needs --into <directory>")
+            return stage(paths, arguments.into)
         if arguments.action == "install":
-            return install(paths)
+            if arguments.system:
+                return install(paths, SYSTEM_INSTALL_ROOT, USER_INSTALL_ROOT)
+            return install(paths, USER_INSTALL_ROOT, SYSTEM_INSTALL_ROOT)
         return uninstall(paths)
     except Failure as failure:
         print(f"error: {failure}", file=sys.stderr)

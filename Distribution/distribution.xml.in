@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Filled in by scripts/build-pkg.sh: one choice per plugin it found in the
+     repository, so the installer offers them as a list the buyer picks from. -->
+<installer-gui-script minSpecVersion="2">
+    <title>Keyframeless</title>
+    <options customize="always" require-scripts="false" hostArchitectures="@ARCHITECTURES@"/>
+    <background file="installer.png" mime-type="image/png" alignment="center" scaling="tofit"/>
+    <background-darkAqua file="installer.png" mime-type="image/png" alignment="center" scaling="tofit"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="15.6"/>
+        </allowed-os-versions>
+    </volume-check>
+    <choices-outline>
+@OUTLINE@
+    </choices-outline>
+@CHOICES@
+</installer-gui-script>

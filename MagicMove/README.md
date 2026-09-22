@@ -72,10 +72,13 @@ See [architecture](Architecture.md) for how the plugin works and [tests](Tests/R
 Final Cut Pro reaches the effect through a Motion template, which also decides which controls the inspector shows and in what order. `Template/` holds the manifest, the artwork, and the generated `effect.moef`; `scripts/templates/effect.moef.in` holds the document skeleton shared by future plugins.
 
 ```sh
-scripts/motion-template.py build      # regenerate Template/effect.moef
-scripts/motion-template.py install    # copy it into ~/Movies/Motion Templates.localized
-scripts/motion-template.py uninstall
+scripts/motion-template.py build             # regenerate Template/effect.moef
+scripts/motion-template.py install           # this account: ~/Movies/Motion Templates.localized
+sudo scripts/motion-template.py install --system   # every account, where the installer puts it
+scripts/motion-template.py uninstall         # removes whichever copies exist
 ```
+
+Both locations are read by Final Cut Pro and Motion, and a template in each shows the effect twice, so `install` reports when the other one is also populated.
 
 The published controls are the ones registered with `kFxParameterFlag_CUSTOM_UI` and without `kFxParameterFlag_HIDDEN`, in the order `addParametersWithError:` registers them. Reordering the FCP inspector means moving a line in `Plugin+Parameters.m` and regenerating, never republishing parameters by hand in Motion. `MagicMove/Tests/ParameterExport.m` reports that registration to the generator.
 
@@ -86,6 +89,10 @@ Artwork is one file: `Template/thumbnail.png`, a 16:9 export of at least 640x360
 A generated template carries no parameter values and no editor state, which Motion writes but the host does not need. That was verified in Final Cut Pro 12.3 and Motion 6.3 on macOS 26.5.1: the effect appears under Effects > Keyframeless with its thumbnail, the inspector follows the registration order, poses start at their defaults, and the on-screen controls draw.
 
 The template really is what drives both, checked by changing each one on its own in the same hosts. Listing Anchor first in `MMLanes` moved that row to the top of the FCP inspector, and clearing `Publish OSC` in the installed document alone stopped the on-screen controls from drawing while the control class stayed registered and rendering carried on. A published parameter set is bound when the effect is applied, so a template change needs a relaunch and a freshly applied effect to show up.
+
+## Installing and removing a release
+
+Releases ship inside the Keyframeless installer built by `scripts/build-pkg.sh`, which lists Magic Move as one of its choices: the application goes to `/Applications/Keyframeless`, the template to the system-wide Final Cut Pro templates folder. The installed application declares both locations in its `Info.plist` and is also the uninstaller. Opening it shows what is on disk and removes all of it, including the PlugInKit registration and, unless asked to keep them, the saved defaults, normally without asking for a password. See [distribution](../Distribution/README.md).
 
 ## Setting defaults
 

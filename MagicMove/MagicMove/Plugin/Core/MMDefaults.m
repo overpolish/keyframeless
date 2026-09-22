@@ -13,7 +13,7 @@ static PPDefaultStore *MMDefaultStore(void) {
         initWithDefaults:[[NSUserDefaults alloc]
                              initWithSuiteName:NSProcessInfo.processInfo
                                                        .environment[@"MM_PREFERENCES_SUITE"]
-                                                   ?: @"co.overpolish.magicmove.preferences"]
+                                                   ?: @"com.keyframeless.magicmove.preferences"]
                namespace:@"defaults"];
   });
   return store;
